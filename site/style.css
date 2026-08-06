@@ -48,7 +48,7 @@ table.standings td.tie { background: #fff3cd; }
 .poolgrid { display: flex; gap: 1.5rem; align-items: flex-start; flex-wrap: wrap; }
 .poolgrid > table { flex: 1; min-width: 14rem; }
 .gmatches td { padding: .25rem .5rem; border-bottom: 1px solid var(--line); font-size: .9rem; }
-.gmatches .mid { color: var(--muted); font-size: .8rem; }
+.gmatches .mid { position: static; color: var(--muted); font-size: .8rem; }
 .gmatches .score { text-align: center; white-space: nowrap; color: var(--muted); }
 .gmatches .gmeta { color: var(--muted); font-size: .8rem; text-align: right; white-space: nowrap; }
 
