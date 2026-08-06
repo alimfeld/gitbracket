@@ -22,7 +22,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { matchSlotMs, slotsOverlap, pairSig } = require('./site/app.js'); // per-category/per-match slot lengths live in tournament.json
+const { matchSlotMs, slotsOverlap, pairSig, dayKey } = require('./site/app.js'); // per-category/per-match slot lengths live in tournament.json
 
 const SLUG = '2026-mammut60';
 const POOL_SIZE = 4; // max teams per pool; leftovers spill into a smaller pool
@@ -213,7 +213,6 @@ function scheduleMatches(categories, venues, tz, slotCfgOf) {
   const offset = tzOffset(tz);
   const startOf = (cat) => Date.parse(`${EVENT_DATE}T${BLOCK_START[cat]}:00${offset}`);
   const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
-  const dayFmt = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
   const courtUse = new Map(); // venue -> [{ start, end }]
   const playerUse = []; // { start, end, players: Set }
   const endOf = new Map(); // match id -> end ms (feeder floor)
@@ -241,7 +240,7 @@ function scheduleMatches(categories, venues, tz, slotCfgOf) {
           m.venue = venue;
           // local date + time from the event tz — a fixed EVENT_DATE prefix would
           // backdate a slot crossing midnight by 24h
-          m.scheduled = `${dayFmt.format(new Date(t))}T${fmt.format(new Date(t))}:00${offset}`;
+          m.scheduled = `${dayKey(t, tz)}T${fmt.format(new Date(t))}:00${offset}`;
           courtUse.set(venue, [...(courtUse.get(venue) ?? []), { start: t, end: t + slotMs }]);
           endOf.set(m.id, t + slotMs);
           if (m.pool !== undefined) poolDone.set(m.pool, Math.max(poolDone.get(m.pool) ?? start, t + slotMs));

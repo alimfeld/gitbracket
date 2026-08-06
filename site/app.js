@@ -200,11 +200,8 @@ function matchRound(m, ctx, memo = new Map()) {
   return d;
 }
 
-function ordinal(n) {
-  const r = n % 100;
-  if (r > 10 && r < 14) return n + 'th';
-  return n + ({ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th');
-}
+const ordRules = new Intl.PluralRules('en', { type: 'ordinal' });
+const ordinal = n => n + ({ one: 'st', two: 'nd', few: 'rd' }[ordRules.select(n)] || 'th');
 
 // Classification label for a placement match (3rd/5th/7th place, classification
 // semis). Winner-bracket matches (QF/SF/final) return null. The chain walks
@@ -706,5 +703,5 @@ if (typeof document !== 'undefined') boot();
 
 // CommonJS exports for validate.js; browser <script> ignores these.
 if (typeof module !== 'undefined') {
-  module.exports = { ID_RE, pairSig, matchSlotMs, slotsOverlap, makeCat, winnerIdx, isDone, poolStandings, resolveSide, sameRecord, matchRound, isDeadTie, playerMatches, slotLabel, sideLabel, schedTime, gamesText, roundName, placementLabel, koColumn, scheduleStatus, venueBacklog, kioskBuckets, matchLabel, fmtTime, renderIndex, renderStandings, renderVenue, renderPlayer };
+  module.exports = { ID_RE, pairSig, matchSlotMs, slotsOverlap, makeCat, winnerIdx, isDone, poolStandings, resolveSide, sameRecord, matchRound, isDeadTie, playerMatches, slotLabel, sideLabel, schedTime, gamesText, roundName, placementLabel, koColumn, scheduleStatus, venueBacklog, kioskBuckets, matchLabel, fmtTime, dayKey, renderIndex, renderStandings, renderVenue, renderPlayer };
 }

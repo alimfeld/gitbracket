@@ -52,7 +52,6 @@ function validateRepo(repo) {
   const errs = [...repo.readErrs];
   const warns = [];
   const err = (f, m) => errs.push(`${f}: ${m}`);
-  const warn = (f, m) => warns.push(`${f}: ${m}`);
   const { index, tournaments } = repo;
 
   if (index === undefined) return { errs, warns }; // tournaments.json unreadable — readErrs carries the message
@@ -86,7 +85,6 @@ function validateTournamentData(slug, info, errs, warns) {
   const tjson = info.tjson;
   if (tjson === undefined) return; // unreadable — readErrs carries the message
   const err = (f, m) => errs.push(`${f}: ${m}`);
-  const warn = (f, m) => warns.push(`${f}: ${m}`);
   if (tjson === null) { err(tFile, 'tournament.json must be an object, got null'); return; }
 
   if (typeof tjson.timezone !== 'string' || !tjson.timezone) {
