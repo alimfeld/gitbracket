@@ -91,6 +91,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   const venue = renderVenue(no(), data);
   assert(venue.includes('k-venue') && venue.includes('Ada Lovelace'), 'venue page renders venue boards with match rows');
   assert(renderPlayer(new URLSearchParams('p=p1'), data).includes('Ada Lovelace'), 'player page finds the player');
+  assert(renderPlayer(new URLSearchParams('p=p1'), data).includes('standings.html?t=sample'), 'player page links the tournament name to standings');
   assert(renderIndex(no(), data).includes('standings.html?t=sample'), 'index links the tournament');
   // escaping: a hostile name must reach the DOM entity-encoded
   const evil = JSON.parse(JSON.stringify(data.tjson));

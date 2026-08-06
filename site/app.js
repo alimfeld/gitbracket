@@ -622,7 +622,7 @@ function renderPlayer(params, data) {
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(r);
   }
-  const parts = [`<h1>${esc(p.name)}</h1>`, `<p class="sub">${esc(data.t.name)}</p>`];
+  const parts = [`<h1>${esc(p.name)}</h1>`, `<p class="sub"><a href="standings.html?t=${esc(data.t.slug)}">${esc(data.t.name)}</a></p>`];
   for (const [key, g] of groups) {
     parts.push(`<h2>${esc(key)}</h2>`);
     for (const r of g) {
