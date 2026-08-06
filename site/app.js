@@ -680,8 +680,11 @@ function boot() {
     });
   };
   tick();
-  // ponytail: jitter so a hall of screens doesn't fetch in lockstep
-  setInterval(tick, POLL_MS + Math.random() * 5000);
+  // Auto-refresh only on the kiosk; the other pages are read-on-load.
+  if (page === 'venue') {
+    // ponytail: jitter so a hall of kiosk screens doesn't fetch in lockstep
+    setInterval(tick, POLL_MS + Math.random() * 5000);
+  }
 }
 
 if (typeof document !== 'undefined') boot();

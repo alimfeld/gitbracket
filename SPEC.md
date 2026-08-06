@@ -172,8 +172,7 @@ entry of `tournaments.json` so a kiosk URL survives the next event), then one
 over HTTP. **Fetches are same-origin relative paths** (`tournaments/<slug>/…`):
 the pages and the data ship from the same Pages deploy, so there is no base URL,
 no repo `const`, no CORS, and no per-IP fetch throttle — Pages static requests
-are unmetered. `?_=Date.now()` cache-buster; one `POLL_MS = 30000` for every
-page and every file — requests are free, so there is nothing to tune.
+are unmetered. `?_=Date.now()` cache-buster; `POLL_MS = 30000`, but only the kiosk (venue) page auto-refreshes — the other pages read once on load, so nobody wastes requests staring at a static table.
 
 An all-venues kiosk refetches every category each poll. Jitter the interval so a
 hall full of screens doesn't hit in lockstep; that is the only reason to touch
