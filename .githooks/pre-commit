@@ -2,4 +2,4 @@
 # Run the validator + test suite before every commit: the hook is the only
 # gate between a typo and a live Pages deploy.
 node "$(dirname "$0")/../validate.js" "$(git rev-parse --show-toplevel)" || exit 1
-exec node "$(dirname "$0")/../tests.js"
+cd "$(git rev-parse --show-toplevel)" && exec node --test

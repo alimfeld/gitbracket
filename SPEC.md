@@ -33,7 +33,7 @@ site/app.js                 # fetch, render, derive
 validate.js                 # schema + cross-file check (hook, local)
 cli.js                      # score entry on match day: list scorable matches, set scores/forfeits (local)
 schedule.js                 # one-off match generator (2026-mammut60); its output must be committed
-tests.js                    # zero-dep runner: loads fixtures/, asserts (hook)
+test/                        # node:test suites (app/cli/validate), fixtures-backed (hook)
 fixtures/                   # test data — every dir is a mini repo, one scenario each
 .github/workflows/pages.yml # upload site/, deploy to Pages
 ```
@@ -219,7 +219,7 @@ node cli.js list                       # what can be scored right now
 node cli.js score md m1 11-9 11-7      # set games — a prefix is a mid-match push
 node cli.js forfeit md m7 1            # side 1 forfeits, side 0 wins
 node cli.js -t 2026-spring …           # pick the tournament (default: last in tournaments.json)
-git commit -am "m1 11-9 11-7" && git push   # hook runs validate.js + tests.js
+git commit -am "m1 11-9 11-7" && git push   # hook runs validate.js + node --test
 ```
 
 `cli.js` is the match-day scorer's tool (zero deps, plain node): `list` shows
@@ -237,7 +237,7 @@ API client. Per-category files stripe writes across categories; two scorers on
 one category still hand-merge. One scorer per category is the operating model.
 
 `git config core.hooksPath .githooks` once; `.githooks/pre-commit` runs
-`validate.js` then `tests.js` — so "validate and test before commit" is a
+`validate.js` then `node --test` — so "validate and test before commit" is a
 mechanism, not discipline.
 
 `validate.js` is where the logic lives: `loadRepo` reads a data root into
@@ -284,14 +284,17 @@ A category with no matches file is valid. Dead-tie pool slots warn.
 Player clashes are not checked: behind a `match` or `pool` slot there is no
 player id yet, so the check is blind past round 1 anyway.
 
-`tests.js` is the harness, `fixtures/` is the data. Every scenario — the core
+`test/` is the harness, `fixtures/` is the data. Every scenario — the core
 validator rules, each derive behavior, plus the dead-tie and cycle corner cases —
 is a committed fixture under `fixtures/`: a self-contained mini repo
 (`tournaments.json` + `tournaments/<slug>/…`) loaded with the same `loadRepo`
 used on real checkouts, so the tests exercise the real I/O path. Tests only load
 and assert — none generate or mutate data, and none depend on the live
-`site/tournaments/` data. The pre-commit hook runs `node tests.js` after `node validate.js`;
-the deploy workflow uploads only `site/` (`path: site`), so fixtures and dev tooling never ship.
+`site/tournaments/` data. The suites split by layer (`test/app.test.js` derive,
+`test/cli.test.js` CLI, `test/validate.test.js` validator; shared helpers in
+`test/helpers.js`) and run with Node's built-in runner via `node --test`
+auto-discovery; the pre-commit hook runs it after `node validate.js`. The
+deploy workflow uploads only `site/` (`path: site`), so fixtures and dev tooling never ship.
 
 `ponytail:` no CLI in v1 — `score md40 m1 11-9 11-7` was planned as a wrapper
 over one JSON edit; built as cli.js once hand-editing during a live match hurt.

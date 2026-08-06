@@ -1,7 +1,7 @@
 'use strict';
 // app.js — shared fetch/render/derive for the GitBracket pages. No build step, no deps.
 // Derive functions are pure (node-runnable); DOM work happens only in the browser boot.
-// `node tests.js` runs the derive tests against fixtures/.
+// `node --test` runs the derive tests against fixtures/ (test/ dir).
 
 const POLL_MS = 30000;
 const SLOT_MIN = 45; // default match length, minutes — per-stage category slotMinutes (groups/knockout) and per-match slotMinutes override (match > stage > default)
