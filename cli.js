@@ -17,7 +17,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { makeCat, isDone, resolveSide, sideLabel, schedTime, gamesText, fmtTime } = require('./app.js');
+const { makeCat, isDone, resolveSide, sideLabel, schedTime, gamesText, fmtTime } = require('./site/app.js');
 const { loadRepo, validateRepo } = require('./validate.js');
 
 // ---------- pure logic (tests drive these on fixture repos) ----------
@@ -122,7 +122,7 @@ const USAGE = `usage:
 
 function findRoot() {
   let dir = process.cwd();
-  while (!fs.existsSync(path.join(dir, 'tournaments.json')) && dir !== path.dirname(dir)) dir = path.dirname(dir);
+  while (!fs.existsSync(path.join(dir, 'site', 'tournaments.json')) && dir !== path.dirname(dir)) dir = path.dirname(dir);
   return dir;
 }
 
@@ -139,7 +139,8 @@ function main(argv) {
   }
 
   const root = findRoot();
-  const repo = loadRepo(root);
+  const dataRoot = path.join(root, 'site');
+  const repo = loadRepo(dataRoot);
   if (repo.readErrs.length) { console.error(repo.readErrs.join('\n')); process.exit(1); }
   if (!slug) {
     const last = repo.index.length && repo.index[repo.index.length - 1];
@@ -179,8 +180,8 @@ function main(argv) {
   }
 
   const res = cmd === 'score'
-    ? writeEdit(root, repo, slug, cat, c => applyScore(c, matchId, games))
-    : writeEdit(root, repo, slug, cat, c => applyForfeit(c, matchId, Number(tokens[0])));
+    ? writeEdit(dataRoot, repo, slug, cat, c => applyScore(c, matchId, games))
+    : writeEdit(dataRoot, repo, slug, cat, c => applyForfeit(c, matchId, Number(tokens[0])));
   if (res.err) { console.error(res.err); process.exit(1); }
   if (res.errs) {
     for (const e of res.errs) console.error(e);

@@ -8,7 +8,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { ID_RE, pairSig, matchSlotMs, slotsOverlap, makeCat, isDone, poolStandings, resolveSide, isDeadTie } = require('./app.js');
+const { ID_RE, pairSig, matchSlotMs, slotsOverlap, makeCat, isDone, poolStandings, resolveSide, isDeadTie } = require('./site/app.js');
 
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/;
 const RESULTS = ['winner', 'loser'];
@@ -47,7 +47,7 @@ function loadRepo(root) {
   return { index, tournaments, readErrs };
 }
 
-// All checks, in memory. Labels are repo-relative paths (tournaments/<slug>/...).
+// All checks, in memory. Labels are repo-relative paths (site/tournaments/<slug>/...).
 function validateRepo(repo) {
   const errs = [...repo.readErrs];
   const warns = [];
@@ -82,7 +82,7 @@ function validateRepo(repo) {
 }
 
 function validateTournamentData(slug, info, errs, warns) {
-  const tFile = `tournaments/${slug}/tournament.json`;
+  const tFile = `site/tournaments/${slug}/tournament.json`;
   const tjson = info.tjson;
   if (tjson === undefined) return; // unreadable — readErrs carries the message
   const err = (f, m) => errs.push(`${f}: ${m}`);
@@ -140,7 +140,7 @@ function validateTournamentData(slug, info, errs, warns) {
     }
   });
 
-  const mdir = `tournaments/${slug}/matches`;
+  const mdir = `site/tournaments/${slug}/matches`;
   for (const cid of info.matches.keys()) {
     if (!categories.has(cid)) err(`${mdir}/${cid}.json`, `file maps to undeclared category ${JSON.stringify(cid)} — a filename typo would silently render an empty category`);
   }
@@ -406,7 +406,7 @@ function validateGames(games, target, where, err) {
 
 function main() {
   const root = process.argv[2] || process.cwd();
-  const { errs, warns } = validateRepo(loadRepo(root));
+  const { errs, warns } = validateRepo(loadRepo(path.join(root, 'site')));
   for (const w of warns) console.log(`warn: ${w}`);
   for (const e of errs) console.log(`error: ${e}`);
   if (errs.length) {

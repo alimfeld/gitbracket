@@ -20,26 +20,28 @@ Repo must be **public**: GitHub Pages on the free plan serves public repos only.
 ## Layout
 
 ```
-tournaments.json            # [{ "slug": "2026-spring", "name": "Spring Open 2026" }, …] — newest last
-tournaments/<slug>/
+site/tournaments.json       # [{ "slug": "2026-spring", "name": "Spring Open 2026" }, …] — newest last
+site/tournaments/<slug>/
   tournament.json           # meta, timezone, venues, categories, players
   matches/<category-id>.json  # one file per category
-index.html                  # links to tournaments
-style.css                   # shared; venue.html adds a kiosk override block
-venue.html                  # kiosk: now + next, one venue (?t=&v=) or all
-player.html                 # mobile schedule (?t=&p=)
-standings.html              # tables + bracket (?t=&c=)
-app.js                      # fetch, render, derive
+site/index.html             # links to tournaments
+site/style.css              # shared; venue.html adds a kiosk override block
+site/venue.html             # kiosk: now + next, one venue (?t=&v=) or all
+site/player.html            # mobile schedule (?t=&p=)
+site/standings.html         # tables + bracket (?t=&c=)
+site/app.js                 # fetch, render, derive
 validate.js                 # schema + cross-file check (hook, local)
 cli.js                      # score entry on match day: list scorable matches, set scores/forfeits (local)
 schedule.js                 # one-off match generator (2026-mammut60); its output must be committed
-tests.js                    # zero-dep runner: loads fixtures/, asserts (hook, CI)
+tests.js                    # zero-dep runner: loads fixtures/, asserts (hook)
 fixtures/                   # test data — every dir is a mini repo, one scenario each
-.github/workflows/pages.yml # upload repo root, deploy to Pages
+.github/workflows/pages.yml # upload site/, deploy to Pages
 ```
 
-App files sit at the root because that is what the workflow uploads and what the
-relative data paths are resolved against.
+Everything Pages serves lives under `site/` — the workflow uploads that one
+ directory (`upload-pages-artifact` `path: site`), and the app's relative
+fetches resolve against it. Dev tooling (cli, validate, tests, fixtures) stays
+at the repo root and never ships.
 One repo, one directory per tournament on `main`.
 
 ## Data
@@ -49,7 +51,7 @@ display label — the name lives only here, nothing repeats it. Order is
 chronological, so the last entry is the current event and `index.html` lists past
 ones above it.
 
-`tournaments/<slug>/tournament.json`
+`site/tournaments/<slug>/tournament.json`
 
 ```jsonc
 {
@@ -86,7 +88,7 @@ No team entity: a doubles side is just its player ids, written inline in each
 match. A pair entering two categories repeats its ids in both files — nothing
 links them, and nothing needs to.
 
-`tournaments/<slug>/matches/<category-id>.json`
+`site/tournaments/<slug>/matches/<category-id>.json`
 
 ```jsonc
 {
@@ -239,7 +241,7 @@ one category still hand-merge. One scorer per category is the operating model.
 `validate.js` then `tests.js` — so "validate and test before commit" is a
 mechanism, not discipline.
 
-`validate.js` is where the logic lives: `loadRepo` reads a repo root into
+`validate.js` is where the logic lives: `loadRepo` reads a data root into
 memory, `validateRepo` runs every check on it. Plain node, zero dependencies,
 no `package.json`, no schema library — the checks are hand-rolled. It checks
 the schema and cross-file references:
@@ -289,8 +291,8 @@ is a committed fixture under `fixtures/`: a self-contained mini repo
 (`tournaments.json` + `tournaments/<slug>/…`) loaded with the same `loadRepo`
 used on real checkouts, so the tests exercise the real I/O path. Tests only load
 and assert — none generate or mutate data, and none depend on the live
-`tournaments/` data. The hook and CI run `node tests.js` after `node validate.js`;
-the deploy workflow strips `fixtures/`, `tests.js`, `schedule.js`, `.git`, and `.github` before uploading.
+`site/tournaments/` data. The pre-commit hook runs `node tests.js` after `node validate.js`;
+the deploy workflow uploads only `site/` (`path: site`), so fixtures and dev tooling never ship.
 
 `ponytail:` no CLI in v1 — `score md40 m1 11-9 11-7` was planned as a wrapper
 over one JSON edit; built as cli.js once hand-editing during a live match hurt.
@@ -309,14 +311,16 @@ wrapper pattern hurts.
 
 GitHub Pages on `main`, publishing source **GitHub Actions** — not "deploy from a
 branch". `.github/workflows/pages.yml` is the stock
-`upload-pages-artifact` + `deploy-pages` pair with the repo root as the artifact.
+`upload-pages-artifact` + `deploy-pages` pair with `site/` as the artifact (`path: site`).
+No build, no checks — the pushed tree is served as-is; the hook is the only gate.
 Two settings carry the whole design:
 
 - The 10 builds/hour Pages cap applies to the legacy branch build only — GitHub's
   docs exempt Actions-published sites. Public repo ⇒ Actions minutes are free, so
   a match day of score pushes has no ceiling.
-- `concurrency: { group: pages, cancel-in-progress: true }` — a burst of scorer
-  pushes collapses to the latest one instead of queueing behind each other.
+- `concurrency: { group: pages, cancel-in-progress: false }` — deploys
+  serialize: an in-progress production deploy is never canceled (per the official
+  starter), a burst of scorer pushes queues behind the one in flight.
 
 A push is live in ~30–60s. Plain static files — host them anywhere if Pages stops
 fitting; the fetches are relative, so nothing points at github.com.
@@ -341,7 +345,7 @@ Two roles, and only one of them touches git.
 
 ### 1. Dana sets up a tournament (T-3 weeks → T-1 day)
 
-1. `mkdir tournaments/2026-spring` (or `cp -r` last year's), write
+1. `mkdir site/tournaments/2026-spring` (or `cp -r` last year's), write
    `tournament.json`: `timezone`, `venues`, `categories` with `bestOf` (e.g.
    `groups: 3`, `knockout: 5`).
 2. Registration comes in by whatever channel she already uses (mail, form,

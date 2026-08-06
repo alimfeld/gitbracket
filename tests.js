@@ -11,7 +11,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { loadRepo, validateRepo } = require('./validate.js');
-const { makeCat, winnerIdx, isDone, poolStandings, resolveSide, sameRecord, matchRound, playerMatches, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, scheduleStatus, venueBacklog, kioskBuckets, matchLabel, renderIndex, renderStandings, renderVenue, renderPlayer } = require('./app.js');
+const { makeCat, winnerIdx, isDone, poolStandings, resolveSide, sameRecord, matchRound, playerMatches, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, scheduleStatus, venueBacklog, kioskBuckets, matchLabel, renderIndex, renderStandings, renderVenue, renderPlayer } = require('./site/app.js');
 const cli = require('./cli.js');
 
 const FIX = (...parts) => path.join(__dirname, 'fixtures', ...parts);
@@ -338,18 +338,20 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
 test('cli writeEdit: rollback on validation failure, write on success (real disk)', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gitbracket-'));
   try {
-    fs.cpSync(FIX('sample'), tmp, { recursive: true });
-    const repo = loadRepo(tmp);
-    const file = path.join(tmp, 'tournaments', 'sample', 'matches', 'md40.json');
+    const dataRoot = path.join(tmp, 'site');
+    fs.mkdirSync(dataRoot, { recursive: true });
+    fs.cpSync(FIX('sample'), dataRoot, { recursive: true });
+    const repo = loadRepo(dataRoot);
+    const file = path.join(dataRoot, 'tournaments', 'sample', 'matches', 'md40.json');
     const before = fs.readFileSync(file, 'utf8');
-    const bad = cli.writeEdit(tmp, repo, 'sample', 'md40', c => cli.applyScore(c, 'm7', [{ a: 11, b: 5 }, { a: 11, b: 3 }]));
+    const bad = cli.writeEdit(dataRoot, repo, 'sample', 'md40', c => cli.applyScore(c, 'm7', [{ a: 11, b: 5 }, { a: 11, b: 3 }]));
     assert(bad.errs && bad.errs.length > 0 && !bad.file, 'bad edit reports validation errors');
     assert(fs.readFileSync(file, 'utf8') === before, 'rejected edit rolls the file back byte-identical');
     const m7mem = repo.tournaments.get('sample').matches.get('md40').matches.find(m => m.id === 'm7');
     assert(m7mem.forfeit === 1 && m7mem.games === undefined, 'rejected edit restores the in-memory match too');
-    const good = cli.writeEdit(tmp, repo, 'sample', 'md40', c => cli.applyScore(c, 'm7', [{ a: 11, b: 5 }]));
+    const good = cli.writeEdit(dataRoot, repo, 'sample', 'md40', c => cli.applyScore(c, 'm7', [{ a: 11, b: 5 }]));
     assert(!good.errs && good.file, 'good edit writes the file');
-    const reread = loadRepo(tmp);
+    const reread = loadRepo(dataRoot);
     assert(validateRepo(reread).errs.length === 0, 'written repo validates');
     const m7 = reread.tournaments.get('sample').matches.get('md40').matches.find(m => m.id === 'm7');
     assert(m7.games.length === 1 && m7.forfeit === undefined, 'games applied and the forfeit cleared');

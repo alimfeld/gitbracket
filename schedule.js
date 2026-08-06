@@ -22,7 +22,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { matchSlotMs, slotsOverlap, pairSig } = require('./app.js'); // per-category/per-match slot lengths live in tournament.json
+const { matchSlotMs, slotsOverlap, pairSig } = require('./site/app.js'); // per-category/per-match slot lengths live in tournament.json
 
 const SLUG = '2026-mammut60';
 const POOL_SIZE = 4; // max teams per pool; leftovers spill into a smaller pool
@@ -307,15 +307,15 @@ function assertPoolCoverage(teams, matches, names) {
 
 function main() {
   const tourney = JSON.parse(
-    fs.readFileSync(path.join(__dirname, 'tournaments', SLUG, 'tournament.json'), 'utf8')
+    fs.readFileSync(path.join(__dirname, 'site', 'tournaments', SLUG, 'tournament.json'), 'utf8')
   );
   const known = new Set(tourney.players.map((p) => p.id));
   for (const [cat, teams] of Object.entries(TEAMS)) {
     for (const ids of teams) for (const id of ids) {
-      if (!known.has(id)) throw new Error(`TEAMS.${cat}: player ${id} not in tournaments/${SLUG}/tournament.json`);
+      if (!known.has(id)) throw new Error(`TEAMS.${cat}: player ${id} not in site/tournaments/${SLUG}/tournament.json`);
     }
   }
-  const dir = path.join(__dirname, 'tournaments', SLUG, 'matches');
+  const dir = path.join(__dirname, 'site', 'tournaments', SLUG, 'matches');
   fs.mkdirSync(dir, { recursive: true });
 
   const results = [];
@@ -336,7 +336,7 @@ function main() {
     fs.writeFileSync(path.join(dir, cat + '.json'), JSON.stringify({ matches }, null, 2) + '\n');
     console.log(`${cat}: ${matches.length} matches -> ${cat}.json`);
   }
-  console.log('Wrote tournaments/' + SLUG + '/matches/*.json — run `node validate.js` before committing.');
+  console.log('Wrote site/tournaments/' + SLUG + '/matches/*.json — run `node validate.js` before committing.');
 }
 
 if (require.main === module) main();
