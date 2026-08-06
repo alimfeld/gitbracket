@@ -1,0 +1,26 @@
+{
+  "matches": [
+    {
+      "id": "m1",
+      "pool": "A",
+      "sides": [
+        {
+          "kind": "players",
+          "ids": [
+            "doris",
+            "nicole"
+          ]
+        },
+        {
+          "kind": "players",
+          "ids": [
+            "karin",
+            "eveline"
+          ]
+        }
+      ],
+      "venue": "court-3",
+      "scheduled": "2026-09-27T09:00:00+02:00"
+    }
+  ]
+}

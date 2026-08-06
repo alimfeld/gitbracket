@@ -1,0 +1,38 @@
+{
+  "timezone": "Europe/Zurich",
+  "venues": [
+    { "id": "court-1", "name": "Court 1" },
+    { "id": "court-2", "name": "Court 2" },
+    { "id": "court-3", "name": "Court 3" },
+    { "id": "court-4", "name": "Court 4" },
+    { "id": "court-5", "name": "Court 5" }
+  ],
+  "categories": [
+    { "id": "md", "name": "Men's Doubles 60+", "bestOf": { "groups": 1, "knockout": 1 }, "slotMinutes": { "groups": 30, "knockout": 30 } },
+    { "id": "wd", "name": "Women's Doubles 60+", "bestOf": { "groups": 1, "knockout": 1 }, "slotMinutes": { "groups": 30, "knockout": 30 } },
+    { "id": "xd", "name": "Mixed Doubles 60+", "bestOf": { "groups": 1, "knockout": 1 }, "slotMinutes": { "groups": 30, "knockout": 30 } }
+  ],
+  "players": [
+    { "id": "beni", "name": "Beni", "categories": ["md"] },
+    { "id": "charles", "name": "Charles", "categories": ["md", "xd"] },
+    { "id": "charly", "name": "Charly", "categories": ["md"] },
+    { "id": "doris", "name": "Doris", "categories": ["wd", "xd"] },
+    { "id": "elke", "name": "Elke", "categories": ["wd", "xd"] },
+    { "id": "eveline", "name": "Eveline", "categories": ["wd"] },
+    { "id": "gerry", "name": "Gerry", "categories": ["xd"] },
+    { "id": "hanspeter", "name": "Hanspeter", "categories": ["md"] },
+    { "id": "hase", "name": "Häse", "categories": ["md", "xd"] },
+    { "id": "karin", "name": "Karin", "categories": ["wd", "xd"] },
+    { "id": "koni", "name": "Koni", "categories": ["md", "xd"] },
+    { "id": "kurt", "name": "Kurt", "categories": ["md", "xd"] },
+    { "id": "marc", "name": "Marc", "categories": ["md", "xd"] },
+    { "id": "matthias", "name": "Matthias", "categories": ["md", "xd"] },
+    { "id": "nelly", "name": "Nelly", "categories": ["xd"] },
+    { "id": "nicole", "name": "Nicole", "categories": ["wd", "xd"] },
+    { "id": "otto", "name": "Otto", "categories": ["md", "xd"] },
+    { "id": "patrick", "name": "Patrick", "categories": ["md", "xd"] },
+    { "id": "phoebe", "name": "Phoebe", "categories": ["wd"] },
+    { "id": "reto", "name": "Reto", "categories": ["md"] },
+    { "id": "tom", "name": "Tom", "categories": ["md"] }
+  ]
+}

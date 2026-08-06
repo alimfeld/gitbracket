@@ -1,0 +1,10 @@
+{
+  "timezone": "UTC",
+  "venues": [],
+  "categories": [{ "id": "t", "name": "T", "bestOf": { "groups": 3, "knockout": 3 } }],
+  "players": [
+    { "id": "p1", "name": "A", "categories": ["t"] },
+    { "id": "p2", "name": "B", "categories": ["t"] },
+    { "id": "p3", "name": "C", "categories": ["t"] }
+  ]
+}

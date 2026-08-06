@@ -1,0 +1,5 @@
+#!/bin/sh
+# Run the validator + test suite before every commit: a rejected push is a data
+# problem caught here instead of a red Pages deploy.
+node "$(dirname "$0")/../validate.js" "$(git rev-parse --show-toplevel)" || exit 1
+exec node "$(dirname "$0")/../tests.js"

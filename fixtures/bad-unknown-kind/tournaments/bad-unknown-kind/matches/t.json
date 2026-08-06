@@ -1,0 +1,5 @@
+{
+  "matches": [
+    { "id": "m1", "sides": [{ "kind": "bogus" }, { "kind": "players", "ids": ["p2"] }] }
+  ]
+}

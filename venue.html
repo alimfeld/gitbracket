@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kiosk</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  /* kiosk override block */
+  body.kiosk { background: #000; color: #f2f2ec; max-width: none; padding: 2rem 3rem; }
+  body.kiosk h1 { font-size: 2.2rem; margin: 0 0 1.5rem; }
+  body.kiosk nav.cats { margin: 0 0 1.5rem; }
+  body.kiosk nav.cats a { border-color: #2a2a28; color: #f2f2ec; padding: .5rem 1.2rem; font-size: 1.1rem; }
+  body.kiosk nav.cats a.on { background: #ffd166; border-color: #ffd166; color: #000; }
+  body.kiosk h2.k-venue { font-size: 2.4rem; margin: 2.5rem 0 .6rem; padding-bottom: .4rem; border-bottom: 2px solid #2a2a28; }
+  body.kiosk .k-cols { display: flex; gap: 2.5rem; align-items: flex-start; flex-wrap: wrap; }
+  body.kiosk .k-venue-col { flex: 1 1 24rem; min-width: 0; }
+  body.kiosk .k-venue-col h2.k-venue { margin-top: 0; }
+  body.kiosk h2.k-now { font-size: 2.2rem; margin: .8rem 0 1rem; color: #ffd166; }
+  body.kiosk h2.k-next { font-size: 1.4rem; margin: 2.5rem 0 .8rem; color: #8a8a84; text-transform: uppercase; letter-spacing: .08em; }
+  body.kiosk .km { margin-bottom: 1.5rem; padding: 1.2rem 1.6rem; border: 1px solid #2a2a28; border-radius: 1rem; background: #111; }
+  body.kiosk .km.small { padding: .8rem 1.2rem; }
+  body.kiosk .ks { display: flex; justify-content: space-between; align-items: baseline; gap: 2rem; font-size: 3rem; line-height: 1.25; }
+  body.kiosk .km.small .ks { font-size: 2.2rem; }
+  body.kiosk .kscore { color: #8a8a84; font-size: .6em; }
+  body.kiosk .kmeta { color: #8a8a84; margin-top: .6rem; font-size: 1.2rem; }
+  body.kiosk .k-empty { color: #8a8a84; font-size: 1.4rem; }
+  body.kiosk .k-status { margin: 0 0 1.5rem; padding: .7rem 1.2rem; border: 1px solid #2a2a28; border-radius: .6rem; font-size: 1.4rem; }
+  body.kiosk .k-status.on { color: #7ee787; background: #0e1f12; border-color: #22402b; }
+  body.kiosk .k-status.late { color: #ffb3ab; background: #2a1210; border-color: #4a211c; }
+</style>
+</head>
+<body data-page="venue" class="kiosk">
+<main id="app"></main>
+<script src="app.js"></script>
+</body>
+</html>

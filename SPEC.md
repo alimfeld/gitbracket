@@ -20,17 +20,21 @@ Repo must be **public**: GitHub Pages on the free plan serves public repos only.
 ## Layout
 
 ```
-tournaments.json            # [{ "slug": "2025-spring", "name": "Spring Open 2025" }, …] — newest last
+tournaments.json            # [{ "slug": "2026-spring", "name": "Spring Open 2026" }, …] — newest last
 tournaments/<slug>/
   tournament.json           # meta, timezone, venues, categories, players
   matches/<category-id>.json  # one file per category
 index.html                  # links to tournaments
 style.css                   # shared; venue.html adds a kiosk override block
 venue.html                  # kiosk: now + next, one venue (?t=&v=) or all
-player.html                 # mobile schedule (?t=&player=)
-standings.html              # tables + bracket (?t=&cat=)
+player.html                 # mobile schedule (?t=&p=)
+standings.html              # tables + bracket (?t=&c=)
 app.js                      # fetch, render, derive
 validate.js                 # schema + cross-file check (hook, local)
+cli.js                      # score entry on match day: list scorable matches, set scores/forfeits (local)
+schedule.js                 # one-off match generator (2026-mammut60); its output must be committed
+tests.js                    # zero-dep runner: loads fixtures/, asserts (hook, CI)
+fixtures/                   # test data — every dir is a mini repo, one scenario each
 .github/workflows/pages.yml # upload repo root, deploy to Pages
 ```
 
@@ -55,7 +59,7 @@ ones above it.
     { "id": "court-4", "name": "Court 4" }
   ],
   "categories": [
-    { "id": "md40", "name": "Men's Doubles 40+", "bestOf": { "groups": 3, "knockout": 5 } }
+    { "id": "md40", "name": "Men's Doubles 40+", "bestOf": { "groups": 3, "knockout": 5 }, "slotMinutes": { "groups": 45, "knockout": 60 } }
   ],
   "players": [
     { "id": "p1", "name": "Ada Lovelace", "categories": ["md40"] },
@@ -71,6 +75,13 @@ number) that overrides the stage default — that is how a best-of-1 knockout ge
 a best-of-3 final and bronze. Venues are referenced by `id` everywhere (they are
 URL params); venue `name` is display only.
 
+`slotMinutes` is the **match length in wall-clock minutes per stage** — how long
+a match owns its court. Optional; both keys default to 45. A match may carry its
+own `"slotMinutes": 90` (a plain number) that overrides the stage default — that
+is how a best-of-3 final gets a longer court booking than the group games. One
+resolver, `matchSlotMs`, feeds the generator's slot grid, the venue-overlap
+check, and the kiosk's "now" window.
+
 No team entity: a doubles side is just its player ids, written inline in each
 match. A pair entering two categories repeats its ids in both files — nothing
 links them, and nothing needs to.
@@ -84,6 +95,7 @@ links them, and nothing needs to.
     "pool": "A",                      // present ⇒ stage "groups", absent ⇒ "knockout"
     "venue": "court-3",               // optional — omit for not-yet-placed
     "scheduled": "2025-07-14T09:00:00-04:00",  // optional — omit for TBD
+    "slotMinutes": 90,               // optional — overrides the category slot (best-of-3 final, say)
     "bestOf": 3,                      // optional — overrides bestOf[stage] (final, bronze)
     "sides": [                        // exactly two: sides[0] = "a", sides[1] = "b"
       { "kind": "players", "ids": ["p1", "p3"] },
@@ -138,9 +150,9 @@ unique per category), so the full bracket is committed before a ball is hit.
   and dead ties route to a human anyway.
 - **Byes** need no schema: no first-round match, point the second-round slot at
   the `pool` rank.
-- **Dead ties** at a pool's cutoff render the dependent slot "TBD" (as does an
-  unfinished pool), and `validate.js` warns so the admin can replace the source
-  with explicit `players` — decider or toss. Never blocks the commit.
+- **Dead ties** at a pool's cutoff keep the dependent slot descriptive ("1st in Pool A" —
+  it stays unresolved, as does an unfinished pool), and `validate.js` warns so the admin
+  can replace the source with explicit `players` — decider or toss. Never blocks the commit.
   `ponytail:` warn-only; block if a real event ships a bracket seeded off an
   unnoticed coin flip.
 - **Times** are ISO-8601 with explicit offset, so they parse as absolute
@@ -167,42 +179,70 @@ the timing.
 
 Per-file fetches aren't atomic — a deploy landing mid-poll yields one mixed
 snapshot, self-healing next poll. Renderers never throw on a bad snapshot: a
-missing matches file (404) renders empty, an unresolvable id renders "TBD", a
-match with no `scheduled` or `venue` renders "TBD" — never drop the row. The slot
-resolver carries a `seen` set as a backstop, so a cycle that slipped past
-`validate.js` renders TBD instead of hanging.
+missing matches file (404) renders empty, an unresolvable slot renders a
+descriptive label ("Winner of m9", "1st in Pool A") — never drop the row.
+Time and venue render defensively per view: the bracket and player schedule
+show "TBD" for a match with no `scheduled` or `venue`; standings pool tables
+show the venue with an empty time cell; the kiosk is a timeline, so it shows
+only matches that have both a venue and a time. Cycles are rejected by
+`validate.js` before a push, so the renderer trusts the gate.
 
-Every URL param (`?t= ?cat= ?player= ?v=`) is checked against the id regex before
+Every URL param (`?t= ?c= ?p= ?v=`) is checked against the id regex before
 use — unchecked, `?t=../../` is a path traversal on the fetch URL. Reject →
 render an error, fetch nothing.
 
-- **`venue.html?v=…`** — fullscreen dark kiosk, "now + next 3"; no `?v=` shows
-  all venues. "Now" = interval contains the current time and no result yet.
-- **`player.html?player=p1`** — matches by day: venue, time, partner, opponents.
-- **`standings.html?cat=md40`** — one table per pool plus the bracket view. The
-  bracket is laid out by depth: a match's round is its longest slot path from the
-  leaves, one column per round, bronze is just another member of its column. No
-  layout engine, no round metadata in the data.
+- **`venue.html?v=…`** — fullscreen dark kiosk; no `?v=` shows all venues.
+  Matches are grouped per venue, each group showing its "now" matches and the
+  next two; venue filter pills work like the standings category pills
+  (`?v=` toggles) and cover only venues with matches — a declared-but-unused
+  court gets no pill. All-venues mode lays the venues out side by side, one
+  column each. "Now" = any scheduled start already reached with no result
+  yet — a match whose slot has fully elapsed stays on the board (a late match
+  is still the match on court); only a result removes a match from it. Once the
+  day's first match is due, a status line shows "On schedule", or "Behind
+  schedule" naming every match whose full slot has elapsed without a result.
+- **`player.html?p=…`** — matches by day: venue, time, partner, opponents.
+  While the day runs late, an upcoming match on a backed-up venue shows its
+  backlog: "~30 min late · est. 15:55" (lower bound — a forfeit can clear it
+  sooner).
+- **`standings.html?c=…`** — one table per pool plus the bracket view. The
+  bracket is laid out by distance from the final: a match's column is its
+  winner-edge path to the final (one column per round), placement matches sit
+  one column after the round they branch from, bronze is just another member of
+  its column. No layout engine, no round metadata in the data.
 
 ## Write path
 
 ```
-$EDITOR tournaments/2025-spring/matches/md40.json   # add "games": [...]
-git commit -am "m1 11-9 11-7" && git push           # hook runs validate.js
+node cli.js list                       # what can be scored right now
+node cli.js score md m1 11-9 11-7      # set games — a prefix is a mid-match push
+node cli.js forfeit md m7 1            # side 1 forfeits, side 0 wins
+node cli.js -t 2026-spring …           # pick the tournament (default: last in tournaments.json)
+git commit -am "m1 11-9 11-7" && git push   # hook runs validate.js + tests.js
 ```
+
+`cli.js` is the match-day scorer's tool (zero deps, plain node): `list` shows
+every match whose two sides both resolve to players — the same rule
+`validate.js` enforces on scored matches — ready (no result) first. `score` and
+`forfeit` edit the one category file and run the real `validateRepo` before
+writing; a rejected edit rolls the file back, so the CLI never leaves data the
+pre-commit hook would refuse. The write is `JSON.stringify(cjson, null, 2)`,
+byte-identical to the existing files, so a commit diff shows only the edited
+match.
 
 A rejected push means someone pushed first: `git pull --rebase && git push`.
 Git's conflict semantics are the concurrency design — no retry loop, no CAS, no
 API client. Per-category files stripe writes across categories; two scorers on
 one category still hand-merge. One scorer per category is the operating model.
 
-`git config core.hooksPath .githooks` once, and `.githooks/pre-commit` is
-`#!/bin/sh` + `exec node validate.js` — so "validate before commit" is a
+`git config core.hooksPath .githooks` once; `.githooks/pre-commit` runs
+`validate.js` then `tests.js` — so "validate and test before commit" is a
 mechanism, not discipline.
 
-`validate.js` is the one piece of logic here. Plain node, zero dependencies, no
-`package.json`, no schema library — the checks are hand-rolled. It checks the
-schema and cross-file references:
+`validate.js` is where the logic lives: `loadRepo` reads a repo root into
+memory, `validateRepo` runs every check on it. Plain node, zero dependencies,
+no `package.json`, no schema library — the checks are hand-rolled. It checks
+the schema and cross-file references:
 
 - `tournaments.json` slugs exist; ids match the regex and are unique per scope
   (players and venues per tournament, matches per category).
@@ -233,16 +273,29 @@ schema and cross-file references:
   and it corrupts the bracket at render instead of at commit.
 - `scheduled` parses as ISO-8601 with an explicit offset; without it the venue
   overlap check silently skips the match.
-- No two unplayed scheduled matches share a venue at overlapping times
-  (`SLOT_MINUTES = 45`, one const until per-category durations land).
+- No two unplayed scheduled matches share a venue at overlapping times — across
+  categories too, so two categories can't double-book a court. A match's window
+  is its effective slot length: per-match `slotMinutes` > per-stage category
+  `slotMinutes` (`groups`/`knockout`) > the 45-minute default.
 
 A category with no matches file is valid. Dead-tie pool slots warn.
 
 Player clashes are not checked: behind a `match` or `pool` slot there is no
 player id yet, so the check is blind past round 1 anyway.
 
-`ponytail:` no CLI in v1 — `score md40 m1 11-9 11-7` is a wrapper over one JSON
-edit. Add one if hand-editing during a live match measurably hurts.
+`tests.js` is the harness, `fixtures/` is the data. Every scenario — the core
+validator rules, each derive behavior, plus the dead-tie and cycle corner cases —
+is a committed fixture under `fixtures/`: a self-contained mini repo
+(`tournaments.json` + `tournaments/<slug>/…`) loaded with the same `loadRepo`
+used on real checkouts, so the tests exercise the real I/O path. Tests only load
+and assert — none generate or mutate data, and none depend on the live
+`tournaments/` data. The hook and CI run `node tests.js` after `node validate.js`;
+the deploy workflow strips `fixtures/`, `tests.js`, `schedule.js`, `.git`, and `.github` before uploading.
+
+`ponytail:` no CLI in v1 — `score md40 m1 11-9 11-7` was planned as a wrapper
+over one JSON edit; built as cli.js once hand-editing during a live match hurt.
+No subcommands beyond list/score/forfeit — add `gitbracket` aliasing if the
+wrapper pattern hurts.
 
 ## Security
 
@@ -288,7 +341,7 @@ Two roles, and only one of them touches git.
 
 ### 1. Dana sets up a tournament (T-3 weeks → T-1 day)
 
-1. `mkdir tournaments/2025-spring` (or `cp -r` last year's), write
+1. `mkdir tournaments/2026-spring` (or `cp -r` last year's), write
    `tournament.json`: `timezone`, `venues`, `categories` with `bestOf` (e.g.
    `groups: 3`, `knockout: 5`).
 2. Registration comes in by whatever channel she already uses (mail, form,
@@ -298,14 +351,15 @@ Two roles, and only one of them touches git.
    then the knockout, whose sides are *slots* — `{"kind":"pool","pool":"A","rank":1}`
    for the quarters, `{"kind":"match","match":"m9","result":"winner"}` upward.
    No player ids past the pools.
-4. She assigns `venue` + `scheduled` by hand. `node validate.js` names the first
-   venue double-booking; she fixes it and re-runs until clean. **This loop is the
-   real work of v1** — there is no scheduler.
-5. Append `2025-spring` and its display name to `tournaments.json`, commit, push.
+4. She assigns `venue` + `scheduled` by hand (or regenerates the mammut60 grid with
+   `schedule.js`). `node validate.js` names the first venue double-booking; she fixes
+   it and re-runs until clean. **This loop is the real work of v1** — there is no
+   general scheduler.
+5. Append `2026-spring` and its display name to `tournaments.json`, commit, push.
    Pages redeploys; the kiosk and player pages are live in about a minute. Next
    season's entry goes below it — this one keeps its directory and its URLs, and
    `index.html` moves it into the past list.
-6. She hands out each player's link, `…/player.html?t=2025-spring&player=p1`,
+6. She hands out each player's link, `…/player.html?t=2026-spring&p=p1`,
    however she already contacts them.
 
 ### 2. Sam runs the tournament (match day)
@@ -313,7 +367,7 @@ Two roles, and only one of them touches git.
 1. Sam owns one category — that is the operating model.
 2. Court 3 finishes a game 11-9. Sam appends `{"a":11,"b":9}` to that match's
    `games`, runs `git commit -am "m1 11-9" && git push`. The pre-commit hook
-   runs `validate.js`, so a typo can't reach the kiosk.
+   runs `validate.js` and the test suite, so a typo can't reach the kiosk.
    Partial scores are legal — mid-match pushes show live on the kiosk. Second
    game 11-7 and the match is done, because it *has a result*; standings and
    every downstream slot recompute at the next render.
@@ -324,13 +378,13 @@ Two roles, and only one of them touches git.
 
 ### 3. The kiosk shows the hall
 
-A TV in the corner runs `venue.html?t=2025-spring&v=court-3` fullscreen — or
-drops `&v=` for an all-venues board. It renders "now" plus the next three.
+A TV in the corner runs `venue.html?t=2026-spring&v=court-3` fullscreen — or
+drops `&v=` for an all-venues board. It renders "now" plus the next two.
 Nobody logs in, nobody operates it. Unplugged and replugged, it's a URL.
 
 ### 4. Priya plays
 
-1. Opens her link, `player.html?t=2025-spring&player=p12`, on her phone and
+1. Opens her link, `player.html?t=2026-spring&p=p12`, on her phone and
    bookmarks it; no app, no login.
 2. It lists her matches by day: time, court, partner, opponents. Later rounds
    show "TBD" until the pool that feeds them finishes.
@@ -343,16 +397,13 @@ Nobody logs in, nobody operates it. Unplugged and replugged, it's a URL.
 
 ## Non-goals (v1)
 
-Real-time push (polling suffices), accounts/roles/database/SaaS backend, CLI or
-web admin UI, a generic rules engine (the slot enum is the model), native apps,
-media upload, streaming, multi-org management, a scheduler.
+Real-time push (polling suffices), accounts/roles/database/SaaS backend, a web admin UI, a generic rules engine (the slot enum is the model), native apps, media upload, streaming, multi-org management, a scheduler.
 
 ## Roadmap
 
-- **v1**: data files + kiosk + schedule + standings + validate.js.
+- **v1**: data files + kiosk + schedule + standings + validate.js + fixtures/tests.
 - **v1.5**: `.ics` export, PWA manifest, draws (points model — unlocks chess and
   football).
-- **v2**: `gitbracket` CLI, per-category durations, CI validation workflow,
-  template-repo distribution,
+- **v2**: per-category durations, CI validation workflow, template-repo distribution,
   Swiss pairing, setup wizard — each only if the hand-run version hurts.
 ```

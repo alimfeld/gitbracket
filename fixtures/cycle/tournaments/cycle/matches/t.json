@@ -1,0 +1,6 @@
+{
+  "matches": [
+    { "id": "a", "sides": [{ "kind": "match", "match": "b", "result": "winner" }, { "kind": "players", "ids": ["p1"] }], "games": [{ "a": 11, "b": 9 }] },
+    { "id": "b", "sides": [{ "kind": "match", "match": "a", "result": "winner" }, { "kind": "players", "ids": ["p2"] }], "games": [{ "a": 11, "b": 9 }] }
+  ]
+}

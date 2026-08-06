@@ -1,0 +1,52 @@
+{
+  "matches": [
+    {
+      "id": "x1", "pool": "A", "venue": "court-1", "scheduled": "2025-07-14T13:00:00-04:00",
+      "sides": [
+        { "kind": "players", "ids": ["p1", "p3"] },
+        { "kind": "players", "ids": ["p2", "p4"] }
+      ],
+      "games": [{ "a": 11, "b": 9 }, { "a": 11, "b": 8 }]
+    },
+    {
+      "id": "x2", "pool": "A", "venue": "court-2", "scheduled": "2025-07-14T13:00:00-04:00",
+      "sides": [
+        { "kind": "players", "ids": ["p5", "p7"] },
+        { "kind": "players", "ids": ["p6", "p8"] }
+      ],
+      "games": [{ "a": 11, "b": 7 }, { "a": 9, "b": 11 }, { "a": 11, "b": 8 }]
+    },
+    {
+      "id": "x3", "pool": "A", "venue": "court-1", "scheduled": "2025-07-14T13:45:00-04:00",
+      "sides": [
+        { "kind": "players", "ids": ["p1", "p3"] },
+        { "kind": "players", "ids": ["p5", "p7"] }
+      ],
+      "games": [{ "a": 11, "b": 5 }, { "a": 11, "b": 6 }]
+    },
+    {
+      "id": "x4", "pool": "A", "venue": "court-2", "scheduled": "2025-07-14T13:45:00-04:00",
+      "sides": [
+        { "kind": "players", "ids": ["p2", "p4"] },
+        { "kind": "players", "ids": ["p6", "p8"] }
+      ],
+      "games": [{ "a": 11, "b": 9 }, { "a": 11, "b": 7 }]
+    },
+    {
+      "id": "x5", "pool": "A", "venue": "court-1", "scheduled": "2025-07-14T14:30:00-04:00",
+      "sides": [
+        { "kind": "players", "ids": ["p1", "p3"] },
+        { "kind": "players", "ids": ["p6", "p8"] }
+      ],
+      "games": [{ "a": 11, "b": 4 }, { "a": 11, "b": 4 }]
+    },
+    {
+      "id": "x6", "pool": "A", "venue": "court-2", "scheduled": "2025-07-14T14:30:00-04:00",
+      "sides": [
+        { "kind": "players", "ids": ["p2", "p4"] },
+        { "kind": "players", "ids": ["p5", "p7"] }
+      ],
+      "games": [{ "a": 9, "b": 11 }, { "a": 11, "b": 9 }, { "a": 11, "b": 6 }]
+    }
+  ]
+}

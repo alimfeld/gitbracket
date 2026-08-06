@@ -1,0 +1,29 @@
+name: Deploy to GitHub Pages
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: node validate.js
+      - run: node tests.js
+      - run: node schedule.js && git diff --exit-code -- tournaments/2026-mammut60/matches  # generator output must stay committed
+      - uses: actions/configure-pages@v5
+      - run: rm -rf .git .github fixtures tests.js schedule.js cli.js validate.js .githooks SPEC.md
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: .
+      - id: deployment
+        uses: actions/deploy-pages@v4

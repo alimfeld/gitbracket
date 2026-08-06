@@ -1,0 +1,10 @@
+{
+  "matches": [
+    { "id": "m1", "pool": "A", "sides": [{ "kind": "players", "ids": ["p1"] }, { "kind": "players", "ids": ["p2"] }], "games": [{ "a": 11, "b": 9 }, { "a": 8, "b": 11 }, { "a": 11, "b": 9 }] },
+    { "id": "m2", "pool": "A", "sides": [{ "kind": "players", "ids": ["p3"] }, { "kind": "players", "ids": ["p4"] }], "games": [{ "a": 11, "b": 9 }, { "a": 8, "b": 11 }, { "a": 11, "b": 9 }] },
+    { "id": "m3", "pool": "A", "sides": [{ "kind": "players", "ids": ["p2"] }, { "kind": "players", "ids": ["p3"] }], "games": [{ "a": 11, "b": 9 }, { "a": 8, "b": 11 }, { "a": 12, "b": 10 }] },
+    { "id": "m4", "pool": "A", "sides": [{ "kind": "players", "ids": ["p1"] }, { "kind": "players", "ids": ["p3"] }], "games": [{ "a": 11, "b": 9 }, { "a": 11, "b": 9 }] },
+    { "id": "m5", "pool": "A", "sides": [{ "kind": "players", "ids": ["p2"] }, { "kind": "players", "ids": ["p4"] }], "games": [{ "a": 11, "b": 9 }, { "a": 8, "b": 11 }, { "a": 11, "b": 5 }] },
+    { "id": "m6", "pool": "A", "sides": [{ "kind": "players", "ids": ["p1"] }, { "kind": "players", "ids": ["p4"] }], "games": [{ "a": 9, "b": 11 }, { "a": 11, "b": 9 }, { "a": 9, "b": 11 }] }
+  ]
+}
