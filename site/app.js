@@ -158,6 +158,16 @@ function sideLabel(side, ctx) {
   return [...ids].map(id => ctx.names.get(id) || id).join(' / ');
 }
 
+// Like sideLabel, but each resolved player name links to their player page.
+// Unresolved slots keep their plain slot label (nothing to link to).
+function playerLinks(ids, ctx, slug) {
+  return [...ids].map(id => `<a href="player.html?t=${esc(slug)}&p=${esc(id)}">${esc(ctx.names.get(id) || id)}</a>`).join(' / ');
+}
+function sideLinks(side, ctx, slug) {
+  const ids = resolveSide(side, ctx);
+  return ids ? playerLinks(ids, ctx, slug) : sideLabel(side, ctx);
+}
+
 // The player's confirmed matches: only matches where their side actually
 // resolves to them. "Winner of m9" slots stay off the schedule until m9 is
 // decided — a possibility is not a booking.
@@ -398,8 +408,8 @@ function renderStandings(params, data) {
       parts.push('<table class="standings"><thead><tr><th>#</th><th>Team</th><th>W</th><th>L</th><th>GD</th><th>PD</th></tr></thead><tbody>');
       st.forEach((r, i) => {
         const tied = isDeadTie(st, i + 1);
-        const team = [...r.ids].map(id => ctx.names.get(id) || id).join(' / ');
-        parts.push(`<tr${tied ? ' class="tie"' : ''}><td>${i + 1}${tied ? '†' : ''}</td><td>${esc(team)}</td><td>${r.wins}</td><td>${r.losses}</td><td>${fmtDiff(r.gd)}</td><td>${fmtDiff(r.pd)}</td></tr>`);
+        const team = playerLinks(r.ids, ctx, data.t.slug);
+        parts.push(`<tr${tied ? ' class="tie"' : ''}><td>${i + 1}${tied ? '†' : ''}</td><td>${team}</td><td>${r.wins}</td><td>${r.losses}</td><td>${fmtDiff(r.gd)}</td><td>${fmtDiff(r.pd)}</td></tr>`);
       });
       parts.push('</tbody></table>');
       parts.push('<table class="gmatches"><tbody>');
@@ -409,9 +419,9 @@ function renderStandings(params, data) {
         const state = matchState(m, ctx) || gamesText(m);
         parts.push(`<tr>
           <td class="mid">${esc(m.id)}</td>
-          <td>${esc(sideLabel(m.sides[0], ctx))}</td>
+          <td>${sideLinks(m.sides[0], ctx, data.t.slug)}</td>
           <td class="score">${esc(state || '–')}</td>
-          <td>${esc(sideLabel(m.sides[1], ctx))}</td>
+          <td>${sideLinks(m.sides[1], ctx, data.t.slug)}</td>
           <td class="gmeta">${meta}</td>
         </tr>`);
       }
@@ -419,7 +429,7 @@ function renderStandings(params, data) {
       parts.push('</div>');
     }
     const ko = ctx.matches.filter(m => m && m.pool === undefined);
-    if (ko.length) parts.push(bracketHtml(ctx, ko));
+    if (ko.length) parts.push(bracketHtml(ctx, ko, data.t.slug));
   }
   return parts.join('');
 }
@@ -471,7 +481,7 @@ function koColumn(m, ctx) {
   return ctx._koCol.get(m.id);
 }
 
-function bracketHtml(ctx, ko) {
+function bracketHtml(ctx, ko, slug) {
   const cols = [];
   const maxR = ko.reduce((mx, m) => Math.max(mx, koColumn(m, ctx)), 0);
   for (const m of ko) {
@@ -481,17 +491,17 @@ function bracketHtml(ctx, ko) {
   const parts = ['<div class="bracket">'];
   cols.forEach((ms, r) => {
     parts.push(`<div class="bcol"><div class="bhead">${roundName(cols.length - 1 - r)}</div>`);
-    for (const m of ms) parts.push(matchCard(m, ctx));
+    for (const m of ms) parts.push(matchCard(m, ctx, slug));
     parts.push('</div>');
   });
   parts.push('</div>');
   return parts.join('');
 }
 
-function matchCard(m, ctx) {
+function matchCard(m, ctx, slug) {
   const w = winnerIdx(m, ctx);
   const sides = m.sides.map((s, i) =>
-    `<div class="bs${w === i ? ' win' : ''}"><span>${esc(sideLabel(s, ctx))}</span></div>`).join('');
+    `<div class="bs${w === i ? ' win' : ''}"><span>${sideLinks(s, ctx, slug)}</span></div>`).join('');
   const state = matchState(m, ctx) || gamesText(m);
   const t = schedTime(m);
   const meta = [m.venue ? esc(ctx.venues.get(m.venue) || m.venue) : 'TBD', t !== null ? fmtTime(t, ctx.tz) : 'TBD'].join(' · ');

@@ -88,6 +88,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   const standings = renderStandings(no(), data);
   assert(standings.includes('Pool A') && standings.includes('Final') && standings.includes('Winner of m8'), 'standings renders pools, bracket, and slot labels');
   assert(standings.includes('Ada Lovelace'), 'standings renders player names');
+  assert(standings.includes('player.html?t=sample&p=p1'), 'standings links players to their player page');
   const venue = renderVenue(no(), data);
   assert(venue.includes('k-venue') && venue.includes('Ada Lovelace'), 'venue page renders venue boards with match rows');
   assert(renderPlayer(new URLSearchParams('p=p1'), data).includes('Ada Lovelace'), 'player page finds the player');
