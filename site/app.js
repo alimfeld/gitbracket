@@ -598,7 +598,12 @@ function renderVenue(params, data) {
 function renderPlayer(params, data) {
   if (!data.tjson) return '<p>Missing tournament.json — has the tournament been pushed?</p>';
   const pid = params.get('p');
-  const p = (data.tjson.players || []).find(x => x && x.id === pid);
+  const players = (data.tjson.players || []).filter(p => p && typeof p === 'object' && typeof p.id === 'string');
+  if (!pid) { // no ?p= — the picker, one page per player
+    const items = players.map(p => `<li><a href="player.html?t=${esc(data.t.slug)}&p=${esc(p.id)}">${esc(p.name || p.id)}</a></li>`);
+    return `<h1>${esc(data.t.name)}</h1><p class="sub">Pick a player to see their schedule</p><ul class="tournaments">${items.join('') || '<li>No players.</li>'}</ul>`;
+  }
+  const p = players.find(x => x.id === pid);
   if (!p) return '<p>Player not found.</p>';
   const rows = [];
   const ctxs = data.cats.map(c => makeCat(c, data.tjson));
