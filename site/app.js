@@ -321,9 +321,10 @@ function venueBacklog(cats, nowMs) {
 
 async function fetchJson(url) {
   try {
-    // ?_= cache-buster; ponytail: if the Pages edge TTL ever wins over this,
-    // swap in a per-deploy version token in the URL here instead.
-    const res = await fetch(url + '?_=' + Date.now());
+    // Revalidate with the CDN every poll: Pages honors If-None-Match, so
+    // unchanged data returns a 0-byte 304 instead of a full re-download, and
+    // changed data still arrives fresh on the next poll.
+    const res = await fetch(url, { cache: 'no-cache' });
     if (!res.ok) return null; // 404 -> null -> renders empty, never throws
     return await res.json();
   } catch (e) {
