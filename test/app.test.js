@@ -6,7 +6,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { makeCat, winnerIdx, isDone, poolStandings, resolveSide, sameRecord, matchRound, playerMatches, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, scheduleStatus, venueBacklog, kioskBuckets, matchLabel } = require('../site/app.js');
+const { makeCat, winnerIdx, isDone, poolStandings, resolveSide, sameRecord, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, scheduleStatus, venueBacklog, kioskBuckets, matchLabel } = require('../site/app.js');
 const { FIX, catOf } = require('./helpers.js');
 
 test('pool A standings: 4 sides, order, leader record', () => {
@@ -114,6 +114,24 @@ test('matchLabel: pool, placement, and round names on one card label', () => {
   assert(matchLabel(full.byId.get('m9'), full) === '3rd place', 'bronze via placementLabel');
   const md = catOf('sample', 'md40');
   assert(matchLabel(md.byId.get('m9'), md) === 'Final' && matchLabel(md.byId.get('m10'), md) === '3rd place', 'sample: m9 final, m10 bronze');
+});
+
+test('reachableKo: undecided feeder keeps both branches; decided feeder gates the closed one', () => {
+  const md = catOf('sample', 'md40');
+  const ids = pid => [...reachableKo(md, pid)].sort().join(',');
+  assert(ids('p5') === 'm10,m9', 'p5: final and bronze both open while m8 is undecided');
+  assert(ids('p1') === '' && ids('p7') === '', 'p1/p7: decided feeders close the losing/winning branch');
+});
+
+test('possibleSpan: open knockout span, and pre-knockout fallback to the bracket block', () => {
+  const md = catOf('sample', 'md40');
+  const s = possibleSpan(md, 'p5');
+  assert(s && s.count === 1 && s.min === Date.parse('2025-07-14T12:15:00-04:00') && s.max === s.min, 'p5: final or bronze at 12:15 — one more match, not both');
+  assert(possibleSpan(md, 'p1') === null && possibleSpan(md, 'p7') === null, 'confirmed knockout seat (final/bronze) leaves no open span');
+  const tjson = require(FIX('sample', 'tournaments', 'sample', 'tournament.json'));
+  const pre = makeCat({ meta: tjson.categories[0], matches: md.matches.map(m => ({ ...m, games: [], forfeit: undefined })) }, tjson);
+  const s0 = possibleSpan(pre, 'p1');
+  assert(s0 && s0.count === 2 && s0.min === Date.parse('2025-07-14T11:15:00-04:00') && s0.max === Date.parse('2025-07-14T12:15:00-04:00'), 'pre-event: up to 2 matches along one bracket path (m7 -> final/bronze, 11:15 to 12:15)');
 });
 
 test('playerMatches: only matches the player is actually in, not potential slots', () => {

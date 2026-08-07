@@ -55,6 +55,7 @@ table.standings td.tie { background: #fff3cd; }
 .pmpartner { font-size: .9rem; color: var(--muted); }
 .pmmeta { font-size: .85rem; color: var(--muted); margin-top: .2rem; }
 .pmmeta .late { color: #b3402e; font-weight: 600; }
+.pm-possible { font-size: .85rem; color: var(--muted); border: 1px dashed var(--line); border-radius: .5rem; padding: .4rem .8rem; margin: .4rem 0 .6rem; }
 
 /* kiosk override block — venue.html only, gated by body.kiosk */
 body.kiosk { background: #000; color: #f2f2ec; max-width: none; padding: 2rem 3rem; }

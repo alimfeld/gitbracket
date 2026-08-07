@@ -186,6 +186,68 @@ function playerMatches(ctx, pid) {
   return rows;
 }
 
+// Knockout matches still open for this player: from their confirmed matches
+// through undecided "Winner/Loser of X" slots. A decided feeder only forwards
+// the result the player got, so the closed branch drops out; confirmed
+// consumers are excluded (they render as cards). Returns match ids.
+function reachableKo(ctx, pid) {
+  const starts = playerMatches(ctx, pid).filter(r => r.m.pool === undefined);
+  const sideOf = new Map(starts.map(r => [r.m.id, r.i]));
+  const open = new Set();
+  const seen = new Set(sideOf.keys());
+  const queue = [...sideOf.keys()];
+  while (queue.length) {
+    const id = queue.shift();
+    const w = winnerIdx(ctx.byId.get(id), ctx); // null until the feeder is decided
+    for (const m of ctx.matches) {
+      if (m.pool !== undefined || !Array.isArray(m.sides) || seen.has(m.id)) continue;
+      for (const s of m.sides) {
+        if (!s || s.kind !== 'match' || s.match !== id) continue;
+        const pSide = sideOf.get(id); // only start nodes can be decided; candidates are undecided by construction
+        if (w !== null && pSide !== undefined && (s.result === 'winner') !== (pSide === w)) continue;
+        seen.add(m.id);
+        open.add(m.id);
+        queue.push(m.id);
+      }
+    }
+  }
+  return open;
+}
+
+// Longest chain of knockout matches starting at id (the match itself counts):
+// winner and loser branches are exclusive, so this is the max a team can still
+// play from that point. O(N²) per id but memoized and brackets are tiny.
+function chainLen(ctx, id, memo = new Map()) {
+  if (memo.has(id)) return memo.get(id);
+  memo.set(id, 0); // cycle guard — validate rejects cycles anyway
+  const cs = [];
+  for (const m of ctx.matches) {
+    if (!m || !Array.isArray(m.sides)) continue;
+    for (const s of m.sides) {
+      if (s && s.kind === 'match' && s.match === id) cs.push(m);
+    }
+  }
+  memo.set(id, 1 + (cs.length ? Math.max(...cs.map(c => chainLen(ctx, c.id, memo))) : 0));
+  return memo.get(id);
+}
+
+// Day-span of knockout slots still open for this player; null when none.
+// Pre-knockout (pool team with no knockout seat yet) every bracket path is
+// possible — times are pre-scheduled. count = the longest single path (win XOR
+// lose, one rank). ponytail: fallback assumes everyone advances; gate it on
+// pool completion if a format with a knockout cutoff ever appears.
+function possibleSpan(ctx, pid) {
+  const rows = playerMatches(ctx, pid);
+  const ko = rows.filter(r => r.m.pool === undefined);
+  let open = [...reachableKo(ctx, pid)];
+  if (!open.length && rows.some(r => r.m.pool !== undefined) && !ko.length) {
+    open = ctx.matches.filter(m => m.pool === undefined).map(m => m.id);
+  }
+  const ts = open.map(id => schedTime(ctx.byId.get(id))).filter(t => t !== null);
+  if (!ts.length) return null;
+  return { min: Math.min(...ts), max: Math.max(...ts), count: Math.max(...open.map(id => chainLen(ctx, id))) };
+}
+
 function matchRound(m, ctx, memo = new Map()) {
   if (memo.has(m.id)) return memo.get(m.id);
   memo.set(m.id, 0); // in-progress guard — validate rejects cycles; this only stops a hang if one slips past the gate
@@ -593,6 +655,24 @@ function renderVenue(params, data) {
   return parts.join('');
 }
 
+// "~X min late · est. H:MM" note for a scheduled match, from the venue's
+// accumulated backlog; '' when on schedule.
+function delayNote(t, m, ctx, delayByVenue, now) {
+  if (t === null || t <= now || !m.venue) return '';
+  const d = delayByVenue.get(m.venue) || 0;
+  const min = Math.round(d / 60000 / 5) * 5;
+  return min >= 5 ? ` · <span class="late">~${min} min late · est. ${fmtTime(t + d, ctx.tz)}</span>` : '';
+}
+
+// "N more <category> matches possible between H:MM and H:MM · depends on
+// results" — the open-span line, placed in the schedule where that span starts.
+function possibleLine(b) {
+  const range = b.min === b.max ? `at ${fmtTime(b.min, b.ctx.tz)}` : `between ${fmtTime(b.min, b.ctx.tz)} and ${fmtTime(b.max, b.ctx.tz)}`;
+  const noun = b.count === 1 ? 'match' : 'matches';
+  const howMany = b.count > 1 ? `Up to ${b.count} more` : '1 more';
+  return `<p class="pm-possible">${howMany} ${esc(b.ctx.name)} ${noun} possible ${range} · depends on results</p>`;
+}
+
 function renderPlayer(params, data) {
   if (!data.tjson) return '<p>Missing tournament.json — has the tournament been pushed?</p>';
   const pid = params.get('p');
@@ -620,12 +700,23 @@ function renderPlayer(params, data) {
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(r);
   }
+  const blocksByDay = new Map(); // dayKey -> [{ ctx, min, max, count }]
+  for (const ctx of ctxs) {
+    const span = possibleSpan(ctx, pid);
+    if (!span) continue;
+    const key = dayKey(span.min, ctx.tz);
+    if (!blocksByDay.has(key)) blocksByDay.set(key, []);
+    blocksByDay.get(key).push({ ctx, ...span });
+  }
   const parts = [`<h1>${esc(p.name)}</h1>`, `<p class="sub"><a href="index.html">Home</a> · <a href="standings.html?t=${esc(data.t.slug)}">${esc(data.t.name)}</a></p>`];
   for (const [key, g] of groups) {
     parts.push(`<h2>${esc(key)}</h2>`);
+    const blocks = (blocksByDay.get(key) || []).sort((a, b) => a.min - b.min);
+    let bi = 0;
     for (const r of g) {
+      const t = schedTime(r.m);
+      while (bi < blocks.length && blocks[bi].min < t) parts.push(possibleLine(blocks[bi++]));
       const m = r.m, ctx = r.ctx;
-      const t = schedTime(m);
       const oppSet = resolveSide(m.sides[1 - r.i], ctx);
       const opp = oppSet ? teamLabel(oppSet, ctx) : null;
       const w = winnerIdx(m, ctx);
@@ -633,12 +724,7 @@ function renderPlayer(params, data) {
         : (w === null ? matchState(m, ctx) : `${w === r.i ? 'W' : 'L'} · ${gamesText(m)}`);
       const withP = r.partner.length ? teamLabel(r.partner, ctx) : '— (singles)';
       const venue = m.venue ? ctx.venues.get(m.venue) || m.venue : 'TBD';
-      let late = '';
-      if (t !== null && t > now && m.venue) {
-        const d = delayByVenue.get(m.venue) || 0;
-        const min = Math.round(d / 60000 / 5) * 5;
-        if (min >= 5) late = ` · <span class="late">~${min} min late · est. ${fmtTime(t + d, ctx.tz)}</span>`;
-      }
+      const late = delayNote(t, m, ctx, delayByVenue, now);
       parts.push(`<div class="pm">
         <div class="pmtop"><span class="pmtime">${t === null ? 'TBD' : fmtTime(t, ctx.tz)}</span><span class="pmcourt">${esc(venue)}</span></div>
         <div class="pmopp">vs ${esc(opp || slotLabel(m.sides[1 - r.i], ctx))}</div>
@@ -646,6 +732,7 @@ function renderPlayer(params, data) {
         <div class="pmmeta">${esc(ctx.name)}${state ? ' · ' + esc(state) : ''}${late}</div>
       </div>`);
     }
+    while (bi < blocks.length) parts.push(possibleLine(blocks[bi++]));
   }
   if (!rows.length) parts.push('<p>No matches.</p>');
   return parts.join('');
@@ -694,5 +781,5 @@ if (typeof document !== 'undefined') boot();
 
 // CommonJS exports for validate.js; browser <script> ignores these.
 if (typeof module !== 'undefined') {
-  module.exports = { ID_RE, pairSig, matchSlotMs, slotsOverlap, makeCat, winnerIdx, isDone, poolStandings, resolveSide, sameRecord, matchRound, isDeadTie, playerMatches, slotLabel, sideLabel, schedTime, gamesText, roundName, placementLabel, koColumn, scheduleStatus, venueBacklog, kioskBuckets, matchLabel, fmtTime, dayKey, renderIndex, renderStandings, renderVenue, renderPlayer };
+  module.exports = { ID_RE, pairSig, matchSlotMs, slotsOverlap, makeCat, winnerIdx, isDone, poolStandings, resolveSide, sameRecord, matchRound, isDeadTie, playerMatches, reachableKo, possibleSpan, slotLabel, sideLabel, schedTime, gamesText, roundName, placementLabel, koColumn, scheduleStatus, venueBacklog, kioskBuckets, matchLabel, fmtTime, dayKey, renderIndex, renderStandings, renderVenue, renderPlayer };
 }
