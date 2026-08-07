@@ -1,5 +1,15 @@
 #!/bin/sh
 # Run the validator + test suite before every commit: the hook is the only
 # gate between a typo and a live Pages deploy.
-node "$(dirname "$0")/../validate.js" "$(git rev-parse --show-toplevel)" || exit 1
-cd "$(git rev-parse --show-toplevel)" && exec node --test
+set -e
+root="$(git rev-parse --show-toplevel)"
+cd "$root"
+# Cache-bust asset URLs with the short SHA when app.js/style.css changed:
+# Pages caches static files, a new ?v= forces browsers to re-fetch.
+if ! git diff --quiet HEAD -- site/app.js site/style.css; then
+  v="$(git rev-parse --short HEAD)"
+  sed -i '' -E "s/(app\.js|style\.css)(\?v=[^\"']*)?\"/\1?v=$v\"/g" site/*.html
+  git add site/*.html
+fi
+node validate.js "$root" || exit 1
+exec node --test
