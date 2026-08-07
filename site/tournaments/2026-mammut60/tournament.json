@@ -10,7 +10,7 @@
   "categories": [
     { "id": "md", "name": "Men's Doubles", "bestOf": { "groups": 1, "knockout": 1 }, "slotMinutes": { "groups": 30, "knockout": 30 } },
     { "id": "wd", "name": "Women's Doubles", "bestOf": { "groups": 1, "knockout": 1 }, "slotMinutes": { "groups": 30, "knockout": 30 } },
-    { "id": "xd", "name": "Mixed Doubles", "bestOf": { "groups": 1, "knockout": 1 }, "slotMinutes": { "groups": 30, "knockout": 30 } }
+    { "id": "xd", "name": "Mixed", "bestOf": { "groups": 1, "knockout": 1 }, "slotMinutes": { "groups": 30, "knockout": 30 } }
   ],
   "players": [
     { "id": "beni", "name": "Beni", "categories": ["md"] },
