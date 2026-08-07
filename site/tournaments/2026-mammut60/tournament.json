@@ -8,9 +8,9 @@
     { "id": "court-5", "name": "Court 5" }
   ],
   "categories": [
-    { "id": "md", "name": "Men's Doubles 60+", "bestOf": { "groups": 1, "knockout": 1 }, "slotMinutes": { "groups": 30, "knockout": 30 } },
-    { "id": "wd", "name": "Women's Doubles 60+", "bestOf": { "groups": 1, "knockout": 1 }, "slotMinutes": { "groups": 30, "knockout": 30 } },
-    { "id": "xd", "name": "Mixed Doubles 60+", "bestOf": { "groups": 1, "knockout": 1 }, "slotMinutes": { "groups": 30, "knockout": 30 } }
+    { "id": "md", "name": "Men's Doubles", "bestOf": { "groups": 1, "knockout": 1 }, "slotMinutes": { "groups": 30, "knockout": 30 } },
+    { "id": "wd", "name": "Women's Doubles", "bestOf": { "groups": 1, "knockout": 1 }, "slotMinutes": { "groups": 30, "knockout": 30 } },
+    { "id": "xd", "name": "Mixed Doubles", "bestOf": { "groups": 1, "knockout": 1 }, "slotMinutes": { "groups": 30, "knockout": 30 } }
   ],
   "players": [
     { "id": "beni", "name": "Beni", "categories": ["md"] },
