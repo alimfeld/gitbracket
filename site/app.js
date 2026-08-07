@@ -575,11 +575,14 @@ function kioskCard(r, small) {
   const m = r.m, ctx = r.ctx;
   const score = i => gamesWon(m, i) || '';
   const state = matchState(m, ctx);
-  const meta = [esc(matchLabel(m, ctx)), esc(ctx.name), fmtTime(r.t, ctx.tz), esc(state)].filter(Boolean).join(' · '); // venue is the group header now
+  const meta = [esc(ctx.name), esc(matchLabel(m, ctx)), esc(state)].filter(Boolean).join(' · '); // category first, then pool; venue is the group header now
   return `<div class="km${small ? ' small' : ''}">
-    <div class="ks"><span>${esc(sideLabel(m.sides[0], ctx))}</span><span class="kscore">${score(0)}</span></div>
-    <div class="ks"><span>${esc(sideLabel(m.sides[1], ctx))}</span><span class="kscore">${score(1)}</span></div>
-    <div class="kmeta">${meta}</div>
+    <div class="km-main">
+      <div class="ks"><span>${esc(sideLabel(m.sides[0], ctx))}</span><span class="kscore">${score(0)}</span></div>
+      <div class="ks"><span>${esc(sideLabel(m.sides[1], ctx))}</span><span class="kscore">${score(1)}</span></div>
+      <div class="kmeta">${meta}</div>
+    </div>
+    <div class="ktime">${esc(fmtTime(r.t, ctx.tz))}</div>
   </div>`;
 }
 
@@ -614,7 +617,7 @@ function renderVenue(params, data) {
   const venues = (data.tjson.venues || []).map(x => x.id).filter(id => rows.some(r => r.m.venue === id));
   const shown = v ? rows.filter(r => r.m.venue === v) : rows;
   const base = `venue.html?t=${esc(data.t.slug)}`;
-  const parts = [`<h1>${esc(v ? venueNames.get(v) || v : 'All venues')}</h1>`];
+  const parts = [`<h1>${esc(data.t.name)}</h1>`]; // title = tournament, venue lives in the active pill
   // filter pills, same toggle pattern as the standings category nav
   parts.push(`<nav class="cats">${['', ...venues].map(id => {
     const active = id ? v === id : !v;

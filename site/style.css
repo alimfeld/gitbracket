@@ -69,8 +69,11 @@ body.kiosk .k-venue-col { flex: 1 1 24rem; min-width: 0; }
 body.kiosk .k-venue-col h2.k-venue { margin-top: 0; }
 body.kiosk h2.k-now { font-size: 2.2rem; margin: .8rem 0 1rem; color: #ffd166; }
 body.kiosk h2.k-next { font-size: 1.4rem; margin: 2.5rem 0 .8rem; color: #8a8a84; text-transform: uppercase; letter-spacing: .08em; }
-body.kiosk .km { margin-bottom: 1.5rem; padding: 1.2rem 1.6rem; border: 1px solid #2a2a28; border-radius: 1rem; background: #111; }
+body.kiosk .km { display: flex; justify-content: space-between; align-items: center; gap: 1.5rem; margin-bottom: 1.5rem; padding: 1.2rem 1.6rem; border: 1px solid #2a2a28; border-radius: 1rem; background: #111; }
 body.kiosk .km.small { padding: .8rem 1.2rem; }
+body.kiosk .km-main { min-width: 0; }
+body.kiosk .ktime { font-size: 3.6rem; font-weight: 700; color: #f2f2ec; font-variant-numeric: tabular-nums; white-space: nowrap; }
+body.kiosk .km.small .ktime { font-size: 2.6rem; }
 body.kiosk .ks { display: flex; justify-content: space-between; align-items: baseline; gap: 2rem; font-size: 3rem; line-height: 1.25; }
 body.kiosk .km.small .ks { font-size: 2.2rem; }
 body.kiosk .kscore { color: #8a8a84; font-size: .6em; }
