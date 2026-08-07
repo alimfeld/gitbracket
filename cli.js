@@ -6,7 +6,7 @@
 //
 //   node cli.js                            # list scorable matches (latest tournament)
 //   node cli.js list [category]            #  … one category only
-//   node cli.js score md m1 11-9 11-7      # set games — a prefix is a mid-match push
+//   node cli.js score md m1 11:9 11:7      # set games — a prefix is a mid-match push
 //   node cli.js forfeit md m7 1            # side 1 forfeits, side 0 wins
 //   node cli.js -t 2026-mammut60 score …   # pick the tournament (default: last in tournaments.json)
 //
@@ -28,7 +28,7 @@ function isScorable(m, ctx) {
 }
 
 function parseGame(s) {
-  const mm = /^(\d+)-(\d+)$/.exec(s);
+  const mm = /^(\d+)[:-](\d+)$/.exec(s);
   return mm ? { a: +mm[1], b: +mm[2] } : null;
 }
 
@@ -116,7 +116,7 @@ function listText(repo, slug, catOnly) {
 const USAGE = `usage:
   node cli.js                      list scorable matches (latest tournament)
   node cli.js list [category]
-  node cli.js score <category> <match> <a-b> [a-b ...]   e.g. score md m1 11-9 11-7
+  node cli.js score <category> <match> <a:b> [a:b ...]   e.g. score md m1 11:9 11:7
   node cli.js forfeit <category> <match> <0|1>
   node cli.js -t <slug> <command>  pick the tournament (default: last in tournaments.json)`;
 
@@ -166,7 +166,7 @@ function main(argv) {
   if (cmd !== 'score' && cmd !== 'forfeit') { console.error(`unknown command ${cmd}\n${USAGE}`); process.exit(1); }
 
   const [cat, matchId, ...tokens] = rest;
-  const want = cmd === 'score' ? 'a-b [a-b ...]' : '0|1';
+  const want = cmd === 'score' ? 'a:b [a:b ...]' : '0|1';
   if (!cat || !matchId || tokens.length === 0) { console.error(`usage: node cli.js ${cmd} <category> <match> ${want}`); process.exit(1); }
 
   if (cmd === 'forfeit') {
@@ -176,7 +176,7 @@ function main(argv) {
   const games = cmd === 'score' ? tokens.map(parseGame) : null;
   if (games) {
     const bad = tokens.findIndex((t, i) => !games[i]);
-    if (bad !== -1) { console.error(`bad score ${JSON.stringify(tokens[bad])} — expected a-b, e.g. 11-9`); process.exit(1); }
+    if (bad !== -1) { console.error(`bad score ${JSON.stringify(tokens[bad])} — expected a:b, e.g. 11:9`); process.exit(1); }
   }
 
   const res = cmd === 'score'
@@ -193,7 +193,7 @@ function main(argv) {
   const ctx = makeCat({ meta: info.tjson.categories.find(c => c.id === cat), matches: cjson.matches }, info.tjson);
   const m = ctx.byId.get(matchId);
   if (m.forfeit !== undefined) console.log(`${cat}/${matchId} → side ${m.forfeit} forfeits — side ${1 - m.forfeit} wins`);
-  else console.log(`${cat}/${matchId} → ${m.games.map(g => `${g.a}-${g.b}`).join(' · ')}${isDone(m, ctx) ? ' — done' : ''}`);
+  else console.log(`${cat}/${matchId} → ${m.games.map(g => `${g.a}:${g.b}`).join(' · ')}${isDone(m, ctx) ? ' — done' : ''}`);
   console.log(`wrote ${path.relative(root, res.file)}`);
   console.log('next: git add -A && git commit -m "…" && git push');
 }

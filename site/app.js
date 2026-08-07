@@ -264,7 +264,7 @@ function schedTime(m) {
 }
 
 function gamesText(m) {
-  return (m.games || []).map(g => `${g.a}-${g.b}`).join(' · ');
+  return (m.games || []).map(g => `${g.a}:${g.b}`).join(' · ');
 }
 
 function gamesWon(m, i) {
@@ -486,14 +486,15 @@ function bracketHtml(ctx, ko) {
 
 function matchCard(m, ctx) {
   const w = winnerIdx(m, ctx);
-  const sides = m.sides.map((s, i) =>
-    `<div class="bs${w === i ? ' win' : ''}"><span>${sideLabel(s, ctx)}</span></div>`).join('');
-  const state = matchState(m, ctx) || gamesText(m);
   const t = schedTime(m);
   const meta = [m.venue ? esc(ctx.venues.get(m.venue) || m.venue) : 'TBD', t !== null ? fmtTime(t, ctx.tz) : 'TBD'].join(' · ');
-  // classification match under a winner-bracket column header -> its real label
-  const tag = placementLabel(m, ctx);
-  return `<div class="bm"><span class="mid">${esc(m.id)}</span>${sides}<div class="bmeta">${tag ? tag + ' · ' : ''}${meta}${state ? ' — ' + esc(state) : ''}</div></div>`;
+  // one score per game, right-clustered on the side's own row
+  const games = m.games || [];
+  const score = i => m.forfeit === i ? '<span class="bscore">forfeit</span>'
+    : (games.length ? games.map(g => `<span class="bscore">${i === 0 ? g.a : g.b}</span>`).join('') : '');
+  const side = i => `<div class="bs${w === i ? ' win' : ''}"><span>${sideLabel(m.sides[i], ctx)}</span><span class="bscores">${score(i)}</span></div>`;
+  const state = games.length && !isDone(m, ctx) ? ' — in play' : '';
+  return `<div class="bm">${side(0)}${side(1)}<div class="bmeta"><span class="mid">${esc(m.id)}</span> · ${esc(matchLabel(m, ctx))} · ${meta}${state}</div></div>`;
 }
 
 // What kind of match this is, for the kiosk card: "Pool A" for group games,

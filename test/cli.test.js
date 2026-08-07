@@ -66,6 +66,7 @@ test('cli rejects edits the validator would refuse', () => {
 
 test('cli parseGame', () => {
   assert(JSON.stringify(cli.parseGame('11-9')) === JSON.stringify({ a: 11, b: 9 }), 'a-b parses');
+  assert(JSON.stringify(cli.parseGame('11:9')) === JSON.stringify({ a: 11, b: 9 }), 'a:b parses');
   assert(cli.parseGame('11x9') === null, 'bad shape is null');
 });
 

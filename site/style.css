@@ -38,9 +38,11 @@ table.standings td.tie { background: #fff3cd; }
 .bcol, .poolgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); gap: 1rem; }
 .bhead { grid-column: 1 / -1; font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 .bm { border: 1px solid var(--line); border-radius: .5rem; padding: .5rem .7rem; background: #fff; position: relative; }
-.mid { position: absolute; top: .25rem; right: .5rem; font-size: .7rem; color: var(--muted); }
+.mid { font-size: .7rem; color: var(--muted); }
 .bs { display: flex; justify-content: space-between; gap: .5rem; }
 .bs.win { font-weight: 700; }
+.bs .bscores { margin-left: auto; display: flex; gap: .4rem; }
+.bs .bscores .bscore { font-weight: 600; min-width: 1.3em; text-align: right; }
 .bmeta { font-size: .8rem; color: var(--muted); margin-top: .3rem; }
 
 .poolgrid > table { grid-column: 1 / -1; }
