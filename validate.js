@@ -69,12 +69,10 @@ function validateRepo(repo) {
     if (typeof t.slug !== 'string' || !ID_RE.test(t.slug)) err(where, `slug ${JSON.stringify(t.slug)} must match ${ID_RE}`);
     if (seenSlugs.has(t.slug)) err(where, `duplicate slug ${t.slug}`);
     seenSlugs.add(t.slug);
-  }
-
-  for (const t of index) {
-    if (!t || typeof t.slug !== 'string' || !ID_RE.test(t.slug)) continue;
-    const info = tournaments.get(t.slug);
-    if (info) validateTournamentData(t.slug, info, errs, warns);
+    if (typeof t.slug === 'string' && ID_RE.test(t.slug)) {
+      const info = tournaments.get(t.slug);
+      if (info) validateTournamentData(t.slug, info, errs, warns);
+    }
   }
 
   return { errs, warns };

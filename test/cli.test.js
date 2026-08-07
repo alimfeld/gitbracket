@@ -88,7 +88,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   const standings = renderStandings(no(), data);
   assert(standings.includes('Pool A') && standings.includes('Final') && standings.includes('Winner of m8'), 'standings renders pools, bracket, and slot labels');
   assert(standings.includes('Ada Lovelace'), 'standings renders player names');
-  assert(standings.includes('player.html?t=sample&p=p1'), 'standings links players to their player page');
+  assert(standings.includes('player.html?t=sample') && !standings.includes('player.html?t=sample&p='), 'standings links the player picker, not each name');
   const venue = renderVenue(no(), data);
   assert(venue.includes('k-venue') && venue.includes('Ada Lovelace'), 'venue page renders venue boards with match rows');
   assert(renderPlayer(new URLSearchParams('p=p1'), data).includes('Ada Lovelace'), 'player page finds the player');
@@ -99,9 +99,10 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   evil.players[0].name = '<b>Ada</b> & "Co"';
   const out = renderPlayer(new URLSearchParams('p=p1'), { ...data, tjson: evil });
   assert(out.includes('&lt;b&gt;Ada&lt;/b&gt; &amp; &quot;Co&quot;') && !out.includes('<b>Ada</b>'), 'player name is escaped');
-  // dead ties are flagged in the standings table, not just by background color
+  // tied teams share the first rank of their group (standard competition ranking: 1 1 1 4)
   const { data: tdata } = dataOf('tie');
-  assert(renderStandings(no(), tdata).includes('†'), 'tied rows carry a rank marker');
+  const tieHtml = renderStandings(no(), tdata);
+  assert(!tieHtml.includes('†') && (tieHtml.match(/class="tie"><td>1<\/td>/g) || []).length === 2, 'tied teams share rank 1, no dagger');
 });
 
 test('cli writeEdit: rollback on validation failure, write on success (real disk)', () => {

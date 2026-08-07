@@ -48,19 +48,26 @@ function matchSlotMs(m, ctx) {
 // and the generator's court/player occupancy — one predicate, no drift.
 const slotsOverlap = (a0, a1, b0, b1) => a0 < b1 && b0 < a1;
 
+// Raw game wins per side, target not applied — base for winnerIdx (target gate)
+// and gamesWon (kiosk's live score).
+function countWins(games) {
+  const w = [0, 0];
+  for (const g of games) {
+    if (g.a > g.b) w[0]++;
+    else if (g.b > g.a) w[1]++;
+  }
+  return w;
+}
+
 function winnerIdx(m, ctx) {
   if (m.forfeit !== undefined) return m.forfeit === 0 ? 1 : 0;
   const games = m.games;
   if (!Array.isArray(games) || games.length === 0) return null;
   const stage = m.pool !== undefined ? 'groups' : 'knockout';
   const target = Math.ceil((m.bestOf ?? ctx.bestOf[stage]) / 2);
-  const w = [0, 0];
-  for (const g of games) {
-    if (g.a > g.b) w[0]++;
-    else if (g.b > g.a) w[1]++;
-  }
-  if (w[0] >= target) return 0;
-  if (w[1] >= target) return 1;
+  const [w0, w1] = countWins(games);
+  if (w0 >= target) return 0;
+  if (w1 >= target) return 1;
   return null;
 }
 
@@ -152,20 +159,13 @@ function slotLabel(side, ctx) {
   return 'TBD';
 }
 
+// Player-id set -> display name: "Ada / Ben". The one place names render.
+const teamLabel = (ids, ctx) => [...ids].map(id => ctx.names.get(id) || id).join(' / ');
+
 function sideLabel(side, ctx) {
   const ids = resolveSide(side, ctx);
   if (!ids) return slotLabel(side, ctx);
-  return [...ids].map(id => ctx.names.get(id) || id).join(' / ');
-}
-
-// Like sideLabel, but each resolved player name links to their player page.
-// Unresolved slots keep their plain slot label (nothing to link to).
-function playerLinks(ids, ctx, slug) {
-  return [...ids].map(id => `<a href="player.html?t=${esc(slug)}&p=${esc(id)}">${esc(ctx.names.get(id) || id)}</a>`).join(' / ');
-}
-function sideLinks(side, ctx, slug) {
-  const ids = resolveSide(side, ctx);
-  return ids ? playerLinks(ids, ctx, slug) : sideLabel(side, ctx);
+  return teamLabel(ids, ctx);
 }
 
 // The player's confirmed matches: only matches where their side actually
@@ -268,12 +268,7 @@ function gamesText(m) {
 }
 
 function gamesWon(m, i) {
-  let n = 0;
-  for (const g of (m.games || [])) {
-    if (g.a > g.b && i === 0) n++;
-    else if (g.b > g.a && i === 1) n++;
-  }
-  return n;
+  return countWins(m.games || [])[i];
 }
 
 function matchState(m, ctx) {
@@ -381,6 +376,7 @@ function renderIndex(params, data) {
 function renderStandings(params, data) {
   if (!data.tjson) return '<p>Missing tournament.json — has the tournament been pushed?</p>';
   const parts = [`<h1>${esc(data.t.name)}</h1>`];
+  parts.push(`<p class="sub"><a href="player.html?t=${esc(data.t.slug)}">Player schedules</a></p>`);
   // nav from the full category list, not the ?c=-filtered cats — a filtered page must still show every pill
   const nav = (data.tjson.categories || []).map(c => {
     const active = params.get('c') === c.id;
@@ -403,30 +399,23 @@ function renderStandings(params, data) {
       // pools come from matches, so partial standings always resolve
       const st = poolStandings(ctx, pool, true);
       parts.push('<table class="standings"><thead><tr><th>#</th><th>Team</th><th>W</th><th>L</th><th>GD</th><th>PD</th></tr></thead><tbody>');
+      let rank = 0;
       st.forEach((r, i) => {
         const tied = isDeadTie(st, i + 1);
-        const team = playerLinks(r.ids, ctx, data.t.slug);
-        parts.push(`<tr${tied ? ' class="tie"' : ''}><td>${i + 1}${tied ? '†' : ''}</td><td>${team}</td><td>${r.wins}</td><td>${r.losses}</td><td>${fmtDiff(r.gd)}</td><td>${fmtDiff(r.pd)}</td></tr>`);
+        // shared rank for ties: same record as the row above keeps the group's first rank (1 1 1 4)
+        if (i === 0 || !sameRecord(st[i - 1], r)) rank = i + 1;
+        const team = teamLabel(r.ids, ctx);
+        parts.push(`<tr${tied ? ' class="tie"' : ''}><td>${rank}</td><td>${team}</td><td>${r.wins}</td><td>${r.losses}</td><td>${fmtDiff(r.gd)}</td><td>${fmtDiff(r.pd)}</td></tr>`);
       });
       parts.push('</tbody></table>');
-      parts.push('<table class="gmatches"><tbody>');
-      for (const m of poolMs) {
-        const t = schedTime(m);
-        const meta = [m.venue ? esc(ctx.venues.get(m.venue) || m.venue) : 'TBD', t !== null ? fmtTime(t, ctx.tz) : ''].filter(Boolean).join(' · ');
-        const state = matchState(m, ctx) || gamesText(m);
-        parts.push(`<tr>
-          <td class="mid">${esc(m.id)}</td>
-          <td>${sideLinks(m.sides[0], ctx, data.t.slug)}</td>
-          <td class="score">${esc(state || '–')}</td>
-          <td>${sideLinks(m.sides[1], ctx, data.t.slug)}</td>
-          <td class="gmeta">${meta}</td>
-        </tr>`);
-      }
-      parts.push('</tbody></table>');
+      for (const m of poolMs) parts.push(matchCard(m, ctx));
       parts.push('</div>');
     }
     const ko = ctx.matches.filter(m => m && m.pool === undefined);
-    if (ko.length) parts.push(bracketHtml(ctx, ko, data.t.slug));
+    if (ko.length) {
+      parts.push('<h3>Knockout</h3>');
+      parts.push(bracketHtml(ctx, ko));
+    }
   }
   return parts.join('');
 }
@@ -478,7 +467,7 @@ function koColumn(m, ctx) {
   return ctx._koCol.get(m.id);
 }
 
-function bracketHtml(ctx, ko, slug) {
+function bracketHtml(ctx, ko) {
   const cols = [];
   const maxR = ko.reduce((mx, m) => Math.max(mx, koColumn(m, ctx)), 0);
   for (const m of ko) {
@@ -488,17 +477,17 @@ function bracketHtml(ctx, ko, slug) {
   const parts = ['<div class="bracket">'];
   cols.forEach((ms, r) => {
     parts.push(`<div class="bcol"><div class="bhead">${roundName(cols.length - 1 - r)}</div>`);
-    for (const m of ms) parts.push(matchCard(m, ctx, slug));
+    for (const m of ms) parts.push(matchCard(m, ctx));
     parts.push('</div>');
   });
   parts.push('</div>');
   return parts.join('');
 }
 
-function matchCard(m, ctx, slug) {
+function matchCard(m, ctx) {
   const w = winnerIdx(m, ctx);
   const sides = m.sides.map((s, i) =>
-    `<div class="bs${w === i ? ' win' : ''}"><span>${sideLinks(s, ctx, slug)}</span></div>`).join('');
+    `<div class="bs${w === i ? ' win' : ''}"><span>${sideLabel(s, ctx)}</span></div>`).join('');
   const state = matchState(m, ctx) || gamesText(m);
   const t = schedTime(m);
   const meta = [m.venue ? esc(ctx.venues.get(m.venue) || m.venue) : 'TBD', t !== null ? fmtTime(t, ctx.tz) : 'TBD'].join(' · ');
@@ -636,11 +625,11 @@ function renderPlayer(params, data) {
       const m = r.m, ctx = r.ctx;
       const t = schedTime(m);
       const oppSet = resolveSide(m.sides[1 - r.i], ctx);
-      const opp = oppSet ? [...oppSet].map(id => ctx.names.get(id) || id).join(' / ') : null;
+      const opp = oppSet ? teamLabel(oppSet, ctx) : null;
       const w = winnerIdx(m, ctx);
       const state = m.forfeit !== undefined ? (w === r.i ? 'W (forfeit)' : 'L (forfeit)')
         : (w === null ? matchState(m, ctx) : `${w === r.i ? 'W' : 'L'} · ${gamesText(m)}`);
-      const withP = r.partner.length ? r.partner.map(id => ctx.names.get(id) || id).join(' / ') : '— (singles)';
+      const withP = r.partner.length ? teamLabel(r.partner, ctx) : '— (singles)';
       const venue = m.venue ? ctx.venues.get(m.venue) || m.venue : 'TBD';
       let late = '';
       if (t !== null && t > now && m.venue) {
@@ -649,10 +638,10 @@ function renderPlayer(params, data) {
         if (min >= 5) late = ` · <span class="late">~${min} min late · est. ${fmtTime(t + d, ctx.tz)}</span>`;
       }
       parts.push(`<div class="pm">
-        <div class="pmtop"><span class="pmtime">${t === null ? 'TBD' : fmtTime(t, ctx.tz)}</span><span class="pmcat">${esc(ctx.name)}</span></div>
+        <div class="pmtop"><span class="pmtime">${t === null ? 'TBD' : fmtTime(t, ctx.tz)}</span><span class="pmcourt">${esc(venue)}</span></div>
         <div class="pmopp">vs ${esc(opp || slotLabel(m.sides[1 - r.i], ctx))}</div>
         <div class="pmpartner">with ${esc(withP)}</div>
-        <div class="pmmeta">${esc(venue)}${state ? ' · ' + esc(state) : ''}${late}</div>
+        <div class="pmmeta">${esc(ctx.name)}${state ? ' · ' + esc(state) : ''}${late}</div>
       </div>`);
     }
   }

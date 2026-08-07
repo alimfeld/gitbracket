@@ -14,7 +14,7 @@
 //
 // Run:  node schedule.js   # then the pre-commit hook (or `node validate.js`) gates it
 //
-// Registration is open until 26 Sep 2026 — rerun after the deadline with the
+// Rerun after the registration deadline with the
 // final TEAMS. Pools are drawn in list order; shuffle TEAMS before the final
 // run for a fair draw. Incomplete registrations (partner open) stay out until
 // the pair is complete.
@@ -26,7 +26,7 @@ const { matchSlotMs, slotsOverlap, pairSig, dayKey } = require('./site/app.js');
 
 const SLUG = '2026-mammut60';
 const POOL_SIZE = 4; // max teams per pool; leftovers spill into a smaller pool
-const EVENT_DATE = '2026-09-27'; // tournament day — set the real date before the final run (registration closes Sat 26 Sep 2026)
+const EVENT_DATE = '2026-10-03'; // tournament day — set the real date before the final run
 const BLOCK_START = { md: '09:00', wd: '09:00', xd: '13:00' }; // morning: md+wd; afternoon: xd
 // ponytail: 13 morning matches run 09:00–12:30 in 30-min slots (md final/bronze
 // are best-of-3, 60 min), so a morning finalist who also plays xd has a 30-min
@@ -133,6 +133,15 @@ function buildKnockout(pools, names, mid) {
     if (i < byeSides.length) round.push(byeSides[i]);
     if (i < winners.length) round.push(winners[i]);
   }
+  // Round-2 pairing order: feeder-free pairings first, feeder pairings last. A
+  // match with a round-1 winner can't start until round 1 ends, so it always
+  // schedules later; building it last keeps id order in sync with time order.
+  // Pair contents are unchanged — only their creation (and schedule) order.
+  const feedless = [], fed = [];
+  for (let i = 0; i < round.length; i += 2) {
+    ((round[i].kind === 'match' || round[i + 1].kind === 'match') ? fed : feedless).push(round[i], round[i + 1]);
+  }
+  round = feedless.concat(fed);
 
   while (round.length > 1) {
     const next = [];
