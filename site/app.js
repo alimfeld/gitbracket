@@ -370,13 +370,13 @@ function renderIndex(params, data) {
   const items = data.index
     .filter(e => e && typeof e.slug === 'string' && ID_RE.test(e.slug))
     .map(e => `<li><a href="standings.html?t=${esc(e.slug)}">${esc(e.name || e.slug)}</a> <a class="kiosk" href="venue.html?t=${esc(e.slug)}">kiosk</a></li>`);
-  return `<h1>GitBracket</h1><ul class="tournaments">${items.join('') || '<li>No tournaments yet.</li>'}</ul>`;
+  return `<h1>Tournaments</h1><ul class="tournaments">${items.join('') || '<li>No tournaments yet.</li>'}</ul>`;
 }
 
 function renderStandings(params, data) {
   if (!data.tjson) return '<p>Missing tournament.json — has the tournament been pushed?</p>';
   const parts = [`<h1>${esc(data.t.name)}</h1>`];
-  parts.push(`<p class="sub"><a href="player.html?t=${esc(data.t.slug)}">Player schedules</a></p>`);
+  parts.push(`<p class="sub"><a href="index.html">Home</a> · <a href="player.html?t=${esc(data.t.slug)}">Player schedules</a></p>`);
   // nav from the full category list, not the ?c=-filtered cats — a filtered page must still show every pill
   const nav = (data.tjson.categories || []).map(c => {
     const active = params.get('c') === c.id;
@@ -598,7 +598,7 @@ function renderPlayer(params, data) {
   const players = (data.tjson.players || []).filter(p => p && typeof p === 'object' && typeof p.id === 'string');
   if (!pid) { // no ?p= — the picker, one page per player
     const items = players.map(p => `<li><a href="player.html?t=${esc(data.t.slug)}&p=${esc(p.id)}">${esc(p.name || p.id)}</a></li>`);
-    return `<h1>${esc(data.t.name)}</h1><p class="sub">Pick a player to see their schedule</p><ul class="tournaments">${items.join('') || '<li>No players.</li>'}</ul>`;
+    return `<h1>Players</h1><p class="sub"><a href="index.html">Home</a> · <a href="standings.html?t=${esc(data.t.slug)}">${esc(data.t.name)}</a></p><p class="sub">Pick a player to see their schedule</p><ul class="tournaments">${items.join('') || '<li>No players.</li>'}</ul>`;
   }
   const p = players.find(x => x.id === pid);
   if (!p) return '<p>Player not found.</p>';
@@ -619,7 +619,7 @@ function renderPlayer(params, data) {
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(r);
   }
-  const parts = [`<h1>${esc(p.name)}</h1>`, `<p class="sub"><a href="standings.html?t=${esc(data.t.slug)}">${esc(data.t.name)}</a></p>`];
+  const parts = [`<h1>${esc(p.name)}</h1>`, `<p class="sub"><a href="index.html">Home</a> · <a href="standings.html?t=${esc(data.t.slug)}">${esc(data.t.name)}</a></p>`];
   for (const [key, g] of groups) {
     parts.push(`<h2>${esc(key)}</h2>`);
     for (const r of g) {
