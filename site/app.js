@@ -48,8 +48,7 @@ function matchSlotMs(m, ctx) {
 // and the generator's court/player occupancy — one predicate, no drift.
 const slotsOverlap = (a0, a1, b0, b1) => a0 < b1 && b0 < a1;
 
-// Raw game wins per side, target not applied — base for winnerIdx (target gate)
-// and gamesWon (kiosk's live score).
+// Raw game wins per side, target not applied — base for winnerIdx (target gate).
 function countWins(games) {
   const w = [0, 0];
   for (const g of games) {
@@ -329,10 +328,6 @@ function gamesText(m) {
   return (m.games || []).map(g => `${g.a}:${g.b}`).join(' · ');
 }
 
-function gamesWon(m, i) {
-  return countWins(m.games || [])[i];
-}
-
 function matchState(m, ctx) {
   return m.forfeit !== undefined ? 'forfeit'
     : (!isDone(m, ctx) && (m.games || []).length ? `in play · ${gamesText(m)}` : '');
@@ -548,16 +543,20 @@ function bracketHtml(ctx, ko) {
 }
 
 function matchCard(m, ctx) {
-  const w = winnerIdx(m, ctx);
   const t = schedTime(m);
   const meta = [m.venue ? esc(ctx.venues.get(m.venue) || m.venue) : 'TBD', t !== null ? fmtTime(t, ctx.tz) : 'TBD'].join(' · ');
-  // one score per game, right-clustered on the side's own row
+  const state = (m.games || []).length && !isDone(m, ctx) ? ' — in play' : '';
+  return `<div class="bm">${sideRow(m, ctx, 0)}${sideRow(m, ctx, 1)}<div class="bmeta"><span class="mid">${esc(m.id)}</span> · ${esc(matchLabel(m, ctx))} · ${meta}${state}</div></div>`;
+}
+
+// One score span per game, right-clustered on the side's own row; the winner's
+// row is bold. Shared by bracket cards (standings) and the kiosk.
+function sideRow(m, ctx, i) {
+  const w = winnerIdx(m, ctx);
   const games = m.games || [];
-  const score = i => m.forfeit === i ? '<span class="bscore">forfeit</span>'
+  const score = m.forfeit === i ? '<span class="bscore">forfeit</span>'
     : (games.length ? games.map(g => `<span class="bscore">${i === 0 ? g.a : g.b}</span>`).join('') : '');
-  const side = i => `<div class="bs${w === i ? ' win' : ''}"><span>${sideLabel(m.sides[i], ctx)}</span><span class="bscores">${score(i)}</span></div>`;
-  const state = games.length && !isDone(m, ctx) ? ' — in play' : '';
-  return `<div class="bm">${side(0)}${side(1)}<div class="bmeta"><span class="mid">${esc(m.id)}</span> · ${esc(matchLabel(m, ctx))} · ${meta}${state}</div></div>`;
+  return `<div class="bs${w === i ? ' win' : ''}"><span>${sideLabel(m.sides[i], ctx)}</span><span class="bscores">${score}</span></div>`;
 }
 
 // What kind of match this is, for the kiosk card: "Pool A" for group games,
@@ -573,16 +572,12 @@ function matchLabel(m, ctx) {
 
 function kioskCard(r, small) {
   const m = r.m, ctx = r.ctx;
-  const score = i => gamesWon(m, i) || '';
   const state = matchState(m, ctx);
-  const meta = [esc(ctx.name), esc(matchLabel(m, ctx)), esc(state)].filter(Boolean).join(' · '); // category first, then pool; venue is the group header now
+  const meta = [esc(ctx.name), esc(matchLabel(m, ctx)), esc(state), esc(fmtTime(r.t, ctx.tz))].filter(Boolean).join(' · '); // category first, then pool; venue is the group header now
   return `<div class="km${small ? ' small' : ''}">
-    <div class="km-main">
-      <div class="ks"><span>${esc(sideLabel(m.sides[0], ctx))}</span><span class="kscore">${score(0)}</span></div>
-      <div class="ks"><span>${esc(sideLabel(m.sides[1], ctx))}</span><span class="kscore">${score(1)}</span></div>
-      <div class="kmeta">${meta}</div>
-    </div>
-    <div class="ktime">${esc(fmtTime(r.t, ctx.tz))}</div>
+    ${sideRow(m, ctx, 0)}
+    ${sideRow(m, ctx, 1)}
+    <div class="kmeta">${meta}</div>
   </div>`;
 }
 
