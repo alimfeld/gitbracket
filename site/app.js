@@ -639,17 +639,22 @@ function renderVenue(params, data) {
 
 // Backlog note for a match card: '~X min late · est. H:MM' while it hasn't
 // started (future OR still queued behind an unscored predecessor), 'started
-// ~X min late' once it's in play; '' when on schedule, finished, or the source.
+// ~X min late' once it's in play; '' when on schedule, finished, or the
+// backlog source itself (the match the venue's delay is measured from).
 function delayNote(t, m, ctx, delayByVenue, now) {
   if (t === null || !m.venue) return '';
   const d = delayByVenue.get(m.venue) || 0;
   const min = Math.round(d / 60000 / 5) * 5;
   if (min < 5 || isDone(m, ctx)) return '';
-  // in play: it started late — checked first so a playing match never reads as still upcoming
-  if ((m.games || []).length) return ` · <span class="late">started ~${min} min late</span>`;
-  // not started: the backlog pushes its start to t + d. With back-to-back slots
-  // that est. is exactly now while the predecessor is unscored (>= not >).
-  if (t + d >= now) return ` · <span class="late">~${min} min late · est. ${fmtTime(t + d, ctx.tz)}</span>`;
+  // queued: the backlog-adjusted start is still ahead of or at now. The source
+  // (t + d < now) gets no note — for it, d is minutes past its own slot end,
+  // not its start delay. Back-to-back slots put the queued est. exactly at now
+  // while the predecessor is unscored, hence >= not >.
+  const queued = t + d >= now;
+  // in play: it started behind the backlog — checked first so a playing match
+  // never reads as still upcoming.
+  if ((m.games || []).length) return queued ? ` · <span class="late">started ~${min} min late</span>` : '';
+  if (queued) return ` · <span class="late">~${min} min late · est. ${fmtTime(t + d, ctx.tz)}</span>`;
   return ''; // the backlog source itself — no estimate the model can give
 }
 

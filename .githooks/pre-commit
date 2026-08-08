@@ -5,7 +5,10 @@ set -e
 root="$(git rev-parse --show-toplevel)"
 cd "$root"
 # Cache-bust asset URLs with the short SHA when app.js/style.css changed:
-# Pages caches static files, a new ?v= forces browsers to re-fetch.
+# Pages caches static files, a new ?v= forces browsers to re-fetch. The SHA
+# stamped is HEAD — the parent of the in-flight commit, the only SHA knowable
+# pre-commit — and each deploy serves a ?v= no earlier deploy referenced, so
+# repeat visitors are forced to re-fetch the new assets.
 if ! git diff --quiet HEAD -- site/app.js site/style.css; then
   v="$(git rev-parse --short HEAD)"
   sed -i '' -E "s/(app\.js|style\.css)(\?v=[^\"']*)?\"/\1?v=$v\"/g" site/*.html
