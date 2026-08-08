@@ -315,6 +315,11 @@ function fmtTime(t, tz) {
   return new Intl.DateTimeFormat(undefined, { timeZone: tz, hour: 'numeric', minute: '2-digit' }).format(t);
 }
 
+// Kiosk wall clock, second-granularity, in the tournament's timezone.
+function fmtClock(t, tz) {
+  return new Intl.DateTimeFormat(undefined, { timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(t);
+}
+
 function dayKey(t, tz) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(t);
 }
@@ -581,13 +586,15 @@ function kioskCard(r, small) {
   </div>`;
 }
 
-// Status, not the clock, picks the board: started-and-unfinished is "Now" — an
-// overdue match stays on the board (a late match is still the match on court),
-// only a result removes a match from it. "Next" is the future starts, two max.
+// Status, not the clock, picks the board. Overdue = the full slot has elapsed
+// without a result; Now = started, still inside its slot; Next = future starts,
+// two max. Only a result removes a match entirely.
 function kioskBuckets(rows, now) {
+  const open = rows.filter(r => !isDone(r.m, r.ctx));
   return {
-    live: rows.filter(r => !isDone(r.m, r.ctx) && now >= r.t),
-    next: rows.filter(r => !isDone(r.m, r.ctx) && r.t > now).slice(0, 2) // > not >=: the boundary instant belongs to Now
+    overdue: open.filter(r => now >= r.t + matchSlotMs(r.m, r.ctx)),
+    live: open.filter(r => now >= r.t && now < r.t + matchSlotMs(r.m, r.ctx)),
+    next: open.filter(r => r.t > now).slice(0, 2) // > not >=: the boundary instant belongs to Now
   };
 }
 
@@ -606,24 +613,11 @@ function renderVenue(params, data) {
   }
   rows.sort((a, b) => a.t - b.t);
   const now = Date.now();
-  const status = scheduleStatus(ctxs, now); // whole-event, independent of ?v=
-  // pills cover only venues with matches — a declared-but-unused court gets no pill
+  // venues with matches — a declared-but-unused court is simply absent
   const venueNames = new Map((data.tjson.venues || []).map(x => [x.id, x.name]));
   const venues = (data.tjson.venues || []).map(x => x.id).filter(id => rows.some(r => r.m.venue === id));
   const shown = v ? rows.filter(r => r.m.venue === v) : rows;
-  const base = `venue.html?t=${esc(data.t.slug)}`;
-  const parts = [`<h1>${esc(data.t.name)}</h1>`]; // title = tournament, venue lives in the active pill
-  // filter pills, same toggle pattern as the standings category nav
-  parts.push(`<nav class="cats">${['', ...venues].map(id => {
-    const active = id ? v === id : !v;
-    const href = active && id ? base : id ? `${base}&v=${esc(id)}` : base;
-    return `<a href="${href}"${active ? ' class="on"' : ''}>${esc(id ? venueNames.get(id) || id : 'All')}</a>`;
-  }).join('')}</nav>`);
-  if (status) {
-    parts.push(status.overdue.length
-      ? `<div class="k-status late">Behind schedule — ${status.overdue.length} match${status.overdue.length === 1 ? '' : 'es'} overdue: ${status.overdue.map(r => `${esc(r.m.id)} ${fmtTime(r.t, r.ctx.tz)}`).join(', ')}</div>`
-      : '<div class="k-status on">On schedule</div>');
-  }
+  const parts = [`<div class="k-head"><h1>${esc(data.t.name)}</h1><span class="k-clock" id="k-clock"></span></div>`]; // title left, wall clock right; the court shows as the column header
   const byVenue = new Map(venues.map(id => [id, []]));
   for (const r of shown) {
     if (byVenue.has(r.m.venue)) byVenue.get(r.m.venue).push(r); // rows pre-sorted, buckets stay sorted
@@ -632,21 +626,25 @@ function renderVenue(params, data) {
   const cols = [];
   for (const id of venues) {
     const bucket = byVenue.get(id);
-    const { live, next } = kioskBuckets(bucket, now);
-    if (!live.length && !next.length) continue;
+    const { overdue, live, next } = kioskBuckets(bucket, now);
+    if (!overdue.length && !live.length && !next.length) continue;
     any = true;
     const col = [];
-    if (!v) col.push(`<h2 class="k-venue">${esc(venueNames.get(id) || id)}</h2>`);
+    col.push(`<h2 class="k-venue">${esc(venueNames.get(id) || id)}</h2>`);
+    if (overdue.length) {
+      col.push('<h3 class="k-overdue">Overdue</h3>');
+      for (const r of overdue) col.push(kioskCard(r));
+    }
     if (live.length) {
-      col.push('<h2 class="k-now">Now</h2>');
+      col.push('<h3 class="k-now">Now</h3>');
       for (const r of live) col.push(kioskCard(r));
     }
     if (next.length) {
-      col.push('<h2 class="k-next">Next</h2>');
+      col.push('<h3 class="k-next">Next</h3>');
       for (const r of next) col.push(kioskCard(r, true));
     }
     // one column per venue, side by side on the all-venues board
-    cols.push(v ? col.join('') : `<div class="k-venue-col">${col.join('')}</div>`);
+    cols.push(`<div class="k-venue-col">${col.join('')}</div>`);
   }
   parts.push(v ? cols.join('') : `<div class="k-cols">${cols.join('')}</div>`);
   if (!any) parts.push('<p class="k-empty">Nothing scheduled.</p>');
@@ -772,6 +770,13 @@ function boot() {
   if (page === 'venue') {
     // ponytail: jitter so a hall of kiosk screens doesn't fetch in lockstep
     setInterval(tick, POLL_MS + Math.random() * 5000);
+    // Wall clock, tournament-local time. Kept out of the render HTML (empty
+    // span) so the lastHtml change-guard isn't tripped every second; the poll
+    // re-render replaces the span, so look it up fresh each tick.
+    setInterval(() => {
+      const el = document.getElementById('k-clock');
+      if (el) el.textContent = fmtClock(Date.now(), (data && data.tjson && data.tjson.timezone) || 'UTC');
+    }, 1000);
   }
 }
 

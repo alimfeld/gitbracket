@@ -57,24 +57,24 @@ table.standings td.tie { background: #fff3cd; }
 .pmmeta .late { color: #b3402e; font-weight: 600; }
 .pm-possible { font-size: .85rem; color: var(--muted); border: 1px dashed var(--line); border-radius: .5rem; padding: .4rem .8rem; margin: .4rem 0 .6rem; }
 
-/* kiosk override block — venue.html only, gated by body.kiosk */
-body.kiosk { background: #000; color: #f2f2ec; max-width: none; padding: 2rem 3rem; }
-body.kiosk h1 { font-size: 2.2rem; margin: 0 0 1.5rem; }
-body.kiosk nav.cats { margin: 0 0 1.5rem; }
-body.kiosk nav.cats a { border-color: #2a2a28; color: #f2f2ec; padding: .5rem 1.2rem; font-size: 1.1rem; }
-body.kiosk nav.cats a.on { background: #ffd166; border-color: #ffd166; color: #000; }
-body.kiosk h2.k-venue { font-size: 2.4rem; margin: 2.5rem 0 .6rem; padding-bottom: .4rem; border-bottom: 2px solid #2a2a28; }
-body.kiosk .k-cols { display: flex; gap: 2.5rem; align-items: flex-start; flex-wrap: wrap; }
-body.kiosk .k-venue-col { flex: 1 1 24rem; min-width: 0; }
-body.kiosk .k-venue-col h2.k-venue { margin-top: 0; }
-body.kiosk h2.k-now { font-size: 2.2rem; margin: .8rem 0 1rem; color: #ffd166; }
-body.kiosk h2.k-next { font-size: 1.4rem; margin: 2.5rem 0 .8rem; color: #8a8a84; text-transform: uppercase; letter-spacing: .08em; }
-body.kiosk .km { margin-bottom: 1.5rem; padding: 1.2rem 1.6rem; border: 1px solid #2a2a28; border-radius: 1rem; background: #111; }
-body.kiosk .km.small { padding: .8rem 1.2rem; }
-body.kiosk .bs { align-items: baseline; gap: 2rem; font-size: 3rem; line-height: 1.25; }
-body.kiosk .km.small .bs { font-size: 2.2rem; }
-body.kiosk .kmeta { color: #8a8a84; margin-top: .6rem; font-size: 1.2rem; }
-body.kiosk .k-empty { color: #8a8a84; font-size: 1.4rem; }
-body.kiosk .k-status { margin: 0 0 1.5rem; padding: .7rem 1.2rem; border: 1px solid #2a2a28; border-radius: .6rem; font-size: 1.4rem; }
-body.kiosk .k-status.on { color: #7ee787; background: #0e1f12; border-color: #22402b; }
-body.kiosk .k-status.late { color: #ffb3ab; background: #2a1210; border-color: #4a211c; }
+/* kiosk override block — venue.html only. The k-* classes (and .km, which
+   wraps every .bs row on a kiosk card) are rendered only there, so they need
+   no page gate; only the page theme and the generic h1 do. */
+body[data-page="venue"] { background: #000; color: #f2f2ec; max-width: none; padding: 2rem 3rem; }
+body[data-page="venue"] h1 { font-size: 3.2rem; margin: 0; }
+.k-head { display: flex; justify-content: space-between; align-items: baseline; gap: 2rem; margin: 0 0 1.5rem; }
+.k-clock { font-size: 3.2rem; font-weight: 700; color: #f2f2ec; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.k-venue { font-size: 2.2rem; margin: 2.5rem 0 .6rem; padding-bottom: .4rem; border-bottom: 2px solid #2a2a28; }
+.k-cols { display: flex; gap: 2.5rem; align-items: flex-start; flex-wrap: wrap; }
+.k-venue-col { flex: 1 1 24rem; min-width: 0; }
+.k-venue-col .k-venue { margin-top: 0; }
+.k-overdue, .k-now, .k-next { font-size: 1.8rem; margin: .8rem 0 1rem; }
+.k-overdue { color: #ffb3ab; }
+.k-now { color: #ffd166; }
+.k-next { color: #8a8a84; }
+.km { margin-bottom: 1.5rem; padding: 1.2rem 1.6rem; border: 1px solid #2a2a28; border-radius: 1rem; background: #111; }
+.km.small { padding: .8rem 1.2rem; }
+.km .bs { align-items: baseline; gap: 2rem; font-size: 1.8rem; line-height: 1.25; }
+.km.small .bs { font-size: 1.4rem; }
+.kmeta { color: #8a8a84; margin-top: .6rem; font-size: 1.2rem; }
+.k-empty { color: #8a8a84; font-size: 1.4rem; }

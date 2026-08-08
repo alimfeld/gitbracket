@@ -87,7 +87,7 @@ test('venueBacklog: per-venue delay from the most overdue unfinished match', () 
   assert((bg.get('c2') || 0) === 0, 'c2: 09:30 match still inside its slot, no delay');
 });
 
-test('kioskBuckets: status picks the board, the clock never hides an overdue match', () => {
+test('kioskBuckets: overdue / now / next sections, the clock never hides an overdue match', () => {
   const ctx = makeCat({ meta: { bestOf: { knockout: 3 } }, matches: [
     { id: 'm1', scheduled: '2025-07-14T09:00:00Z', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }], games: [{ a: 11, b: 5 }, { a: 11, b: 4 }] },
     { id: 'm2', scheduled: '2025-07-14T08:30:00Z', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },
@@ -99,8 +99,9 @@ test('kioskBuckets: status picks the board, the clock never hides an overdue mat
   const now = Date.parse('2025-07-14T10:00:00Z'); // m2's slot ended 09:15 — long overdue
   const rows = ctx.matches.map(m => ({ m, t: Date.parse(m.scheduled), ctx }));
   const ids = a => a.map(r => r.m.id);
-  const { live, next } = kioskBuckets(rows, now);
-  assert(ids(live).includes('m2') && ids(live).includes('m3') && ids(live).includes('m6'), 'started-and-unfinished stays on the board, overdue m2 included');
+  const { overdue, live, next } = kioskBuckets(rows, now);
+  assert(JSON.stringify(ids(overdue)) === '["m2"]', 'slot fully elapsed without a result: overdue');
+  assert(ids(live).includes('m3') && ids(live).includes('m6'), 'started and still inside its slot: Now');
   assert(!ids(live).includes('m1'), 'a done match leaves the board');
   assert(JSON.stringify(ids(next)) === '["m4","m5"]', 'next = the two future starts');
   assert(!ids(next).includes('m6'), 'the boundary instant (now === t) belongs to Now, not Next');
