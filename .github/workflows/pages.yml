@@ -27,7 +27,7 @@ jobs:
       # stays pristine; the token is the real SHA of the tree being deployed,
       # so a browser can never serve yesterday's JS with today's data.
       - run: |
-          perl -i -pe 's{(app\.js|derive\.js|style\.css)(\?v=[^"]*)?"}{$1?v=$ENV{GITHUB_SHA}}g' site/*.html
+          perl -i -pe 's{(app\.js|derive\.js|style\.css)(\?v=[^"]*)?"}{$1?v=$ENV{GITHUB_SHA}"}g' site/*.html
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
