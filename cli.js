@@ -17,7 +17,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { makeCat, isDone, resolveSide, sideLabel, schedTime, gamesText, fmtTime } = require('./site/app.js');
+const { makeCat, isDone, resolveSide, sideLabel, schedTime, gamesText, fmtTime } = require('./site/derive.js');
 const { loadRepo, validateRepo } = require('./validate.js');
 
 // ---------- pure logic (tests drive these on fixture repos) ----------

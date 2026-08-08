@@ -22,7 +22,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { matchSlotMs, slotsOverlap, pairSig, dayKey } = require('./site/app.js'); // per-category/per-match slot lengths live in tournament.json
+const { matchSlotMs, slotsOverlap, pairSig, dayKey } = require('./site/derive.js'); // per-category/per-match slot lengths live in tournament.json
 
 const SLUG = '2026-mammut60';
 const POOL_SIZE = 4; // max teams per pool; leftovers spill into a smaller pool

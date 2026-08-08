@@ -29,7 +29,8 @@ site/style.css              # shared; venue.html adds a kiosk override block
 site/venue.html             # kiosk: now + next, one venue (?t=&v=) or all
 site/player.html            # mobile schedule (?t=&p=)
 site/standings.html         # tables + bracket (?t=&c=)
-site/app.js                 # fetch, render, derive
+site/derive.js              # pure derive + time logic — shared by app, validate, cli, schedule
+site/app.js                 # fetch, render, boot
 validate.js                 # schema + cross-file check (hook, local)
 cli.js                      # score entry on match day: list scorable matches, set scores/forfeits (local)
 schedule.js                 # one-off match generator (2026-mammut60); its output must be committed
@@ -172,7 +173,14 @@ entry of `tournaments.json` so a kiosk URL survives the next event), then one
 over HTTP. **Fetches are same-origin relative paths** (`tournaments/<slug>/…`):
 the pages and the data ship from the same Pages deploy, so there is no base URL,
 no repo `const`, no CORS, and no per-IP fetch throttle — Pages static requests
-are unmetered. `?_=Date.now()` cache-buster; `POLL_MS = 30000`, but only the kiosk (venue) page auto-refreshes — the other pages read once on load, so nobody wastes requests staring at a static table.
+are unmetered. Data fetches revalidate with the CDN (`cache: 'no-cache'` →
+`If-None-Match`, a 0-byte 304 when unchanged), so a poll costs nothing when
+nothing changed. `POLL_MS = 30000`, and only the kiosk (venue) page polls —
+the other pages read once on load, so nobody wastes requests staring at a
+static table. A read-once page re-fetches when its tab returns to the
+foreground, and a load that lands in a deploy window or a blip retries up to
+three times, 5s apart — a transient failure can't leave a permanent "missing"
+page, while a genuinely empty repo or category still renders empty.
 
 An all-venues kiosk refetches every category each poll. Jitter the interval so a
 hall full of screens doesn't hit in lockstep; that is the only reason to touch
@@ -193,15 +201,15 @@ use — unchecked, `?t=../../` is a path traversal on the fetch URL. Reject →
 render an error, fetch nothing.
 
 - **`venue.html?v=…`** — fullscreen dark kiosk; no `?v=` shows all venues.
-  Matches are grouped per venue, each group showing its "now" matches and the
-  next two; venue filter pills work like the standings category pills
-  (`?v=` toggles) and cover only venues with matches — a declared-but-unused
-  court gets no pill. All-venues mode lays the venues out side by side, one
-  column each. "Now" = any scheduled start already reached with no result
-  yet — a match whose slot has fully elapsed stays on the board (a late match
-  is still the match on court); only a result removes a match from it. Once the
-  day's first match is due, a status line shows "On schedule", or "Behind
-  schedule" naming every match whose full slot has elapsed without a result.
+  Matches are grouped per venue, one column each; a result removes its card,
+  everything else stays. Each card carries a status badge: **Live** (started,
+  still inside its slot), **Late** (full slot elapsed without a result — a
+  late match is still the match on court), **Next** (start not yet reached;
+  the boundary instant belongs to Live). All-venues mode lays the venues out
+  side by side; a declared-but-unused court gets no column. There is no
+  separate status line — the per-card Late badge is the day's "behind
+  schedule" signal, and the same overdue computation (`scheduleStatus`)
+  feeds the player page's backlog estimate.
 - **`player.html?p=…`** — matches by day: venue, time, partner, opponents.
   While the day runs late, an upcoming match on a backed-up venue shows its
   backlog: "~30 min late · est. 15:55" (lower bound — a forfeit can clear it
@@ -314,7 +322,13 @@ wrapper pattern hurts.
 GitHub Pages on `main`, publishing source **GitHub Actions** — not "deploy from a
 branch". `.github/workflows/pages.yml` is the stock
 `upload-pages-artifact` + `deploy-pages` pair with `site/` as the artifact (`path: site`).
-No build, no checks — the pushed tree is served as-is; the hook is the only gate.
+No build, no checks — the pushed tree is served as-is (apart from one
+version-token stamp, below).
+The pre-commit hook (validate + tests) is the fast local gate; the Pages
+workflow re-runs both on every push, so a bypassed hook can't ship. The one
+deploy-time mutation: `?v=<commit sha>` version tokens are stamped onto
+script/style URLs in the workflow — the repo tree stays pristine, the token
+is the real SHA of the deployed tree, and the hook never rewrites files.
 Two settings carry the whole design:
 
 - The 10 builds/hour Pages cap applies to the legacy branch build only — GitHub's
@@ -327,10 +341,10 @@ Two settings carry the whole design:
 A push is live in ~30–60s. Plain static files — host them anywhere if Pages stops
 fitting; the fetches are relative, so nothing points at github.com.
 
-`ponytail:` **verify before writing `app.js`** that the `?_=` cache-buster beats
-the Pages CDN's `Cache-Control` at the edge, not just in the browser. If it
-doesn't, freshness floors at the edge TTL (~600s) and the workaround is a
-per-deploy version token in the URL. Target: live in ~1 min.
+Data fetches revalidate per request (`cache: 'no-cache'`), so their freshness
+is independent of edge `Cache-Control`; script and style tags can't
+revalidate, so they carry a per-deploy `?v=<sha>` stamped by the workflow — a
+browser can never serve yesterday's JS with today's data. Target: live in ~1 min.
 
 `ponytail:` Cloudflare Pages was considered and rejected: 500 builds/*month* and
 one build at a time, account-wide — a single busy event eats the quota and
@@ -385,7 +399,8 @@ Two roles, and only one of them touches git.
 ### 3. The kiosk shows the hall
 
 A TV in the corner runs `venue.html?t=2026-spring&v=court-3` fullscreen — or
-drops `&v=` for an all-venues board. It renders "now" plus the next two.
+drops `&v=` for an all-venues board. It renders every unfinished match on
+each venue's board, each card carrying a Live / Late / Next badge.
 Nobody logs in, nobody operates it. Unplugged and replugged, it's a URL.
 
 ### 4. Priya plays

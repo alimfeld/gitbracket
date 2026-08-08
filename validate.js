@@ -8,7 +8,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { ID_RE, pairSig, matchSlotMs, slotsOverlap, makeCat, isDone, poolStandings, resolveSide, isDeadTie } = require('./site/app.js');
+const { ID_RE, pairSig, matchSlotMs, slotsOverlap, makeCat, isDone, poolStandings, resolveSide, isDeadTie } = require('./site/derive.js');
 
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/;
 const RESULTS = ['winner', 'loser'];

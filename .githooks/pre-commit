@@ -1,18 +1,10 @@
 #!/bin/sh
-# Run the validator + test suite before every commit: the hook is the only
-# gate between a typo and a live Pages deploy.
+# Run the validator + test suite before every commit: the hook is the fast
+# local gate, the Pages workflow re-runs both on every push, so a bypassed
+# hook can't ship. Asset version tokens (?v=) are stamped by the deploy
+# workflow, not here — the hook never rewrites the tree.
 set -e
 root="$(git rev-parse --show-toplevel)"
 cd "$root"
-# Cache-bust asset URLs with the short SHA when app.js/style.css changed:
-# Pages caches static files, a new ?v= forces browsers to re-fetch. The SHA
-# stamped is HEAD — the parent of the in-flight commit, the only SHA knowable
-# pre-commit — and each deploy serves a ?v= no earlier deploy referenced, so
-# repeat visitors are forced to re-fetch the new assets.
-if ! git diff --quiet HEAD -- site/app.js site/style.css; then
-  v="$(git rev-parse --short HEAD)"
-  sed -i '' -E "s/(app\.js|style\.css)(\?v=[^\"']*)?\"/\1?v=$v\"/g" site/*.html
-  git add site/*.html
-fi
 node validate.js "$root" || exit 1
 exec node --test
