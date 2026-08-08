@@ -6,7 +6,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { makeCat, winnerIdx, isDone, poolStandings, resolveSide, sameRecord, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, scheduleStatus, venueBacklog, kioskStatus, matchLabel } = require('../site/app.js');
+const { makeCat, winnerIdx, isDone, poolStandings, resolveSide, sameRecord, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, scheduleStatus, venueBacklog, kioskStatus, delayNote, matchLabel } = require('../site/app.js');
 const { FIX, catOf } = require('./helpers.js');
 
 test('pool A standings: 4 sides, order, leader record', () => {
@@ -85,6 +85,24 @@ test('venueBacklog: per-venue delay from the most overdue unfinished match', () 
   const bg = venueBacklog([ctx], now);
   assert(bg.get('c1') === 5 * 60000, 'c1: 09:00 slot ended 09:45, 5 min overdue (done m2 never counts)');
   assert((bg.get('c2') || 0) === 0, 'c2: 09:30 match still inside its slot, no delay');
+});
+
+test('delayNote: the match queued behind an unscored one shows the delay; source, in-play, done get theirs', () => {
+  // back-to-back slots: m2 sits exactly where m1's slot ends, so while m1 is
+  // undone its est. start is exactly now — the note must still appear
+  const ctx = makeCat({ meta: { bestOf: { groups: 3, knockout: 3 }, slotMinutes: { groups: 30, knockout: 30 } }, matches: [
+    { id: 'm1', scheduled: '2025-07-14T09:00:00Z', venue: 'c1', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] }, // backlog source: overdue, unscored, not started
+    { id: 'm2', scheduled: '2025-07-14T09:30:00Z', venue: 'c1', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] }, // queued: scheduled start passed, still not started
+    { id: 'm3', scheduled: '2025-07-14T10:30:00Z', venue: 'c1', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }], games: [{ a: 1, b: 0 }] }, // in play
+    { id: 'm4', scheduled: '2025-07-14T08:00:00Z', venue: 'c1', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }], games: [{ a: 2, b: 0 }, { a: 2, b: 0 }] }, // done
+  ] }, { timezone: 'UTC', players: [] });
+  const now = Date.parse('2025-07-14T09:40:00Z'); // m1 slot ended 09:30 → 10 min backlog on c1
+  const bg = venueBacklog([ctx], now);
+  assert(bg.get('c1') === 10 * 60000, 'backlog from the unscored match');
+  const note = id => delayNote(Date.parse(ctx.byId.get(id).scheduled), ctx.byId.get(id), ctx, bg, now);
+  assert(note('m2').includes('~10 min late · est. 9:40'), 'back-to-back queued match: est. start is now, note still shows');
+  assert(note('m3').includes('started ~10 min late'), 'in-play match shows its late start, never an est. time');
+  assert(note('m1') === '' && note('m4') === '', 'backlog source and done match get no note');
 });
 
 test('kioskStatus: overdue / now / upcoming badge per open card', () => {

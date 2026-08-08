@@ -637,13 +637,20 @@ function renderVenue(params, data) {
   return parts.join('');
 }
 
-// "~X min late · est. H:MM" note for a scheduled match, from the venue's
-// accumulated backlog; '' when on schedule.
+// Backlog note for a match card: '~X min late · est. H:MM' while it hasn't
+// started (future OR still queued behind an unscored predecessor), 'started
+// ~X min late' once it's in play; '' when on schedule, finished, or the source.
 function delayNote(t, m, ctx, delayByVenue, now) {
-  if (t === null || t <= now || !m.venue) return '';
+  if (t === null || !m.venue) return '';
   const d = delayByVenue.get(m.venue) || 0;
   const min = Math.round(d / 60000 / 5) * 5;
-  return min >= 5 ? ` · <span class="late">~${min} min late · est. ${fmtTime(t + d, ctx.tz)}</span>` : '';
+  if (min < 5 || isDone(m, ctx)) return '';
+  // in play: it started late — checked first so a playing match never reads as still upcoming
+  if ((m.games || []).length) return ` · <span class="late">started ~${min} min late</span>`;
+  // not started: the backlog pushes its start to t + d. With back-to-back slots
+  // that est. is exactly now while the predecessor is unscored (>= not >).
+  if (t + d >= now) return ` · <span class="late">~${min} min late · est. ${fmtTime(t + d, ctx.tz)}</span>`;
+  return ''; // the backlog source itself — no estimate the model can give
 }
 
 // "N more <category> matches possible between H:MM and H:MM · depends on
@@ -770,5 +777,5 @@ if (typeof document !== 'undefined') boot();
 
 // CommonJS exports for validate.js; browser <script> ignores these.
 if (typeof module !== 'undefined') {
-  module.exports = { ID_RE, pairSig, matchSlotMs, slotsOverlap, makeCat, winnerIdx, isDone, poolStandings, resolveSide, sameRecord, matchRound, isDeadTie, playerMatches, reachableKo, possibleSpan, slotLabel, sideLabel, schedTime, gamesText, roundName, placementLabel, koColumn, scheduleStatus, venueBacklog, kioskStatus, matchLabel, fmtTime, dayKey, renderIndex, renderStandings, renderVenue, renderPlayer };
+  module.exports = { ID_RE, pairSig, matchSlotMs, slotsOverlap, makeCat, winnerIdx, isDone, poolStandings, resolveSide, sameRecord, matchRound, isDeadTie, playerMatches, reachableKo, possibleSpan, slotLabel, sideLabel, schedTime, gamesText, roundName, placementLabel, koColumn, scheduleStatus, venueBacklog, kioskStatus, delayNote, matchLabel, fmtTime, dayKey, renderIndex, renderStandings, renderVenue, renderPlayer };
 }
