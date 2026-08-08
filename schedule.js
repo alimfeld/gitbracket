@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Mammut Open 60+ match generator.
 //
-// Reads TEAMS (pairs of player ids, registration order) and writes the three
-// tournaments/2026-mammut60/matches/*.json files: round-robin pools of up to
+// Reads TEAMS (pairs of player ids, registration order) and writes the one
+// tournaments/2026-mammut60.json file: round-robin pools of up to
 // POOL_SIZE, then a single-elimination knockout everyone advances into. Every
 // match also gets a venue and start time: md/wd share the morning courts from
 // 09:00, xd plays the afternoon from 13:00, in per-category slot-length steps. The
@@ -22,7 +22,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { matchSlotMs, slotsOverlap, pairSig, dayKey } = require('./site/derive.js'); // per-category/per-match slot lengths live in tournament.json
+const { matchSlotMs, slotsOverlap, pairSig, dayKey } = require('./site/derive.js'); // per-category/per-match slot lengths live in the tournament file
 
 const SLUG = '2026-mammut60';
 const POOL_SIZE = 4; // max teams per pool; leftovers spill into a smaller pool
@@ -32,7 +32,7 @@ const BLOCK_START = { md: '09:00', wd: '09:00', xd: '13:00' }; // morning: md+wd
 // are best-of-3, 60 min), so a morning finalist who also plays xd has a 30-min
 // turnaround before xd starts at 13:00. Stretch a lunch break there if needed.
 
-// Player ids must exist in tournaments/<SLUG>/tournament.json.
+// Player ids must exist in tournaments/<SLUG>.json.
 const TEAMS = {
   md: [
     ['charles', 'beni'],
@@ -218,7 +218,7 @@ function tzOffset(tz) {
 // (matchSlotMs), matching the validator's overlap rule, so the off-set
 // morning/afternoon grids can't collide.
 function scheduleMatches(categories, venues, tz, slotCfgOf) {
-  if (venues.length === 0) throw new Error('no venues in tournament.json');
+  if (venues.length === 0) throw new Error('no venues in the tournament file');
   const offset = tzOffset(tz);
   const startOf = (cat) => Date.parse(`${EVENT_DATE}T${BLOCK_START[cat]}:00${offset}`);
   const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
@@ -315,16 +315,14 @@ function assertPoolCoverage(teams, matches, names) {
 
 function main() {
   const tourney = JSON.parse(
-    fs.readFileSync(path.join(__dirname, 'site', 'tournaments', SLUG, 'tournament.json'), 'utf8')
+    fs.readFileSync(path.join(__dirname, 'site', 'tournaments', `${SLUG}.json`), 'utf8')
   );
   const known = new Set(tourney.players.map((p) => p.id));
   for (const [cat, teams] of Object.entries(TEAMS)) {
     for (const ids of teams) for (const id of ids) {
-      if (!known.has(id)) throw new Error(`TEAMS.${cat}: player ${id} not in site/tournaments/${SLUG}/tournament.json`);
+      if (!known.has(id)) throw new Error(`TEAMS.${cat}: player ${id} not in site/tournaments/${SLUG}.json`);
     }
   }
-  const dir = path.join(__dirname, 'site', 'tournaments', SLUG, 'matches');
-  fs.mkdirSync(dir, { recursive: true });
 
   const results = [];
   for (const [cat, teams] of Object.entries(TEAMS)) {
@@ -339,12 +337,14 @@ function main() {
   scheduleMatches(categories, tourney.venues.map((v) => v.id), tourney.timezone, slotCfgOf);
   assertSchedule(categories, slotCfgOf);
 
+  const out = {};
   for (const [cat, teams, matches] of results) {
     assertPoolCoverage(teams, matches, teams.map((_, i) => String.fromCharCode(65 + i)));
-    fs.writeFileSync(path.join(dir, cat + '.json'), JSON.stringify({ matches }, null, 2) + '\n');
-    console.log(`${cat}: ${matches.length} matches -> ${cat}.json`);
+    out[cat] = matches;
+    console.log(`${cat}: ${matches.length} matches`);
   }
-  console.log('Wrote site/tournaments/' + SLUG + '/matches/*.json — run `node validate.js` before committing.');
+  fs.writeFileSync(path.join(__dirname, 'site', 'tournaments', `${SLUG}.json`), JSON.stringify({ ...tourney, matches: out }, null, 2) + '\n');
+  console.log(`Wrote site/tournaments/${SLUG}.json — run \`node validate.js\` before committing.`);
 }
 
 if (require.main === module) main();

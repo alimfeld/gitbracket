@@ -32,14 +32,11 @@ function loadRepo(root) {
   if (Array.isArray(index)) {
     for (const t of index) {
       if (!t || typeof t.slug !== 'string' || !ID_RE.test(t.slug)) continue;
-      const tdir = path.join(root, 'tournaments', t.slug);
-      const tjson = readJson(path.join(tdir, 'tournament.json'), readErrs);
+      const tfile = path.join(root, 'tournaments', t.slug + '.json');
+      const tjson = readJson(tfile, readErrs);
       const matches = new Map();
-      let files = [];
-      try { files = fs.readdirSync(path.join(tdir, 'matches')); } catch { files = []; } // missing dir = no matches files = valid
-      for (const f of files) {
-        if (!f.endsWith('.json')) continue;
-        matches.set(f.slice(0, -5), readJson(path.join(tdir, 'matches', f), readErrs));
+      if (tjson && typeof tjson === 'object' && !Array.isArray(tjson) && tjson.matches && typeof tjson.matches === 'object' && !Array.isArray(tjson.matches)) {
+        for (const [cid, arr] of Object.entries(tjson.matches)) matches.set(cid, { matches: arr });
       }
       tournaments.set(t.slug, { tjson, matches });
     }
@@ -79,11 +76,11 @@ function validateRepo(repo) {
 }
 
 function validateTournamentData(slug, info, errs, warns) {
-  const tFile = `site/tournaments/${slug}/tournament.json`;
+  const tFile = `site/tournaments/${slug}.json`;
   const tjson = info.tjson;
   if (tjson === undefined) return; // unreadable — readErrs carries the message
   const err = (f, m) => errs.push(`${f}: ${m}`);
-  if (tjson === null) { err(tFile, 'tournament.json must be an object, got null'); return; }
+  if (tjson === null) { err(tFile, 'must be an object, got null'); return; }
 
   if (typeof tjson.timezone !== 'string' || !tjson.timezone) {
     err(tFile, 'timezone required');
@@ -130,21 +127,20 @@ function validateTournamentData(slug, info, errs, warns) {
     if (typeof p.name !== 'string' || !p.name.trim()) err(where, 'name must be a non-empty string');
     if (players.has(p.id)) err(where, `duplicate player id ${p.id}`);
     players.set(p.id, p);
-    if (!Array.isArray(p.categories)) { err(where, 'categories must be an array of category ids'); return; }
-    for (const cid of p.categories) {
-      if (typeof cid !== 'string' || !categories.has(cid)) err(where, `unknown category ${JSON.stringify(cid)}`);
-    }
   });
 
-  const mdir = `site/tournaments/${slug}/matches`;
+  if (tjson.matches !== undefined && (typeof tjson.matches !== 'object' || tjson.matches === null || Array.isArray(tjson.matches))) {
+    err(tFile, 'matches must be an object map of category id → match array');
+  }
+
   for (const cid of info.matches.keys()) {
-    if (!categories.has(cid)) err(`${mdir}/${cid}.json`, `file maps to undeclared category ${JSON.stringify(cid)} — a filename typo would silently render an empty category`);
+    if (!categories.has(cid)) err(`${tFile} matches.${cid}`, `maps to undeclared category ${JSON.stringify(cid)} — a key typo would silently render an empty category`);
   }
 
   for (const cat of categories.values()) {
     const cjson = info.matches.get(cat.id);
-    if (cjson === undefined) continue; // category with no matches file is valid
-    validateCategory(`${mdir}/${cat.id}.json`, cjson, cat, players, venues, tjson, errs, warns);
+    if (cjson === undefined) continue; // category with no matches entry is valid
+    validateCategory(`${tFile} matches.${cat.id}`, cjson, cat, players, venues, tjson, errs, warns);
   }
 
   // ---- venue overlap on unplayed scheduled matches, across ALL categories ----
@@ -162,7 +158,7 @@ function validateTournamentData(slug, info, errs, warns) {
       if (isDone(m, ctx)) continue;
       const t = Date.parse(m.scheduled);
       if (Number.isNaN(t)) continue;
-      sched.push({ f: `${mdir}/${cat.id}.json`, m, t, ctx });
+      sched.push({ f: `${tFile} matches.${cat.id}`, m, t, ctx });
     }
   }
   for (let i = 0; i < sched.length; i++) {
@@ -198,7 +194,7 @@ function validateCategory(cFile, cjson, cat, players, venues, tjson, errs, warns
     byId.set(m.id, m);
   }
 
-  const roster = new Set([...players.values()].filter(p => (p.categories || []).includes(cat.id)).map(p => p.id));
+  const roster = new Set(players.keys()); // a side id must be a registered player — who plays what is what the matches say, nothing else to maintain
   let hasPool = false;
   let hasKnockout = false;
   const poolUses = new Map(); // pool -> Set<side sig>
@@ -229,7 +225,7 @@ function validateCategory(cFile, cjson, cat, players, venues, tjson, errs, warns
         }
         if (new Set(side.ids).size !== side.ids.length) err(where, `side ${si}: duplicate player id in side`);
         for (const pid of side.ids) {
-          if (!roster.has(pid)) err(where, `side ${si}: player ${pid} is not in category ${cat.id}`);
+          if (!roster.has(pid)) err(where, `side ${si}: unknown player ${pid} — register it in players`);
         }
         const sig = pairSig(side.ids);
         if (m.pool !== undefined) {

@@ -1,0 +1,24 @@
+{
+  "timezone": "America/New_York",
+  "venues": [
+    { "id": "court-1", "name": "Court 1" }
+  ],
+  "categories": [
+    { "id": "md40", "name": "Men's Doubles 40+", "bestOf": { "groups": 3, "knockout": 5 } }
+  ],
+  "players": [
+    { "id": "p1", "name": "Ada Lovelace" }
+  ],
+  "matches": {
+    "md40": [
+      {
+        "id": "m1",
+        "pool": "A",
+        "sides": [
+          { "kind": "players", "ids": ["p1"] },
+          { "kind": "players", "ids": ["ghost"] }
+        ]
+      }
+    ]
+  }
+}

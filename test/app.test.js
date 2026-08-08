@@ -172,7 +172,7 @@ test('possibleSpan: open knockout span, and pre-knockout fallback to the bracket
   const s = possibleSpan(md, 'p5');
   assert(s && s.count === 1 && s.min === Date.parse('2025-07-14T12:15:00-04:00') && s.max === s.min, 'p5: final or bronze at 12:15 — one more match, not both');
   assert(possibleSpan(md, 'p1') === null && possibleSpan(md, 'p7') === null, 'confirmed knockout seat (final/bronze) leaves no open span');
-  const tjson = require(FIX('sample', 'tournaments', 'sample', 'tournament.json'));
+  const tjson = require(FIX('sample', 'tournaments', 'sample.json'));
   const pre = makeCat({ meta: tjson.categories[0], matches: md.matches.map(m => ({ ...m, games: [], forfeit: undefined })) }, tjson);
   const s0 = possibleSpan(pre, 'p1');
   assert(s0 && s0.count === 2 && s0.min === Date.parse('2025-07-14T11:15:00-04:00') && s0.max === Date.parse('2025-07-14T12:15:00-04:00'), 'pre-event: up to 2 matches along one bracket path (m7 -> final/bronze, 11:15 to 12:15)');
@@ -254,7 +254,7 @@ test('slotLabel: unresolved slots describe the slot, not bare TBD', () => {
 });
 
 test('poolStandings partial: unfinished pool still yields a live table', () => {
-  const tjson = require(FIX('sample', 'tournaments', 'sample', 'tournament.json'));
+  const tjson = require(FIX('sample', 'tournaments', 'sample.json'));
   const md = catOf('sample', 'md40');
   const unfinished = makeCat({ meta: tjson.categories[0], matches: md.matches.map(m => m.id === 'm6' ? { ...m, games: [] } : m) }, tjson);
   assert(poolStandings(unfinished, 'A') === null, 'strict form still TBDs an unfinished pool');

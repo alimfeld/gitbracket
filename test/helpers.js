@@ -17,10 +17,8 @@ const validateFixture = name => validateRepo(loadRepo(FIX(name)));
 
 // derive case: build a category context straight from a fixture's JSON
 function catOf(name, catId) {
-  const base = FIX(name, 'tournaments', name);
-  const tjson = require(path.join(base, 'tournament.json'));
-  const cjson = require(path.join(base, 'matches', `${catId}.json`));
-  return makeCat({ meta: tjson.categories.find(c => c.id === catId), matches: cjson.matches }, tjson);
+  const tjson = require(FIX(name, 'tournaments', `${name}.json`));
+  return makeCat({ meta: tjson.categories.find(c => c.id === catId), matches: (tjson.matches || {})[catId] || [] }, tjson);
 }
 
 module.exports = { FIX, hasErr, hasWarn, validateFixture, catOf };

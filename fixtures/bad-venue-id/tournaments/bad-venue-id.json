@@ -1,0 +1,30 @@
+{
+  "timezone": "UTC",
+  "venues": [
+    {
+      "id": "Court 1",
+      "name": "Court 1"
+    }
+  ],
+  "categories": [
+    {
+      "id": "t",
+      "name": "T",
+      "bestOf": {
+        "groups": 3,
+        "knockout": 3
+      }
+    }
+  ],
+  "players": [
+    {
+      "id": "p1",
+      "name": "P1"
+    },
+    {
+      "id": "p2",
+      "name": "P2"
+    }
+  ],
+  "matches": {}
+}

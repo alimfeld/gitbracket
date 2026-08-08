@@ -1,0 +1,69 @@
+{
+  "timezone": "UTC",
+  "categories": [
+    {
+      "id": "t",
+      "name": "T",
+      "bestOf": {
+        "groups": 1,
+        "knockout": 1
+      }
+    }
+  ],
+  "players": [
+    {
+      "id": "p1",
+      "name": "P1"
+    },
+    {
+      "id": "p2",
+      "name": "P2"
+    },
+    {
+      "id": "p3",
+      "name": "P3"
+    },
+    {
+      "id": "p4",
+      "name": "P4"
+    }
+  ],
+  "matches": {
+    "t": [
+      {
+        "id": "m1",
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p1"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p2"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "m2",
+        "sides": [
+          {
+            "kind": "pool",
+            "pool": "A",
+            "rank": 3
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p1"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

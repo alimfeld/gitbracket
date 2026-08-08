@@ -21,9 +21,7 @@ Repo must be **public**: GitHub Pages on the free plan serves public repos only.
 
 ```
 site/tournaments.json       # [{ "slug": "2026-spring", "name": "Spring Open 2026" }, …] — newest last
-site/tournaments/<slug>/
-  tournament.json           # meta, timezone, venues, categories, players
-  matches/<category-id>.json  # one file per category
+site/tournaments/<slug>.json  # the whole tournament: meta, venues, categories, players, matches (keyed by category)
 site/index.html             # links to tournaments
 site/style.css              # shared; venue.html adds a kiosk override block
 site/venue.html             # kiosk: now + next, one venue (?t=&v=) or all
@@ -43,16 +41,16 @@ Everything Pages serves lives under `site/` — the workflow uploads that one
  directory (`upload-pages-artifact` `path: site`), and the app's relative
 fetches resolve against it. Dev tooling (cli, validate, tests, fixtures) stays
 at the repo root and never ships.
-One repo, one directory per tournament on `main`.
+One repo, one file per tournament on `main`.
 
 ## Data
 
-`tournaments.json` is the index: `slug` is the directory name and `name` the
+`tournaments.json` is the index: `slug` is the file name (minus `.json`) and `name` the
 display label — the name lives only here, nothing repeats it. Order is
 chronological, so the last entry is the current event and `index.html` lists past
 ones above it.
 
-`site/tournaments/<slug>/tournament.json`
+`site/tournaments/<slug>.json`
 
 ```jsonc
 {
@@ -65,9 +63,10 @@ ones above it.
     { "id": "md40", "name": "Men's Doubles 40+", "bestOf": { "groups": 3, "knockout": 5 }, "slotMinutes": { "groups": 45, "knockout": 60 } }
   ],
   "players": [
-    { "id": "p1", "name": "Ada Lovelace", "categories": ["md40"] },
-    { "id": "p2", "name": "Grace Hopper", "categories": ["md40"] }
+    { "id": "p1", "name": "Ada Lovelace" },
+    { "id": "p2", "name": "Grace Hopper" }
   ]
+  // + "matches": { "<category-id>": [ …match objects… ] } — the whole tournament in one file
 }
 ```
 
@@ -86,27 +85,32 @@ resolver, `matchSlotMs`, feeds the generator's slot grid, the venue-overlap
 check, and the kiosk's "now" window.
 
 No team entity: a doubles side is just its player ids, written inline in each
-match. A pair entering two categories repeats its ids in both files — nothing
-links them, and nothing needs to.
+match. A pair entering two categories repeats its ids in both arrays — nothing
+links them, and nothing needs to. `players` is a name registry, nothing more: a
+player declares no categories, who plays what is exactly what the match sides
+say (a side id that isn't in `players` is the typo `validate.js` catches).
 
-`site/tournaments/<slug>/matches/<category-id>.json`
+`site/tournaments/<slug>.json` — the `matches` map: category id → match array.
+A category with no `matches` entry is valid.
 
 ```jsonc
 {
-  "matches": [{
-    "id": "m1",
-    "pool": "A",                      // present ⇒ stage "groups", absent ⇒ "knockout"
-    "venue": "court-3",               // optional — omit for not-yet-placed
-    "scheduled": "2025-07-14T09:00:00-04:00",  // optional — omit for TBD
-    "slotMinutes": 90,               // optional — overrides the category slot (best-of-3 final, say)
-    "bestOf": 3,                      // optional — overrides bestOf[stage] (final, bronze)
-    "sides": [                        // exactly two: sides[0] = "a", sides[1] = "b"
-      { "kind": "players", "ids": ["p1", "p3"] },
-      { "kind": "players", "ids": ["p2", "p4"] }
-    ],
-    "games": [{ "a": 11, "b": 9 }, { "a": 11, "b": 7 }],  // prefix; partial while in play
-    "forfeit": 1                      // instead of "games": side 1 forfeited, side 0 wins
-  }]
+  "matches": {
+    "md40": [{
+      "id": "m1",
+      "pool": "A",                    // present ⇒ stage "groups", absent ⇒ "knockout"
+      "venue": "court-3",             // optional — omit for not-yet-placed
+      "scheduled": "2025-07-14T09:00:00-04:00",  // optional — omit for TBD
+      "slotMinutes": 90,              // optional — overrides the category slot (best-of-3 final, say)
+      "bestOf": 3,                    // optional — overrides bestOf[stage] (final, bronze)
+      "sides": [                      // exactly two: sides[0] = "a", sides[1] = "b"
+        { "kind": "players", "ids": ["p1", "p3"] },
+        { "kind": "players", "ids": ["p2", "p4"] }
+      ],
+      "games": [{ "a": 11, "b": 9 }, { "a": 11, "b": 7 }],  // prefix; partial while in play
+      "forfeit": 1                    // instead of "games": side 1 forfeited, side 0 wins
+    }]
+  }
 }
 ```
 
@@ -163,14 +167,15 @@ unique per category), so the full bracket is committed before a ball is hit.
 - **IDs and slugs** match `^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$`, unique per
   scope (players and venues per tournament, matches per category). They become
   file paths and URL params.
-- **Categories are independent** data-wise; a player can be in several.
+- **Categories are independent** data-wise; a player can be in several — the
+  membership is the matches, there is nothing else to maintain.
 
 ## Read path
 
-`app.js` fetches `tournament.json` (selected by `?t=`, defaulting to the last
-entry of `tournaments.json` so a kiosk URL survives the next event), then one
-`matches/<id>.json` per entry in its `categories` — there is no directory listing
-over HTTP. **Fetches are same-origin relative paths** (`tournaments/<slug>/…`):
+`app.js` fetches one file, `tournaments/<slug>.json` (slug from `?t=`, defaulting
+to the last entry of `tournaments.json` so a kiosk URL survives the next event) —
+there is no directory listing over HTTP. **Fetches are same-origin relative paths**
+(`tournaments/<slug>.json`):
 the pages and the data ship from the same Pages deploy, so there is no base URL,
 no repo `const`, no CORS, and no per-IP fetch throttle — Pages static requests
 are unmetered. Data fetches revalidate with the CDN (`cache: 'no-cache'` →
@@ -182,13 +187,14 @@ foreground, and a load that lands in a deploy window or a blip retries up to
 three times, 5s apart — a transient failure can't leave a permanent "missing"
 page, while a genuinely empty repo or category still renders empty.
 
-An all-venues kiosk refetches every category each poll. Jitter the interval so a
-hall full of screens doesn't hit in lockstep; that is the only reason to touch
-the timing.
+An all-venues kiosk refetches the one tournament file each poll. Jitter the
+interval so a hall full of screens doesn't hit in lockstep; that is the only
+reason to touch the timing.
 
-Per-file fetches aren't atomic — a deploy landing mid-poll yields one mixed
-snapshot, self-healing next poll. Renderers never throw on a bad snapshot: a
-missing matches file (404) renders empty, an unresolvable slot renders a
+A poll is a single fetch, so the snapshot is atomic — a deploy landing mid-poll
+yields the old or the new tournament, never a mix. Renderers never throw on a
+bad snapshot: a missing `matches` key renders empty, an unresolvable slot renders
+a
 descriptive label ("Winner of m9", "1st in Pool A") — never drop the row.
 Time and venue render defensively per view: the bracket and player schedule
 show "TBD" for a match with no `scheduled` or `venue`; standings pool tables
@@ -233,16 +239,18 @@ git commit -am "m1 11-9 11-7" && git push   # hook runs validate.js + node --tes
 `cli.js` is the match-day scorer's tool (zero deps, plain node): `list` shows
 every match whose two sides both resolve to players — the same rule
 `validate.js` enforces on scored matches — ready (no result) first. `score` and
-`forfeit` edit the one category file and run the real `validateRepo` before
+`forfeit` edit the tournament file and run the real `validateRepo` before
 writing; a rejected edit rolls the file back, so the CLI never leaves data the
-pre-commit hook would refuse. The write is `JSON.stringify(cjson, null, 2)`,
-byte-identical to the existing files, so a commit diff shows only the edited
-match.
+pre-commit hook would refuse. The write is `JSON.stringify(tournament, null, 2)`,
+byte-identical to the file apart from the edited match, so a commit diff shows
+only the edited match.
 
 A rejected push means someone pushed first: `git pull --rebase && git push`.
 Git's conflict semantics are the concurrency design — no retry loop, no CAS, no
-API client. Per-category files stripe writes across categories; two scorers on
-one category still hand-merge. One scorer per category is the operating model.
+API client. A tournament is one file, so two scorers on one tournament
+hand-merge; one scorer per tournament is the operating model. (Per-category
+files were the original write stripe — dropped because reads are atomic now and
+schedule edits are cross-category anyway.)
 
 `git config core.hooksPath .githooks` once; `.githooks/pre-commit` runs
 `validate.js` then `node --test` — so "validate and test before commit" is a
@@ -255,10 +263,9 @@ the schema and cross-file references:
 
 - `tournaments.json` slugs exist; ids match the regex and are unique per scope
   (players and venues per tournament, matches per category).
-- Every `matches/*.json` file maps to a declared category — an unlisted file is
-  never fetched (no directory listing), so a filename typo would silently render
-  an empty category.
-- `player.categories` and `match.venue` exist.
+- Every `matches` key maps to a declared category — a key typo would silently
+  render an empty category.
+- Side ids are registered players; `match.venue` exists.
 - `match` slots name a real match in the same category and a `result` of
   `winner`/`loser`; `pool` slots name a pool that category actually uses, with
   `rank` in range.
@@ -287,7 +294,7 @@ the schema and cross-file references:
   is its effective slot length: per-match `slotMinutes` > per-stage category
   `slotMinutes` (`groups`/`knockout`) > the 45-minute default.
 
-A category with no matches file is valid. Dead-tie pool slots warn.
+A category with no `matches` entry is valid. Dead-tie pool slots warn.
 
 Player clashes are not checked: behind a `match` or `pool` slot there is no
 player id yet, so the check is blind past round 1 anyway.
@@ -295,7 +302,7 @@ player id yet, so the check is blind past round 1 anyway.
 `test/` is the harness, `fixtures/` is the data. Every scenario — the core
 validator rules, each derive behavior, plus the dead-tie and cycle corner cases —
 is a committed fixture under `fixtures/`: a self-contained mini repo
-(`tournaments.json` + `tournaments/<slug>/…`) loaded with the same `loadRepo`
+(`tournaments.json` + `tournaments/<slug>.json`) loaded with the same `loadRepo`
 used on real checkouts, so the tests exercise the real I/O path. Tests only load
 and assert — none generate or mutate data, and none depend on the live
 `site/tournaments/` data. The suites split by layer (`test/app.test.js` derive,
@@ -361,13 +368,13 @@ Two roles, and only one of them touches git.
 
 ### 1. Dana sets up a tournament (T-3 weeks → T-1 day)
 
-1. `mkdir site/tournaments/2026-spring` (or `cp -r` last year's), write
-   `tournament.json`: `timezone`, `venues`, `categories` with `bestOf` (e.g.
+1. `cp` last year's `site/tournaments/2026-spring.json` (or write a new one),
+   editing `timezone`, `venues`, `categories` with `bestOf` (e.g.
    `groups: 3`, `knockout: 5`).
 2. Registration comes in by whatever channel she already uses (mail, form,
    spreadsheet). She appends each entry to `players` with a slug id and its
-   `categories`. Commits whenever, `git log` is the registration history.
-3. Deadline hits. She writes `matches/md40.json`: pool matches first (`pool: "A"`),
+   `slug id`. Commits whenever, `git log` is the registration history.
+3. Deadline hits. She writes the `matches.md40` array: pool matches first (`pool: "A"`),
    then the knockout, whose sides are *slots* — `{"kind":"pool","pool":"A","rank":1}`
    for the quarters, `{"kind":"match","match":"m9","result":"winner"}` upward.
    No player ids past the pools.
@@ -377,14 +384,14 @@ Two roles, and only one of them touches git.
    general scheduler.
 5. Append `2026-spring` and its display name to `tournaments.json`, commit, push.
    Pages redeploys; the kiosk and player pages are live in about a minute. Next
-   season's entry goes below it — this one keeps its directory and its URLs, and
+   season's entry goes below it — this one keeps its file and its URLs, and
    `index.html` moves it into the past list.
 6. She hands out each player's link, `…/player.html?t=2026-spring&p=p1`,
    however she already contacts them.
 
 ### 2. Sam runs the tournament (match day)
 
-1. Sam owns one category — that is the operating model.
+1. Sam owns one tournament — that is the operating model.
 2. Court 3 finishes a game 11-9. Sam appends `{"a":11,"b":9}` to that match's
    `games`, runs `git commit -am "m1 11-9" && git push`. The pre-commit hook
    runs `validate.js` and the test suite, so a typo can't reach the kiosk.

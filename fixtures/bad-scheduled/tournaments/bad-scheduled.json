@@ -1,0 +1,63 @@
+{
+  "timezone": "UTC",
+  "venues": [
+    {
+      "id": "court-1",
+      "name": "Court 1"
+    }
+  ],
+  "categories": [
+    {
+      "id": "t",
+      "name": "T",
+      "bestOf": {
+        "groups": 3,
+        "knockout": 3
+      }
+    }
+  ],
+  "players": [
+    {
+      "id": "p1",
+      "name": "P1"
+    },
+    {
+      "id": "p2",
+      "name": "P2"
+    }
+  ],
+  "matches": {
+    "t": [
+      {
+        "id": "m1",
+        "pool": "A",
+        "venue": "court-1",
+        "scheduled": "2025-07-14 09:00",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p1"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p2"
+            ]
+          }
+        ],
+        "games": [
+          {
+            "a": 11,
+            "b": 9
+          },
+          {
+            "a": 11,
+            "b": 7
+          }
+        ]
+      }
+    ]
+  }
+}

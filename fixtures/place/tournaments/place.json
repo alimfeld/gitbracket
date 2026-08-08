@@ -1,0 +1,310 @@
+{
+  "timezone": "UTC",
+  "categories": [
+    {
+      "id": "pl",
+      "name": "Place",
+      "bestOf": {
+        "knockout": 1
+      }
+    }
+  ],
+  "players": [
+    {
+      "id": "p1",
+      "name": "P1"
+    },
+    {
+      "id": "p2",
+      "name": "P2"
+    },
+    {
+      "id": "p3",
+      "name": "P3"
+    },
+    {
+      "id": "p4",
+      "name": "P4"
+    },
+    {
+      "id": "p5",
+      "name": "P5"
+    },
+    {
+      "id": "p6",
+      "name": "P6"
+    },
+    {
+      "id": "p7",
+      "name": "P7"
+    },
+    {
+      "id": "p8",
+      "name": "P8"
+    }
+  ],
+  "matches": {
+    "pl": [
+      {
+        "id": "m1",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p1"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p2"
+            ]
+          }
+        ],
+        "games": [
+          {
+            "a": 11,
+            "b": 5
+          }
+        ]
+      },
+      {
+        "id": "m2",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p3"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p4"
+            ]
+          }
+        ],
+        "games": [
+          {
+            "a": 11,
+            "b": 5
+          }
+        ]
+      },
+      {
+        "id": "m3",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p5"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p6"
+            ]
+          }
+        ],
+        "games": [
+          {
+            "a": 11,
+            "b": 5
+          }
+        ]
+      },
+      {
+        "id": "m4",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p7"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p8"
+            ]
+          }
+        ],
+        "games": [
+          {
+            "a": 11,
+            "b": 5
+          }
+        ]
+      },
+      {
+        "id": "m5",
+        "sides": [
+          {
+            "kind": "match",
+            "match": "m1",
+            "result": "winner"
+          },
+          {
+            "kind": "match",
+            "match": "m2",
+            "result": "winner"
+          }
+        ],
+        "games": [
+          {
+            "a": 11,
+            "b": 6
+          }
+        ]
+      },
+      {
+        "id": "m6",
+        "sides": [
+          {
+            "kind": "match",
+            "match": "m3",
+            "result": "winner"
+          },
+          {
+            "kind": "match",
+            "match": "m4",
+            "result": "winner"
+          }
+        ],
+        "games": [
+          {
+            "a": 11,
+            "b": 6
+          }
+        ]
+      },
+      {
+        "id": "m7",
+        "sides": [
+          {
+            "kind": "match",
+            "match": "m5",
+            "result": "winner"
+          },
+          {
+            "kind": "match",
+            "match": "m6",
+            "result": "winner"
+          }
+        ],
+        "games": [
+          {
+            "a": 11,
+            "b": 7
+          }
+        ]
+      },
+      {
+        "id": "m8",
+        "sides": [
+          {
+            "kind": "match",
+            "match": "m5",
+            "result": "loser"
+          },
+          {
+            "kind": "match",
+            "match": "m6",
+            "result": "loser"
+          }
+        ],
+        "games": [
+          {
+            "a": 11,
+            "b": 7
+          }
+        ]
+      },
+      {
+        "id": "m9",
+        "sides": [
+          {
+            "kind": "match",
+            "match": "m1",
+            "result": "loser"
+          },
+          {
+            "kind": "match",
+            "match": "m2",
+            "result": "loser"
+          }
+        ],
+        "games": [
+          {
+            "a": 11,
+            "b": 7
+          }
+        ]
+      },
+      {
+        "id": "m10",
+        "sides": [
+          {
+            "kind": "match",
+            "match": "m3",
+            "result": "loser"
+          },
+          {
+            "kind": "match",
+            "match": "m4",
+            "result": "loser"
+          }
+        ],
+        "games": [
+          {
+            "a": 11,
+            "b": 7
+          }
+        ]
+      },
+      {
+        "id": "m11",
+        "sides": [
+          {
+            "kind": "match",
+            "match": "m9",
+            "result": "winner"
+          },
+          {
+            "kind": "match",
+            "match": "m10",
+            "result": "winner"
+          }
+        ],
+        "games": [
+          {
+            "a": 11,
+            "b": 8
+          }
+        ]
+      },
+      {
+        "id": "m12",
+        "sides": [
+          {
+            "kind": "match",
+            "match": "m9",
+            "result": "loser"
+          },
+          {
+            "kind": "match",
+            "match": "m10",
+            "result": "loser"
+          }
+        ],
+        "games": [
+          {
+            "a": 11,
+            "b": 8
+          }
+        ]
+      }
+    ]
+  }
+}

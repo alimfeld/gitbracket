@@ -1,9 +1,0 @@
-{
-  "timezone": "America/New_York",
-  "venues": [ { "id": "court-1", "name": "Court 1" } ],
-  "categories": [ { "id": "t", "name": "Test", "bestOf": { "groups": 3, "knockout": 3 } } ],
-  "players": [
-    { "id": "p1", "name": "P1", "categories": ["t"] },
-    { "id": "p2", "name": "P2", "categories": ["t"] }
-  ]
-}

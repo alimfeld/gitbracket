@@ -1,0 +1,51 @@
+{
+  "timezone": "America/New_York",
+  "venues": [
+    {
+      "id": "court-1",
+      "name": "Court 1"
+    }
+  ],
+  "categories": [
+    {
+      "id": "t",
+      "name": "Test",
+      "bestOf": {
+        "groups": 4,
+        "knockout": 5
+      }
+    }
+  ],
+  "players": [
+    {
+      "id": "p1",
+      "name": "P1"
+    },
+    {
+      "id": "p2",
+      "name": "P2"
+    }
+  ],
+  "matches": {
+    "t": [
+      {
+        "id": "m1",
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p1"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p2"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

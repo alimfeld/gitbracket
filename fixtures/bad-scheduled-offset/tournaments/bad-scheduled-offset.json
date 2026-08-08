@@ -1,0 +1,52 @@
+{
+  "timezone": "America/New_York",
+  "venues": [
+    {
+      "id": "court-1",
+      "name": "Court 1"
+    }
+  ],
+  "categories": [
+    {
+      "id": "t",
+      "name": "Test",
+      "bestOf": {
+        "groups": 3,
+        "knockout": 3
+      }
+    }
+  ],
+  "players": [
+    {
+      "id": "p1",
+      "name": "P1"
+    },
+    {
+      "id": "p2",
+      "name": "P2"
+    }
+  ],
+  "matches": {
+    "t": [
+      {
+        "id": "m1",
+        "pool": "A",
+        "scheduled": "2025-07-14T09:00:00+15:00",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p1"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p2"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

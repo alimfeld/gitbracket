@@ -113,7 +113,7 @@ test('cli writeEdit: rollback on validation failure, write on success (real disk
     fs.mkdirSync(dataRoot, { recursive: true });
     fs.cpSync(FIX('sample'), dataRoot, { recursive: true });
     const repo = loadRepo(dataRoot);
-    const file = path.join(dataRoot, 'tournaments', 'sample', 'matches', 'md40.json');
+    const file = path.join(dataRoot, 'tournaments', 'sample.json');
     const before = fs.readFileSync(file, 'utf8');
     const bad = cli.writeEdit(dataRoot, repo, 'sample', 'md40', c => cli.applyScore(c, 'm7', [{ a: 11, b: 5 }, { a: 11, b: 3 }]));
     assert(bad.errs && bad.errs.length > 0 && !bad.file, 'bad edit reports validation errors');

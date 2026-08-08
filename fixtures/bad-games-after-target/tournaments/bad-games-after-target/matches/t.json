@@ -1,5 +1,0 @@
-{
-  "matches": [
-    { "id": "m1", "pool": "A", "sides": [{ "kind": "players", "ids": ["p1"] }, { "kind": "players", "ids": ["p2"] }], "games": [{ "a": 11, "b": 9 }, { "a": 11, "b": 7 }, { "a": 11, "b": 3 }] }
-  ]
-}

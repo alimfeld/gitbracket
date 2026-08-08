@@ -70,27 +70,29 @@ function listEligible(repo, slug) {
 }
 
 // Apply an edit to one match, validate the whole repo, write — or roll the file
-// back and report the validator's errors. The file format
-// (JSON.stringify(cjson, null, 2) + '\n') matches existing match files
-// byte-for-byte, so a commit diff shows only the edited match.
+// back and report the validator's errors. The write
+// (JSON.stringify(tournament, null, 2) + '\n') is byte-identical to the file
+// apart from the edited match, so a commit diff shows only that match.
 function writeEdit(root, repo, slug, catId, apply) {
   const info = repo.tournaments.get(slug);
   if (!info || !info.tjson) return { err: `unknown tournament ${slug}` };
   const cats = (info.tjson.categories || []).map(c => c.id);
   if (!cats.includes(catId)) return { err: `unknown category ${catId} — have: ${cats.join(', ')}` };
   const cjson = info.matches.get(catId);
-  if (!cjson) return { err: `no matches file for category ${catId}` };
-  const file = path.join(root, 'tournaments', slug, 'matches', `${catId}.json`);
+  if (!cjson) return { err: `no matches for category ${catId}` };
+  const file = path.join(root, 'tournaments', `${slug}.json`);
   const before = fs.readFileSync(file, 'utf8');
   const aerr = apply(cjson);
   if (aerr) return { err: aerr };
   const { errs } = validateRepo(repo);
   if (errs.length) {
-    Object.assign(cjson, JSON.parse(before)); // undo the in-memory edit too — a same-process retry must start from the original
+    cjson.matches = (JSON.parse(before).matches || {})[catId] || []; // undo the in-memory edit too — a same-process retry must start from the original
     fs.writeFileSync(file, before);
     return { errs };
   }
-  fs.writeFileSync(file, JSON.stringify(cjson, null, 2) + '\n');
+  const matches = {};
+  for (const [cid, c] of info.matches) matches[cid] = c.matches;
+  fs.writeFileSync(file, JSON.stringify({ ...info.tjson, matches }, null, 2) + '\n');
   return { file };
 }
 

@@ -1,0 +1,133 @@
+{
+  "timezone": "UTC",
+  "venues": [
+    {
+      "id": "court-1",
+      "name": "Court 1"
+    }
+  ],
+  "categories": [
+    {
+      "id": "t",
+      "name": "T",
+      "bestOf": {
+        "groups": 3,
+        "knockout": 3
+      }
+    }
+  ],
+  "players": [
+    {
+      "id": "p1",
+      "name": "P1"
+    },
+    {
+      "id": "p2",
+      "name": "P2"
+    },
+    {
+      "id": "p3",
+      "name": "P3"
+    },
+    {
+      "id": "p4",
+      "name": "P4"
+    }
+  ],
+  "matches": {
+    "t": [
+      {
+        "id": "m1",
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p1"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p2"
+            ]
+          }
+        ],
+        "games": [
+          {
+            "a": 11,
+            "b": 9
+          },
+          {
+            "a": 11,
+            "b": 7
+          }
+        ]
+      },
+      {
+        "id": "m2",
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p3"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p4"
+            ]
+          }
+        ],
+        "games": [
+          {
+            "a": 11,
+            "b": 9
+          },
+          {
+            "a": 9,
+            "b": 11
+          },
+          {
+            "a": 11,
+            "b": 9
+          }
+        ]
+      },
+      {
+        "id": "m3",
+        "sides": [
+          {
+            "kind": "pool",
+            "pool": "A",
+            "rank": 1
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p1"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "m4",
+        "sides": [
+          {
+            "kind": "pool",
+            "pool": "A",
+            "rank": 1
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p2"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

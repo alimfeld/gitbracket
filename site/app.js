@@ -53,14 +53,15 @@ async function loadAll(params, indexOnly) {
   if (!entry || typeof entry.slug !== 'string' || !ID_RE.test(entry.slug)) {
     return { index, t: null, tjson: null, cats: [] };
   }
-  const tjson = await fetchJson(`tournaments/${entry.slug}/tournament.json`);
+  const tjson = await fetchJson(`tournaments/${entry.slug}.json`); // one file per tournament — a poll is a single atomic fetch
   const cats = [];
   if (tjson && Array.isArray(tjson.categories)) {
     const wanted = params.get('c');
+    const byCat = (tjson.matches && typeof tjson.matches === 'object') ? tjson.matches : {};
     for (const meta of tjson.categories) {
       if (wanted && meta.id !== wanted) continue;
-      const j = await fetchJson(`tournaments/${entry.slug}/matches/${meta.id}.json`);
-      cats.push({ meta, matches: (j && Array.isArray(j.matches)) ? j.matches : [] });
+      const arr = byCat[meta.id];
+      cats.push({ meta, matches: Array.isArray(arr) ? arr : [] });
     }
   }
   return { index, t: entry, tjson, cats };
@@ -76,7 +77,7 @@ function renderIndex(params, data) {
 }
 
 function renderStandings(params, data) {
-  if (!data.tjson) return '<p>Missing tournament.json — has the tournament been pushed?</p>';
+  if (!data.tjson) return '<p>Missing tournament data — has the tournament been pushed?</p>';
   const parts = [`<h1>${esc(data.t.name)}</h1>`];
   parts.push(`<p class="sub"><a href="index.html">Home</a> · <a href="player.html?t=${esc(data.t.slug)}">Player schedules</a></p>`);
   // nav from the full category list, not the ?c=-filtered cats — a filtered page must still show every pill
@@ -169,7 +170,7 @@ function kioskCard(r, status) {
 }
 
 function renderVenue(params, data) {
-  if (!data.tjson) return '<p>Missing tournament.json — has the tournament been pushed?</p>';
+  if (!data.tjson) return '<p>Missing tournament data — has the tournament been pushed?</p>';
   const v = params.get('v');
   const rows = [];
   const ctxs = data.cats.map(c => makeCat(c, data.tjson));
@@ -219,7 +220,7 @@ function possibleLine(b) {
 }
 
 function renderPlayer(params, data) {
-  if (!data.tjson) return '<p>Missing tournament.json — has the tournament been pushed?</p>';
+  if (!data.tjson) return '<p>Missing tournament data — has the tournament been pushed?</p>';
   const pid = params.get('p');
   const players = (data.tjson.players || []).filter(p => p && typeof p === 'object' && typeof p.id === 'string');
   if (!pid) { // no ?p= — the picker, one page per player
@@ -289,7 +290,7 @@ function renderPlayer(params, data) {
 // in a Pages deploy window or a network blip must not leave a permanent
 // "missing" page. Two cheap recoveries, neither of which fires on the happy
 // path: re-fetch when the tab returns to the foreground, and a bounded retry
-// when the snapshot is detectably failed (no index entry, or no tournament.json
+// when the snapshot is detectably failed (no index entry, or no tournament data
 // on a page that needs one). A genuinely empty repo or category still renders
 // empty — a 404 is indistinguishable from absence, so empty states are never
 // retried.
@@ -321,7 +322,7 @@ function boot() {
         return;
       }
       if (page !== 'index' && !data.tjson) {
-        app.innerHTML = '<p>Missing tournament.json — has the tournament been pushed?</p>';
+        app.innerHTML = '<p>Missing tournament data — has the tournament been pushed?</p>';
         if (++fails <= MAX_FAILS) setTimeout(tick, RETRY_MS);
         return;
       }

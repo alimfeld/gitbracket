@@ -1,5 +1,0 @@
-{
-  "matches": [
-    { "id": "m2", "pool": "A", "venue": "court-1", "scheduled": "2025-07-14T09:20:00-04:00", "sides": [{ "kind": "players", "ids": ["p3"] }, { "kind": "players", "ids": ["p4"] }] }
-  ]
-}

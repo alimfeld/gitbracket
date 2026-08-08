@@ -35,7 +35,7 @@ const V = [ // [name, fixture dir, ok, expected message regex]
   ['cross-category venue overlap', 'bad-cross-overlap', r => r.errs.length > 0, /also schedules/],
   ['undeclared category matches file', 'bad-undeclared-cat', r => r.errs.length > 0, /undeclared category/],
   ['unknown venue reference', 'bad-unknown-venue', r => r.errs.length > 0, /unknown venue/],
-  ['null tournament.json', 'bad-null-tjson', r => r.errs.length > 0, /must be an object/],
+  ['null tournament data', 'bad-null-tjson', r => r.errs.length > 0, /must be an object/],
   ['scheduled hour 24 rejected', 'bad-scheduled-hour', r => r.errs.length > 0, /hour/],
   ['impossible calendar date rejected', 'bad-scheduled-date', r => r.errs.length > 0, /not a real calendar date/],
   ['offset outside ISO-8601 range', 'bad-scheduled-offset', r => r.errs.length > 0, /outside ISO-8601/],
@@ -43,6 +43,7 @@ const V = [ // [name, fixture dir, ok, expected message regex]
   ['duplicate venue id', 'bad-duplicate-venue', r => r.errs.length > 0, /duplicate venue/],
   ['unknown side kind', 'bad-unknown-kind', r => r.errs.length > 0, /unknown side kind/],
   ['mixed singles and doubles', 'bad-mixed-sizes', r => r.errs.length > 0, /mixes singles and doubles/],
+  ['side id not a registered player', 'bad-unknown-player', r => r.errs.length > 0, /unknown player/],
   ['game with no winner (a equals b)', 'bad-tie-game', r => r.errs.length > 0, /no winner/],
   ['invalid timezone', 'bad-invalid-tz', r => r.errs.length > 0, /not a valid IANA timezone/]
 ];

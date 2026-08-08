@@ -1,0 +1,93 @@
+{
+  "timezone": "UTC",
+  "venues": [
+    {
+      "id": "court-1",
+      "name": "Court 1"
+    },
+    {
+      "id": "court-2",
+      "name": "Court 2"
+    }
+  ],
+  "categories": [
+    {
+      "id": "k1",
+      "name": "K1",
+      "bestOf": {
+        "groups": 3
+      }
+    },
+    {
+      "id": "k2",
+      "name": "K2",
+      "bestOf": {
+        "groups": 3
+      }
+    }
+  ],
+  "players": [
+    {
+      "id": "p1",
+      "name": "P1"
+    },
+    {
+      "id": "p2",
+      "name": "P2"
+    },
+    {
+      "id": "p3",
+      "name": "P3"
+    },
+    {
+      "id": "p4",
+      "name": "P4"
+    }
+  ],
+  "matches": {
+    "k1": [
+      {
+        "id": "m1",
+        "pool": "A",
+        "venue": "court-1",
+        "scheduled": "2025-07-14T09:00:00-04:00",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p1"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p2"
+            ]
+          }
+        ]
+      }
+    ],
+    "k2": [
+      {
+        "id": "m2",
+        "pool": "A",
+        "venue": "court-1",
+        "scheduled": "2025-07-14T09:20:00-04:00",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p3"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p4"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

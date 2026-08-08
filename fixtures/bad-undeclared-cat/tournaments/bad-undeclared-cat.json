@@ -1,0 +1,26 @@
+{
+  "timezone": "UTC",
+  "categories": [
+    {
+      "id": "c",
+      "name": "C",
+      "bestOf": {
+        "groups": 3,
+        "knockout": 3
+      }
+    }
+  ],
+  "players": [
+    {
+      "id": "p1",
+      "name": "P1"
+    },
+    {
+      "id": "p2",
+      "name": "P2"
+    }
+  ],
+  "matches": {
+    "typo": []
+  }
+}

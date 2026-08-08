@@ -1,7 +1,0 @@
-{
-  "matches": [
-    { "id": "m1", "pool": "A", "sides": [{ "kind": "players", "ids": ["p1"] }, { "kind": "players", "ids": ["p2"] }], "games": [{ "a": 11, "b": 9 }, { "a": 11, "b": 7 }] },
-    { "id": "m2", "pool": "A", "sides": [{ "kind": "players", "ids": ["p1"] }, { "kind": "players", "ids": ["p2"] }], "games": [{ "a": 9, "b": 11 }, { "a": 7, "b": 11 }] },
-    { "id": "m3", "sides": [{ "kind": "pool", "pool": "A", "rank": 1 }, { "kind": "players", "ids": ["p3"] }] }
-  ]
-}

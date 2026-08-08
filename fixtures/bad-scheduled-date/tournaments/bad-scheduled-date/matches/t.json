@@ -1,5 +1,0 @@
-{
-  "matches": [
-    { "id": "m1", "pool": "A", "scheduled": "2025-02-30T09:00:00-04:00", "sides": [{ "kind": "players", "ids": ["p1"] }, { "kind": "players", "ids": ["p2"] }] }
-  ]
-}
