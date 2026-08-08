@@ -1,9 +1,9 @@
 'use strict';
-// app.js — fetch/render/boot for the GitBracket pages. No build step, no deps.
+// app.js — fetch/render/boot for the GitBracket pages.
 // The derive engine (standings, slot resolution, scheduling, labels, time)
 // lives in derive.js, loaded before this file in the browser and required here
 // in node; this file is only the data loading, the HTML renderers, and the
-// boot. `node --test` runs the derive tests against fixtures/ (test/ dir).
+// boot.
 
 const POLL_MS = 30000;
 
@@ -33,7 +33,7 @@ async function fetchJson(url) {
   }
 }
 
-// SPEC: every URL param is checked against the id regex before use —
+// Every URL param is checked against the id regex before use —
 // reject → render an error, fetch nothing (a raw param never reaches a URL).
 function parseParams() {
   const p = new URLSearchParams(location.search);
@@ -147,8 +147,7 @@ function matchCard(m, ctx) {
   return `<div class="bm">${sideRow(m, ctx, 0)}${sideRow(m, ctx, 1)}<div class="bmeta"><span class="mid">${esc(m.id)}</span> · ${esc(matchLabel(m, ctx))} · ${meta}${state}</div></div>`;
 }
 
-// One score span per game, right-clustered on the side's own row; the winner's
-// row is bold. Shared by bracket cards (standings) and the kiosk.
+// Shared by bracket cards (standings) and the kiosk.
 function sideRow(m, ctx, i) {
   const w = winnerIdx(m, ctx);
   const games = m.games || [];
@@ -188,7 +187,7 @@ function renderVenue(params, data) {
   const venueNames = new Map((data.tjson.venues || []).map(x => [x.id, x.name]));
   const venues = (data.tjson.venues || []).map(x => x.id).filter(id => rows.some(r => r.m.venue === id));
   const shown = v ? rows.filter(r => r.m.venue === v) : rows;
-  const parts = [`<div class="k-head"><h1>${esc(data.t.name)}</h1><span class="k-clock" id="k-clock"></span></div>`]; // title left, wall clock right; the court shows as the column header
+  const parts = [`<div class="k-head"><h1>${esc(data.t.name)}</h1><span class="k-clock" id="k-clock"></span></div>`];
   const byVenue = new Map(venues.map(id => [id, []]));
   for (const r of shown) {
     if (byVenue.has(r.m.venue)) byVenue.get(r.m.venue).push(r); // rows pre-sorted, buckets stay sorted
@@ -202,7 +201,6 @@ function renderVenue(params, data) {
     const col = [];
     col.push(`<h2 class="k-venue">${esc(venueNames.get(id) || id)}</h2>`);
     for (const r of open) col.push(kioskCard(r, kioskStatus(r, now)));
-    // one column per venue, side by side on the all-venues board
     cols.push(`<div class="k-venue-col">${col.join('')}</div>`);
   }
   parts.push(v ? cols.join('') : `<div class="k-cols">${cols.join('')}</div>`);
@@ -210,8 +208,7 @@ function renderVenue(params, data) {
   return parts.join('');
 }
 
-// "N more <category> matches possible between H:MM and H:MM · depends on
-// results" — the open-span line, placed in the schedule where that span starts.
+// The "N more matches possible" line, placed where that span starts.
 function possibleLine(b) {
   const range = b.min === b.max ? `at ${fmtTime(b.min, b.ctx.tz)}` : `between ${fmtTime(b.min, b.ctx.tz)} and ${fmtTime(b.max, b.ctx.tz)}`;
   const noun = b.count === 1 ? 'match' : 'matches';

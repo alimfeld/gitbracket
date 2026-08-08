@@ -1,0 +1,77 @@
+# GitBracket
+
+GitBracket runs tournaments as code. A tournament lives in a git repo — the
+data, the history, and the frontend are the whole system. No accounts, no
+server, no app: a push deploys, and anyone with the link can follow along.
+
+Works for any win/lose tournament — pickleball, tennis, darts, quiz. Draws
+are not supported.
+
+## Model
+
+One file per tournament. `tournaments.json` is the index; each entry's slug
+names a file in `site/tournaments/`:
+
+```json
+[
+  { "slug": "2026-mammut60", "name": "Mammut Open 60+" }
+]
+```
+
+The tournament file holds everything: venues, categories, players, and all
+matches keyed by category.
+
+```jsonc
+{
+  "timezone": "America/New_York",
+  "venues": [{ "id": "court-3", "name": "Court 3" }],
+  "categories": [{ "id": "md40", "name": "Men's Doubles 40+",
+    "bestOf": { "groups": 3, "knockout": 5 } }],
+  "players": [{ "id": "p1", "name": "Ada Lovelace" }],
+  "matches": { "md40": [ /* below */ ] }
+}
+```
+
+A match has two stages: `groups` (has a `pool`) and `knockout` (no pool).
+`bestOf` sets match length per stage; a match can override it with a plain
+number. A side is one of three kinds:
+
+```jsonc
+// players — the actual people; singles: one id, doubles: two
+{ "id": "m1", "pool": "A", "venue": "court-3", "scheduled": "2025-07-14T09:00:00-04:00",
+  "sides": [
+    { "kind": "players", "ids": ["p1", "p3"] },
+    { "kind": "players", "ids": ["p2", "p4"] }
+  ],
+  "games": [{ "a": 11, "b": 9 }, { "a": 11, "b": 7 }] }      // a result = done
+
+// match — the winner (or loser) of an earlier match
+{ "id": "m9", "sides": [
+  { "kind": "players", "ids": ["p1", "p3"] },
+  { "kind": "match",  "match": "m1", "result": "winner" }
+] }
+
+// pool — the Nth-ranked team of a pool
+{ "id": "m12", "sides": [
+  { "kind": "pool",  "pool": "A", "rank": 1 },
+  { "kind": "match", "match": "m9", "result": "loser" }
+] }
+```
+
+Nothing is stored that can be derived — a match is done when it has a
+result, and standings and brackets follow from the data.
+
+## Views
+
+- **Kiosk** — the fullscreen board for the hall, showing the day live on
+  every court (a hidden `?v=` narrows it to one court).
+- **Player** — a player's schedule: when, where, with whom, against whom.
+- **Standings** — pool tables and the bracket.
+- **Index** — lists tournaments, past and current.
+
+## Tools
+
+- **`cli.js`** — score entry on match day.
+- **`validate.js`** — keeps data consistent before it ships.
+- **`schedule.js`** — generates a tournament grid.
+- **Tests** — guard the behavior; run on every commit and push.

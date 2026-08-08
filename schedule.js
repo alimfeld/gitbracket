@@ -115,7 +115,6 @@ function buildKnockout(pools, names, mid) {
   // sides in round 1 (4/3/3 -> A3 vs A4). Fine for v1 events; offset the seed
   // interleave per pool if a seeding-quality pass is ever needed.
 
-  // Round 1: best vs worst among the non-byed seeds.
   const matches = [];
   const ms1 = [];
   for (let i = 0; i < r1Sides.length; i += 2) {

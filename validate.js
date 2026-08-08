@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 'use strict';
 
-// GitBracket validator — schema + cross-file checks. Zero deps, no package.json.
+// GitBracket validator — schema + cross-file checks.
 // Run from the repo root: `node validate.js`. The pre-commit hook wraps this.
 // I/O (loadRepo) is separate from checks (validateRepo) so tests can run the
-// whole validator against fixtures/ in memory. `node --test` runs the suite.
+// whole validator against fixtures/ in memory.
 
 const fs = require('fs');
 const path = require('path');

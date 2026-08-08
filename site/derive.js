@@ -1,13 +1,13 @@
 'use strict';
-// derive.js — pure derive + time logic for GitBracket. No DOM, no fetch, no deps.
+// derive.js — pure derive + time logic for GitBracket.
 // The one source of the domain model: the validator (validate.js), the score
 // CLI (cli.js), the match generator (schedule.js), and the renderers (app.js)
 // all share these functions, so the integrity gate doesn't depend on renderer
 // code and the renderer doesn't reimplement the model. Loaded as a plain
 // script before app.js in the browser (functions land on globalThis); in node
-// it's a CommonJS module. `node --test` runs the derive tests against fixtures/.
+// it's a CommonJS module.
 
-const SLOT_MIN = 45; // default match length, minutes — per-stage category slotMinutes (groups/knockout) and per-match slotMinutes override (match > stage > default)
+const SLOT_MIN = 45; // default match length, minutes
 const ID_RE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 
 // Canonical side identity: an unordered player set as a sorted '|'-joined string.
@@ -105,8 +105,8 @@ function poolStandings(ctx, pool, partial) {
     if (m.forfeit === undefined) {
       let gd = 0, pd = 0;
       for (const g of m.games) {
-        gd += g.a > g.b ? 1 : -1; // game differential: games won minus lost
-        pd += g.a - g.b;          // point differential
+        gd += g.a > g.b ? 1 : -1; // game differential: won minus lost
+        pd += g.a - g.b;
       }
       r0.gd += gd; r0.pd += pd;
       r1.gd -= gd; r1.pd -= pd;
@@ -452,9 +452,6 @@ function koColumn(m, ctx) {
   return ctx._koCol.get(m.id);
 }
 
-// What kind of match this is, for the kiosk card: "Pool A" for group games,
-// placement labels ("3rd place", "5th–8th semi") for classification matches,
-// short round names (Final / SF / QF / R16) for the winner bracket.
 function matchLabel(m, ctx) {
   if (m.pool !== undefined) return `Pool ${m.pool}`;
   const pl = placementLabel(m, ctx);

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
-// GitBracket CLI — score entry on match day. Zero deps, no package.json.
+// GitBracket CLI — score entry on match day.
 // Run from anywhere under the repo root (the root is found by walking up).
 //
 //   node cli.js                            # list scorable matches (latest tournament)
@@ -51,7 +51,7 @@ function applyForfeit(cjson, matchId, sideIdx) {
 }
 
 // Every scorable match in the tournament: ready (no result) first, then by
-// scheduled time, then id. This is what the `list` command prints.
+// scheduled time, then id.
 function listEligible(repo, slug) {
   const info = repo.tournaments.get(slug);
   if (!info || !info.tjson) return null;
