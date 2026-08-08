@@ -6,7 +6,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { makeCat, winnerIdx, isDone, poolStandings, resolveSide, sameRecord, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, scheduleStatus, venueBacklog, kioskBuckets, matchLabel } = require('../site/app.js');
+const { makeCat, winnerIdx, isDone, poolStandings, resolveSide, sameRecord, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, scheduleStatus, venueBacklog, kioskStatus, matchLabel } = require('../site/app.js');
 const { FIX, catOf } = require('./helpers.js');
 
 test('pool A standings: 4 sides, order, leader record', () => {
@@ -87,7 +87,7 @@ test('venueBacklog: per-venue delay from the most overdue unfinished match', () 
   assert((bg.get('c2') || 0) === 0, 'c2: 09:30 match still inside its slot, no delay');
 });
 
-test('kioskBuckets: overdue / now / next sections, the clock never hides an overdue match', () => {
+test('kioskStatus: overdue / now / upcoming badge per open card', () => {
   const ctx = makeCat({ meta: { bestOf: { knockout: 3 } }, matches: [
     { id: 'm1', scheduled: '2025-07-14T09:00:00Z', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }], games: [{ a: 11, b: 5 }, { a: 11, b: 4 }] },
     { id: 'm2', scheduled: '2025-07-14T08:30:00Z', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },
@@ -98,13 +98,12 @@ test('kioskBuckets: overdue / now / next sections, the clock never hides an over
   ] }, { timezone: 'UTC', players: [] });
   const now = Date.parse('2025-07-14T10:00:00Z'); // m2's slot ended 09:15 — long overdue
   const rows = ctx.matches.map(m => ({ m, t: Date.parse(m.scheduled), ctx }));
-  const ids = a => a.map(r => r.m.id);
-  const { overdue, live, next } = kioskBuckets(rows, now);
-  assert(JSON.stringify(ids(overdue)) === '["m2"]', 'slot fully elapsed without a result: overdue');
-  assert(ids(live).includes('m3') && ids(live).includes('m6'), 'started and still inside its slot: Now');
-  assert(!ids(live).includes('m1'), 'a done match leaves the board');
-  assert(JSON.stringify(ids(next)) === '["m4","m5"]', 'next = the two future starts');
-  assert(!ids(next).includes('m6'), 'the boundary instant (now === t) belongs to Now, not Next');
+  const st = id => kioskStatus(rows.find(r => r.m.id === id), now);
+  assert(st('m2') === 'overdue', 'slot fully elapsed without a result: overdue');
+  assert(st('m3') === 'live' && st('m6') === 'live', 'started and still inside its slot: Now');
+  assert(isDone(ctx.byId.get('m1'), ctx), 'a done match leaves the board — no badge');
+  assert(st('m4') === 'next' && st('m5') === 'next', 'future starts: upcoming');
+  assert(st('m6') === 'live', 'the boundary instant (now === t) belongs to Now, not Next');
 });
 
 test('matchLabel: pool, placement, and round names on one card label', () => {

@@ -68,13 +68,11 @@ body[data-page="venue"] h1 { font-size: 3.2rem; margin: 0; }
 .k-cols { display: flex; gap: 2.5rem; align-items: flex-start; flex-wrap: wrap; }
 .k-venue-col { flex: 1 1 24rem; min-width: 0; }
 .k-venue-col .k-venue { margin-top: 0; }
-.k-overdue, .k-now, .k-next { font-size: 1.8rem; margin: .8rem 0 1rem; }
-.k-overdue { color: #ffb3ab; }
-.k-now { color: #ffd166; }
-.k-next { color: #8a8a84; }
 .km { margin-bottom: 1.5rem; padding: 1.2rem 1.6rem; border: 1px solid #2a2a28; border-radius: 1rem; background: #111; }
-.km.small { padding: .8rem 1.2rem; }
+.k-badge { display: inline-block; font-size: .95rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: .1rem .7rem .15rem; border-radius: 999px; margin-right: .7rem; vertical-align: .1em; }
+.k-badge.overdue { background: #7c2d1e; color: #ffb3ab; }
+.k-badge.live { background: #ffd166; color: #000; }
+.k-badge.next { background: #232321; color: #9a9a94; border: 1px solid #3a3a38; }
 .km .bs { align-items: baseline; gap: 2rem; font-size: 1.8rem; line-height: 1.25; }
-.km.small .bs { font-size: 1.4rem; }
 .kmeta { color: #8a8a84; margin-top: .6rem; font-size: 1.2rem; }
 .k-empty { color: #8a8a84; font-size: 1.4rem; }

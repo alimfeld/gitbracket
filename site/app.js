@@ -575,27 +575,25 @@ function matchLabel(m, ctx) {
   return { 0: 'Final', 1: 'SF', 2: 'QF', 3: 'R16' }[d] || roundName(d);
 }
 
-function kioskCard(r, small) {
+// Card badge status: overdue = full slot elapsed without a result, live = started
+// but inside its slot, else next (> not >=: the boundary instant belongs to live).
+function kioskStatus(r, now) {
+  const t = r.t;
+  if (now >= t + matchSlotMs(r.m, r.ctx)) return 'overdue';
+  if (now >= t) return 'live';
+  return 'next';
+}
+
+function kioskCard(r, status) {
   const m = r.m, ctx = r.ctx;
   const state = matchState(m, ctx);
   const meta = [esc(ctx.name), esc(matchLabel(m, ctx)), esc(state), esc(fmtTime(r.t, ctx.tz))].filter(Boolean).join(' · '); // category first, then pool; venue is the group header now
-  return `<div class="km${small ? ' small' : ''}">
+  const badge = { overdue: 'Late', live: 'Live', next: 'Next' }[status];
+  return `<div class="km">
     ${sideRow(m, ctx, 0)}
     ${sideRow(m, ctx, 1)}
-    <div class="kmeta">${meta}</div>
+    <div class="kmeta"><span class="k-badge ${status}">${badge}</span>${meta}</div>
   </div>`;
-}
-
-// Status, not the clock, picks the board. Overdue = the full slot has elapsed
-// without a result; Now = started, still inside its slot; Next = future starts,
-// two max. Only a result removes a match entirely.
-function kioskBuckets(rows, now) {
-  const open = rows.filter(r => !isDone(r.m, r.ctx));
-  return {
-    overdue: open.filter(r => now >= r.t + matchSlotMs(r.m, r.ctx)),
-    live: open.filter(r => now >= r.t && now < r.t + matchSlotMs(r.m, r.ctx)),
-    next: open.filter(r => r.t > now).slice(0, 2) // > not >=: the boundary instant belongs to Now
-  };
 }
 
 function renderVenue(params, data) {
@@ -625,24 +623,12 @@ function renderVenue(params, data) {
   let any = false;
   const cols = [];
   for (const id of venues) {
-    const bucket = byVenue.get(id);
-    const { overdue, live, next } = kioskBuckets(bucket, now);
-    if (!overdue.length && !live.length && !next.length) continue;
+    const open = byVenue.get(id).filter(r => !isDone(r.m, r.ctx)); // a result removes the card, everything else stays
+    if (!open.length) continue;
     any = true;
     const col = [];
     col.push(`<h2 class="k-venue">${esc(venueNames.get(id) || id)}</h2>`);
-    if (overdue.length) {
-      col.push('<h3 class="k-overdue">Overdue</h3>');
-      for (const r of overdue) col.push(kioskCard(r));
-    }
-    if (live.length) {
-      col.push('<h3 class="k-now">Now</h3>');
-      for (const r of live) col.push(kioskCard(r));
-    }
-    if (next.length) {
-      col.push('<h3 class="k-next">Next</h3>');
-      for (const r of next) col.push(kioskCard(r, true));
-    }
+    for (const r of open) col.push(kioskCard(r, kioskStatus(r, now)));
     // one column per venue, side by side on the all-venues board
     cols.push(`<div class="k-venue-col">${col.join('')}</div>`);
   }
@@ -784,5 +770,5 @@ if (typeof document !== 'undefined') boot();
 
 // CommonJS exports for validate.js; browser <script> ignores these.
 if (typeof module !== 'undefined') {
-  module.exports = { ID_RE, pairSig, matchSlotMs, slotsOverlap, makeCat, winnerIdx, isDone, poolStandings, resolveSide, sameRecord, matchRound, isDeadTie, playerMatches, reachableKo, possibleSpan, slotLabel, sideLabel, schedTime, gamesText, roundName, placementLabel, koColumn, scheduleStatus, venueBacklog, kioskBuckets, matchLabel, fmtTime, dayKey, renderIndex, renderStandings, renderVenue, renderPlayer };
+  module.exports = { ID_RE, pairSig, matchSlotMs, slotsOverlap, makeCat, winnerIdx, isDone, poolStandings, resolveSide, sameRecord, matchRound, isDeadTie, playerMatches, reachableKo, possibleSpan, slotLabel, sideLabel, schedTime, gamesText, roundName, placementLabel, koColumn, scheduleStatus, venueBacklog, kioskStatus, matchLabel, fmtTime, dayKey, renderIndex, renderStandings, renderVenue, renderPlayer };
 }
