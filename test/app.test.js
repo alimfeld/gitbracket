@@ -6,7 +6,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { makeCat, winnerIdx, isDone, poolStandings, resolveSide, sameRecord, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, scheduleStatus, venueBacklog, kioskStatus, delayNote, fmtTime, matchLabel, parseRoute } = require('../site/app.js');
+const { makeCat, winnerIdx, isDone, poolStandings, resolveSide, sameRecord, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, scheduleStatus, venueBacklog, kioskStatus, delayNote, fmtTime, matchLabel, parseRoute, loadAll } = require('../site/app.js');
 const { FIX, catOf } = require('./helpers.js');
 
 test('parseRoute: fragment routing — bare slug defaults to categories, every segment id-gated', () => {
@@ -23,6 +23,35 @@ test('parseRoute: fragment routing — bare slug defaults to categories, every s
   assert.equal(parseRoute('#2026-mammut60/categories/md/x'), null, 'too many segments');
   assert.equal(parseRoute('#../..'), null, 'traversal rejected');
   assert.equal(parseRoute('#/'), null, 'no slug');
+});
+
+test('loadAll: a slug route fetches only the tournament file; the index view only the index', async () => {
+  const calls = [];
+  const origFetch = global.fetch;
+  global.fetch = url => { // fetchJson passes { cache: 'no-cache' }; the stub ignores it
+    calls.push(url);
+    const body = {
+      'tournaments.json': [{ slug: 'sample', name: 'Sample' }],
+      'tournaments/sample.json': require(FIX('sample', 'tournaments', 'sample.json')),
+    }[url] ?? null;
+    return body === null ? Promise.resolve({ ok: false }) : Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
+  };
+  try {
+    const slug = await loadAll({ slug: 'sample', view: 'categories' }, false);
+    assert.deepEqual(calls, ['tournaments/sample.json'], 'slug route: one fetch, no index roundtrip');
+    assert.equal(slug.t.name, 'Sample', 'name comes from the tournament file');
+    assert.equal(slug.t.slug, 'sample', 'slug comes from the route');
+    assert(slug.tjson && slug.cats.length > 0, 'tournament data and categories load');
+    const list = await loadAll({ view: 'index' }, true);
+    assert.deepEqual(calls, ['tournaments/sample.json', 'tournaments.json'], 'index view: fetches only the index');
+    assert.equal(list.index[0].slug, 'sample');
+    assert.equal(list.tjson, null, 'index view carries no tournament data');
+    const missing = await loadAll({ slug: 'nope', view: 'categories' }, false);
+    assert.equal(missing.t, null, 'unknown slug: tjson 404s to null');
+    assert.equal(missing.tjson, null, 'no crash on a 404');
+  } finally {
+    global.fetch = origFetch;
+  }
 });
 
 test('pool A standings: 4 sides, order, leader record', () => {

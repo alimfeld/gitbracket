@@ -68,19 +68,27 @@ function validateRepo(repo) {
     seenSlugs.add(t.slug);
     if (typeof t.slug === 'string' && ID_RE.test(t.slug)) {
       const info = tournaments.get(t.slug);
-      if (info) validateTournamentData(t.slug, info, errs, warns);
+      if (info) validateTournamentData(t.slug, t.name, info, errs, warns);
     }
   }
 
   return { errs, warns };
 }
 
-function validateTournamentData(slug, info, errs, warns) {
+function validateTournamentData(slug, indexName, info, errs, warns) {
   const tFile = `site/tournaments/${slug}.json`;
   const tjson = info.tjson;
   if (tjson === undefined) return; // unreadable — readErrs carries the message
   const err = (f, m) => errs.push(`${f}: ${m}`);
   if (tjson === null) { err(tFile, 'must be an object, got null'); return; }
+
+  // The tournament page loads only this file (never the index), so the name
+  // must live here too; the index copy exists for the list page — keep them equal.
+  if (typeof tjson.name !== 'string' || !tjson.name.trim()) {
+    err(tFile, 'name must be a non-empty string');
+  } else if (tjson.name !== indexName) {
+    err(tFile, `name ${JSON.stringify(tjson.name)} does not match the index entry ${JSON.stringify(indexName)}`);
+  }
 
   if (typeof tjson.timezone !== 'string' || !tjson.timezone) {
     err(tFile, 'timezone required');

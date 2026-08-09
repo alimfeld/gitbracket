@@ -19,10 +19,13 @@ names a file in `site/tournaments/`:
 ```
 
 The tournament file holds everything: venues, categories, players, and all
-matches keyed by category.
+matches keyed by category. It also carries its own `name` (matching the index
+entry — the validator enforces the equality), because a tournament page loads
+only its own file, never the index:
 
 ```jsonc
 {
+  "name": "Mammut Open 60+",
   "timezone": "America/New_York",
   "venues": [{ "id": "court-3", "name": "Court 3" }],
   "categories": [{ "id": "md40", "name": "Men's Doubles 40+",

@@ -1,4 +1,5 @@
 {
+  "name": "bad-scheduled-offset",
   "timezone": "America/New_York",
   "venues": [
     {

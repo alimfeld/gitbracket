@@ -1,4 +1,5 @@
 {
+  "name": "bad-scheduled-hour",
   "timezone": "America/New_York",
   "venues": [
     {

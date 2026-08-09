@@ -48,13 +48,14 @@ function parseRoute(hash) {
 }
 
 async function loadAll(route, indexOnly) {
-  const index = (await fetchJson('tournaments.json')) || [];
-  // a non-array index stops here (renders an empty list, not a crash)
-  if (!Array.isArray(index)) return { index: [], t: null, tjson: null, cats: [] };
-  if (indexOnly) return { index, t: null, tjson: null, cats: [] };
-  const entry = index.find(e => e && e.slug === route.slug);
-  if (!entry) return { index, t: null, tjson: null, cats: [] };
-  const tjson = await fetchJson(`tournaments/${entry.slug}.json`); // one file per tournament — a poll is a single atomic fetch
+  if (indexOnly) {
+    const index = (await fetchJson('tournaments.json')) || [];
+    // a non-array index stops here (renders an empty list, not a crash)
+    if (!Array.isArray(index)) return { index: [], t: null, tjson: null, cats: [] };
+    return { index, t: null, tjson: null, cats: [] };
+  }
+  // one file per tournament — a poll is a single atomic fetch, no index roundtrip.
+  const tjson = await fetchJson(`tournaments/${route.slug}.json`);
   const cats = [];
   if (tjson && Array.isArray(tjson.categories)) {
     const byCat = (tjson.matches && typeof tjson.matches === 'object') ? tjson.matches : {};
@@ -63,7 +64,8 @@ async function loadAll(route, indexOnly) {
       cats.push({ meta, matches: Array.isArray(arr) ? arr : [] });
     }
   }
-  return { index, t: entry, tjson, cats };
+  const t = tjson ? { slug: route.slug, name: tjson.name } : null;
+  return { index: [], t, tjson, cats };
 }
 
 // ---------- renderers ----------
@@ -346,8 +348,8 @@ function boot() {
 
   const load = r => {
     loadAll(r, r.view === 'index').then(d => {
-      if (r.view !== 'index' && (!d.t || !d.tjson)) { // fetch failed or unknown slug — with a board, keep it and retry silently
-        if (!data) app.innerHTML = d.t ? '<p>Missing tournament data — has the tournament been pushed?</p>' : '<p>Tournament not found.</p>';
+      if (r.view !== 'index' && !d.tjson) { // fetch failed or unknown slug — with a board, keep it and retry silently
+        if (!data) app.innerHTML = '<p>Missing tournament data — has the tournament been pushed?</p>';
         if (++fails <= MAX_FAILS) setTimeout(() => load(r), RETRY_MS); // deploy window or blip — retry a few times, then give up
         return;
       }
@@ -393,5 +395,5 @@ if (typeof document !== 'undefined') boot();
 // CommonJS exports for node tools (tests, validate, cli, schedule import from
 // app.js or derive.js directly); browser <script> ignores these.
 if (typeof module !== 'undefined') {
-  module.exports = { ...require('./derive.js'), parseRoute, renderIndex, renderStandings, renderVenue, renderPlayer };
+  module.exports = { ...require('./derive.js'), parseRoute, loadAll, renderIndex, renderStandings, renderVenue, renderPlayer };
 }
