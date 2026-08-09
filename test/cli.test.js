@@ -85,24 +85,27 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
     };
   };
   const { data } = dataOf('sample');
-  const no = () => new URLSearchParams('');
+  const no = () => ({ slug: 'sample', view: 'categories' });
   const standings = renderStandings(no(), data);
   assert(standings.includes('Pool A') && standings.includes('Final') && standings.includes('Winner of m8'), 'standings renders pools, bracket, and slot labels');
   assert(standings.includes('Ada Lovelace'), 'standings renders player names');
-  assert(standings.includes('player.html?t=sample') && !standings.includes('player.html?t=sample&p='), 'standings links the player picker, not each name');
-  const venue = renderVenue(no(), data);
+  assert(standings.includes('#sample/players') && !standings.includes('#sample/players/'), 'standings links the player picker, not each name');
+  const filtered = renderStandings({ slug: 'sample', view: 'categories', filter: 'md40' }, data);
+  assert((filtered.match(/<h2>/g) || []).length === 1 && filtered.includes('Pool A'), 'category filter narrows to one section');
+  assert(filtered.includes('#sample/categories/xd'), 'pills still list every category on a filtered page');
+  const venue = renderVenue({ slug: 'sample', view: 'venues' }, data);
   assert(venue.includes('k-venue') && venue.includes('Ada Lovelace'), 'venue page renders venue boards with match rows');
-  assert(renderPlayer(new URLSearchParams('p=p1'), data).includes('Ada Lovelace'), 'player page finds the player');
-  assert(renderPlayer(new URLSearchParams('p=p1'), data).includes('standings.html?t=sample'), 'player page links the tournament name to standings');
-  assert(renderIndex(no(), data).includes('standings.html?t=sample'), 'index links the tournament');
+  assert(renderPlayer({ slug: 'sample', view: 'players', filter: 'p1' }, data).includes('Ada Lovelace'), 'player page finds the player');
+  assert(renderPlayer({ slug: 'sample', view: 'players', filter: 'p1' }, data).includes('#sample'), 'player page links the tournament name to standings');
+  assert(renderIndex({ view: 'index' }, data).includes('#sample'), 'index links the tournament');
   // escaping: a hostile name must reach the DOM entity-encoded
   const evil = JSON.parse(JSON.stringify(data.tjson));
   evil.players[0].name = '<b>Ada</b> & "Co"';
-  const out = renderPlayer(new URLSearchParams('p=p1'), { ...data, tjson: evil });
+  const out = renderPlayer({ slug: 'sample', view: 'players', filter: 'p1' }, { ...data, tjson: evil });
   assert(out.includes('&lt;b&gt;Ada&lt;/b&gt; &amp; &quot;Co&quot;') && !out.includes('<b>Ada</b>'), 'player name is escaped');
   // tied teams share the first rank of their group (standard competition ranking: 1 1 1 4)
   const { data: tdata } = dataOf('tie');
-  const tieHtml = renderStandings(no(), tdata);
+  const tieHtml = renderStandings({ slug: 'tie', view: 'categories' }, tdata);
   assert(!tieHtml.includes('†') && (tieHtml.match(/class="tie"><td>1<\/td>/g) || []).length === 2, 'tied teams share rank 1, no dagger');
 });
 

@@ -33,33 +33,32 @@ async function fetchJson(url) {
   }
 }
 
-// Every URL param is checked against the id regex before use —
-// reject → render an error, fetch nothing (a raw param never reaches a URL).
-function parseParams() {
-  const p = new URLSearchParams(location.search);
-  for (const [, v] of p) {
-    if (v && !ID_RE.test(v)) return null; // ?t=../../ -> reject, fetch nothing
-  }
-  return p;
+// One page, fragment routing: #<slug>[/categories|venues|players[/<id>]].
+// Every segment is checked against the id regex before use — reject → render
+// an error, fetch nothing (a raw segment never reaches a URL).
+function parseRoute(hash) {
+  if (hash === undefined) hash = location.hash;
+  const segs = String(hash).replace(/^#/, '').split('/');
+  if (segs.length === 1 && segs[0] === '') return { view: 'index' }; // no fragment — the tournament list
+  if (segs.length > 3 || segs.some(s => !s || !ID_RE.test(s))) return null; // #../../ -> reject
+  const [slug, view, filter] = segs;
+  if (view === undefined) return { slug, view: 'categories' }; // bare slug — standings, all categories
+  if (view === 'categories' || view === 'venues' || view === 'players') return filter === undefined ? { slug, view } : { slug, view, filter };
+  return null;
 }
 
-async function loadAll(params, indexOnly) {
+async function loadAll(route, indexOnly) {
   const index = (await fetchJson('tournaments.json')) || [];
   // a non-array index stops here (renders an empty list, not a crash)
   if (!Array.isArray(index)) return { index: [], t: null, tjson: null, cats: [] };
   if (indexOnly) return { index, t: null, tjson: null, cats: [] };
-  const slug = params.get('t');
-  const entry = slug ? index.find(e => e && e.slug === slug) : index[index.length - 1];
-  if (!entry || typeof entry.slug !== 'string' || !ID_RE.test(entry.slug)) {
-    return { index, t: null, tjson: null, cats: [] };
-  }
+  const entry = index.find(e => e && e.slug === route.slug);
+  if (!entry) return { index, t: null, tjson: null, cats: [] };
   const tjson = await fetchJson(`tournaments/${entry.slug}.json`); // one file per tournament — a poll is a single atomic fetch
   const cats = [];
   if (tjson && Array.isArray(tjson.categories)) {
-    const wanted = params.get('c');
     const byCat = (tjson.matches && typeof tjson.matches === 'object') ? tjson.matches : {};
     for (const meta of tjson.categories) {
-      if (wanted && meta.id !== wanted) continue;
       const arr = byCat[meta.id];
       cats.push({ meta, matches: Array.isArray(arr) ? arr : [] });
     }
@@ -69,34 +68,37 @@ async function loadAll(params, indexOnly) {
 
 // ---------- renderers ----------
 
-function renderIndex(params, data) {
+function renderIndex(route, data) {
   const items = data.index
     .filter(e => e && typeof e.slug === 'string' && ID_RE.test(e.slug))
-    .map(e => `<li><a href="standings.html?t=${esc(e.slug)}">${esc(e.name || e.slug)}</a> <a class="kiosk" href="venue.html?t=${esc(e.slug)}">kiosk</a></li>`);
+    .map(e => `<li><a href="#${esc(e.slug)}">${esc(e.name || e.slug)}</a> <a class="kiosk" href="#${esc(e.slug)}/venues">kiosk</a></li>`);
   return `<h1>Tournaments</h1><ul class="tournaments">${items.join('') || '<li>No tournaments yet.</li>'}</ul>`;
 }
 
-function renderStandings(params, data) {
+function renderStandings(route, data) {
   if (!data.tjson) return '<p>Missing tournament data — has the tournament been pushed?</p>';
   const parts = [`<h1>${esc(data.t.name)}</h1>`];
-  parts.push(`<p class="sub"><a href="index.html">Home</a> · <a href="player.html?t=${esc(data.t.slug)}">Player schedules</a></p>`);
-  // nav from the full category list, not the ?c=-filtered cats — a filtered page must still show every pill
+  parts.push(`<p class="sub"><a href="#">Home</a> · <a href="#${esc(data.t.slug)}/players">Player schedules</a></p>`);
+  // nav from the full category list, not the route-filtered cats — a filtered page must still show every pill
   const nav = (data.tjson.categories || []).map(c => {
-    const active = params.get('c') === c.id;
-    // clicking the active category drops the ?c= filter (toggle off)
-    const href = active ? `standings.html?t=${esc(data.t.slug)}` : `standings.html?t=${esc(data.t.slug)}&c=${esc(c.id)}`;
+    const active = route.filter === c.id;
+    // clicking the active category drops the filter (toggle off)
+    const href = active ? `#${esc(data.t.slug)}` : `#${esc(data.t.slug)}/categories/${esc(c.id)}`;
     return `<a href="${href}"${active ? ' class="on"' : ''}>${esc(c.name)}</a>`;
   });
   parts.push(`<nav class="cats">${nav.join('')}</nav>`);
   for (const c of data.cats) {
+    if (route.filter && c.meta.id !== route.filter) continue; // pills keep every category; only the section list narrows
     const ctx = makeCat(c, data.tjson);
     parts.push(`<h2>${esc(c.meta.name)}</h2>`);
-    const pools = [];
+    const byPool = new Map(); // pool -> matches, first-seen order
     for (const m of ctx.matches) {
-      if (m && m.pool !== undefined && !pools.includes(m.pool)) pools.push(m.pool);
+      if (m && m.pool !== undefined) {
+        if (!byPool.has(m.pool)) byPool.set(m.pool, []);
+        byPool.get(m.pool).push(m);
+      }
     }
-    for (const pool of pools) {
-      const poolMs = ctx.matches.filter(m => m && m.pool === pool);
+    for (const [pool, poolMs] of byPool) {
       parts.push(`<h3>Pool ${esc(String(pool))}</h3>`);
       parts.push('<div class="poolgrid">');
       // pools come from matches, so partial standings always resolve
@@ -168,11 +170,16 @@ function kioskCard(r, status) {
   </div>`;
 }
 
-function renderVenue(params, data) {
+// Every category as a context — shared by the venue and player renderers.
+function catCtxs(data) {
+  return data.cats.map(c => makeCat(c, data.tjson));
+}
+
+function renderVenue(route, data) {
   if (!data.tjson) return '<p>Missing tournament data — has the tournament been pushed?</p>';
-  const v = params.get('v');
+  const v = route.filter; // #slug/venues/<id> narrows to one court; no id → all courts
   const rows = [];
-  const ctxs = data.cats.map(c => makeCat(c, data.tjson));
+  const ctxs = catCtxs(data);
   for (const ctx of ctxs) {
     for (const m of ctx.matches) {
       if (!m || m.venue === undefined) continue;
@@ -216,18 +223,18 @@ function possibleLine(b) {
   return `<p class="pm-possible">${howMany} ${esc(b.ctx.name)} ${noun} possible ${range} · depends on results</p>`;
 }
 
-function renderPlayer(params, data) {
+function renderPlayer(route, data) {
   if (!data.tjson) return '<p>Missing tournament data — has the tournament been pushed?</p>';
-  const pid = params.get('p');
+  const pid = route.filter; // no id → the picker
   const players = (data.tjson.players || []).filter(p => p && typeof p === 'object' && typeof p.id === 'string');
-  if (!pid) { // no ?p= — the picker, one page per player
-    const items = players.map(p => `<li><a href="player.html?t=${esc(data.t.slug)}&p=${esc(p.id)}">${esc(p.name || p.id)}</a></li>`);
-    return `<h1>Players</h1><p class="sub"><a href="index.html">Home</a> · <a href="standings.html?t=${esc(data.t.slug)}">${esc(data.t.name)}</a></p><p class="sub">Pick a player to see their schedule</p><ul class="tournaments">${items.join('') || '<li>No players.</li>'}</ul>`;
+  if (!pid) { // no player id — the picker
+    const items = players.map(p => `<li><a href="#${esc(data.t.slug)}/players/${esc(p.id)}">${esc(p.name || p.id)}</a></li>`);
+    return `<h1>Players</h1><p class="sub"><a href="#">Home</a> · <a href="#${esc(data.t.slug)}">${esc(data.t.name)}</a></p><p class="sub">Pick a player to see their schedule</p><ul class="tournaments">${items.join('') || '<li>No players.</li>'}</ul>`;
   }
   const p = players.find(x => x.id === pid);
   if (!p) return '<p>Player not found.</p>';
   const rows = [];
-  const ctxs = data.cats.map(c => makeCat(c, data.tjson));
+  const ctxs = catCtxs(data);
   for (const ctx of ctxs) {
     for (const { m, i, team } of playerMatches(ctx, pid)) {
       rows.push({ m, ctx, i, team, partner: [...team].filter(id => id !== pid) });
@@ -251,7 +258,7 @@ function renderPlayer(params, data) {
     if (!blocksByDay.has(key)) blocksByDay.set(key, []);
     blocksByDay.get(key).push({ ctx, ...span });
   }
-  const parts = [`<h1>${esc(p.name)}</h1>`, `<p class="sub"><a href="index.html">Home</a> · <a href="standings.html?t=${esc(data.t.slug)}">${esc(data.t.name)}</a></p>`];
+  const parts = [`<h1>${esc(p.name)}</h1>`, `<p class="sub"><a href="#">Home</a> · <a href="#${esc(data.t.slug)}">${esc(data.t.name)}</a></p>`];
   for (const [key, g] of groups) {
     parts.push(`<h2>${esc(key)}</h2>`);
     const blocks = (blocksByDay.get(key) || []).sort((a, b) => a.min - b.min);
@@ -283,75 +290,102 @@ function renderPlayer(params, data) {
 
 // ---------- boot ----------
 
-// Read-once pages (index/standings/player) don't poll — but a load that lands
+// Read-once views (index/categories/players) don't poll — but a load that lands
 // in a Pages deploy window or a network blip must not leave a permanent
 // "missing" page. Two cheap recoveries, neither of which fires on the happy
 // path: re-fetch when the tab returns to the foreground, and a bounded retry
 // when the snapshot is detectably failed (no index entry, or no tournament data
-// on a page that needs one). A genuinely empty repo or category still renders
+// on a view that needs one). A genuinely empty repo or category still renders
 // empty — a 404 is indistinguishable from absence, so empty states are never
 // retried.
 function boot() {
-  const params = parseParams();
   const app = document.getElementById('app');
-  if (!params) {
-    app.innerHTML = '<p>Bad URL parameters.</p>';
-    return;
-  }
-  const renderers = { index: renderIndex, venue: renderVenue, player: renderPlayer, standings: renderStandings };
-  const renderer = renderers[document.body.dataset.page] || renderIndex;
-  const page = document.body.dataset.page;
-  let data = null; // last good snapshot — a failed poll keeps the board up
-  let lastHtml = ''; // skip re-render when nothing changed — keeps selection/focus on the player page
-  let fails = 0; // consecutive detectably-failed loads (read-once pages only)
+  const renderers = { index: renderIndex, categories: renderStandings, venues: renderVenue, players: renderPlayer };
+  const titles = { index: 'GitBracket', categories: 'Standings', venues: 'Kiosk', players: 'Player' };
+  let route = null;    // current fragment route — the kiosk poll reads it each tick
+  let data = null;     // last good snapshot — a failed poll keeps the board up
+  let dataSlug = null; // slug the snapshot belongs to — a route change to another tournament reloads
+  let lastHtml = '';   // skip re-render when nothing changed — keeps selection/focus on the player page
+  let fails = 0;       // consecutive detectably-failed loads (read-once views only)
+  let pollTimer = null, clockTimer = null;
   const MAX_FAILS = 3;
   const RETRY_MS = 5000;
-  const tick = () => {
-    loadAll(params, page === 'index').then(d => {
-      if (page !== 'index' && data && !d.t) { // index fetch failed — keep the last board
-        if (++fails <= MAX_FAILS) setTimeout(tick, RETRY_MS);
-        return;
-      }
-      data = d;
-      if (page !== 'index' && !data.t) {
-        app.innerHTML = '<p>Tournament not found.</p>';
-        if (++fails <= MAX_FAILS) setTimeout(tick, RETRY_MS); // deploy window or blip — retry a few times, then give up
-        return;
-      }
-      if (page !== 'index' && !data.tjson) {
-        app.innerHTML = '<p>Missing tournament data — has the tournament been pushed?</p>';
-        if (++fails <= MAX_FAILS) setTimeout(tick, RETRY_MS);
+
+  // Auto-refresh only on the kiosk; the other views are read-on-load.
+  const setKiosk = on => {
+    if (on && !pollTimer) {
+      // ponytail: jitter so a hall of kiosk screens doesn't fetch in lockstep
+      pollTimer = setInterval(tick, POLL_MS + Math.random() * 5000);
+      // Wall clock, tournament-local time. Kept out of the render HTML (empty
+      // span) so the lastHtml change-guard isn't tripped every second; the poll
+      // re-render replaces the span, so look it up fresh each tick.
+      clockTimer = setInterval(() => {
+        const el = document.getElementById('k-clock');
+        if (el) el.textContent = fmtClock(Date.now(), (data && data.tjson && data.tjson.timezone) || 'UTC');
+      }, 1000);
+    } else if (!on && pollTimer) {
+      clearInterval(pollTimer); pollTimer = null;
+      clearInterval(clockTimer); clockTimer = null;
+    }
+  };
+
+  const render = (r, d) => {
+    data = d;
+    dataSlug = r.slug;
+    // the kiosk dark theme keys off body[data-page="venue"] — set it only there
+    document.body.dataset.page = r.view === 'venues' ? 'venue' : '';
+    document.title = r.view === 'index' || !d.t ? titles[r.view] : `${titles[r.view]} — ${d.t.name}`;
+    try {
+      const html = renderers[r.view](r, d);
+      if (html !== lastHtml) { app.innerHTML = html; lastHtml = html; }
+    } catch (e) {
+      app.innerHTML = '<p>Render error.</p>';
+      console.error(e);
+    }
+  };
+
+  const load = r => {
+    loadAll(r, r.view === 'index').then(d => {
+      if (r.view !== 'index' && (!d.t || !d.tjson)) { // fetch failed or unknown slug — with a board, keep it and retry silently
+        if (!data) app.innerHTML = d.t ? '<p>Missing tournament data — has the tournament been pushed?</p>' : '<p>Tournament not found.</p>';
+        if (++fails <= MAX_FAILS) setTimeout(() => load(r), RETRY_MS); // deploy window or blip — retry a few times, then give up
         return;
       }
       fails = 0;
-      try {
-        const html = renderer(params, data);
-        if (html !== lastHtml) { app.innerHTML = html; lastHtml = html; }
-      } catch (e) {
-        app.innerHTML = '<p>Render error.</p>';
-        console.error(e);
-      }
+      render(r, d);
     });
   };
-  tick();
-  // Auto-refresh only on the kiosk; the other pages are read-on-load.
-  if (page === 'venue') {
-    // ponytail: jitter so a hall of kiosk screens doesn't fetch in lockstep
-    setInterval(tick, POLL_MS + Math.random() * 5000);
-    // Wall clock, tournament-local time. Kept out of the render HTML (empty
-    // span) so the lastHtml change-guard isn't tripped every second; the poll
-    // re-render replaces the span, so look it up fresh each tick.
-    setInterval(() => {
-      const el = document.getElementById('k-clock');
-      if (el) el.textContent = fmtClock(Date.now(), (data && data.tjson && data.tjson.timezone) || 'UTC');
-    }, 1000);
-  } else {
-    // read-once pages: a load that failed gets another chance when the tab
-    // comes back to the foreground (fresh attempt, fresh retry budget)
-    document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) { fails = 0; tick(); }
-    });
-  }
+  const tick = () => load(route);
+
+  // Fragment navigation: same-slug view hops (categories → venues → players)
+  // re-render from the cached snapshot; a different slug or the index reloads.
+  const navigate = () => {
+    const r = parseRoute();
+    if (!r) { // reject → render an error, fetch nothing (a raw segment never reaches a URL)
+      route = null;
+      setKiosk(false);
+      app.innerHTML = '<p>Bad URL.</p>';
+      return;
+    }
+    route = r;
+    setKiosk(r.view === 'venues');
+    if (r.view === 'index' || r.slug !== dataSlug) {
+      data = null;
+      lastHtml = '';
+      fails = 0;
+      load(r);
+    } else {
+      render(r, data);
+    }
+  };
+
+  navigate();
+  window.addEventListener('hashchange', navigate);
+  // read-once views: a load that failed gets another chance when the tab comes
+  // back to the foreground (fresh attempt, fresh retry budget)
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && route && route.view !== 'venues') { fails = 0; load(route); }
+  });
 }
 
 if (typeof document !== 'undefined') boot();
@@ -359,5 +393,5 @@ if (typeof document !== 'undefined') boot();
 // CommonJS exports for node tools (tests, validate, cli, schedule import from
 // app.js or derive.js directly); browser <script> ignores these.
 if (typeof module !== 'undefined') {
-  module.exports = { ...require('./derive.js'), renderIndex, renderStandings, renderVenue, renderPlayer };
+  module.exports = { ...require('./derive.js'), parseRoute, renderIndex, renderStandings, renderVenue, renderPlayer };
 }

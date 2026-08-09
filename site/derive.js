@@ -277,7 +277,7 @@ function placementLabel(m, ctx) {
       if (!X) continue;
       const c = chainOf(X);
       const here = s.result === 'loser'
-        ? (c ? { d: c.d, h: c.h + 1 } : { d: maxDepth(ctx) - matchRound(X, ctx), h: 1 })
+        ? (c ? { d: c.d, h: c.h + 1 } : { d: winnerDepth(ctx, X.id), h: 1 })
         : c; // winner edge from a placement match continues the chain
       if (here && (!best || here.h > best.h)) best = here;
     }
@@ -296,13 +296,24 @@ function placementLabel(m, ctx) {
   return `${ordinal(lastLoser && c.d > 1 ? low + 2 : low)} place`;
 }
 
-function maxDepth(ctx) {
-  if (ctx._maxDepth === undefined) {
-    let d = 0;
-    for (const m of ctx.matches) d = Math.max(d, matchRound(m, ctx));
-    ctx._maxDepth = d;
+// Winner-edge distance to the final (0 = the final itself): the round a loser
+// edge branches from, for placement labels. matchRound can't do this — a bye'd
+// semi fed by pool slots has depth 0 from the leaves yet sits one round below
+// the final (XD 2026 m6), and a wrong d mislabels the bronze match as a
+// classification round.
+function winnerDepth(ctx, id, memo = new Map()) {
+  if (memo.has(id)) return memo.get(id);
+  memo.set(id, -1); // in-progress guard, same as matchRound
+  for (const m of ctx.matches) {
+    for (const s of m.sides) {
+      if (s && s.kind === 'match' && s.result === 'winner' && s.match === id) {
+        memo.set(id, 1 + winnerDepth(ctx, m.id, memo));
+        return memo.get(id);
+      }
+    }
   }
-  return ctx._maxDepth;
+  memo.set(id, 0);
+  return 0;
 }
 
 // ---------- time ----------
@@ -461,5 +472,5 @@ function matchLabel(m, ctx) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { SLOT_MIN, ID_RE, pairSig, makeCat, matchSlotMs, slotsOverlap, countWins, winnerIdx, isDone, sameRecord, isDeadTie, poolStandings, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, chainLen, possibleSpan, matchRound, ordinal, placementLabel, maxDepth, fmtTime, fmtClock, dayKey, schedTime, gamesText, matchState, fmtDiff, scheduleStatus, venueBacklog, kioskStatus, delayNote, roundName, koColumn, matchLabel };
+  module.exports = { SLOT_MIN, ID_RE, pairSig, makeCat, matchSlotMs, slotsOverlap, countWins, winnerIdx, isDone, sameRecord, isDeadTie, poolStandings, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, chainLen, possibleSpan, matchRound, ordinal, placementLabel, winnerDepth, fmtTime, fmtClock, dayKey, schedTime, gamesText, matchState, fmtDiff, scheduleStatus, venueBacklog, kioskStatus, delayNote, roundName, koColumn, matchLabel };
 }

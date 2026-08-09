@@ -6,8 +6,24 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { makeCat, winnerIdx, isDone, poolStandings, resolveSide, sameRecord, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, scheduleStatus, venueBacklog, kioskStatus, delayNote, fmtTime, matchLabel } = require('../site/app.js');
+const { makeCat, winnerIdx, isDone, poolStandings, resolveSide, sameRecord, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, scheduleStatus, venueBacklog, kioskStatus, delayNote, fmtTime, matchLabel, parseRoute } = require('../site/app.js');
 const { FIX, catOf } = require('./helpers.js');
+
+test('parseRoute: fragment routing — bare slug defaults to categories, every segment id-gated', () => {
+  assert.deepEqual(parseRoute(''), { view: 'index' }, 'no fragment: tournament list');
+  assert.deepEqual(parseRoute('#'), { view: 'index' });
+  assert.deepEqual(parseRoute('#2026-mammut60'), { slug: '2026-mammut60', view: 'categories' }, 'bare slug: standings, all categories');
+  assert.deepEqual(parseRoute('#2026-mammut60/categories'), { slug: '2026-mammut60', view: 'categories' });
+  assert.deepEqual(parseRoute('#2026-mammut60/categories/md'), { slug: '2026-mammut60', view: 'categories', filter: 'md' });
+  assert.deepEqual(parseRoute('#2026-mammut60/venues'), { slug: '2026-mammut60', view: 'venues' });
+  assert.deepEqual(parseRoute('#2026-mammut60/venues/court-1'), { slug: '2026-mammut60', view: 'venues', filter: 'court-1' });
+  assert.deepEqual(parseRoute('#2026-mammut60/players/p1'), { slug: '2026-mammut60', view: 'players', filter: 'p1' });
+  assert.equal(parseRoute('#2026-mammut60/bogus'), null, 'unknown view');
+  assert.equal(parseRoute('#2026-mammut60/venues/'), null, 'empty segment');
+  assert.equal(parseRoute('#2026-mammut60/categories/md/x'), null, 'too many segments');
+  assert.equal(parseRoute('#../..'), null, 'traversal rejected');
+  assert.equal(parseRoute('#/'), null, 'no slug');
+});
 
 test('pool A standings: 4 sides, order, leader record', () => {
   const md = catOf('sample', 'md40');
@@ -218,11 +234,14 @@ test('koColumn: a bye\'d semi sits in the semifinal column, not with round 1', (
     { id: 'sf1', sides: [{ kind: 'pool', pool: 'A', rank: 1 }, { kind: 'match', match: 'r1', result: 'winner' }] },
     { id: 'sf2', sides: [{ kind: 'pool', pool: 'B', rank: 1 }, { kind: 'pool', pool: 'A', rank: 2 }] },
     { id: 'f', sides: [{ kind: 'match', match: 'sf1', result: 'winner' }, { kind: 'match', match: 'sf2', result: 'winner' }] },
-    { id: 'b', sides: [{ kind: 'match', match: 'sf1', result: 'loser' }, { kind: 'match', match: 'sf2', result: 'loser' }] },
+    { id: 'b', sides: [{ kind: 'match', match: 'sf2', result: 'loser' }, { kind: 'match', match: 'sf1', result: 'loser' }] },
   ] }, { timezone: 'UTC', players: [] });
   const col = id => koColumn(ko.byId.get(id), ko);
   assert(col('f') === 0 && col('sf1') === 1 && col('sf2') === 1 && col('r1') === 2 && col('b') === 0,
     'unbalanced bracket: final 0, both semis 1 (incl. bye\'d sf2), round 1 at 2, bronze with the final');
+  // bye'd semi first in the bronze sides: loser origin must still read depth 1
+  // (round below the final), not the bye'd match's leaf depth — else 5th–8th semi.
+  assert(placementLabel(ko.byId.get('b'), ko) === '3rd place', 'bronze of a bye\'d semi is 3rd place, not a classification round');
   const full = catOf('full', 't');
   assert(koColumn(full.byId.get('m10'), full) === 0 && koColumn(full.byId.get('m7'), full) === 1 && koColumn(full.byId.get('m9'), full) === 0,
     'balanced bracket unchanged: final 0, semis 1, bronze with the final');
