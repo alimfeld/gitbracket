@@ -23,11 +23,15 @@ jobs:
       - run: node validate.js
       - run: node --test
       # Asset version tokens: script/style tags can't revalidate (data fetches
-      # can), so each deploy stamps ?v=<commit sha> onto them. The repo tree
-      # stays pristine; the token is the real SHA of the tree being deployed,
-      # so a browser can never serve yesterday's JS with today's data.
+      # can), so each deploy stamps ?v=<content hash> onto them. The repo tree
+      # stays pristine; the token changes only when the asset's bytes change,
+      # so a result-only commit leaves unchanged JS/CSS cached, while a changed
+      # asset still gets a fresh URL a browser can't serve stale.
       - run: |
-          perl -i -pe 's{(app\.js|derive\.js|style\.css)(\?v=[^"]*)?"}{$1?v=$ENV{GITHUB_SHA}"}g' site/*.html
+          for f in site/*.js site/*.css; do
+            v=$(sha256sum "$f" | cut -c1-12)
+            perl -i -pe "s{(\Q${f#site/}\E)(\?v=[^\"]*)?\"}{\${1}?v=$v\"}g" site/*.html
+          done
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
