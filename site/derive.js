@@ -411,8 +411,8 @@ function delayNote(t, m, ctx, delayByVenue, now) {
   const queued = t + d >= now;
   // in play: it started behind the backlog — checked first so a playing match
   // never reads as still upcoming.
-  if ((m.games || []).length) return queued ? ` · <span class="late">started ~${min} min late</span>` : '';
-  if (queued) return ` · <span class="late">~${min} min late · est. ${fmtTime(t + d, ctx.tz)}</span>`;
+  if ((m.games || []).length) return queued ? `started ~${min} min late` : '';
+  if (queued) return `~${min} min late · est. ${fmtTime(t + d, ctx.tz)}`;
   return ''; // the backlog source itself — no estimate the model can give
 }
 

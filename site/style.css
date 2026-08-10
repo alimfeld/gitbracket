@@ -17,62 +17,62 @@ body {
 h1 { font-size: 1.6rem; margin: 0 0 1rem; }
 h2 { font-size: 1.2rem; margin: 2rem 0 .6rem; }
 h3 { font-size: 1rem; margin: 1.2rem 0 .4rem; color: var(--muted); }
+h4 { font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 1rem 0 0; }
 a { color: var(--accent); }
-p.sub { color: var(--muted); margin-top: -.6rem; }
 
-nav.cats { display: flex; gap: .5rem; flex-wrap: wrap; margin: 1rem 0 1.5rem; }
-nav.cats a { padding: .35rem .8rem; border: 1px solid var(--line); border-radius: 999px; text-decoration: none; }
-nav.cats a.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* A minimal class set, only where structure is ambiguous (divs, navs, p
+   roles); elements like article/ul/table are styled directly since every
+   instance is the same component. State rides data attributes (data-win,
+   data-tie, data-status) or aria-current. body.venue is the kiosk dark
+   theme hook. */
 
-ul.tournaments { list-style: none; padding: 0; }
-ul.tournaments li { padding: .6rem 0; border-bottom: 1px solid #eee; font-size: 1.1rem; }
-ul.tournaments a.kiosk { font-size: .8rem; margin-left: .6rem; }
+/* card grids — pool matches and bracket rounds */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr)); gap: 1rem; margin-top: 1rem; }
 
-table.standings { border-collapse: collapse; width: 100%; }
-table.standings th, table.standings td { padding: .4rem .6rem; border-bottom: 1px solid #eee; }
-table.standings th { text-align: left; font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
-table.standings th:not(:first-child), table.standings td:not(:first-child) { text-align: right; }
-table.standings td.tie { background: #fff3cd; }
+/* cards — every article is a card; .stack is a vertical run of them (player schedule) */
+article { display: flex; flex-direction: column; gap: .3rem; border: 1px solid var(--line); border-radius: .5rem; padding: .6rem .8rem; background: #fff; }
+.stack { display: flex; flex-direction: column; gap: .6rem; }
+.stack .side { font-weight: 600; } /* player header line: time · venue */
+.side { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; }
+.score { margin-left: auto; display: flex; gap: .4rem; }
+.score span { font-weight: 600; min-width: 1.3em; text-align: right; }
+[data-win] { font-weight: 700; }
+.meta { font-size: .8rem; color: var(--muted); }
+.meta .late { color: #b3402e; font-weight: 600; }
 
-.bracket { display: flex; flex-direction: column; gap: 1rem; }
-.bcol, .poolgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); gap: 1rem; }
-.bhead { grid-column: 1 / -1; font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
-.bm { border: 1px solid var(--line); border-radius: .5rem; padding: .5rem .7rem; background: #fff; position: relative; }
-.mid { font-size: .7rem; color: var(--muted); }
-.bs { display: flex; justify-content: space-between; gap: .5rem; }
-.bs.win { font-weight: 700; }
-.bs .bscores { margin-left: auto; display: flex; gap: .4rem; }
-.bs .bscores .bscore { font-weight: 600; min-width: 1.3em; text-align: right; }
-.bmeta { font-size: .8rem; color: var(--muted); margin-top: .3rem; }
+/* navs — breadcrumbs plus the pills variant */
+nav { color: var(--muted); margin: 0 0 .5rem; }
+.pills { display: flex; gap: .5rem; flex-wrap: wrap; margin: 0 0 1.5rem; }
+.pills a { padding: .35rem .8rem; border: 1px solid var(--line); border-radius: 999px; text-decoration: none; }
+.pills a[aria-current] { background: var(--accent); border-color: var(--accent); color: #fff; }
 
-.poolgrid > table { grid-column: 1 / -1; }
+/* lists — every ul is the index or player picker list */
+ul { list-style: none; padding: 0; }
+ul li { padding: .6rem 0; border-bottom: 1px solid #eee; font-size: 1.1rem; }
+ul li a + a { font-size: .8rem; margin-left: .6rem; } /* second link per row (kiosk) */
+.note { font-size: .85rem; color: var(--muted); border: 1px dashed var(--line); border-radius: .5rem; padding: .4rem .8rem; margin: 0; }
 
-.pm { border: 1px solid var(--line); border-radius: .5rem; padding: .6rem .8rem; margin-bottom: .6rem; }
-.pmtop { display: flex; justify-content: space-between; gap: .5rem; }
-.pmtime { font-weight: 600; }
-.pmcourt { font-weight: 600; }
-.pmopp { margin-top: .2rem; }
-.pmpartner { font-size: .9rem; color: var(--muted); }
-.pmmeta { font-size: .85rem; color: var(--muted); margin-top: .2rem; }
-.pmmeta .late { color: #b3402e; font-weight: 600; }
-.pm-possible { font-size: .85rem; color: var(--muted); border: 1px dashed var(--line); border-radius: .5rem; padding: .4rem .8rem; margin: .4rem 0 .6rem; }
+/* standings table */
+table { border-collapse: collapse; width: 100%; }
+table th, table td { padding: .4rem .6rem; border-bottom: 1px solid #eee; }
+table th { text-align: left; font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+table th:not(:first-child), table td:not(:first-child) { text-align: right; }
+tr[data-tie] td { background: #fff3cd; }
 
-/* kiosk override block — venue.html only. The k-* classes (and .km, which
-   wraps every .bs row on a kiosk card) are rendered only there, so they need
-   no page gate; only the page theme and the generic h1 do. */
-body[data-page="venue"] { background: #000; color: #f2f2ec; max-width: none; padding: 2rem 3rem; }
-body[data-page="venue"] h1 { font-size: 3.2rem; margin: 0; }
-.k-head { display: flex; justify-content: space-between; align-items: baseline; gap: 2rem; margin: 0 0 1.5rem; }
-.k-clock { font-size: 3.2rem; font-weight: 700; color: #f2f2ec; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.k-venue { font-size: 2.2rem; margin: 2.5rem 0 .6rem; padding-bottom: .4rem; border-bottom: 2px solid #2a2a28; }
-.k-cols { display: flex; gap: 2.5rem; align-items: flex-start; flex-wrap: wrap; }
-.k-venue-col { flex: 1 1 24rem; min-width: 0; }
-.k-venue-col .k-venue { margin-top: 0; }
-.km { margin-bottom: 1.5rem; padding: 1.2rem 1.6rem; border: 1px solid #2a2a28; border-radius: 1rem; background: #111; }
-.k-badge { display: inline-block; font-size: .95rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: .1rem .7rem .15rem; border-radius: 999px; margin-right: .7rem; vertical-align: .1em; }
-.k-badge.overdue { background: #7c2d1e; color: #ffb3ab; }
-.k-badge.live { background: #ffd166; color: #000; }
-.k-badge.next { background: #232321; color: #9a9a94; border: 1px solid #3a3a38; }
-.km .bs { align-items: baseline; gap: 2rem; font-size: 1.8rem; line-height: 1.25; }
-.kmeta { color: #8a8a84; margin-top: .6rem; font-size: 1.2rem; }
-.k-empty { color: #8a8a84; font-size: 1.4rem; }
+/* kiosk — dark theme (body.venue) */
+body.venue { background: #000; color: #f2f2ec; max-width: none; padding: 2rem 3rem; }
+body.venue header { display: flex; justify-content: space-between; align-items: baseline; gap: 2rem; margin: 0 0 1.5rem; }
+body.venue header h1 { font-size: 3.2rem; margin: 0; }
+#k-clock { font-size: 3.2rem; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+body.venue h2 { font-size: 2.2rem; margin: 2.5rem 0 .6rem; padding-bottom: .4rem; border-bottom: 2px solid #2a2a28; }
+body.venue main > div { display: flex; gap: 2.5rem; align-items: flex-start; flex-wrap: wrap; }
+body.venue main section { flex: 1 1 24rem; min-width: 0; }
+body.venue main section h2 { margin-top: 0; }
+body.venue article { margin-bottom: 1.5rem; padding: 1.2rem 1.6rem; border: 1px solid #2a2a28; border-radius: 1rem; background: #111; gap: .6rem; }
+body.venue .side { font-size: 1.8rem; line-height: 1.25; gap: 2rem; }
+body.venue .meta { color: #8a8a84; font-size: 1.2rem; }
+body.venue .badge { display: inline-block; font-size: .95rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: .1rem .7rem .15rem; border-radius: 999px; margin-right: .7rem; vertical-align: .1em; }
+body.venue .badge[data-status="overdue"] { background: #7c2d1e; color: #ffb3ab; }
+body.venue .badge[data-status="live"] { background: #ffd166; color: #000; }
+body.venue .badge[data-status="next"] { background: #232321; color: #9a9a94; border: 1px solid #3a3a38; }
+body.venue main > p { color: #8a8a84; font-size: 1.4rem; }

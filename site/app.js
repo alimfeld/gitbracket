@@ -73,22 +73,21 @@ async function loadAll(route, indexOnly) {
 function renderIndex(route, data) {
   const items = data.index
     .filter(e => e && typeof e.slug === 'string' && ID_RE.test(e.slug))
-    .map(e => `<li><a href="#${esc(e.slug)}">${esc(e.name || e.slug)}</a> <a class="kiosk" href="#${esc(e.slug)}/venues">kiosk</a></li>`);
-  return `<h1>Tournaments</h1><ul class="tournaments">${items.join('') || '<li>No tournaments yet.</li>'}</ul>`;
+    .map(e => `<li><a href="#${esc(e.slug)}">${esc(e.name || e.slug)}</a> <a href="#${esc(e.slug)}/venues">kiosk</a></li>`);
+  return `<h1>Tournaments</h1><ul>${items.join('') || '<li>No tournaments yet.</li>'}</ul>`;
 }
 
 function renderStandings(route, data) {
   if (!data.tjson) return '<p>Missing tournament data — has the tournament been pushed?</p>';
-  const parts = [`<h1>${esc(data.t.name)}</h1>`];
-  parts.push(`<p class="sub"><a href="#">Home</a> · <a href="#${esc(data.t.slug)}/players">Player schedules</a></p>`);
+  const parts = [`<header><nav><a href="#">Home</a> · <a href="#${esc(data.t.slug)}/players">Player schedules</a></nav><h1>${esc(data.t.name)}</h1>`];
   // nav from the full category list, not the route-filtered cats — a filtered page must still show every pill
   const nav = (data.tjson.categories || []).map(c => {
     const active = route.filter === c.id;
     // clicking the active category drops the filter (toggle off)
     const href = active ? `#${esc(data.t.slug)}` : `#${esc(data.t.slug)}/categories/${esc(c.id)}`;
-    return `<a href="${href}"${active ? ' class="on"' : ''}>${esc(c.name)}</a>`;
+    return `<a href="${href}"${active ? ' aria-current="true"' : ''}>${esc(c.name)}</a>`;
   });
-  parts.push(`<nav class="cats">${nav.join('')}</nav>`);
+  parts.push(`<nav class="pills">${nav.join('')}</nav></header>`);
   for (const c of data.cats) {
     if (route.filter && c.meta.id !== route.filter) continue; // pills keep every category; only the section list narrows
     const ctx = makeCat(c, data.tjson);
@@ -102,27 +101,24 @@ function renderStandings(route, data) {
     }
     for (const [pool, poolMs] of byPool) {
       parts.push(`<h3>Pool ${esc(String(pool))}</h3>`);
-      parts.push('<div class="poolgrid">');
       // pools come from matches, so partial standings always resolve
       const st = poolStandings(ctx, pool, true);
-      parts.push('<table class="standings"><thead><tr><th>#</th><th>Team</th><th>W</th><th>L</th><th>GD</th><th>PD</th></tr></thead><tbody>');
+      parts.push('<table><thead><tr><th>#</th><th>Team</th><th>W</th><th>L</th><th>GD</th><th>PD</th></tr></thead><tbody>');
       let rank = 0;
       st.forEach((r, i) => {
         const tied = isDeadTie(st, i + 1);
         // shared rank for ties: same record as the row above keeps the group's first rank (1 1 1 4)
         if (i === 0 || !sameRecord(st[i - 1], r)) rank = i + 1;
         const team = teamLabel(r.ids, ctx);
-        parts.push(`<tr${tied ? ' class="tie"' : ''}><td>${rank}</td><td>${team}</td><td>${r.wins}</td><td>${r.losses}</td><td>${fmtDiff(r.gd)}</td><td>${fmtDiff(r.pd)}</td></tr>`);
+        parts.push(`<tr${tied ? ' data-tie' : ''}><td>${rank}</td><td>${team}</td><td>${r.wins}</td><td>${r.losses}</td><td>${fmtDiff(r.gd)}</td><td>${fmtDiff(r.pd)}</td></tr>`);
       });
       parts.push('</tbody></table>');
+      parts.push('<section class="grid">');
       for (const m of poolMs) parts.push(matchCard(m, ctx));
-      parts.push('</div>');
+      parts.push('</section>');
     }
     const ko = ctx.matches.filter(m => m && m.pool === undefined);
-    if (ko.length) {
-      parts.push('<h3>Knockout</h3>');
-      parts.push(bracketHtml(ctx, ko));
-    }
+    if (ko.length) parts.push(bracketHtml(ctx, ko));
   }
   return parts.join('');
 }
@@ -134,13 +130,13 @@ function bracketHtml(ctx, ko) {
     const r = maxR - koColumn(m, ctx); // koColumn is distance from the final; render that column rightmost
     (cols[r] = cols[r] || []).push(m);
   }
-  const parts = ['<div class="bracket">'];
+  const parts = ['<h3>Knockout</h3>'];
   cols.forEach((ms, r) => {
-    parts.push(`<div class="bcol"><div class="bhead">${roundName(cols.length - 1 - r)}</div>`);
+    parts.push(`<h4>${roundName(cols.length - 1 - r)}</h4>`);
+    parts.push('<section class="grid">');
     for (const m of ms) parts.push(matchCard(m, ctx));
-    parts.push('</div>');
+    parts.push('</section>');
   });
-  parts.push('</div>');
   return parts.join('');
 }
 
@@ -148,16 +144,16 @@ function matchCard(m, ctx) {
   const t = schedTime(m);
   const meta = [m.venue ? esc(ctx.venues.get(m.venue) || m.venue) : 'TBD', t !== null ? fmtTime(t, ctx.tz) : 'TBD'].join(' · ');
   const state = (m.games || []).length && !isDone(m, ctx) ? ' — in play' : '';
-  return `<div class="bm">${sideRow(m, ctx, 0)}${sideRow(m, ctx, 1)}<div class="bmeta"><span class="mid">${esc(m.id)}</span> · ${esc(matchLabel(m, ctx))} · ${meta}${state}</div></div>`;
+  return `<article>${sideRow(m, ctx, 0)}${sideRow(m, ctx, 1)}<div class="meta">${esc(m.id)} · ${esc(matchLabel(m, ctx))} · ${meta}${state}</div></article>`;
 }
 
 // Shared by bracket cards (standings) and the kiosk.
 function sideRow(m, ctx, i) {
   const w = winnerIdx(m, ctx);
   const games = m.games || [];
-  const score = m.forfeit === i ? '<span class="bscore">forfeit</span>'
-    : (games.length ? games.map(g => `<span class="bscore">${i === 0 ? g.a : g.b}</span>`).join('') : '');
-  return `<div class="bs${w === i ? ' win' : ''}"><span>${sideLabel(m.sides[i], ctx)}</span><span class="bscores">${score}</span></div>`;
+  const score = m.forfeit === i ? '<span>forfeit</span>'
+    : (games.length ? games.map(g => `<span>${i === 0 ? g.a : g.b}</span>`).join('') : '');
+  return `<div class="side"${w === i ? ' data-win' : ''}><span>${sideLabel(m.sides[i], ctx)}</span><span class="score">${score}</span></div>`;
 }
 
 function kioskCard(r, status) {
@@ -165,11 +161,11 @@ function kioskCard(r, status) {
   const state = matchState(m, ctx);
   const meta = [esc(ctx.name), esc(matchLabel(m, ctx)), esc(state), esc(fmtTime(r.t, ctx.tz))].filter(Boolean).join(' · '); // category first, then pool; venue is the group header now
   const badge = { overdue: 'Late', live: 'Live', next: 'Next' }[status];
-  return `<div class="km">
+  return `<article>
     ${sideRow(m, ctx, 0)}
     ${sideRow(m, ctx, 1)}
-    <div class="kmeta"><span class="k-badge ${status}">${badge}</span>${meta}</div>
-  </div>`;
+    <div class="meta"><span class="badge" data-status="${status}">${badge}</span>${meta}</div>
+  </article>`;
 }
 
 // Every category as a context — shared by the venue and player renderers.
@@ -196,7 +192,7 @@ function renderVenue(route, data) {
   const venueNames = new Map((data.tjson.venues || []).map(x => [x.id, x.name]));
   const venues = (data.tjson.venues || []).map(x => x.id).filter(id => rows.some(r => r.m.venue === id));
   const shown = v ? rows.filter(r => r.m.venue === v) : rows;
-  const parts = [`<div class="k-head"><h1>${esc(data.t.name)}</h1><span class="k-clock" id="k-clock"></span></div>`];
+  const parts = [`<header><h1>${esc(data.t.name)}</h1><span id="k-clock"></span></header>`];
   const byVenue = new Map(venues.map(id => [id, []]));
   for (const r of shown) {
     if (byVenue.has(r.m.venue)) byVenue.get(r.m.venue).push(r); // rows pre-sorted, buckets stay sorted
@@ -208,12 +204,12 @@ function renderVenue(route, data) {
     if (!open.length) continue;
     any = true;
     const col = [];
-    col.push(`<h2 class="k-venue">${esc(venueNames.get(id) || id)}</h2>`);
+    col.push(`<h2>${esc(venueNames.get(id) || id)}</h2>`);
     for (const r of open) col.push(kioskCard(r, kioskStatus(r, now)));
-    cols.push(`<div class="k-venue-col">${col.join('')}</div>`);
+    cols.push(`<section>${col.join('')}</section>`);
   }
-  parts.push(v ? cols.join('') : `<div class="k-cols">${cols.join('')}</div>`);
-  if (!any) parts.push('<p class="k-empty">Nothing scheduled.</p>');
+  parts.push(v ? cols.join('') : `<div>${cols.join('')}</div>`);
+  if (!any) parts.push('<p>Nothing scheduled.</p>');
   return parts.join('');
 }
 
@@ -222,7 +218,7 @@ function possibleLine(b) {
   const range = b.min === b.max ? `at ${fmtTime(b.min, b.ctx.tz)}` : `between ${fmtTime(b.min, b.ctx.tz)} and ${fmtTime(b.max, b.ctx.tz)}`;
   const noun = b.count === 1 ? 'match' : 'matches';
   const howMany = b.count > 1 ? `Up to ${b.count} more` : '1 more';
-  return `<p class="pm-possible">${howMany} ${esc(b.ctx.name)} ${noun} possible ${range} · depends on results</p>`;
+  return `<p class="note">${howMany} ${esc(b.ctx.name)} ${noun} possible ${range} · depends on results</p>`;
 }
 
 function renderPlayer(route, data) {
@@ -231,7 +227,7 @@ function renderPlayer(route, data) {
   const players = (data.tjson.players || []).filter(p => p && typeof p === 'object' && typeof p.id === 'string');
   if (!pid) { // no player id — the picker
     const items = players.map(p => `<li><a href="#${esc(data.t.slug)}/players/${esc(p.id)}">${esc(p.name || p.id)}</a></li>`);
-    return `<h1>Players</h1><p class="sub"><a href="#">Home</a> · <a href="#${esc(data.t.slug)}">${esc(data.t.name)}</a></p><p class="sub">Pick a player to see their schedule</p><ul class="tournaments">${items.join('') || '<li>No players.</li>'}</ul>`;
+    return `<header><nav><a href="#">Home</a> · <a href="#${esc(data.t.slug)}">${esc(data.t.name)}</a></nav><h1>Players</h1></header><p>Pick a player to see their schedule</p><ul>${items.join('') || '<li>No players.</li>'}</ul>`;
   }
   const p = players.find(x => x.id === pid);
   if (!p) return '<p>Player not found.</p>';
@@ -260,14 +256,15 @@ function renderPlayer(route, data) {
     if (!blocksByDay.has(key)) blocksByDay.set(key, []);
     blocksByDay.get(key).push({ ctx, ...span });
   }
-  const parts = [`<h1>${esc(p.name)}</h1>`, `<p class="sub"><a href="#">Home</a> · <a href="#${esc(data.t.slug)}">${esc(data.t.name)}</a></p>`];
+  const parts = [`<header><nav><a href="#">Home</a> · <a href="#${esc(data.t.slug)}">${esc(data.t.name)}</a></nav><h1>${esc(p.name)}</h1></header>`];
   for (const [key, g] of groups) {
     parts.push(`<h2>${esc(key)}</h2>`);
+    const day = [];
     const blocks = (blocksByDay.get(key) || []).sort((a, b) => a.min - b.min);
     let bi = 0;
     for (const r of g) {
       const t = schedTime(r.m);
-      while (bi < blocks.length && blocks[bi].min < t) parts.push(possibleLine(blocks[bi++]));
+      while (bi < blocks.length && blocks[bi].min < t) day.push(possibleLine(blocks[bi++]));
       const m = r.m, ctx = r.ctx;
       const oppSet = resolveSide(m.sides[1 - r.i], ctx);
       const opp = oppSet ? teamLabel(oppSet, ctx) : null;
@@ -277,14 +274,15 @@ function renderPlayer(route, data) {
       const withP = r.partner.length ? teamLabel(r.partner, ctx) : '— (singles)';
       const venue = m.venue ? ctx.venues.get(m.venue) || m.venue : 'TBD';
       const late = delayNote(t, m, ctx, delayByVenue, now);
-      parts.push(`<div class="pm">
-        <div class="pmtop"><span class="pmtime">${t === null ? 'TBD' : fmtTime(t, ctx.tz)}</span><span class="pmcourt">${esc(venue)}</span></div>
-        <div class="pmopp">vs ${esc(opp || slotLabel(m.sides[1 - r.i], ctx))}</div>
-        <div class="pmpartner">with ${esc(withP)}</div>
-        <div class="pmmeta">${esc(ctx.name)}${state ? ' · ' + esc(state) : ''}${late}</div>
-      </div>`);
+      day.push(`<article>
+        <div class="side"><span>${t === null ? 'TBD' : fmtTime(t, ctx.tz)}</span><span>${esc(venue)}</span></div>
+        <div>vs ${esc(opp || slotLabel(m.sides[1 - r.i], ctx))}</div>
+        <div>with ${esc(withP)}</div>
+        <div class="meta">${esc(ctx.name)}${state ? ' · ' + esc(state) : ''}${late ? ` · <span class="late">${esc(late)}</span>` : ''}</div>
+      </article>`);
     }
-    while (bi < blocks.length) parts.push(possibleLine(blocks[bi++]));
+    while (bi < blocks.length) day.push(possibleLine(blocks[bi++]));
+    parts.push(`<div class="stack">${day.join('')}</div>`);
   }
   if (!rows.length) parts.push('<p>No matches.</p>');
   return parts.join('');
@@ -301,7 +299,7 @@ function renderPlayer(route, data) {
 // empty — a 404 is indistinguishable from absence, so empty states are never
 // retried.
 function boot() {
-  const app = document.getElementById('app');
+  const app = document.querySelector('main');
   const renderers = { index: renderIndex, categories: renderStandings, venues: renderVenue, players: renderPlayer };
   const titles = { index: 'GitBracket', categories: 'Standings', venues: 'Kiosk', players: 'Player' };
   let route = null;    // current fragment route — the kiosk poll reads it each tick
@@ -334,8 +332,8 @@ function boot() {
   const render = (r, d) => {
     data = d;
     dataSlug = r.slug;
-    // the kiosk dark theme keys off body[data-page="venue"] — set it only there
-    document.body.dataset.page = r.view === 'venues' ? 'venue' : '';
+    // the kiosk dark theme keys off body.venue — present only on the venue view
+    document.body.classList.toggle('venue', r.view === 'venues');
     document.title = r.view === 'index' || !d.t ? titles[r.view] : `${titles[r.view]} — ${d.t.name}`;
     try {
       const html = renderers[r.view](r, d);

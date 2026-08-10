@@ -94,7 +94,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert((filtered.match(/<h2>/g) || []).length === 1 && filtered.includes('Pool A'), 'category filter narrows to one section');
   assert(filtered.includes('#sample/categories/xd'), 'pills still list every category on a filtered page');
   const venue = renderVenue({ slug: 'sample', view: 'venues' }, data);
-  assert(venue.includes('k-venue') && venue.includes('Ada Lovelace'), 'venue page renders venue boards with match rows');
+  assert(venue.includes('Court 1') && venue.includes('Ada Lovelace'), 'venue page renders venue boards with match rows');
   assert(renderPlayer({ slug: 'sample', view: 'players', filter: 'p1' }, data).includes('Ada Lovelace'), 'player page finds the player');
   assert(renderPlayer({ slug: 'sample', view: 'players', filter: 'p1' }, data).includes('#sample'), 'player page links the tournament name to standings');
   assert(renderIndex({ view: 'index' }, data).includes('#sample'), 'index links the tournament');
@@ -106,7 +106,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   // tied teams share the first rank of their group (standard competition ranking: 1 1 1 4)
   const { data: tdata } = dataOf('tie');
   const tieHtml = renderStandings({ slug: 'tie', view: 'categories' }, tdata);
-  assert(!tieHtml.includes('†') && (tieHtml.match(/class="tie"><td>1<\/td>/g) || []).length === 2, 'tied teams share rank 1, no dagger');
+  assert(!tieHtml.includes('†') && (tieHtml.match(/data-tie><td>1<\/td>/g) || []).length === 2, 'tied teams share rank 1, no dagger');
 });
 
 test('cli writeEdit: rollback on validation failure, write on success (real disk)', () => {
