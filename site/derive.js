@@ -349,43 +349,6 @@ function fmtDiff(n) {
   return (n > 0 ? '+' : '') + n;
 }
 
-// Match-day status: null until the first scheduled match is due, then
-// { overdue } where overdue = scheduled matches whose full slot has elapsed
-// without a result — exactly the complement of the kiosk's "Now" window
-// (in-slot play is on schedule), so a non-empty list means the day has slipped.
-function scheduleStatus(cats, nowMs) {
-  const rows = [];
-  for (const ctx of cats) {
-    for (const m of ctx.matches) {
-      if (!m || typeof m !== 'object') continue;
-      const t = schedTime(m);
-      if (t === null) continue;
-      rows.push({ m, t, ctx });
-    }
-  }
-  if (rows.length === 0 || nowMs < Math.min(...rows.map(r => r.t))) return null;
-  return {
-    overdue: rows
-      .filter(r => !isDone(r.m, r.ctx) && nowMs >= r.t + matchSlotMs(r.m, r.ctx))
-      .sort((a, b) => a.t - b.t)
-  };
-}
-
-// Per-venue backlog (ms) from the match-day status: each venue's delay = how
-// far past its slot end its most overdue unfinished match is — a lower bound
-// on how late matches queued there run (a forfeit can clear it sooner).
-function venueBacklog(cats, nowMs) {
-  const byVenue = new Map();
-  const status = scheduleStatus(cats, nowMs);
-  if (!status) return byVenue;
-  for (const r of status.overdue) {
-    if (!r.m.venue) continue;
-    const d = nowMs - (r.t + matchSlotMs(r.m, r.ctx));
-    byVenue.set(r.m.venue, Math.max(byVenue.get(r.m.venue) || 0, d));
-  }
-  return byVenue;
-}
-
 // Card badge status: overdue = full slot elapsed without a result, live = started
 // but inside its slot, else next (> not >=: the boundary instant belongs to live).
 function kioskStatus(r, now) {
@@ -393,27 +356,6 @@ function kioskStatus(r, now) {
   if (now >= t + matchSlotMs(r.m, r.ctx)) return 'overdue';
   if (now >= t) return 'live';
   return 'next';
-}
-
-// Backlog note for a match card: '~X min late · est. H:MM' while it hasn't
-// started (future OR still queued behind an unscored predecessor), 'started
-// ~X min late' once it's in play; '' when on schedule, finished, or the
-// backlog source itself (the match the venue's delay is measured from).
-function delayNote(t, m, ctx, delayByVenue, now) {
-  if (t === null || !m.venue) return '';
-  const d = delayByVenue.get(m.venue) || 0;
-  const min = Math.round(d / 60000 / 5) * 5;
-  if (min < 5 || isDone(m, ctx)) return '';
-  // queued: the backlog-adjusted start is still ahead of or at now. The source
-  // (t + d < now) gets no note — for it, d is minutes past its own slot end,
-  // not its start delay. Back-to-back slots put the queued est. exactly at now
-  // while the predecessor is unscored, hence >= not >.
-  const queued = t + d >= now;
-  // in play: it started behind the backlog — checked first so a playing match
-  // never reads as still upcoming.
-  if ((m.games || []).length) return queued ? `started ~${min} min late` : '';
-  if (queued) return `~${min} min late · est. ${fmtTime(t + d, ctx.tz)}`;
-  return ''; // the backlog source itself — no estimate the model can give
 }
 
 // Knockout round names by distance from the final: each round back doubles
@@ -472,5 +414,5 @@ function matchLabel(m, ctx) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { SLOT_MIN, ID_RE, pairSig, makeCat, matchSlotMs, slotsOverlap, countWins, winnerIdx, isDone, sameRecord, isDeadTie, poolStandings, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, chainLen, possibleSpan, matchRound, ordinal, placementLabel, winnerDepth, fmtTime, fmtClock, dayKey, schedTime, gamesText, matchState, fmtDiff, scheduleStatus, venueBacklog, kioskStatus, delayNote, roundName, koColumn, matchLabel };
+  module.exports = { SLOT_MIN, ID_RE, pairSig, makeCat, matchSlotMs, slotsOverlap, countWins, winnerIdx, isDone, sameRecord, isDeadTie, poolStandings, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, chainLen, possibleSpan, matchRound, ordinal, placementLabel, winnerDepth, fmtTime, fmtClock, dayKey, schedTime, gamesText, matchState, fmtDiff, kioskStatus, roundName, koColumn, matchLabel };
 }

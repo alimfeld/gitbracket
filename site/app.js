@@ -238,8 +238,6 @@ function renderPlayer(route, data) {
       rows.push({ m, ctx, i, team, partner: [...team].filter(id => id !== pid) });
     }
   }
-  const now = Date.now();
-  const delayByVenue = venueBacklog(ctxs, now);
   rows.sort((a, b) => (schedTime(a.m) ?? Infinity) - (schedTime(b.m) ?? Infinity));
   const groups = new Map();
   for (const r of rows) {
@@ -273,12 +271,11 @@ function renderPlayer(route, data) {
         : (w === null ? matchState(m, ctx) : `${w === r.i ? 'W' : 'L'} · ${gamesText(m)}`);
       const withP = r.partner.length ? teamLabel(r.partner, ctx) : '— (singles)';
       const venue = m.venue ? ctx.venues.get(m.venue) || m.venue : 'TBD';
-      const late = delayNote(t, m, ctx, delayByVenue, now);
       day.push(`<article>
         <div class="side"><span>${t === null ? 'TBD' : fmtTime(t, ctx.tz)}</span><span>${esc(venue)}</span></div>
         <div>vs ${esc(opp || slotLabel(m.sides[1 - r.i], ctx))}</div>
         <div>with ${esc(withP)}</div>
-        <div class="meta">${esc(ctx.name)}${state ? ' · ' + esc(state) : ''}${late ? ` · <span class="late">${esc(late)}</span>` : ''}</div>
+        <div class="meta">${esc(ctx.name)}${state ? ' · ' + esc(state) : ''}</div>
       </article>`);
     }
     while (bi < blocks.length) day.push(possibleLine(blocks[bi++]));

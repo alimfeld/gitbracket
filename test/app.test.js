@@ -6,7 +6,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { makeCat, winnerIdx, isDone, poolStandings, resolveSide, sameRecord, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, scheduleStatus, venueBacklog, kioskStatus, delayNote, fmtTime, matchLabel, parseRoute, loadAll } = require('../site/app.js');
+const { makeCat, winnerIdx, isDone, poolStandings, resolveSide, sameRecord, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, kioskStatus, matchLabel, parseRoute, loadAll } = require('../site/app.js');
 const { FIX, catOf } = require('./helpers.js');
 
 test('parseRoute: fragment routing — bare slug defaults to categories, every segment id-gated', () => {
@@ -105,75 +105,6 @@ test('matchSlotMs: match override > per-stage category config > default', () => 
   assert(matchSlotMs({}, { slotMinutes: { knockout: 60 } }) === 60 * 60000, 'knockout match takes the knockout slot');
   assert(matchSlotMs({ slotMinutes: 90 }, { slotMinutes: { knockout: 60 } }) === 90 * 60000, 'match override wins');
   assert(matchSlotMs({}, {}) === 45 * 60000, 'default is 45 minutes');
-});
-
-test('scheduleStatus: gated on start; a slot fully elapsed without a result is overdue', () => {
-  const ctx = makeCat({ meta: { bestOf: { knockout: 3 } }, matches: [
-    { id: 'm1', scheduled: '2025-07-14T09:00:00Z', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },
-    { id: 'm2', scheduled: '2025-07-14T10:00:00Z', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }], games: [{ a: 11, b: 5 }, { a: 11, b: 4 }] },
-  ] }, { timezone: 'UTC', players: [] });
-  const at = ms => scheduleStatus([ctx], ms);
-  assert(at(Date.parse('2025-07-14T08:00:00Z')) === null, 'before the first scheduled match: no status');
-  assert(at(Date.parse('2025-07-14T09:20:00Z')).overdue.length === 0, 'unfinished but inside its slot: on schedule');
-  assert(at(Date.parse('2025-07-14T09:46:00Z')).overdue.length === 1 && at(Date.parse('2025-07-14T09:46:00Z')).overdue[0].m.id === 'm1', 'slot elapsed without a result: behind');
-  assert(at(Date.parse('2025-07-14T10:46:00Z')).overdue.length === 1 && at(Date.parse('2025-07-14T10:46:00Z')).overdue[0].m.id === 'm1', 'finished m2 is not overdue; only m1 still is');
-});
-
-test('venueBacklog: per-venue delay from the most overdue unfinished match', () => {
-  const ctx = makeCat({ meta: { bestOf: { knockout: 3 } }, matches: [
-    { id: 'm1', scheduled: '2025-07-14T09:00:00Z', venue: 'c1', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },
-    { id: 'm2', scheduled: '2025-07-14T09:10:00Z', venue: 'c1', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }], games: [{ a: 11, b: 5 }, { a: 11, b: 4 }] },
-    { id: 'm3', scheduled: '2025-07-14T09:30:00Z', venue: 'c2', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },
-  ] }, { timezone: 'UTC', players: [] });
-  const now = Date.parse('2025-07-14T09:50:00Z');
-  assert(venueBacklog([ctx], Date.parse('2025-07-14T08:00:00Z')).size === 0, 'before start: no backlog');
-  const bg = venueBacklog([ctx], now);
-  assert(bg.get('c1') === 5 * 60000, 'c1: 09:00 slot ended 09:45, 5 min overdue (done m2 never counts)');
-  assert((bg.get('c2') || 0) === 0, 'c2: 09:30 match still inside its slot, no delay');
-});
-
-test('delayNote: the match queued behind an unscored one shows the delay; source, in-play, done get theirs', () => {
-  // back-to-back slots: m2 sits exactly where m1's slot ends, so while m1 is
-  // undone its est. start is exactly now — the note must still appear
-  const ctx = makeCat({ meta: { bestOf: { groups: 3, knockout: 3 }, slotMinutes: { groups: 30, knockout: 30 } }, matches: [
-    { id: 'm1', scheduled: '2025-07-14T09:00:00Z', venue: 'c1', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] }, // backlog source: overdue, unscored, not started
-    { id: 'm2', scheduled: '2025-07-14T09:30:00Z', venue: 'c1', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] }, // queued: scheduled start passed, still not started
-    { id: 'm3', scheduled: '2025-07-14T10:30:00Z', venue: 'c1', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }], games: [{ a: 1, b: 0 }] }, // in play
-    { id: 'm4', scheduled: '2025-07-14T08:00:00Z', venue: 'c1', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }], games: [{ a: 2, b: 0 }, { a: 2, b: 0 }] }, // done
-    { id: 'm5', scheduled: '2025-07-14T08:30:00Z', venue: 'c2', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }], forfeit: 0 }, // forfeited: done
-    { id: 'm6', scheduled: '2025-07-14T09:40:00Z', venue: 'c2', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] }, // clean venue
-  ] }, { timezone: 'UTC', players: [] });
-  const now = Date.parse('2025-07-14T09:40:00Z'); // m1 slot ended 09:30 → 10 min backlog on c1
-  const bg = venueBacklog([ctx], now);
-  assert(bg.get('c1') === 10 * 60000, 'backlog from the unscored match');
-  const note = id => delayNote(Date.parse(ctx.byId.get(id).scheduled), ctx.byId.get(id), ctx, bg, now);
-  // t + d === now here, so the expected est. is fmtTime(now) — computed, not a literal:
-  // fmtTime renders in the viewer's locale, so a hard-coded '9:40' would break on e.g. ar-SA.
-  assert(note('m2').includes(`~10 min late · est. ${fmtTime(now, 'UTC')}`), 'back-to-back queued match: est. start is now, note still shows');
-  assert(note('m3').includes('started ~10 min late'), 'in-play match shows its late start, never an est. time');
-  assert(note('m1') === '', 'backlog source gets no note');
-  assert(note('m4') === '', 'done match gets no note');
-  assert(note('m5') === '', 'forfeited match gets no note');
-  assert((bg.get('c2') || 0) === 0, 'forfeit match is done → no backlog on its venue');
-  assert(note('m6') === '', 'clean venue: no note while c1 is backed up');
-  // rounding: nearest 5, so 2 min → 0 → no note; 7 min → "~5", not "~10"
-  const mm = { id: 'mm', scheduled: '2025-07-14T09:35:00Z', venue: 'c1', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] };
-  const at = d => delayNote(Date.parse(mm.scheduled), mm, ctx, new Map([['c1', d]]), now);
-  assert(at(2 * 60000) === '', '2 min backlog rounds to 0 → no note');
-  assert(at(7 * 60000).includes('~5 min late'), '7 min backlog rounds to ~5');
-  assert(delayNote(null, ctx.byId.get('m2'), ctx, bg, now) === '', 'null scheduled time → no note');
-  assert(delayNote(Date.parse(ctx.byId.get('m2').scheduled), { ...ctx.byId.get('m2'), venue: undefined }, ctx, bg, now) === '', 'missing venue → no note');
-});
-
-test('delayNote: an in-play match that is itself the backlog source gets no note', () => {
-  const ctx = makeCat({ meta: { bestOf: { groups: 3, knockout: 3 }, slotMinutes: { groups: 30, knockout: 30 } }, matches: [
-    { id: 's1', scheduled: '2025-07-14T09:00:00Z', venue: 'c1', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }], games: [{ a: 1, b: 0 }] }, // in play, its slot ended 09:30
-  ] }, { timezone: 'UTC', players: [] });
-  const now = Date.parse('2025-07-14T09:40:00Z');
-  const bg = venueBacklog([ctx], now);
-  assert(bg.get('c1') === 10 * 60000, 'in-play match past its slot end drives the backlog');
-  // d here is minutes past its own slot end, not its start delay — a note would mislabel it
-  assert(delayNote(Date.parse(ctx.byId.get('s1').scheduled), ctx.byId.get('s1'), ctx, bg, now) === '', 'in-play source gets no delay note');
 });
 
 test('kioskStatus: overdue / now / upcoming badge per open card', () => {

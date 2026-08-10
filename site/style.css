@@ -38,7 +38,6 @@ article { display: flex; flex-direction: column; gap: .3rem; border: 1px solid v
 .score span { font-weight: 600; min-width: 1.3em; text-align: right; }
 [data-win] { font-weight: 700; }
 .meta { font-size: .8rem; color: var(--muted); }
-.meta .late { color: #b3402e; font-weight: 600; }
 
 /* navs — breadcrumbs plus the pills variant */
 nav { color: var(--muted); margin: 0 0 .5rem; }
