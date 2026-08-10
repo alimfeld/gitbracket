@@ -43,3 +43,6 @@ details. When docs and code disagree, code wins.
 
 - **Conventional commits** — `feat:`, `fix:`, `refactor:`, `perf:`, `ci:`,
   with a scope when it helps, as the existing history does.
+- **No package.json, no npm** — scripts run with `node` directly; tests run
+  with `node --test` (node:test), in the repo root, exactly as the pre-commit
+  hook and the Pages workflow run them.
