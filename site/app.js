@@ -301,7 +301,17 @@ function renderPlayer(route, data) {
 function boot() {
   const app = document.querySelector('main');
   const renderers = { index: renderIndex, categories: renderStandings, venues: renderVenue, players: renderPlayer };
-  const titles = { index: 'GitBracket', categories: 'Standings', venues: 'Kiosk', players: 'Player' };
+  const pageTitle = (r, d) => { // index: GitBracket; standings/kiosk: bare tournament; players: "name — Players" or "name — player"
+    if (r.view === 'index' || !d.t) return 'GitBracket';
+    if (r.view === 'players') {
+      if (r.filter) {
+        const p = ((d.tjson && d.tjson.players) || []).find(x => x && x.id === r.filter);
+        if (p) return `${d.t.name} — ${p.name || p.id}`;
+      }
+      return `${d.t.name} — Players`;
+    }
+    return d.t.name; // categories (standings) and venues (kiosk)
+  };
   let route = null;    // current fragment route — the kiosk poll reads it each tick
   let data = null;     // last good snapshot — a failed poll keeps the board up
   let dataSlug = null; // slug the snapshot belongs to — a route change to another tournament reloads
@@ -334,7 +344,7 @@ function boot() {
     dataSlug = r.slug;
     // the kiosk dark theme keys off body.venue — present only on the venue view
     document.body.classList.toggle('venue', r.view === 'venues');
-    document.title = r.view === 'index' || !d.t ? titles[r.view] : `${titles[r.view]} — ${d.t.name}`;
+    document.title = pageTitle(r, d);
     try {
       const html = renderers[r.view](r, d);
       if (html !== lastHtml) { app.innerHTML = html; lastHtml = html; }
