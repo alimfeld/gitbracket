@@ -1,0 +1,96 @@
+{
+  "slug": "2026-mammut60",
+  "name": "Mammut Open 60+",
+  "timezone": "Europe/Zurich",
+  "date": "2026-10-03",
+  "poolSize": 4,
+  "blocks": {
+    "md": "09:00",
+    "wd": "09:00",
+    "xd": "13:00"
+  },
+  "venues": {
+    "court-1": "Court 1",
+    "court-2": "Court 2",
+    "court-3": "Court 3",
+    "court-4": "Court 4",
+    "court-5": "Court 5"
+  },
+  "players": {
+    "beni": "Beni",
+    "charles": "Charles",
+    "charly": "Charly",
+    "doris": "Doris",
+    "elke": "Elke",
+    "eveline": "Eveline",
+    "gerry": "Gerry",
+    "hanspeter": "Hanspeter",
+    "hase": "Häse",
+    "karin": "Karin",
+    "koni": "Koni",
+    "kurt": "Kurt",
+    "marc": "Marc",
+    "matthias": "Matthias",
+    "nelly": "Nelly",
+    "nicole": "Nicole",
+    "otto": "Otto",
+    "patrick": "Patrick",
+    "phoebe": "Phoebe",
+    "reto": "Reto",
+    "stephen": "Stephen",
+    "tom": "Tom"
+  },
+  "categories": [
+    {
+      "id": "md",
+      "name": "Men's Doubles",
+      "bestOf": 1,
+      "slotMinutes": 30,
+      "final": {
+        "bestOf": 3,
+        "slotMinutes": 60
+      }
+    },
+    {
+      "id": "wd",
+      "name": "Women's Doubles",
+      "bestOf": 1,
+      "slotMinutes": 30,
+      "final": {
+        "bestOf": 3,
+        "slotMinutes": 60
+      }
+    },
+    {
+      "id": "xd",
+      "name": "Mixed",
+      "bestOf": 1,
+      "slotMinutes": 30,
+      "final": {
+        "bestOf": 3,
+        "slotMinutes": 60
+      }
+    }
+  ],
+  "teams": {
+    "md": [
+      ["charles", "beni"],
+      ["hase", "patrick"],
+      ["matthias", "hanspeter"],
+      ["koni", "otto"],
+      ["reto", "charly"],
+      ["kurt", "tom"]
+    ],
+    "wd": [
+      ["doris", "nicole"],
+      ["karin", "eveline"]
+    ],
+    "xd": [
+      ["doris", "matthias"],
+      ["karin", "hase"],
+      ["nicole", "kurt"],
+      ["patrick", "nelly"],
+      ["otto", "elke"]
+    ]
+  }
+}

@@ -78,5 +78,5 @@ One page, fragment-routed. `#<slug>` is a tournament's standings;
 
 - **`cli.js`** — score entry on match day.
 - **`validate.js`** — keeps data consistent before it ships.
-- **`schedule.js`** — generates a tournament grid.
+- **`schedule.js`** — generates a tournament file from a spec (`specs/<slug>.json`).
 - **Tests** — guard the behavior; run on every commit and push.

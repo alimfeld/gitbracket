@@ -1,59 +1,34 @@
 #!/usr/bin/env node
-// Mammut Open 60+ match generator.
+// GitBracket tournament generator.
 //
-// Reads TEAMS (pairs of player ids, registration order) and writes the one
-// tournaments/2026-mammut60.json file: round-robin pools of up to
-// POOL_SIZE, then a single-elimination knockout everyone advances into. Every
-// match also gets a venue and start time: md/wd share the morning courts from
-// 09:00, xd plays the afternoon from 13:00, in per-category slot-length steps. The
-// strongest seeds (pool winners first) take the byes that round the field up
-// to a power of two; the rest pair best vs worst across pools in round 1 — for
-// two pools of three: A2 vs B3, A3 vs B2, with A1 and B1 byed. Winners
-// advance, semifinal losers play for 3rd place. Final and 3rd-place game are
-// best-of-3 ("2 Gewinnsätze"), everything else best-of-1, per the event page.
+// Reads a spec (specs/<slug>.json) and writes the full site/tournaments/<slug>.json
+// file from scratch: the skeleton (venues, categories, players) plus every
+// match. The spec is the single source — the tournament file is derived and
+// regenerated wholesale, so nothing in it is ever hand-edited. The index
+// (site/tournaments.json) is kept in sync too.
 //
-// Run:  node schedule.js   # then the pre-commit hook (or `node validate.js`) gates it
+// Format: each category's teams run a round-robin of pools up to poolSize,
+// then a single-elimination knockout everyone advances into. Every match gets
+// a venue and start time: each category starts at its blocks time, in
+// category slotMinutes steps. The strongest seeds (pool winners first) take
+// the byes that round the field up to a power of two; the rest pair best vs
+// worst across pools in round 1 — for two pools of three: A2 vs B3, A3 vs B2,
+// with A1 and B1 byed. Winners advance, semifinal losers play for 3rd place.
+// A category's "final" override (bestOf / slotMinutes) lands on the final and
+// the 3rd-place match; without it they use the stage defaults.
 //
-// Rerun after the registration deadline with the
-// final TEAMS. Pools are drawn in list order; shuffle TEAMS before the final
-// run for a fair draw. Incomplete registrations (partner open) stay out until
-// the pair is complete.
+// Run:  node schedule.js specs/<slug>.json   # then the pre-commit hook (or `node validate.js`) gates it
+//
+// Rerun after the registration deadline with the final spec.teams. Pools are
+// drawn in list order; shuffle spec.teams before the final run for a fair
+// draw. Incomplete registrations (partner open) stay out until the pair is
+// complete. Regeneration replaces the whole matches map (scores included) —
+// run it before results go in, not after.
 'use strict';
 
 const fs = require('fs');
 const path = require('path');
-const { matchSlotMs, slotsOverlap, pairSig, dayKey } = require('./site/derive.js'); // per-category/per-match slot lengths live in the tournament file
-
-const SLUG = '2026-mammut60';
-const POOL_SIZE = 4; // max teams per pool; leftovers spill into a smaller pool
-const EVENT_DATE = '2026-10-03'; // tournament day — set the real date before the final run
-const BLOCK_START = { md: '09:00', wd: '09:00', xd: '13:00' }; // morning: md+wd; afternoon: xd
-// ponytail: 13 morning matches run 09:00–12:30 in 30-min slots (md final/bronze
-// are best-of-3, 60 min), so a morning finalist who also plays xd has a 30-min
-// turnaround before xd starts at 13:00. Stretch a lunch break there if needed.
-
-// Player ids must exist in tournaments/<SLUG>.json.
-const TEAMS = {
-  md: [
-    ['charles', 'beni'],
-    ['hase', 'patrick'],
-    ['matthias', 'hanspeter'],
-    ['koni', 'otto'],
-    ['reto', 'charly'],
-    ['kurt', 'tom'],
-  ],
-  wd: [
-    ['doris', 'nicole'],
-    ['karin', 'eveline'],
-  ],
-  xd: [
-    ['doris', 'matthias'],
-    ['karin', 'hase'],
-    ['nicole', 'kurt'],
-    ['patrick', 'nelly'],
-    ['otto', 'elke'],
-  ],
-};
+const { matchSlotMs, slotsOverlap, pairSig, dayKey, ID_RE } = require('./site/derive.js');
 
 // Round-robin pairings, circle method: array of rounds, each a list of pairs.
 function roundRobin(teams) {
@@ -74,8 +49,8 @@ function roundRobin(teams) {
 }
 
 // Even split into k pools (sizes differ by at most one).
-function splitPools(teams) {
-  const k = Math.ceil(teams.length / POOL_SIZE);
+function splitPools(teams, poolSize) {
+  const k = Math.ceil(teams.length / poolSize);
   const base = Math.floor(teams.length / k);
   const extra = teams.length % k;
   const pools = [];
@@ -91,8 +66,10 @@ function splitPools(teams) {
 // Single elimination, everyone advances. Strength order = pool winners first,
 // then interleaved by rank (snake). The top seeds (byes = next power of two
 // minus field size) skip round 1; the rest pair best vs worst so the strongest
-// meet only late. Winners advance, semifinal losers play for 3rd place.
-function buildKnockout(pools, names, mid) {
+// meet only late. Winners advance, semifinal losers play for 3rd place. The
+// final and bronze match take fin (the spec's per-category "final" override:
+// bestOf / slotMinutes) where present.
+function buildKnockout(pools, names, mid, fin) {
   const total = pools.reduce((s, p) => s + p.length, 0);
   let M = 1;
   while (M < total) M *= 2;
@@ -155,12 +132,13 @@ function buildKnockout(pools, names, mid) {
     round = next;
   }
 
-  matches[matches.length - 1].bestOf = 3; // final — best-of-3 overrides get an hour-long slot too
-  matches[matches.length - 1].slotMinutes = 60;
+  const finalM = matches[matches.length - 1];
+  if (fin.bestOf !== undefined) finalM.bestOf = fin.bestOf;
+  if (fin.slotMinutes !== undefined) finalM.slotMinutes = fin.slotMinutes;
   matches.push({
     id: mid(),
-    bestOf: 3,
-    slotMinutes: 60,
+    bestOf: fin.bestOf, // undefined = no override; JSON.stringify drops the key
+    slotMinutes: fin.slotMinutes,
     sides: [
       { kind: 'match', match: semis[0].id, result: 'loser' },
       { kind: 'match', match: semis[1].id, result: 'loser' },
@@ -173,8 +151,8 @@ function buildKnockout(pools, names, mid) {
   return matches;
 }
 
-function buildCategory(teams) {
-  const pools = splitPools(teams);
+function buildCategory(teams, cat, poolSize) {
+  const pools = splitPools(teams, poolSize);
   const names = pools.map((_, i) => String.fromCharCode(65 + i));
   const matches = [];
   let next = 1;
@@ -193,16 +171,16 @@ function buildCategory(teams) {
     }
   });
 
-  if (pools.length > 1) matches.push(...buildKnockout(pools, names, mid));
+  if (pools.length > 1) matches.push(...buildKnockout(pools, names, mid, cat.final || {}));
   return matches;
 }
 
 // ---------- scheduling ----------
 
-// IANA tz -> "+02:00"-style offset on EVENT_DATE (Europe/Zurich in Sep is CEST).
-function tzOffset(tz) {
+// IANA tz -> "+02:00"-style offset on eventDate (Europe/Zurich in Sep is CEST).
+function tzOffset(tz, eventDate) {
   const p = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'longOffset' })
-    .formatToParts(new Date(EVENT_DATE + 'T12:00:00Z')).find((x) => x.type === 'timeZoneName');
+    .formatToParts(new Date(eventDate + 'T12:00:00Z')).find((x) => x.type === 'timeZoneName');
   return p && p.value !== 'GMT' ? p.value.replace('GMT', '') : '+00:00';
 }
 
@@ -216,10 +194,10 @@ function tzOffset(tz) {
 // Occupancy is a start/end window over the match's effective slot length
 // (matchSlotMs), matching the validator's overlap rule, so the off-set
 // morning/afternoon grids can't collide.
-function scheduleMatches(categories, venues, tz, slotCfgOf) {
-  if (venues.length === 0) throw new Error('no venues in the tournament file');
-  const offset = tzOffset(tz);
-  const startOf = (cat) => Date.parse(`${EVENT_DATE}T${BLOCK_START[cat]}:00${offset}`);
+function scheduleMatches(categories, venues, tz, slotCfgOf, eventDate, blockStart) {
+  if (venues.length === 0) throw new Error('spec: venues must be a non-empty id -> name map');
+  const offset = tzOffset(tz, eventDate);
+  const startOf = (cat) => Date.parse(`${eventDate}T${blockStart[cat]}:00${offset}`);
   const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
   const courtUse = new Map(); // venue -> [{ start, end }]
   const playerUse = []; // { start, end, players: Set }
@@ -228,7 +206,7 @@ function scheduleMatches(categories, venues, tz, slotCfgOf) {
 
   for (const [cat, matches] of categories) {
     const start = startOf(cat);
-    if (Number.isNaN(start)) throw new Error(`no BLOCK_START for category ${cat}`);
+    if (Number.isNaN(start)) throw new Error(`spec: no blocks entry for category ${cat}`);
     const catSlots = slotCfgOf.get(cat);
     for (const m of matches) {
       const slotMs = matchSlotMs(m, { slotMinutes: catSlots }); // per stage: pools vs knockout
@@ -246,7 +224,7 @@ function scheduleMatches(categories, venues, tz, slotCfgOf) {
           (w) => slotsOverlap(t, t + slotMs, w.start, w.end) && [...players].some((p) => w.players.has(p)));
         if (venue && !blocked) {
           m.venue = venue;
-          // local date + time from the event tz — a fixed EVENT_DATE prefix would
+          // local date + time from the event tz — a fixed eventDate prefix would
           // backdate a slot crossing midnight by 24h
           m.scheduled = `${dayKey(t, tz)}T${fmt.format(new Date(t))}:00${offset}`;
           courtUse.set(venue, [...(courtUse.get(venue) ?? []), { start: t, end: t + slotMs }]);
@@ -295,8 +273,8 @@ function assertSchedule(categories, slotCfgOf) {
 }
 
 // Round robin must cover every pair exactly once — validate.js can't see this.
-function assertPoolCoverage(teams, matches, names) {
-  splitPools(teams).forEach((pool, p) => {
+function assertPoolCoverage(teams, matches, names, poolSize) {
+  splitPools(teams, poolSize).forEach((pool, p) => {
     const pairs = matches
       .filter((m) => m.pool === names[p])
       .map((m) =>
@@ -312,38 +290,95 @@ function assertPoolCoverage(teams, matches, names) {
   });
 }
 
-function main() {
-  const tourney = JSON.parse(
-    fs.readFileSync(path.join(__dirname, 'site', 'tournaments', `${SLUG}.json`), 'utf8')
-  );
-  const known = new Set(tourney.players.map((p) => p.id));
-  for (const [cat, teams] of Object.entries(TEAMS)) {
-    for (const ids of teams) for (const id of ids) {
-      if (!known.has(id)) throw new Error(`TEAMS.${cat}: player ${id} not in site/tournaments/${SLUG}.json`);
+// Spec -> the full tournament file body (skeleton + scheduled matches). Pure:
+// no I/O, so tests can run it against a spec in memory. main() does the writes.
+function generate(spec) {
+  const { slug, name, timezone, date: eventDate, poolSize, blocks: blockStart, venues, players, categories, teams } = spec;
+
+  // ---- spec surface (fail fast; the gate below would catch most of these too) ----
+  if (typeof slug !== 'string' || !ID_RE.test(slug)) throw new Error(`spec: slug ${JSON.stringify(slug)} must match ${ID_RE}`);
+  if (!Number.isInteger(poolSize) || poolSize < 2) throw new Error(`spec: poolSize must be an integer >= 2, got ${JSON.stringify(poolSize)}`);
+  // Date.parse rolls impossible calendar dates (2025-02-30 -> Mar 2); catch them like the validator does.
+  const [yy, mm, dd] = String(eventDate).split('-').map(Number);
+  const d = new Date(Date.UTC(yy, mm - 1, dd));
+  if (!Number.isInteger(yy) || d.getUTCFullYear() !== yy || d.getUTCMonth() !== mm - 1 || d.getUTCDate() !== dd) {
+    throw new Error(`spec: date ${JSON.stringify(eventDate)} is not a real calendar date`);
+  }
+  // The one silent failure the gate can't see: a non-object final (bestOf on a number
+  // is undefined) drops the override and still validates. Everything else (bestOf,
+  // slotMinutes, final values) lands in the file where validate.js rejects it by name.
+  for (const c of categories) {
+    if (c.final !== undefined && (typeof c.final !== 'object' || Array.isArray(c.final))) {
+      throw new Error(`spec: category ${c.id}: final must be an object { bestOf?, slotMinutes? }, got ${JSON.stringify(c.final)}`);
     }
   }
 
+  // ---- skeleton ----
+  const catById = new Map(categories.map((c) => [c.id, c]));
+  const VENUES = Object.entries(venues).map(([id, vn]) => ({ id, name: vn })); // spec order = court-assignment priority
+  const PLAYERS = Object.entries(players).map(([id, pn]) => ({ id, name: pn })).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const CATS = categories.map((c) => ({
+    id: c.id,
+    name: c.name,
+    bestOf: { groups: c.bestOf, knockout: c.bestOf },
+    slotMinutes: { groups: c.slotMinutes, knockout: c.slotMinutes },
+  }));
+
+  // ---- teams ----
+  const known = new Set(Object.keys(players));
+  for (const [cat, teamList] of Object.entries(teams)) {
+    if (!catById.has(cat)) throw new Error(`spec: teams for undeclared category ${cat}`);
+    for (const ids of teamList) for (const id of ids) {
+      if (!known.has(id)) throw new Error(`spec: teams.${cat}: player ${id} not in spec.players`);
+    }
+  }
+
+  // ---- matches ----
   const results = [];
-  for (const [cat, teams] of Object.entries(TEAMS)) {
-    if (teams.length < 2) {
-      console.log(`${cat}: skipped (${teams.length} team)`);
+  for (const [cat, teamList] of Object.entries(teams)) {
+    if (teamList.length < 2) {
+      console.log(`${cat}: skipped (${teamList.length} team)`);
       continue;
     }
-    results.push([cat, teams, buildCategory(teams)]);
+    results.push([cat, teamList, buildCategory(teamList, catById.get(cat), poolSize)]);
   }
-  const categories = results.map(([cat, , matches]) => [cat, matches]);
-  const slotCfgOf = new Map(tourney.categories.map(c => [c.id, c.slotMinutes]));
-  scheduleMatches(categories, tourney.venues.map((v) => v.id), tourney.timezone, slotCfgOf);
-  assertSchedule(categories, slotCfgOf);
+  const catsWithMatches = results.map(([cat, , ms]) => [cat, ms]);
+  const slotCfgOf = new Map(CATS.map((c) => [c.id, c.slotMinutes]));
+  scheduleMatches(catsWithMatches, VENUES.map((v) => v.id), timezone, slotCfgOf, eventDate, blockStart);
+  assertSchedule(catsWithMatches, slotCfgOf);
 
   const out = {};
-  for (const [cat, teams, matches] of results) {
-    assertPoolCoverage(teams, matches, teams.map((_, i) => String.fromCharCode(65 + i)));
-    out[cat] = matches;
-    console.log(`${cat}: ${matches.length} matches`);
+  for (const [cat, teamList, ms] of results) {
+    assertPoolCoverage(teamList, ms, teamList.map((_, i) => String.fromCharCode(65 + i)), poolSize);
+    out[cat] = ms;
+    console.log(`${cat}: ${ms.length} matches`);
   }
-  fs.writeFileSync(path.join(__dirname, 'site', 'tournaments', `${SLUG}.json`), JSON.stringify({ ...tourney, matches: out }, null, 2) + '\n');
-  console.log(`Wrote site/tournaments/${SLUG}.json — run \`node validate.js\` before committing.`);
+
+  return { name, timezone, venues: VENUES, categories: CATS, players: PLAYERS, matches: out };
+}
+
+function main() {
+  const SPEC_PATH = process.argv[2];
+  if (!SPEC_PATH) {
+    console.error('usage: node schedule.js <specs/xxx.json>');
+    process.exit(1);
+  }
+  const spec = JSON.parse(fs.readFileSync(path.join(__dirname, SPEC_PATH), 'utf8'));
+  const tourney = generate(spec);
+  const tfile = path.join(__dirname, 'site', 'tournaments', `${spec.slug}.json`);
+  fs.writeFileSync(tfile, JSON.stringify(tourney, null, 2) + '\n');
+
+  // keep the list page in sync — a tournament the index doesn't know is invisible
+  const idxFile = path.join(__dirname, 'site', 'tournaments.json');
+  const idx = JSON.parse(fs.readFileSync(idxFile, 'utf8'));
+  const entry = { slug: spec.slug, name: spec.name };
+  const i = Array.isArray(idx) ? idx.findIndex((t) => t && t.slug === spec.slug) : -1;
+  if (i >= 0) idx[i] = entry; else idx.push(entry);
+  // keep the index's established one-entry-per-line format — index diffs stay per-tournament
+  fs.writeFileSync(idxFile, '[' + idx.map((t) => `\n  ${JSON.stringify(t)}`).join(',') + '\n]\n');
+
+  console.log(`Wrote site/tournaments/${spec.slug}.json — run \`node validate.js\` before committing.`);
 }
 
 if (require.main === module) main();
+module.exports = { generate };
