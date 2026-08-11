@@ -1,0 +1,435 @@
+#!/usr/bin/env node
+'use strict';
+
+// GitBracket match-day tool — REPL + validate. Replaces cli.js.
+// Run from anywhere under the repo root (the root is found by walking up).
+//
+//   node gb.js                     start the REPL (drops into the latest tournament)
+//   node gb.js validate [slug]     validate the repo (or one tournament), no REPL
+//
+// The REPL navigates tournaments like a directory tree: bare words cd, slash
+// commands act. Every successful edit is validated (the real validateRepo)
+// and committed immediately, so the process can die at any instant with
+// nothing lost — Ctrl-C just quits. The prompt shows sync state: ↑n unpushed
+// commits, ↓n behind, * dirty tree. Tab completes at every level.
+//
+// All edits reuse writeEdit from the old cli.js: in-memory apply, full-repo
+// validate, write-or-rollback — the pre-commit hook can never see a bad file.
+
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const readline = require('readline');
+const { spawnSync } = require('child_process');
+const { makeCat, isDone, resolveSide, sideLabel, schedTime, gamesText, fmtTime } = require('./site/derive.js');
+const { loadRepo, validateRepo } = require('./validate.js');
+
+// ---------- pure logic (tests drive these on fixture repos) ----------
+
+function isScorable(m, ctx) {
+  return !!m && Array.isArray(m.sides) && m.sides.length === 2
+    && !!resolveSide(m.sides[0], ctx) && !!resolveSide(m.sides[1], ctx);
+}
+
+function parseGame(s) {
+  const mm = /^(\d+)[:-](\d+)$/.exec(s);
+  return mm ? { a: +mm[1], b: +mm[2] } : null;
+}
+
+// Mutate cjson in memory; return an error string or null. Never touches disk —
+// the caller rolls back on validation failure.
+function findMatch(cjson, matchId, fn) {
+  const m = (cjson.matches || []).find(x => x && x.id === matchId);
+  if (!m) return `unknown match ${matchId}`;
+  return fn(m) ?? null;
+}
+
+function applyScore(cjson, matchId, games) {
+  return findMatch(cjson, matchId, m => {
+    m.games = games;
+    delete m.forfeit; // a correction replaces a forfeit
+  });
+}
+
+function applyForfeit(cjson, matchId, sideIdx) {
+  return findMatch(cjson, matchId, m => {
+    m.forfeit = sideIdx;
+    delete m.games;
+  });
+}
+
+function applyVenue(cjson, matchId, venueId) {
+  return findMatch(cjson, matchId, m => {
+    m.venue = venueId; // unknown venue + court double-booking are caught by validateRepo
+  });
+}
+
+// Every scorable match in the tournament: ready (no result) first, then by
+// scheduled time, then id.
+function listEligible(repo, slug) {
+  const info = repo.tournaments.get(slug);
+  if (!info || !info.tjson) return null;
+  const rows = [];
+  for (const cat of info.tjson.categories || []) {
+    const cjson = info.matches.get(cat.id);
+    if (!cjson) continue;
+    const ctx = makeCat({ meta: cat, matches: cjson.matches }, info.tjson);
+    for (const m of cjson.matches) {
+      if (isScorable(m, ctx)) rows.push({ cat: cat.id, m, ctx });
+    }
+  }
+  const t = r => schedTime(r.m) ?? Infinity; // unscheduled matches sort last
+  rows.sort((a, b) => isDone(a.m, a.ctx) - isDone(b.m, b.ctx) || t(a) - t(b) || a.m.id.localeCompare(b.m.id));
+  return rows;
+}
+
+// Apply an edit to one match, validate the whole repo, write — or roll the file
+// back and report the validator's errors. The write
+// (JSON.stringify(tournament, null, 2) + '\n') is byte-identical to the file
+// apart from the edited match, so a commit diff shows only that match.
+function writeEdit(root, repo, slug, catId, apply) {
+  const info = repo.tournaments.get(slug);
+  if (!info || !info.tjson) return { err: `unknown tournament ${slug}` };
+  const cats = (info.tjson.categories || []).map(c => c.id);
+  if (!cats.includes(catId)) return { err: `unknown category ${catId} — have: ${cats.join(', ')}` };
+  const cjson = info.matches.get(catId);
+  if (!cjson) return { err: `no matches for category ${catId}` };
+  const file = path.join(root, 'tournaments', `${slug}.json`);
+  const before = fs.readFileSync(file, 'utf8');
+  const aerr = apply(cjson);
+  if (aerr) return { err: aerr };
+  const { errs } = validateRepo(repo);
+  if (errs.length) {
+    cjson.matches = (JSON.parse(before).matches || {})[catId] || []; // undo the in-memory edit too — a same-process retry must start from the original
+    fs.writeFileSync(file, before);
+    return { errs };
+  }
+  const matches = {};
+  for (const [cid, c] of info.matches) matches[cid] = c.matches;
+  fs.writeFileSync(file, JSON.stringify({ ...info.tjson, matches }, null, 2) + '\n');
+  return { file };
+}
+
+function listText(repo, slug, cat) {
+  const info = repo.tournaments.get(slug);
+  const tjson = info.tjson;
+  const shown = listEligible(repo, slug).filter(r => r.cat === cat);
+  const entry = repo.index.find(e => e && e.slug === slug);
+  const out = [`${(entry && entry.name) || slug} — ${shown.length} scorable match${shown.length === 1 ? '' : 'es'}:`];
+  for (const r of shown) {
+    const m = r.m, ctx = r.ctx, tz = tjson.timezone || 'UTC';
+    const t = schedTime(m);
+    const stage = m.pool !== undefined ? `Pool ${m.pool}` : 'KO';
+    const score = m.forfeit !== undefined ? `forfeit ${m.forfeit}` : (gamesText(m) || '–');
+    out.push(`  ${r.cat} ${m.id}  ${stage.padEnd(6)} ${t === null ? 'TBD' : fmtTime(t, tz)}  ${(m.venue || 'TBD').padEnd(8)} ${sideLabel(m.sides[0], ctx)} vs ${sideLabel(m.sides[1], ctx)}  ${score}`);
+  }
+  return out.join('\n');
+}
+
+// Conventional-commit messages per edit kind — grep-able match-day history:
+//   git log --grep='^score('
+function commitMessage(kind, slug, cat, matchId, detail) {
+  return `${kind}(${slug}): ${cat}/${matchId} ${detail}`;
+}
+
+const CMDS = ['score', 'ff', 'venue', 'push', 'pull', 'status', 'validate', 'help', 'q'];
+
+// Slash line -> { kind, args }; null when not a slash command.
+function parseCmd(line) {
+  const [head, ...args] = line.trim().split(/\s+/);
+  if (!head.startsWith('/')) return null;
+  const kind = head.slice(1);
+  return { kind: CMDS.includes(kind) ? kind : 'unknown', args };
+}
+
+// Resolve a cd target against the current position. state = { repo, slug, cat }.
+function navigate(state, token) {
+  if (token === '/') return { slug: null, cat: null };
+  if (token === '..') {
+    if (state.slug === null) return { slug: null, cat: null };
+    return state.cat === null ? { slug: null, cat: null } : { slug: state.slug, cat: null };
+  }
+  if (state.slug === null) {
+    if (!state.repo.tournaments.has(token)) return { err: `unknown tournament ${token} — tab completes` };
+    return { slug: token, cat: null };
+  }
+  if (state.cat === null) {
+    const info = state.repo.tournaments.get(state.slug);
+    if (!(info.tjson.categories || []).some(c => c.id === token)) return { err: `unknown category ${token} — tab completes` };
+    return { slug: state.slug, cat: token };
+  }
+  return { err: `matches are leaves — /score ${token} … or cd ..` };
+}
+
+// One tournament's line for the category listing: id, name, match counts.
+function catSummary(info, cat) {
+  const cjson = info.matches.get(cat.id);
+  const matches = (cjson && cjson.matches) || [];
+  const ctx = makeCat({ meta: cat, matches }, info.tjson);
+  const done = matches.filter(m => isDone(m, ctx)).length;
+  return `${cat.id} — ${cat.name} · ${matches.length} match${matches.length === 1 ? '' : 'es'}, ${done} done`;
+}
+
+// validate <slug>: errors touching that tournament's file or index entry.
+function filterErrs(errs, slug) {
+  return errs.filter(e => e.includes(`tournaments/${slug}.json`) || e.includes(slug));
+}
+
+// ---------- git + repo I/O (thin shell, not unit-tested) ----------
+
+function findRoot() {
+  let dir = process.cwd();
+  while (!fs.existsSync(path.join(dir, 'site', 'tournaments.json')) && dir !== path.dirname(dir)) dir = path.dirname(dir);
+  return dir;
+}
+
+function git(root, args) {
+  // spawnSync, not execSync: execSync has no argv array — args must be baked
+  // into the command string, which breaks ids with spaces and quotes.
+  const r = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+  return { code: r.status === 0 ? 0 : 1, out: r.stdout || '', err: r.stderr || '' };
+}
+
+function syncSuffix(root) {
+  const ahead = git(root, ['rev-list', '--count', '@{u}..HEAD']);
+  const behind = git(root, ['rev-list', '--count', 'HEAD..@{u}']);
+  if (ahead.code || behind.code) return ''; // no upstream — indicator unavailable
+  const dirty = git(root, ['status', '--porcelain']);
+  let s = '';
+  if (ahead.out.trim() !== '0') s += ` ↑${ahead.out.trim()}`;
+  if (behind.out.trim() !== '0') s += ` ↓${behind.out.trim()}`;
+  if (dirty.code === 0 && dirty.out.length) s += ' *';
+  return s;
+}
+
+const HIST = path.join(os.homedir(), '.gitbracket_history');
+
+function loadHist() {
+  try {
+    return fs.existsSync(HIST) ? fs.readFileSync(HIST, 'utf8').split('\n').filter(Boolean).slice(-500) : [];
+  } catch { return []; }
+}
+
+function saveHist(h) {
+  try { fs.writeFileSync(HIST, [...new Set(h)].join('\n') + '\n'); } catch {}
+}
+
+// ---------- REPL ----------
+
+const HELP = `navigate like a shell:
+  ls                     list this level
+  cd <slug|category>     enter (or just type the name) — cd .. / cd / go up / root
+  q                      quit (every edit is committed; nothing is lost)
+
+score & manage (inside a category):
+  /score <match> <a:b> [a:b …]   set games — a prefix is a mid-match update, re-score corrects
+  /ff <match> <0|1>              forfeit: side 0 or 1 forfeits
+  /venue <match> <venue>         move a match to another court
+
+sync (every edit commits itself):
+  /push  /pull  /status  /validate
+
+prompt: ↑n = n unpushed commits, ↓n = n behind, * = dirty tree. Tab completes.`;
+
+function makePrompt(state) {
+  const p = state.slug ? `${state.slug}${state.cat ? '/' + state.cat : ''}` : '';
+  return `gitbracket${p ? ':' + p : ''}${syncSuffix(state.root)}> `;
+}
+
+function completer(state) {
+  return line => {
+    const parts = line.split(/\s+/).filter(Boolean);
+    const partial = parts.length ? parts[parts.length - 1] : '';
+    let cands = [];
+    if (!parts.length || !parts[0].startsWith('/')) {
+      const dirs = state.slug === null ? [...state.repo.tournaments.keys()]
+        : state.cat === null ? (state.repo.tournaments.get(state.slug).tjson.categories || []).map(c => c.id) : [];
+      cands = [...['ls', 'cd', 'q', 'help'], ...dirs];
+    } else {
+      const cmd = parts[0].slice(1);
+      if (parts.length === 1) cands = CMDS.map(c => '/' + c);
+      else if ((cmd === 'score' || cmd === 'ff' || cmd === 'venue') && parts.length === 2 && state.cat) {
+        const cjson = state.repo.tournaments.get(state.slug).matches.get(state.cat);
+        cands = cjson ? cjson.matches.map(m => m.id) : [];
+      } else if (cmd === 'venue' && parts.length === 3) {
+        cands = (state.repo.tournaments.get(state.slug).tjson.venues || []).map(v => v.id);
+      }
+    }
+    return [cands.filter(c => c.startsWith(partial) && c !== partial).slice(0, 100), partial];
+  };
+}
+
+function listing(state) {
+  if (state.slug === null) {
+    if (!state.repo.index.length) return 'no tournaments — add one to tournaments.json';
+    return state.repo.index.map(e => {
+      const info = state.repo.tournaments.get(e.slug);
+      const n = info && info.tjson ? (info.tjson.categories || []).length : 0;
+      return `${e.name}  (${e.slug}) — ${n} categor${n === 1 ? 'y' : 'ies'}`;
+    }).join('\n');
+  }
+  const info = state.repo.tournaments.get(state.slug);
+  if (state.cat === null) return (info.tjson.categories || []).map(c => catSummary(info, c)).join('\n');
+  return listText(state.repo, state.slug, state.cat);
+}
+
+function validateText(repo) {
+  const { errs, warns } = validateRepo(repo);
+  const lines = [...warns.map(w => `warn: ${w}`), ...errs.map(e => `error: ${e}`)];
+  if (!lines.length) return 'validate: ok';
+  return lines.join('\n') + (errs.length ? `\n${errs.length} error(s)` : ` (${warns.length} warning(s))`);
+}
+
+function gitPush(root) {
+  const r = git(root, ['push']);
+  if (r.code === 0) return 'pushed';
+  const rejected = /rejected|! \[rejected\]/.test(r.err + r.out);
+  return (rejected ? 'push rejected — someone pushed first: run /pull (rebases), then /push\n' : '') + r.err.trim();
+}
+
+function gitPull(state) {
+  const r = git(state.root, ['pull', '--rebase']);
+  if (r.code !== 0) {
+    const txt = (r.err + r.out).trim();
+    return txt + (/(CONFLICT|conflict)/.test(txt) ? '\nresolve the conflicted file, then /push' : '');
+  }
+  state.repo = loadRepo(state.dataRoot); // the in-memory snapshot is stale after a pull
+  if (state.slug && !state.repo.tournaments.has(state.slug)) {
+    state.slug = null;
+    state.cat = null;
+    return 'pulled — repo reloaded; current tournament vanished, back at root';
+  }
+  return 'pulled — repo reloaded';
+}
+
+function gitStatus(root) {
+  return git(root, ['status', '-sb']).out.trim() || '(clean)';
+}
+
+// Apply + write + commit one edit; every successful edit is a commit, so the
+// tree is never dirty for long and Ctrl-C can't lose anything.
+function applyAndCommit(state, kind, matchId, apply) {
+  const { root, dataRoot, repo, slug, cat } = state;
+  const res = writeEdit(dataRoot, repo, slug, cat, apply);
+  if (res.err) return res.err;
+  if (res.errs) return res.errs.join('\n') + '\nnot written — validation error(s), file rolled back';
+  const info = repo.tournaments.get(slug);
+  const cjson = info.matches.get(cat);
+  const ctx = makeCat({ meta: info.tjson.categories.find(c => c.id === cat), matches: cjson.matches }, info.tjson);
+  const m = ctx.byId.get(matchId);
+  const detail = kind === 'score' ? gamesText(m) : kind === 'forfeit' ? `side ${m.forfeit}` : `→ ${m.venue}`;
+  const msg = commitMessage(kind, slug, cat, matchId, detail);
+  git(root, ['add', path.relative(root, res.file)]);
+  const c = git(root, ['commit', '-m', msg]);
+  if (c.code !== 0) return `wrote ${path.relative(root, res.file)} but the commit failed:\n${c.err}\n(file staged — commit it manually)`;
+  const sha = git(root, ['rev-parse', '--short', 'HEAD']).out.trim();
+  const sum = m.forfeit !== undefined
+    ? `${cat}/${matchId} → side ${m.forfeit} forfeits — side ${1 - m.forfeit} wins`
+    : `${cat}/${matchId} → ${gamesText(m)}${isDone(m, ctx) ? ' — done' : ''}`;
+  return `${sum}\ncommitted ${sha}: ${msg}`;
+}
+
+function editCmd(state, kind, args) {
+  if (kind === 'score') {
+    const [matchId, ...tokens] = args;
+    if (!matchId || tokens.length === 0) return 'usage: /score <match> <a:b> [a:b ...]';
+    const games = tokens.map(parseGame);
+    const bad = tokens.findIndex((t, i) => !games[i]);
+    if (bad !== -1) return `bad score ${JSON.stringify(tokens[bad])} — expected a:b, e.g. 11:9`;
+    return applyAndCommit(state, 'score', matchId, c => applyScore(c, matchId, games));
+  }
+  if (kind === 'ff') {
+    const [matchId, side] = args;
+    const idx = Number(side);
+    if (!matchId || side === undefined) return 'usage: /ff <match> <0|1>';
+    if (!Number.isInteger(idx) || (idx !== 0 && idx !== 1)) return 'forfeit side must be 0 or 1';
+    return applyAndCommit(state, 'forfeit', matchId, c => applyForfeit(c, matchId, idx));
+  }
+  if (kind === 'venue') {
+    const [matchId, venueId] = args;
+    if (!matchId || !venueId) return 'usage: /venue <match> <venue>';
+    return applyAndCommit(state, 'venue', matchId, c => applyVenue(c, matchId, venueId));
+  }
+}
+
+function dispatch(kind, args, state) {
+  if (kind === 'score' || kind === 'ff' || kind === 'venue') {
+    if (state.cat === null) return 'cd into a category first';
+    return editCmd(state, kind, args);
+  }
+  if (kind === 'push') return gitPush(state.root);
+  if (kind === 'pull') return gitPull(state);
+  if (kind === 'status') return gitStatus(state.root);
+  if (kind === 'validate') return validateText(state.repo);
+  if (kind === 'help') return HELP;
+}
+
+const curPath = state => `${state.slug || '/'}${state.cat ? '/' + state.cat : ''}`;
+
+function replMain(root, dataRoot, repo) {
+  const state = { root, dataRoot, repo, slug: null, cat: null };
+  if (repo.index.length) {
+    const last = repo.index[repo.index.length - 1]; // cli.js default: the latest tournament
+    if (last && repo.tournaments.has(last.slug)) state.slug = last.slug;
+  }
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout, completer: completer(state), history: loadHist(), historySize: 500 });
+  const show = () => { rl.setPrompt(makePrompt(state)); rl.prompt(); };
+  console.log('gitbracket — tab completes, /help for commands, /q to quit');
+  rl.on('line', line => {
+    const t = line.trim();
+    if (!t) console.log(listing(state));
+    else if (t.startsWith('/')) {
+      const { kind, args } = parseCmd(t);
+      if (kind === 'quit') { rl.close(); return; }
+      if (kind === 'unknown') { console.log(`unknown command ${t.split(/\s+/)[0]} — /help`); show(); return; }
+      console.log(dispatch(kind, args, state));
+    } else {
+      const [word, ...rest] = t.split(/\s+/);
+      if (word === 'ls') console.log(listing(state));
+      else if (word === 'cd' && !rest[0]) console.log(curPath(state));
+      else if (word === 'q') { rl.close(); return; }
+      else if (word === 'help' || word === '?') console.log(HELP);
+      else {
+        const r = navigate(state, word === 'cd' ? rest[0] : word);
+        if (r.err) console.log(r.err);
+        else { state.slug = r.slug; state.cat = r.cat; console.log('→ ' + curPath(state)); }
+      }
+    }
+    show();
+  });
+  rl.on('close', () => { saveHist(rl.history); console.log('bye'); });
+  show();
+}
+
+// ---------- validate mode ----------
+
+function validateMain(repo, slug) {
+  if (slug !== undefined && !repo.tournaments.has(slug)) {
+    console.error(`unknown tournament ${slug} — have: ${[...repo.tournaments.keys()].join(', ')}`);
+    process.exit(1);
+  }
+  const { errs, warns } = validateRepo(repo);
+  const es = slug ? filterErrs(errs, slug) : errs;
+  const ws = slug ? filterErrs(warns, slug) : warns;
+  for (const w of ws) console.log(`warn: ${w}`);
+  for (const e of es) console.log(`error: ${e}`);
+  if (es.length) {
+    console.log(`validate: ${es.length} error(s) — fix and re-commit`);
+    process.exit(1);
+  }
+  console.log(ws.length ? `validate: ok (${ws.length} warning(s))` : 'validate: ok');
+}
+
+function main(argv) {
+  const root = findRoot();
+  const dataRoot = path.join(root, 'site');
+  const repo = loadRepo(dataRoot);
+  if (repo.readErrs.length) { console.error(repo.readErrs.join('\n')); process.exit(1); }
+  if (argv[0] === 'validate') return validateMain(repo, argv[1]);
+  if (argv[0] !== undefined) { console.error(`unknown command ${argv[0]} — usage: node gb.js [validate [slug]]`); process.exit(1); }
+  replMain(root, dataRoot, repo);
+}
+
+if (require.main === module) main(process.argv.slice(2));
+
+module.exports = { isScorable, parseGame, applyScore, applyForfeit, applyVenue, listEligible, listText, writeEdit, commitMessage, parseCmd, navigate, catSummary, filterErrs };

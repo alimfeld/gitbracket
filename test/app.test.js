@@ -6,8 +6,9 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { makeCat, winnerIdx, isDone, poolStandings, resolveSide, sameRecord, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, kioskStatus, matchLabel, parseRoute, loadAll } = require('../site/app.js');
+const { makeCat, winnerIdx, isDone, poolStandings, resolveSide, sameRecord, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, kioskStatus, matchLabel, parseRoute, loadAll, renderIndex, renderStandings, renderVenue, renderPlayer } = require('../site/app.js');
 const { FIX, catOf } = require('./helpers.js');
+const { loadRepo } = require('../validate.js');
 
 test('parseRoute: fragment routing — bare slug defaults to categories, every segment id-gated', () => {
   assert.deepEqual(parseRoute(''), { view: 'index' }, 'no fragment: tournament list');
@@ -256,4 +257,43 @@ test('placementLabel: 3rd/5th/7th place and classification semis', () => {
   assert(L('m9') === '5th–8th semi', 'losers of quarters -> classification semi');
   assert(L('m11') === '5th place', 'winners of classification semis -> 5th place');
   assert(L('m12') === '7th place', 'losers of classification semis -> 7th place');
+});
+
+test('renderers: all four render from a repo and escape repo-sourced strings', () => {
+  const dataOf = name => {
+    const repo = loadRepo(FIX(name));
+    const info = repo.tournaments.get(name);
+    return {
+      repo,
+      data: {
+        index: repo.index,
+        t: repo.index[0],
+        tjson: info.tjson,
+        cats: info.tjson.categories.map(c => ({ meta: c, matches: (info.matches.get(c.id) || {}).matches || [] })),
+      },
+    };
+  };
+  const { data } = dataOf('sample');
+  const no = () => ({ slug: 'sample', view: 'categories' });
+  const standings = renderStandings(no(), data);
+  assert(standings.includes('Pool A') && standings.includes('Final') && standings.includes('Winner of m8'), 'standings renders pools, bracket, and slot labels');
+  assert(standings.includes('Ada Lovelace'), 'standings renders player names');
+  assert(standings.includes('#sample/players') && !standings.includes('#sample/players/'), 'standings links the player picker, not each name');
+  const filtered = renderStandings({ slug: 'sample', view: 'categories', filter: 'md40' }, data);
+  assert((filtered.match(/<h2>/g) || []).length === 1 && filtered.includes('Pool A'), 'category filter narrows to one section');
+  assert(filtered.includes('#sample/categories/xd'), 'pills still list every category on a filtered page');
+  const venue = renderVenue({ slug: 'sample', view: 'venues' }, data);
+  assert(venue.includes('Court 1') && venue.includes('Ada Lovelace'), 'venue page renders venue boards with match rows');
+  assert(renderPlayer({ slug: 'sample', view: 'players', filter: 'p1' }, data).includes('Ada Lovelace'), 'player page finds the player');
+  assert(renderPlayer({ slug: 'sample', view: 'players', filter: 'p1' }, data).includes('#sample'), 'player page links the tournament name to standings');
+  assert(renderIndex({ view: 'index' }, data).includes('#sample'), 'index links the tournament');
+  // escaping: a hostile name must reach the DOM entity-encoded
+  const evil = JSON.parse(JSON.stringify(data.tjson));
+  evil.players[0].name = '<b>Ada</b> & "Co"';
+  const out = renderPlayer({ slug: 'sample', view: 'players', filter: 'p1' }, { ...data, tjson: evil });
+  assert(out.includes('&lt;b&gt;Ada&lt;/b&gt; &amp; &quot;Co&quot;') && !out.includes('<b>Ada</b>'), 'player name is escaped');
+  // tied teams share the first rank of their group (standard competition ranking: 1 1 1 4)
+  const { data: tdata } = dataOf('tie');
+  const tieHtml = renderStandings({ slug: 'tie', view: 'categories' }, tdata);
+  assert(!tieHtml.includes('†') && (tieHtml.match(/data-tie><td>1<\/td>/g) || []).length === 2, 'tied teams share rank 1, no dagger');
 });

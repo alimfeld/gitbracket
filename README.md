@@ -76,7 +76,7 @@ One page, fragment-routed. `#<slug>` is a tournament's standings;
 
 ## Tools
 
-- **`cli.js`** — score entry on match day.
+- **`gb.js`** — match-day REPL: navigate, score, move venues; every edit commits itself. `node gb.js validate [slug]` checks data without the REPL.
 - **`validate.js`** — keeps data consistent before it ships.
 - **`schedule.js`** — generates a tournament file from a spec (`specs/<slug>.json`).
 - **Tests** — guard the behavior; run on every commit and push.
