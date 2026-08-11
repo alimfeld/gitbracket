@@ -1,5 +1,4 @@
-#!/usr/bin/env node
-// GitBracket tournament generator.
+// GitBracket tournament generator — run via `node gb.js schedule specs/<slug>.json`.
 //
 // Reads a spec (specs/<slug>.json) and writes the full site/tournaments/<slug>.json
 // file from scratch: the skeleton (venues, categories, players) plus every
@@ -17,7 +16,7 @@
 // A category's "final" override (bestOf / slotMinutes) lands on the final and
 // the 3rd-place match; without it they use the stage defaults.
 //
-// Run:  node schedule.js specs/<slug>.json   # then the pre-commit hook (or `node validate.js`) gates it
+// Run:  node gb.js schedule specs/<slug>.json   # then the pre-commit hook (or `node gb.js validate`) gates it
 //
 // Rerun after the registration deadline with the final spec.teams. Pools are
 // drawn in list order; shuffle spec.teams before the final run for a fair
@@ -28,7 +27,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const { matchSlotMs, slotsOverlap, pairSig, dayKey, ID_RE } = require('./site/derive.js');
+const { matchSlotMs, slotsOverlap, pairSig, dayKey, ID_RE } = require('../site/derive.js');
+const { writeTournament } = require('./repo.js');
 
 // Round-robin pairings, circle method: array of rounds, each a list of pairs.
 function roundRobin(teams) {
@@ -357,19 +357,20 @@ function generate(spec) {
   return { name, timezone, venues: VENUES, categories: CATS, players: PLAYERS, matches: out };
 }
 
-function main() {
-  const SPEC_PATH = process.argv[2];
-  if (!SPEC_PATH) {
-    console.error('usage: node schedule.js <specs/xxx.json>');
+// CLI entry (dispatched from gb.js): root is the repo root, specPath is
+// cwd-relative (run from the repo root: specs/<slug>.json).
+function main(root, specPath) {
+  if (!specPath) {
+    console.error('usage: node gb.js schedule <specs/xxx.json>');
     process.exit(1);
   }
-  const spec = JSON.parse(fs.readFileSync(path.join(__dirname, SPEC_PATH), 'utf8'));
+  const spec = JSON.parse(fs.readFileSync(path.resolve(specPath), 'utf8'));
   const tourney = generate(spec);
-  const tfile = path.join(__dirname, 'site', 'tournaments', `${spec.slug}.json`);
-  fs.writeFileSync(tfile, JSON.stringify(tourney, null, 2) + '\n');
+  const siteRoot = path.join(root, 'site');
+  writeTournament(siteRoot, spec.slug, tourney);
 
   // keep the list page in sync — a tournament the index doesn't know is invisible
-  const idxFile = path.join(__dirname, 'site', 'tournaments.json');
+  const idxFile = path.join(siteRoot, 'tournaments.json');
   const idx = JSON.parse(fs.readFileSync(idxFile, 'utf8'));
   const entry = { slug: spec.slug, name: spec.name };
   const i = Array.isArray(idx) ? idx.findIndex((t) => t && t.slug === spec.slug) : -1;
@@ -377,8 +378,7 @@ function main() {
   // keep the index's established one-entry-per-line format — index diffs stay per-tournament
   fs.writeFileSync(idxFile, '[' + idx.map((t) => `\n  ${JSON.stringify(t)}`).join(',') + '\n]\n');
 
-  console.log(`Wrote site/tournaments/${spec.slug}.json — run \`node validate.js\` before committing.`);
+  console.log(`Wrote site/tournaments/${spec.slug}.json — run \`node gb.js validate\` before committing.`);
 }
 
-if (require.main === module) main();
-module.exports = { generate };
+module.exports = { generate, main };

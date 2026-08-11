@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v7
       # The gate, re-run on every push: the pre-commit hook is the fast local
       # check, this is the enforced one — a bypassed hook can't ship.
-      - run: node validate.js
+      - run: node gb.js validate
       - run: node --test
       # Asset version tokens: script/style tags can't revalidate (data fetches
       # can), so each deploy stamps ?v=<content hash> onto them. The repo tree

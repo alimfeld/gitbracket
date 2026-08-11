@@ -1,10 +1,11 @@
 'use strict';
 
-// Validator (validate.js): every fixture runs through the real loadRepo +
+// Validator (src/validate.js): every fixture runs through the real loadRepo +
 // validateRepo; the V table pins the error/warn channel per fixture.
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const { filterErrs } = require('../src/validate.js');
 const { validateFixture, hasErr, hasWarn } = require('./helpers.js');
 
 const V = [ // [name, fixture dir, ok, expected message regex]
@@ -61,3 +62,14 @@ for (const [name, dir, ok, re] of V) {
     assert(!r.errs.some(e => e.endsWith(': undefined')), 'no error message may end in ": undefined" (err(f, m) called with one arg?)');
   });
 }
+
+test('filterErrs: validate <slug> narrows to that tournament', () => {
+  const errs = [
+    'site/tournaments/2026-mammut60.json: name does not match the index entry',
+    'tournaments.json [0]: duplicate slug 2026-mammut60',
+    'site/tournaments/other.json: timezone required',
+  ];
+  const got = filterErrs(errs, '2026-mammut60');
+  assert.equal(got.length, 2, 'keeps the tournament file and its index entry');
+  assert(!got.some(e => e.includes('other.json')), 'other tournaments stay out');
+});

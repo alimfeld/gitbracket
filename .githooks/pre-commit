@@ -4,7 +4,6 @@
 # hook can't ship. Asset version tokens (?v=) are stamped by the deploy
 # workflow, not here — the hook never rewrites the tree.
 set -e
-root="$(git rev-parse --show-toplevel)"
-cd "$root"
-node validate.js "$root" || exit 1
+cd "$(git rev-parse --show-toplevel)"
+node gb.js validate || exit 1
 exec node --test

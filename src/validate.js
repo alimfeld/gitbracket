@@ -1,48 +1,16 @@
-#!/usr/bin/env node
 'use strict';
 
-// GitBracket validator — schema + cross-file checks.
-// Run from the repo root: `node validate.js`. The pre-commit hook wraps this.
-// I/O (loadRepo) is separate from checks (validateRepo) so tests can run the
-// whole validator against fixtures/ in memory.
+// GitBracket validator — schema + cross-file checks, run via `node gb.js
+// validate [slug]`. I/O (loadRepo in repo.js) is separate from checks
+// (validateRepo) so tests can run the whole validator against fixtures/ in
+// memory. Never writes — the gate stays pure.
 
-const fs = require('fs');
 const path = require('path');
-const { ID_RE, pairSig, matchSlotMs, slotsOverlap, makeCat, isDone, poolStandings, resolveSide, isDeadTie } = require('./site/derive.js');
+const { loadRepo } = require('./repo.js');
+const { ID_RE, pairSig, matchSlotMs, slotsOverlap, makeCat, isDone, poolStandings, resolveSide, isDeadTie } = require('../site/derive.js');
 
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/;
 const RESULTS = ['winner', 'loser'];
-
-function readJson(file, errs) {
-  try {
-    return JSON.parse(fs.readFileSync(file, 'utf8'));
-  } catch (e) {
-    errs.push(`${file}: not readable JSON (${e.message})`);
-    return undefined;
-  }
-}
-
-// Read a repo root into memory:
-// { index, tournaments: Map<slug, { tjson, matches: Map<catId, cjson> }>, readErrs }.
-// validateRepo() runs every check on this structure; tests build it from fixtures/.
-function loadRepo(root) {
-  const readErrs = [];
-  const index = readJson(path.join(root, 'tournaments.json'), readErrs);
-  const tournaments = new Map();
-  if (Array.isArray(index)) {
-    for (const t of index) {
-      if (!t || typeof t.slug !== 'string' || !ID_RE.test(t.slug)) continue;
-      const tfile = path.join(root, 'tournaments', t.slug + '.json');
-      const tjson = readJson(tfile, readErrs);
-      const matches = new Map();
-      if (tjson && typeof tjson === 'object' && !Array.isArray(tjson) && tjson.matches && typeof tjson.matches === 'object' && !Array.isArray(tjson.matches)) {
-        for (const [cid, arr] of Object.entries(tjson.matches)) matches.set(cid, { matches: arr });
-      }
-      tournaments.set(t.slug, { tjson, matches });
-    }
-  }
-  return { index, tournaments, readErrs };
-}
 
 // All checks, in memory. Labels are repo-relative paths (site/tournaments/<slug>/...).
 function validateRepo(repo) {
@@ -404,18 +372,28 @@ function validateGames(games, target, where, err) {
   }
 }
 
-function main() {
-  const root = process.argv[2] || process.cwd();
-  const { errs, warns } = validateRepo(loadRepo(path.join(root, 'site')));
-  for (const w of warns) console.log(`warn: ${w}`);
-  for (const e of errs) console.log(`error: ${e}`);
-  if (errs.length) {
-    console.log(`validate: ${errs.length} error(s) — fix and re-commit`);
-    process.exit(1);
-  }
-  console.log(warns.length ? `validate: ok (${warns.length} warning(s))` : 'validate: ok');
+// validate <slug>: errors touching that tournament's file or index entry.
+function filterErrs(errs, slug) {
+  return errs.filter(e => e.includes(`tournaments/${slug}.json`) || e.includes(slug));
 }
 
-if (require.main === module) main();
+// CLI entry (dispatched from gb.js): root is the repo root, slug narrows the report.
+function main(root, slug) {
+  const repo = loadRepo(path.join(root, 'site'));
+  if (slug !== undefined && !repo.tournaments.has(slug)) {
+    console.error(`unknown tournament ${slug} — have: ${[...repo.tournaments.keys()].join(', ')}`);
+    process.exit(1);
+  }
+  const { errs, warns } = validateRepo(repo);
+  const es = slug ? filterErrs(errs, slug) : errs;
+  const ws = slug ? filterErrs(warns, slug) : warns;
+  for (const w of ws) console.log(`warn: ${w}`);
+  for (const e of es) console.log(`error: ${e}`);
+  if (es.length) {
+    console.log(`validate: ${es.length} error(s) — fix and re-commit`);
+    process.exit(1);
+  }
+  console.log(ws.length ? `validate: ok (${ws.length} warning(s))` : 'validate: ok');
+}
 
-module.exports = { loadRepo, validateRepo };
+module.exports = { validateRepo, filterErrs, main };

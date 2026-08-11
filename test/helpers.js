@@ -4,7 +4,8 @@
 // Auto-discovery runs this file too; it defines no tests, which is fine.
 
 const path = require('path');
-const { loadRepo, validateRepo } = require('../validate.js');
+const { loadRepo } = require('../src/repo.js');
+const { validateRepo } = require('../src/validate.js');
 const { makeCat } = require('../site/app.js');
 
 const FIX = (...parts) => path.join(__dirname, '..', 'fixtures', ...parts);

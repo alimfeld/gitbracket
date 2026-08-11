@@ -5,8 +5,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { generate } = require('../schedule.js');
-const { validateRepo } = require('../validate.js');
+const { generate } = require('../src/schedule.js');
+const { validateRepo } = require('../src/validate.js');
 
 const MINI = {
   slug: 'mini',
