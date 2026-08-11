@@ -7,11 +7,13 @@
 //   node gb.js                     start the REPL (drops into the latest tournament)
 //   node gb.js validate [slug]     validate the repo (or one tournament), no REPL
 //
-// The REPL navigates tournaments like a directory tree: bare words cd, slash
-// commands act. Every successful edit is validated (the real validateRepo)
-// and committed immediately, so the process can die at any instant with
-// nothing lost — Ctrl-C just quits. The prompt shows sync state: ↑n unpushed
-// commits, ↓n behind, * dirty tree. Tab completes at every level.
+// The REPL navigates tournaments like a directory tree. Every line is a
+// command — the first word is always a verb, so targets (slugs, categories,
+// matches) only ever appear as cd/score args and can't collide with commands.
+// Every successful edit is validated (the real validateRepo) and committed
+// immediately, so the process can die at any instant with nothing lost —
+// Ctrl-C just quits. The prompt shows sync state: ↑n unpushed commits, ↓n
+// behind, * dirty tree. Tab completes at every level.
 //
 // All edits reuse writeEdit from the old cli.js: in-memory apply, full-repo
 // validate, write-or-rollback — the pre-commit hook can never see a bad file.
@@ -132,14 +134,12 @@ function commitMessage(kind, slug, cat, matchId, detail) {
   return `${kind}(${slug}): ${cat}/${matchId} ${detail}`;
 }
 
-const CMDS = ['score', 'ff', 'venue', 'push', 'pull', 'status', 'validate', 'help', 'q'];
+const VERBS = ['ls', 'cd', 'q', 'help', 'score', 'ff', 'venue', 'push', 'pull', 'status', 'validate'];
 
-// Slash line -> { kind, args }; null when not a slash command.
+// Any line is <verb> <args> — the first word is always a command.
 function parseCmd(line) {
   const [head, ...args] = line.trim().split(/\s+/);
-  if (!head.startsWith('/')) return null;
-  const kind = head.slice(1);
-  return { kind: CMDS.includes(kind) ? kind : 'unknown', args };
+  return { kind: VERBS.includes(head) ? head : 'unknown', args };
 }
 
 // Resolve a cd target against the current position. state = { repo, slug, cat }.
@@ -158,7 +158,7 @@ function navigate(state, token) {
     if (!(info.tjson.categories || []).some(c => c.id === token)) return { err: `unknown category ${token} — tab completes` };
     return { slug: state.slug, cat: token };
   }
-  return { err: `matches are leaves — /score ${token} … or cd ..` };
+  return { err: `matches are leaves — score ${token} … or cd ..` };
 }
 
 // One tournament's line for the category listing: id, name, match counts.
@@ -216,18 +216,18 @@ function saveHist(h) {
 
 // ---------- REPL ----------
 
-const HELP = `navigate like a shell:
+const HELP = `navigate:
   ls                     list this level
-  cd <slug|category>     enter (or just type the name) — cd .. / cd / go up / root
+  cd <slug|category>     enter — cd .. / cd / go up / root, cd alone shows the path
   q                      quit (every edit is committed; nothing is lost)
 
 score & manage (inside a category):
-  /score <match> <a:b> [a:b …]   set games — a prefix is a mid-match update, re-score corrects
-  /ff <match> <0|1>              forfeit: side 0 or 1 forfeits
-  /venue <match> <venue>         move a match to another court
+  score <match> <a:b> [a:b …]   set games — a prefix is a mid-match update, re-score corrects
+  ff <match> <0|1>              forfeit: side 0 or 1 forfeits
+  venue <match> <venue>         move a match to another court
 
 sync (every edit commits itself):
-  /push  /pull  /status  /validate
+  push  pull  status  validate
 
 prompt: ↑n = n unpushed commits, ↓n = n behind, * = dirty tree. Tab completes.`;
 
@@ -240,20 +240,18 @@ function completer(state) {
   return line => {
     const parts = line.split(/\s+/).filter(Boolean);
     const partial = parts.length ? parts[parts.length - 1] : '';
+    const verb = parts[0];
     let cands = [];
-    if (!parts.length || !parts[0].startsWith('/')) {
-      const dirs = state.slug === null ? [...state.repo.tournaments.keys()]
+    if (!verb) cands = VERBS;
+    else if (parts.length === 1) cands = VERBS.filter(v => v.startsWith(verb));
+    else if (verb === 'cd') {
+      cands = state.slug === null ? [...state.repo.tournaments.keys()]
         : state.cat === null ? (state.repo.tournaments.get(state.slug).tjson.categories || []).map(c => c.id) : [];
-      cands = [...['ls', 'cd', 'q', 'help'], ...dirs];
-    } else {
-      const cmd = parts[0].slice(1);
-      if (parts.length === 1) cands = CMDS.map(c => '/' + c);
-      else if ((cmd === 'score' || cmd === 'ff' || cmd === 'venue') && parts.length === 2 && state.cat) {
-        const cjson = state.repo.tournaments.get(state.slug).matches.get(state.cat);
-        cands = cjson ? cjson.matches.map(m => m.id) : [];
-      } else if (cmd === 'venue' && parts.length === 3) {
-        cands = (state.repo.tournaments.get(state.slug).tjson.venues || []).map(v => v.id);
-      }
+    } else if ((verb === 'score' || verb === 'ff' || verb === 'venue') && parts.length === 2 && state.cat) {
+      const cjson = state.repo.tournaments.get(state.slug).matches.get(state.cat);
+      cands = cjson ? cjson.matches.map(m => m.id) : [];
+    } else if (verb === 'venue' && parts.length === 3) {
+      cands = (state.repo.tournaments.get(state.slug).tjson.venues || []).map(v => v.id);
     }
     return [cands.filter(c => c.startsWith(partial) && c !== partial).slice(0, 100), partial];
   };
@@ -284,14 +282,14 @@ function gitPush(root) {
   const r = git(root, ['push']);
   if (r.code === 0) return 'pushed';
   const rejected = /rejected|! \[rejected\]/.test(r.err + r.out);
-  return (rejected ? 'push rejected — someone pushed first: run /pull (rebases), then /push\n' : '') + r.err.trim();
+  return (rejected ? 'push rejected — someone pushed first: run pull (rebases), then push\n' : '') + r.err.trim();
 }
 
 function gitPull(state) {
   const r = git(state.root, ['pull', '--rebase']);
   if (r.code !== 0) {
     const txt = (r.err + r.out).trim();
-    return txt + (/(CONFLICT|conflict)/.test(txt) ? '\nresolve the conflicted file, then /push' : '');
+    return txt + (/(CONFLICT|conflict)/.test(txt) ? '\nresolve the conflicted file, then push' : '');
   }
   state.repo = loadRepo(state.dataRoot); // the in-memory snapshot is stale after a pull
   if (state.slug && !state.repo.tournaments.has(state.slug)) {
@@ -332,7 +330,7 @@ function applyAndCommit(state, kind, matchId, apply) {
 function editCmd(state, kind, args) {
   if (kind === 'score') {
     const [matchId, ...tokens] = args;
-    if (!matchId || tokens.length === 0) return 'usage: /score <match> <a:b> [a:b ...]';
+    if (!matchId || tokens.length === 0) return 'usage: score <match> <a:b> [a:b ...]';
     const games = tokens.map(parseGame);
     const bad = tokens.findIndex((t, i) => !games[i]);
     if (bad !== -1) return `bad score ${JSON.stringify(tokens[bad])} — expected a:b, e.g. 11:9`;
@@ -341,18 +339,27 @@ function editCmd(state, kind, args) {
   if (kind === 'ff') {
     const [matchId, side] = args;
     const idx = Number(side);
-    if (!matchId || side === undefined) return 'usage: /ff <match> <0|1>';
+    if (!matchId || side === undefined) return 'usage: ff <match> <0|1>';
     if (!Number.isInteger(idx) || (idx !== 0 && idx !== 1)) return 'forfeit side must be 0 or 1';
     return applyAndCommit(state, 'forfeit', matchId, c => applyForfeit(c, matchId, idx));
   }
   if (kind === 'venue') {
     const [matchId, venueId] = args;
-    if (!matchId || !venueId) return 'usage: /venue <match> <venue>';
+    if (!matchId || !venueId) return 'usage: venue <match> <venue>';
     return applyAndCommit(state, 'venue', matchId, c => applyVenue(c, matchId, venueId));
   }
 }
 
 function dispatch(kind, args, state) {
+  if (kind === 'ls') return listing(state);
+  if (kind === 'cd') {
+    if (!args[0]) return curPath(state);
+    const r = navigate(state, args[0]);
+    if (r.err) return r.err;
+    state.slug = r.slug;
+    state.cat = r.cat;
+    return '→ ' + curPath(state);
+  }
   if (kind === 'score' || kind === 'ff' || kind === 'venue') {
     if (state.cat === null) return 'cd into a category first';
     return editCmd(state, kind, args);
@@ -374,25 +381,21 @@ function replMain(root, dataRoot, repo) {
   }
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout, completer: completer(state), history: loadHist(), historySize: 500 });
   const show = () => { rl.setPrompt(makePrompt(state)); rl.prompt(); };
-  console.log('gitbracket — tab completes, /help for commands, /q to quit');
+  console.log('gitbracket — tab completes, help for commands, q to quit');
   rl.on('line', line => {
     const t = line.trim();
     if (!t) console.log(listing(state));
-    else if (t.startsWith('/')) {
+    else {
       const { kind, args } = parseCmd(t);
-      if (kind === 'quit') { rl.close(); return; }
-      if (kind === 'unknown') { console.log(`unknown command ${t.split(/\s+/)[0]} — /help`); show(); return; }
-      console.log(dispatch(kind, args, state));
-    } else {
-      const [word, ...rest] = t.split(/\s+/);
-      if (word === 'ls') console.log(listing(state));
-      else if (word === 'cd' && !rest[0]) console.log(curPath(state));
-      else if (word === 'q') { rl.close(); return; }
-      else if (word === 'help' || word === '?') console.log(HELP);
-      else {
-        const r = navigate(state, word === 'cd' ? rest[0] : word);
-        if (r.err) console.log(r.err);
-        else { state.slug = r.slug; state.cat = r.cat; console.log('→ ' + curPath(state)); }
+      if (kind === 'q') { rl.close(); return; }
+      if (kind === 'unknown') {
+        const word = t.split(/\s+/)[0];
+        const info = state.slug ? state.repo.tournaments.get(state.slug) : null;
+        const target = state.slug === null ? state.repo.tournaments.has(word)
+          : state.cat === null && info && (info.tjson.categories || []).some(c => c.id === word);
+        console.log(`unknown command ${word}${target ? ` — did you mean cd ${word}?` : ''} — help`);
+      } else {
+        console.log(dispatch(kind, args, state));
       }
     }
     show();

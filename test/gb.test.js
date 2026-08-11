@@ -86,14 +86,15 @@ test('gb parseGame', () => {
   assert(gb.parseGame('11x9') === null, 'bad shape is null');
 });
 
-test('gb parseCmd: slash commands, args split; bare words are navigation', () => {
-  assert.deepEqual(gb.parseCmd('/score m1 11:9 11:7'), { kind: 'score', args: ['m1', '11:9', '11:7'] });
-  assert.deepEqual(gb.parseCmd('/ff m1 1'), { kind: 'ff', args: ['m1', '1'] });
-  assert.deepEqual(gb.parseCmd('/venue m1 court-2'), { kind: 'venue', args: ['m1', 'court-2'] });
-  assert.deepEqual(gb.parseCmd('/push'), { kind: 'push', args: [] });
-  assert.deepEqual(gb.parseCmd('/q'), { kind: 'q', args: [] });
-  assert.deepEqual(gb.parseCmd('/bogus x'), { kind: 'unknown', args: ['x'] });
-  assert.equal(gb.parseCmd('cd md40'), null, 'bare words are not slash commands');
+test('gb parseCmd: every line is a command — the first word is the verb', () => {
+  assert.deepEqual(gb.parseCmd('score m1 11:9 11:7'), { kind: 'score', args: ['m1', '11:9', '11:7'] });
+  assert.deepEqual(gb.parseCmd('ff m1 1'), { kind: 'ff', args: ['m1', '1'] });
+  assert.deepEqual(gb.parseCmd('venue m1 court-2'), { kind: 'venue', args: ['m1', 'court-2'] });
+  assert.deepEqual(gb.parseCmd('push'), { kind: 'push', args: [] });
+  assert.deepEqual(gb.parseCmd('cd md40'), { kind: 'cd', args: ['md40'] });
+  assert.deepEqual(gb.parseCmd('q'), { kind: 'q', args: [] });
+  assert.deepEqual(gb.parseCmd('md40'), { kind: 'unknown', args: [] }, 'bare words are not commands');
+  assert.deepEqual(gb.parseCmd('/score m1'), { kind: 'unknown', args: ['m1'] }, 'slashes are not commands');
 });
 
 test('gb navigate: root → tournament → category, up and root shortcuts', () => {
@@ -105,7 +106,7 @@ test('gb navigate: root → tournament → category, up and root shortcuts', () 
   assert.deepEqual(gb.navigate(tour, 'md40'), { slug: 'sample', cat: 'md40' }, 'category entered');
   assert.deepEqual(gb.navigate(tour, 'nope').err, 'unknown category nope — tab completes', 'unknown category errors');
   const cat = { repo, slug: 'sample', cat: 'md40' };
-  assert.deepEqual(gb.navigate(cat, 'm1').err, 'matches are leaves — /score m1 … or cd ..', 'matches are leaves');
+  assert.deepEqual(gb.navigate(cat, 'm1').err, 'matches are leaves — score m1 … or cd ..', 'matches are leaves');
   assert.deepEqual(gb.navigate(cat, '..'), { slug: 'sample', cat: null }, '.. goes up to the tournament');
   assert.deepEqual(gb.navigate(tour, '..'), { slug: null, cat: null }, '.. from a tournament goes to root');
   assert.deepEqual(gb.navigate(cat, '/'), { slug: null, cat: null }, '/ goes to root');
