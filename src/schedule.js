@@ -273,10 +273,10 @@ function assertSchedule(categories, slotCfgOf) {
 }
 
 // Round robin must cover every pair exactly once — validate.js can't see this.
-function assertPoolCoverage(teams, matches, names, poolSize) {
+function assertPoolCoverage(teams, matches, poolSize) {
   splitPools(teams, poolSize).forEach((pool, p) => {
     const pairs = matches
-      .filter((m) => m.pool === names[p])
+      .filter((m) => m.pool === String.fromCharCode(65 + p))
       .map((m) =>
         m.sides
           .map((s) => pairSig(s.ids))
@@ -349,7 +349,7 @@ function generate(spec) {
 
   const out = {};
   for (const [cat, teamList, ms] of results) {
-    assertPoolCoverage(teamList, ms, teamList.map((_, i) => String.fromCharCode(65 + i)), poolSize);
+    assertPoolCoverage(teamList, ms, poolSize);
     out[cat] = ms;
     console.log(`${cat}: ${ms.length} matches`);
   }

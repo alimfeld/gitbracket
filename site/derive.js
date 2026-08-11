@@ -1,7 +1,7 @@
 'use strict';
 // derive.js — pure derive + time logic for GitBracket.
 // The one source of the domain model: the validator (validate.js), the score
-// CLI (cli.js), the match generator (schedule.js), and the renderers (app.js)
+// REPL (repl.js), the match generator (schedule.js), and the renderers (app.js)
 // all share these functions, so the integrity gate doesn't depend on renderer
 // code and the renderer doesn't reimplement the model. Loaded as a plain
 // script before app.js in the browser (functions land on globalThis); in node
@@ -414,5 +414,5 @@ function matchLabel(m, ctx) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { SLOT_MIN, ID_RE, pairSig, makeCat, matchSlotMs, slotsOverlap, countWins, winnerIdx, isDone, sameRecord, isDeadTie, poolStandings, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, chainLen, possibleSpan, matchRound, ordinal, placementLabel, winnerDepth, fmtTime, fmtClock, dayKey, schedTime, gamesText, matchState, fmtDiff, kioskStatus, roundName, koColumn, matchLabel };
+  module.exports = { ID_RE, pairSig, makeCat, matchSlotMs, slotsOverlap, winnerIdx, isDone, sameRecord, isDeadTie, poolStandings, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, fmtClock, dayKey, schedTime, gamesText, matchState, fmtDiff, kioskStatus, roundName, koColumn, matchLabel };
 }

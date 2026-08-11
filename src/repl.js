@@ -13,7 +13,6 @@
 // * dirty tree. Tab completes at every level.
 
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
 const readline = require('readline');
 const { spawnSync } = require('child_process');
@@ -186,18 +185,6 @@ function syncSuffix(root) {
   return s;
 }
 
-const HIST = path.join(os.homedir(), '.gitbracket_history');
-
-function loadHist() {
-  try {
-    return fs.existsSync(HIST) ? fs.readFileSync(HIST, 'utf8').split('\n').filter(Boolean).slice(-500) : [];
-  } catch { return []; }
-}
-
-function saveHist(h) {
-  try { fs.writeFileSync(HIST, [...new Set(h)].join('\n') + '\n'); } catch {}
-}
-
 // ---------- REPL ----------
 
 const HELP = `navigate:
@@ -360,10 +347,10 @@ const curPath = state => `${state.slug || '/'}${state.cat ? '/' + state.cat : ''
 function replMain(root, siteRoot, repo) {
   const state = { root, siteRoot, repo, slug: null, cat: null };
   if (repo.index.length) {
-    const last = repo.index[repo.index.length - 1]; // cli.js default: the latest tournament
+    const last = repo.index[repo.index.length - 1]; // the REPL default: the latest tournament
     if (last && repo.tournaments.has(last.slug)) state.slug = last.slug;
   }
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout, completer: completer(state), history: loadHist(), historySize: 500 });
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout, completer: completer(state), historySize: 500 });
   const show = () => { rl.setPrompt(makePrompt(state)); rl.prompt(); };
   console.log('gitbracket — tab completes, help for commands, q to quit');
   rl.on('line', line => {
@@ -384,7 +371,7 @@ function replMain(root, siteRoot, repo) {
     }
     show();
   });
-  rl.on('close', () => { saveHist(rl.history); console.log('bye'); });
+  rl.on('close', () => { console.log('bye'); });
   show();
 }
 
