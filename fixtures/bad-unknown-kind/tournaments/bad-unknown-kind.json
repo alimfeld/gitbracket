@@ -30,7 +30,7 @@
   "matches": {
     "t": [
       {
-        "id": "m1",
+        "id": 1,
         "sides": [
           {
             "kind": "bogus"

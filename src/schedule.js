@@ -189,7 +189,7 @@ function buildCategory(teams, cat, poolSize) {
   const names = pools.map((_, i) => String.fromCharCode(65 + i));
   const matches = [];
   let next = 1;
-  const mid = () => 'm' + next++;
+  const mid = () => next++;
 
   pools.forEach((pool, p) => {
     for (const [a, b] of roundRobin(pool).flat()) {

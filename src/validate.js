@@ -165,7 +165,7 @@ function validateCategory(cFile, cjson, cat, players, venues, tjson, errs, warns
     const m = matches[i];
     const where = `${cFile} match[${i}]`;
     if (!m || typeof m !== 'object') { err(where, 'must be an object'); continue; }
-    if (typeof m.id !== 'string' || !ID_RE.test(m.id)) err(where, `id ${JSON.stringify(m.id)} must match ${ID_RE}`);
+    if (typeof m.id !== 'number' || !Number.isInteger(m.id) || m.id < 1) err(where, `match id ${JSON.stringify(m.id)} must be a positive integer`);
     if (byId.has(m.id)) err(where, `duplicate match id ${m.id}`);
     byId.set(m.id, m);
   }
@@ -216,7 +216,7 @@ function validateCategory(cFile, cjson, cat, players, venues, tjson, errs, warns
         }
       } else if (side.kind === 'match') {
         if (m.pool !== undefined) err(where, `side ${si}: a pool match cannot have a match slot — pools are round robin`);
-        if (typeof side.match !== 'string' || !byId.has(side.match)) err(where, `side ${si}: unknown match slot ${JSON.stringify(side.match)}`);
+        if (typeof side.match !== 'number' || !Number.isInteger(side.match) || !byId.has(side.match)) err(where, `side ${si}: unknown match slot ${JSON.stringify(side.match)}`);
         if (!RESULTS.includes(side.result)) err(where, `side ${si}: match slot result must be winner or loser, got ${JSON.stringify(side.result)}`);
       } else if (side.kind === 'pool') {
         if (m.pool !== undefined) err(where, `side ${si}: a pool match cannot have a pool slot — pools are round robin`);

@@ -32,7 +32,7 @@
   "matches": {
     "t": [
       {
-        "id": "m1",
+        "id": 1,
         "pool": "A",
         "sides": [
           {
@@ -50,7 +50,7 @@
         ]
       },
       {
-        "id": "m2",
+        "id": 2,
         "sides": [
           {
             "kind": "pool",

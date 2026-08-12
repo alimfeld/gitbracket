@@ -12,7 +12,7 @@ const V = [ // [name, fixture dir, ok, expected message regex]
   ['clean fixture validates', 'sample', r => r.errs.length === 0 && r.warns.length === 0, null],
   ['placement bracket validates', 'place', r => r.errs.length === 0 && r.warns.length === 0, null],
   ['fully played bracket validates', 'full', r => r.errs.length === 0 && r.warns.length === 0, null],
-  ['uppercase match id', 'bad-uppercase-id', r => r.errs.length > 0, /must match/],
+  ['non-numeric match id', 'bad-uppercase-id', r => r.errs.length > 0, /must be a positive integer/],
   ['same player set on both sides', 'bad-same-pair', r => r.errs.length > 0, /same player set/],
   ['slot source consumed twice', 'bad-consumed-twice', r => r.errs.length > 0, /consumed twice/],
   ['slot cycle', 'cycle', r => r.errs.length > 0, /cycle/],

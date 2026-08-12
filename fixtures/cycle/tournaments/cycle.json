@@ -25,11 +25,11 @@
   "matches": {
     "t": [
       {
-        "id": "a",
+        "id": 1,
         "sides": [
           {
             "kind": "match",
-            "match": "b",
+            "match": 2,
             "result": "winner"
           },
           {
@@ -47,11 +47,11 @@
         ]
       },
       {
-        "id": "b",
+        "id": 2,
         "sides": [
           {
             "kind": "match",
-            "match": "a",
+            "match": 1,
             "result": "winner"
           },
           {

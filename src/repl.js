@@ -36,7 +36,7 @@ function parseGame(s) {
 // Mutate cjson in memory; return an error string or null. Never touches disk —
 // the caller rolls back on validation failure.
 function findMatch(cjson, matchId, fn) {
-  const m = (cjson.matches || []).find(x => x && x.id === matchId);
+  const m = (cjson.matches || []).find(x => x && x.id === Number(matchId));
   if (!m) return `unknown match ${matchId}`;
   return fn(m) ?? null;
 }
@@ -79,7 +79,7 @@ function applyTime(cjson, matchId, isoString) {
 // Pool matches are preserved.
 function applyRebracket(cjson, newKO) {
   const pools = cjson.matches.filter(m => m.pool !== undefined);
-  cjson.matches = pools.concat(newKO).sort((a, b) => a.id.localeCompare(b.id));
+  cjson.matches = pools.concat(newKO).sort((a, b) => a.id - b.id);
   return null;
 }
 
@@ -98,7 +98,7 @@ function listEligible(repo, slug) {
     }
   }
   const t = r => schedTime(r.m) ?? Infinity; // unscheduled matches sort last
-  rows.sort((a, b) => isDone(a.m, a.ctx) - isDone(b.m, b.ctx) || t(a) - t(b) || a.m.id.localeCompare(b.m.id));
+  rows.sort((a, b) => isDone(a.m, a.ctx) - isDone(b.m, b.ctx) || t(a) - t(b) || a.m.id - b.m.id);
   return rows;
 }
 
@@ -141,7 +141,7 @@ function formatMatchLine(m, ctx, tz, stage, sidew, idw, venuew, stagew) {
   const sides = s0 + C.dim(' vs ') + s1;
   const sidePad = sidew !== undefined ? ' '.repeat(Math.max(0, sidew - (s0.length + 4 + s1.length))) : '';
   const stagePad = stagew !== undefined ? ' '.repeat(Math.max(0, stagew - stage.length)) : '';
-  return `${C.bold(idw ? m.id.padEnd(idw) : m.id)}  ${C.dim(stage)}${stagePad}  ${sides}${sidePad}  ${time}  ${venue}  ${score}`;
+  return `${C.bold(idw ? String(m.id).padEnd(idw) : m.id)}  ${C.dim(stage)}${stagePad}  ${sides}${sidePad}  ${time}  ${venue}  ${score}`;
 }
 
 function listText(repo, slug, cat) {
@@ -172,16 +172,16 @@ function listText(repo, slug, cat) {
   all.sort((a, b) => {
     const pa = a.m.pool !== undefined, pb = b.m.pool !== undefined;
     if (pa !== pb) return pa ? -1 : 1; // pool matches first
-    if (pa) return a.m.pool.localeCompare(b.m.pool) || a.m.id.localeCompare(b.m.id);
+    if (pa) return a.m.pool.localeCompare(b.m.pool) || a.m.id - b.m.id;
     // KO: earlier round first (higher column), then placement after final, then ID
     const ca = koColumn(a.m, ctx), cb = koColumn(b.m, ctx);
     if (ca !== cb) return cb - ca;
     const pa2 = a.stage.startsWith('3rd') || a.stage.startsWith('5th') || a.stage.startsWith('7th') ? 1 : 0;
     const pb2 = b.stage.startsWith('3rd') || b.stage.startsWith('5th') || b.stage.startsWith('7th') ? 1 : 0;
     if (pa2 !== pb2) return pa2 - pb2;
-    return a.m.id.localeCompare(b.m.id);
+    return a.m.id - b.m.id;
   });
-  const idw = Math.max(...all.map(r => r.m.id.length));
+  const idw = Math.max(...all.map(r => String(r.m.id).length));
   const stagew = Math.max(...all.map(r => r.stage.length));
   const sidew = Math.max(...all.map(r => sideLabel(r.m.sides[0], ctx).length + 4 + sideLabel(r.m.sides[1], ctx).length));
   const venuew = Math.max(...all.map(r => (r.m.venue || 'TBD').length));
@@ -469,8 +469,8 @@ function rebracketCmd(state, dropPlayers) {
 
   // Build new knockout from remaining teams in all pools
   let next = 11;
-  while (cjson.matches.some(m => m.id === 'm' + next)) next++;
-  const mid = () => 'm' + next++;
+  while (cjson.matches.some(m => m.id === next)) next++;
+  const mid = () => next++;
   const newKO = buildKnockout(
     perPool.map(p => p.teams),
     perPool.map(p => p.pool),

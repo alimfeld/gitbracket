@@ -154,7 +154,7 @@
   "matches": {
     "md": [
       {
-        "id": "m1",
+        "id": 1,
         "pool": "A",
         "sides": [
           {
@@ -176,7 +176,7 @@
         "scheduled": "2026-10-03T09:00:00+02:00"
       },
       {
-        "id": "m2",
+        "id": 2,
         "pool": "A",
         "sides": [
           {
@@ -198,7 +198,7 @@
         "scheduled": "2026-10-03T09:30:00+02:00"
       },
       {
-        "id": "m3",
+        "id": 3,
         "pool": "A",
         "sides": [
           {
@@ -220,7 +220,7 @@
         "scheduled": "2026-10-03T10:00:00+02:00"
       },
       {
-        "id": "m4",
+        "id": 4,
         "pool": "B",
         "sides": [
           {
@@ -242,7 +242,7 @@
         "scheduled": "2026-10-03T09:00:00+02:00"
       },
       {
-        "id": "m5",
+        "id": 5,
         "pool": "B",
         "sides": [
           {
@@ -264,7 +264,7 @@
         "scheduled": "2026-10-03T09:30:00+02:00"
       },
       {
-        "id": "m6",
+        "id": 6,
         "pool": "B",
         "sides": [
           {
@@ -286,7 +286,7 @@
         "scheduled": "2026-10-03T10:00:00+02:00"
       },
       {
-        "id": "m7",
+        "id": 7,
         "sides": [
           {
             "kind": "pool",
@@ -303,7 +303,7 @@
         "scheduled": "2026-10-03T10:30:00+02:00"
       },
       {
-        "id": "m8",
+        "id": 8,
         "sides": [
           {
             "kind": "pool",
@@ -320,7 +320,7 @@
         "scheduled": "2026-10-03T10:30:00+02:00"
       },
       {
-        "id": "m9",
+        "id": 9,
         "sides": [
           {
             "kind": "pool",
@@ -329,7 +329,7 @@
           },
           {
             "kind": "match",
-            "match": "m7",
+            "match": 7,
             "result": "winner"
           }
         ],
@@ -337,7 +337,7 @@
         "scheduled": "2026-10-03T11:00:00+02:00"
       },
       {
-        "id": "m10",
+        "id": 10,
         "sides": [
           {
             "kind": "pool",
@@ -346,7 +346,7 @@
           },
           {
             "kind": "match",
-            "match": "m8",
+            "match": 8,
             "result": "winner"
           }
         ],
@@ -354,16 +354,16 @@
         "scheduled": "2026-10-03T11:00:00+02:00"
       },
       {
-        "id": "m11",
+        "id": 11,
         "sides": [
           {
             "kind": "match",
-            "match": "m9",
+            "match": 9,
             "result": "winner"
           },
           {
             "kind": "match",
-            "match": "m10",
+            "match": 10,
             "result": "winner"
           }
         ],
@@ -373,16 +373,16 @@
         "scheduled": "2026-10-03T11:30:00+02:00"
       },
       {
-        "id": "m12",
+        "id": 12,
         "sides": [
           {
             "kind": "match",
-            "match": "m9",
+            "match": 9,
             "result": "loser"
           },
           {
             "kind": "match",
-            "match": "m10",
+            "match": 10,
             "result": "loser"
           }
         ],
@@ -394,7 +394,7 @@
     ],
     "wd": [
       {
-        "id": "m1",
+        "id": 1,
         "pool": "A",
         "sides": [
           {
@@ -418,7 +418,7 @@
     ],
     "xd": [
       {
-        "id": "m1",
+        "id": 1,
         "pool": "A",
         "sides": [
           {
@@ -440,7 +440,7 @@
         "scheduled": "2026-10-03T13:00:00+02:00"
       },
       {
-        "id": "m2",
+        "id": 2,
         "pool": "A",
         "sides": [
           {
@@ -462,7 +462,7 @@
         "scheduled": "2026-10-03T13:00:00+02:00"
       },
       {
-        "id": "m3",
+        "id": 3,
         "pool": "A",
         "sides": [
           {
@@ -484,7 +484,7 @@
         "scheduled": "2026-10-03T13:30:00+02:00"
       },
       {
-        "id": "m4",
+        "id": 4,
         "pool": "A",
         "sides": [
           {
@@ -506,7 +506,7 @@
         "scheduled": "2026-10-03T13:30:00+02:00"
       },
       {
-        "id": "m5",
+        "id": 5,
         "pool": "A",
         "sides": [
           {
@@ -528,7 +528,7 @@
         "scheduled": "2026-10-03T14:00:00+02:00"
       },
       {
-        "id": "m6",
+        "id": 6,
         "pool": "A",
         "sides": [
           {
@@ -550,7 +550,7 @@
         "scheduled": "2026-10-03T14:00:00+02:00"
       },
       {
-        "id": "m7",
+        "id": 7,
         "pool": "A",
         "sides": [
           {
@@ -572,7 +572,7 @@
         "scheduled": "2026-10-03T14:30:00+02:00"
       },
       {
-        "id": "m8",
+        "id": 8,
         "pool": "A",
         "sides": [
           {
@@ -594,7 +594,7 @@
         "scheduled": "2026-10-03T14:30:00+02:00"
       },
       {
-        "id": "m9",
+        "id": 9,
         "pool": "A",
         "sides": [
           {
@@ -616,7 +616,7 @@
         "scheduled": "2026-10-03T15:00:00+02:00"
       },
       {
-        "id": "m10",
+        "id": 10,
         "pool": "A",
         "sides": [
           {
@@ -638,7 +638,7 @@
         "scheduled": "2026-10-03T15:00:00+02:00"
       },
       {
-        "id": "m11",
+        "id": 11,
         "sides": [
           {
             "kind": "pool",
@@ -655,7 +655,7 @@
         "scheduled": "2026-10-03T15:30:00+02:00"
       },
       {
-        "id": "m12",
+        "id": 12,
         "sides": [
           {
             "kind": "pool",
@@ -672,7 +672,7 @@
         "scheduled": "2026-10-03T15:30:00+02:00"
       },
       {
-        "id": "m13",
+        "id": 13,
         "sides": [
           {
             "kind": "pool",
@@ -681,7 +681,7 @@
           },
           {
             "kind": "match",
-            "match": "m11",
+            "match": 11,
             "result": "winner"
           }
         ],
@@ -689,16 +689,16 @@
         "scheduled": "2026-10-03T16:00:00+02:00"
       },
       {
-        "id": "m14",
+        "id": 14,
         "sides": [
           {
             "kind": "match",
-            "match": "m12",
+            "match": 12,
             "result": "winner"
           },
           {
             "kind": "match",
-            "match": "m13",
+            "match": 13,
             "result": "winner"
           }
         ],
@@ -708,16 +708,16 @@
         "scheduled": "2026-10-03T16:30:00+02:00"
       },
       {
-        "id": "m15",
+        "id": 15,
         "sides": [
           {
             "kind": "match",
-            "match": "m12",
+            "match": 12,
             "result": "loser"
           },
           {
             "kind": "match",
-            "match": "m13",
+            "match": 13,
             "result": "loser"
           }
         ],

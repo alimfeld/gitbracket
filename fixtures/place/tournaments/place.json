@@ -47,7 +47,7 @@
   "matches": {
     "pl": [
       {
-        "id": "m1",
+        "id": 1,
         "sides": [
           {
             "kind": "players",
@@ -70,7 +70,7 @@
         ]
       },
       {
-        "id": "m2",
+        "id": 2,
         "sides": [
           {
             "kind": "players",
@@ -93,7 +93,7 @@
         ]
       },
       {
-        "id": "m3",
+        "id": 3,
         "sides": [
           {
             "kind": "players",
@@ -116,7 +116,7 @@
         ]
       },
       {
-        "id": "m4",
+        "id": 4,
         "sides": [
           {
             "kind": "players",
@@ -139,37 +139,16 @@
         ]
       },
       {
-        "id": "m5",
+        "id": 5,
         "sides": [
           {
             "kind": "match",
-            "match": "m1",
+            "match": 1,
             "result": "winner"
           },
           {
             "kind": "match",
-            "match": "m2",
-            "result": "winner"
-          }
-        ],
-        "games": [
-          {
-            "a": 11,
-            "b": 6
-          }
-        ]
-      },
-      {
-        "id": "m6",
-        "sides": [
-          {
-            "kind": "match",
-            "match": "m3",
-            "result": "winner"
-          },
-          {
-            "kind": "match",
-            "match": "m4",
+            "match": 2,
             "result": "winner"
           }
         ],
@@ -181,16 +160,37 @@
         ]
       },
       {
-        "id": "m7",
+        "id": 6,
         "sides": [
           {
             "kind": "match",
-            "match": "m5",
+            "match": 3,
             "result": "winner"
           },
           {
             "kind": "match",
-            "match": "m6",
+            "match": 4,
+            "result": "winner"
+          }
+        ],
+        "games": [
+          {
+            "a": 11,
+            "b": 6
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "sides": [
+          {
+            "kind": "match",
+            "match": 5,
+            "result": "winner"
+          },
+          {
+            "kind": "match",
+            "match": 6,
             "result": "winner"
           }
         ],
@@ -202,16 +202,16 @@
         ]
       },
       {
-        "id": "m8",
+        "id": 8,
         "sides": [
           {
             "kind": "match",
-            "match": "m5",
+            "match": 5,
             "result": "loser"
           },
           {
             "kind": "match",
-            "match": "m6",
+            "match": 6,
             "result": "loser"
           }
         ],
@@ -223,16 +223,16 @@
         ]
       },
       {
-        "id": "m9",
+        "id": 9,
         "sides": [
           {
             "kind": "match",
-            "match": "m1",
+            "match": 1,
             "result": "loser"
           },
           {
             "kind": "match",
-            "match": "m2",
+            "match": 2,
             "result": "loser"
           }
         ],
@@ -244,16 +244,16 @@
         ]
       },
       {
-        "id": "m10",
+        "id": 10,
         "sides": [
           {
             "kind": "match",
-            "match": "m3",
+            "match": 3,
             "result": "loser"
           },
           {
             "kind": "match",
-            "match": "m4",
+            "match": 4,
             "result": "loser"
           }
         ],
@@ -265,16 +265,16 @@
         ]
       },
       {
-        "id": "m11",
+        "id": 11,
         "sides": [
           {
             "kind": "match",
-            "match": "m9",
+            "match": 9,
             "result": "winner"
           },
           {
             "kind": "match",
-            "match": "m10",
+            "match": 10,
             "result": "winner"
           }
         ],
@@ -286,16 +286,16 @@
         ]
       },
       {
-        "id": "m12",
+        "id": 12,
         "sides": [
           {
             "kind": "match",
-            "match": "m9",
+            "match": 9,
             "result": "loser"
           },
           {
             "kind": "match",
-            "match": "m10",
+            "match": 10,
             "result": "loser"
           }
         ],

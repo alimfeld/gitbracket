@@ -40,7 +40,7 @@
   "matches": {
     "t": [
       {
-        "id": "m1",
+        "id": 1,
         "pool": "A",
         "sides": [
           {
@@ -59,7 +59,7 @@
         "forfeit": 1
       },
       {
-        "id": "m2",
+        "id": 2,
         "pool": "A",
         "sides": [
           {
@@ -87,7 +87,7 @@
         ]
       },
       {
-        "id": "m3",
+        "id": 3,
         "pool": "A",
         "sides": [
           {
@@ -115,7 +115,7 @@
         ]
       },
       {
-        "id": "m4",
+        "id": 4,
         "pool": "B",
         "sides": [
           {
@@ -143,7 +143,7 @@
         ]
       },
       {
-        "id": "m5",
+        "id": 5,
         "pool": "B",
         "sides": [
           {
@@ -175,7 +175,7 @@
         ]
       },
       {
-        "id": "m6",
+        "id": 6,
         "pool": "B",
         "sides": [
           {
@@ -203,7 +203,7 @@
         ]
       },
       {
-        "id": "m7",
+        "id": 7,
         "sides": [
           {
             "kind": "pool",
@@ -228,7 +228,7 @@
         ]
       },
       {
-        "id": "m8",
+        "id": 8,
         "sides": [
           {
             "kind": "pool",
@@ -257,16 +257,16 @@
         ]
       },
       {
-        "id": "m9",
+        "id": 9,
         "sides": [
           {
             "kind": "match",
-            "match": "m7",
+            "match": 7,
             "result": "loser"
           },
           {
             "kind": "match",
-            "match": "m8",
+            "match": 8,
             "result": "loser"
           }
         ],
@@ -282,16 +282,16 @@
         ]
       },
       {
-        "id": "m10",
+        "id": 10,
         "sides": [
           {
             "kind": "match",
-            "match": "m7",
+            "match": 7,
             "result": "winner"
           },
           {
             "kind": "match",
-            "match": "m8",
+            "match": 8,
             "result": "winner"
           }
         ],

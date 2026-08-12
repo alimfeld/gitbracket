@@ -34,7 +34,7 @@
   "matches": {
     "t": [
       {
-        "id": "m1",
+        "id": 1,
         "pool": "A",
         "venue": "court-2",
         "sides": [
@@ -53,7 +53,7 @@
         ]
       },
       {
-        "id": "m2",
+        "id": 2,
         "pool": "A",
         "venue": "court-2",
         "sides": [
@@ -72,7 +72,7 @@
         ]
       },
       {
-        "id": "m3",
+        "id": 3,
         "pool": "A",
         "venue": "court-2",
         "sides": [

@@ -141,7 +141,7 @@ function resolveSide(side, ctx, memo = new Map()) {
 }
 
 // Unresolved slot -> what the slot IS, so a bracket stays readable while
-// waiting: "Winner of m7", "Loser of m9", "2nd in Pool A" (dead ties stay
+// waiting: "Winner of 7", "Loser of 9", "2nd in Pool A" (dead ties stay
 // descriptive — the slot itself is still what the side says it is).
 function slotLabel(side, ctx) {
   if (side && side.kind === 'match') {
@@ -162,7 +162,7 @@ function sideLabel(side, ctx) {
 }
 
 // The player's confirmed matches: only matches where their side actually
-// resolves to them. "Winner of m9" slots stay off the schedule until m9 is
+// resolves to them. "Winner of 9" slots stay off the schedule until m9 is
 // decided — a possibility is not a booking.
 function playerMatches(ctx, pid) {
   const rows = [];
@@ -361,15 +361,15 @@ function kioskStatus(r, now) {
 // Knockout round names by distance from the final: each round back doubles
 // participants (2 -> Final, 4 -> Semifinals, 8 -> Quarterfinals, ...). With
 // byes a first round of 2 matches is still structurally Quarterfinals; names
-// key off koColumn, so a bye'd semi (XD 2026: m7, two pool slots) reads as a
-// semifinal, not a first-round match.
+// key off koColumn, so a bye'd semi (XD 2026: match 7, two pool slots) reads as
+// a semifinal, not a first-round match.
 function roundName(depthFromEnd) {
   const n = 2 << depthFromEnd;
   return { 2: 'Final', 4: 'Semifinals', 8: 'Quarterfinals' }[n] || `Round of ${n}`;
 }
 
 // Bracket column: 0 is the final column, each winner edge one column back.
-// Depth-from-leaves (matchRound) can't place a bye'd semi — XD 2026's m7 has
+// Depth-from-leaves (matchRound) can't place a bye'd semi — XD 2026's match 7 has
 // two pool slots, so depth 0, yet its winner feeds the final. Winner edges
 // into a placement sub-bracket (5th place fed by the 5th–8th semis) do not
 // extend the chain, so it always terminates at the final. Placement matches

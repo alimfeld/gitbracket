@@ -80,14 +80,14 @@ test('xd pool order', () => {
 
 test('forfeit and partial-match detection', () => {
   const md = catOf('sample', 'md40');
-  assert(winnerIdx(md.byId.get('m7'), md) === 0, 'forfeit 1 -> side 0 wins');
-  assert(winnerIdx(md.byId.get('m8'), md) === null, 'partial match is not done');
-  assert(isDone(md.byId.get('m7'), md) && isDone(md.byId.get('m1'), md), 'done detection');
+  assert(winnerIdx(md.byId.get(7), md) === 0, 'forfeit 1 -> side 0 wins');
+  assert(winnerIdx(md.byId.get(8), md) === null, 'partial match is not done');
+  assert(isDone(md.byId.get(7), md) && isDone(md.byId.get(1), md), 'done detection');
 });
 
 test('slot resolution: forfeit winner vs in-play TBD', () => {
   const md = catOf('sample', 'md40');
-  const m9 = md.byId.get('m9');
+  const m9 = md.byId.get(9);
   const w7 = resolveSide(m9.sides[0], md);
   assert(w7 && w7.has('p1') && w7.has('p2'), 'winner of forfeit m7 resolves to p1/p2');
   assert(resolveSide(m9.sides[1], md) === null, 'winner of in-play m8 -> TBD');
@@ -95,7 +95,7 @@ test('slot resolution: forfeit winner vs in-play TBD', () => {
 
 test('slot resolution: loser path (bronze/placement)', () => {
   const md = catOf('sample', 'md40');
-  const m10 = md.byId.get('m10');
+  const m10 = md.byId.get(10);
   const l7 = resolveSide(m10.sides[0], md);
   assert(l7 && l7.has('p7') && l7.has('p8'), 'loser of forfeit m7 resolves to p7/p8');
   assert(resolveSide(m10.sides[1], md) === null, 'loser of in-play m8 -> TBD');
@@ -130,18 +130,18 @@ test('kioskStatus: overdue / now / upcoming badge per open card', () => {
 
 test('matchLabel: pool, placement, and round names on one card label', () => {
   const full = catOf('full', 't');
-  assert(matchLabel(full.byId.get('m1'), full) === 'Pool A', 'pool match labels its pool');
-  assert(matchLabel(full.byId.get('m7'), full) === 'SF', 'semifinal');
-  assert(matchLabel(full.byId.get('m10'), full) === 'Final', 'final');
-  assert(matchLabel(full.byId.get('m9'), full) === '3rd place', 'bronze via placementLabel');
+  assert(matchLabel(full.byId.get(1), full) === 'Pool A', 'pool match labels its pool');
+  assert(matchLabel(full.byId.get(7), full) === 'SF', 'semifinal');
+  assert(matchLabel(full.byId.get(10), full) === 'Final', 'final');
+  assert(matchLabel(full.byId.get(9), full) === '3rd place', 'bronze via placementLabel');
   const md = catOf('sample', 'md40');
-  assert(matchLabel(md.byId.get('m9'), md) === 'Final' && matchLabel(md.byId.get('m10'), md) === '3rd place', 'sample: m9 final, m10 bronze');
+  assert(matchLabel(md.byId.get(9), md) === 'Final' && matchLabel(md.byId.get(10), md) === '3rd place', 'sample: m9 final, m10 bronze');
 });
 
 test('reachableKo: undecided feeder keeps both branches; decided feeder gates the closed one', () => {
   const md = catOf('sample', 'md40');
   const ids = pid => [...reachableKo(md, pid)].sort().join(',');
-  assert(ids('p5') === 'm10,m9', 'p5: final and bronze both open while m8 is undecided');
+  assert(ids('p5') === '10,9', 'p5: final and bronze both open while m8 is undecided');
   assert(ids('p1') === '' && ids('p7') === '', 'p1/p7: decided feeders close the losing/winning branch');
 });
 
@@ -159,14 +159,14 @@ test('possibleSpan: open knockout span, and pre-knockout fallback to the bracket
 test('playerMatches: only matches the player is actually in, not potential slots', () => {
   const md = catOf('sample', 'md40');
   const ids = pid => playerMatches(md, pid).map(r => r.m.id).sort();
-  assert(ids('p1').join() === 'm1,m3,m5,m7,m9', 'p1: pool + semifinal + final, not bronze m10 (won m7)');
-  assert(ids('p7').join() === 'm10,m2,m4,m5,m7', 'p7: pool + m7 + bronze m10, not final m9 (lost m7)');
-  assert(ids('p5').join() === 'm2,m3,m6,m8', 'p5: pool + m8; m9/m10 stay off until m8 is decided');
+  assert(ids('p1').join() === '1,3,5,7,9', 'p1: pool + semifinal + final, not bronze m10 (won m7)');
+  assert(ids('p7').join() === '10,2,4,5,7', 'p7: pool + m7 + bronze m10, not final m9 (lost m7)');
+  assert(ids('p5').join() === '2,3,6,8', 'p5: pool + m8; m9/m10 stay off until m8 is decided');
 });
 
 test('full bracket: every slot resolves end to end (winner and loser paths)', () => {
   const full = catOf('full', 't');
-  const f = full.byId.get('m10'), b = full.byId.get('m9');
+  const f = full.byId.get(10), b = full.byId.get(9);
   const w0 = resolveSide(f.sides[0], full), w1 = resolveSide(f.sides[1], full);
   assert(w0 && w0.has('p1') && w1 && w1.has('p5'), 'final resolves to p1 vs p5');
   assert(winnerIdx(f, full) === 0, 'final winner is p1');
@@ -184,7 +184,7 @@ test('forfeit inside a pool: counts a win, no gd/pd', () => {
 
 test('bracket depth', () => {
   const md = catOf('sample', 'md40');
-  assert(matchRound(md.byId.get('m7'), md) === 0 && matchRound(md.byId.get('m9'), md) === 1 && matchRound(md.byId.get('m10'), md) === 1, 'bracket depth');
+  assert(matchRound(md.byId.get(7), md) === 0 && matchRound(md.byId.get(9), md) === 1 && matchRound(md.byId.get(10), md) === 1, 'bracket depth');
 });
 
 test('koColumn: a bye\'d semi sits in the semifinal column, not with round 1', () => {
@@ -205,7 +205,7 @@ test('koColumn: a bye\'d semi sits in the semifinal column, not with round 1', (
   // (round below the final), not the bye'd match's leaf depth — else 5th–8th semi.
   assert(placementLabel(ko.byId.get('b'), ko) === '3rd place', 'bronze of a bye\'d semi is 3rd place, not a classification round');
   const full = catOf('full', 't');
-  assert(koColumn(full.byId.get('m10'), full) === 0 && koColumn(full.byId.get('m7'), full) === 1 && koColumn(full.byId.get('m9'), full) === 0,
+  assert(koColumn(full.byId.get(10), full) === 0 && koColumn(full.byId.get(7), full) === 1 && koColumn(full.byId.get(9), full) === 0,
     'balanced bracket unchanged: final 0, semis 1, bronze with the final');
 });
 
@@ -213,31 +213,31 @@ test('dead tie: standings tie + pool slot TBD', () => {
   const tie = catOf('tie', 't');
   const st = poolStandings(tie, 'A');
   assert(st && st.length === 2 && sameRecord(st[0], st[1]), 'tie detected in standings');
-  assert(resolveSide(tie.byId.get('m3').sides[0], tie) === null, 'dead-tied pool slot -> TBD');
+  assert(resolveSide(tie.byId.get(3).sides[0], tie) === null, 'dead-tied pool slot -> TBD');
 });
 
 test('3-way dead tie: standings tie + pool slot TBD', () => {
   const tie3 = catOf('tie3', 't');
   const st = poolStandings(tie3, 'A');
   assert(st && st.length === 3 && sameRecord(st[0], st[1]) && sameRecord(st[1], st[2]), '3-way tie detected');
-  assert(resolveSide(tie3.byId.get('m4').sides[0], tie3) === null, '3-way dead-tied pool slot -> TBD');
+  assert(resolveSide(tie3.byId.get(4).sides[0], tie3) === null, '3-way dead-tied pool slot -> TBD');
 });
 
 test('slotLabel: unresolved slots describe the slot, not bare TBD', () => {
   const md = catOf('sample', 'md40');
-  const m9 = md.byId.get('m9');
-  assert(slotLabel(m9.sides[0], md) === 'Winner of m7', 'winner slot labels the feeder match');
-  assert(slotLabel(m9.sides[1], md) === 'Winner of m8', 'unresolved match slot still labels the feeder');
-  assert(slotLabel(md.byId.get('m10').sides[0], md) === 'Loser of m7', 'loser slot labels the feeder');
-  const st = md.byId.get('m7').sides[0];
+  const m9 = md.byId.get(9);
+  assert(slotLabel(m9.sides[0], md) === 'Winner of 7', 'winner slot labels the feeder match');
+  assert(slotLabel(m9.sides[1], md) === 'Winner of 8', 'unresolved match slot still labels the feeder');
+  assert(slotLabel(md.byId.get(10).sides[0], md) === 'Loser of 7', 'loser slot labels the feeder');
+  const st = md.byId.get(7).sides[0];
   assert(slotLabel(st, md) === '1st in Pool A', 'pool slot labels rank');
-  assert(slotLabel(md.byId.get('m8').sides[1], md) === '3rd in Pool A', 'rank 3 ordinal');
+  assert(slotLabel(md.byId.get(8).sides[1], md) === '3rd in Pool A', 'rank 3 ordinal');
 });
 
 test('poolStandings partial: unfinished pool still yields a live table', () => {
   const tjson = require(FIX('sample', 'tournaments', 'sample.json'));
   const md = catOf('sample', 'md40');
-  const unfinished = makeCat({ meta: tjson.categories[0], matches: md.matches.map(m => m.id === 'm6' ? { ...m, games: [] } : m) }, tjson);
+  const unfinished = makeCat({ meta: tjson.categories[0], matches: md.matches.map(m => m.id === 6 ? { ...m, games: [] } : m) }, tjson);
   assert(poolStandings(unfinished, 'A') === null, 'strict form still TBDs an unfinished pool');
   const live = poolStandings(unfinished, 'A', true);
   assert(live && live.length === 4, 'partial form lists all sides');
@@ -253,11 +253,11 @@ test('roundName: structural knockout names by depth from the final', () => {
 test('placementLabel: 3rd/5th/7th place and classification semis', () => {
   const pl = catOf('place', 'pl');
   const L = id => placementLabel(pl.byId.get(id), pl);
-  assert(L('m7') === null && L('m5') === null && L('m1') === null, 'final/semis/quarters are not placement matches');
-  assert(L('m8') === '3rd place', 'losers of semis -> 3rd place');
-  assert(L('m9') === '5th–8th semi', 'losers of quarters -> classification semi');
-  assert(L('m11') === '5th place', 'winners of classification semis -> 5th place');
-  assert(L('m12') === '7th place', 'losers of classification semis -> 7th place');
+  assert(L(7) === null && L(5) === null && L(1) === null, 'final/semis/quarters are not placement matches');
+  assert(L(8) === '3rd place', 'losers of semis -> 3rd place');
+  assert(L(9) === '5th–8th semi', 'losers of quarters -> classification semi');
+  assert(L(11) === '5th place', 'winners of classification semis -> 5th place');
+  assert(L(12) === '7th place', 'losers of classification semis -> 7th place');
 });
 
 test('renderers: all four render from a repo and escape repo-sourced strings', () => {
@@ -277,7 +277,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   const { data } = dataOf('sample');
   const no = () => ({ slug: 'sample', view: 'categories' });
   const standings = renderStandings(no(), data);
-  assert(standings.includes('Pool A') && standings.includes('Final') && standings.includes('Winner of m8'), 'standings renders pools, bracket, and slot labels');
+  assert(standings.includes('Pool A') && standings.includes('Final') && standings.includes('Winner of 8'), 'standings renders pools, bracket, and slot labels');
   assert(standings.includes('Ada Lovelace'), 'standings renders player names');
   assert(standings.includes('#sample/players') && !standings.includes('#sample/players/'), 'standings links the player picker, not each name');
   const filtered = renderStandings({ slug: 'sample', view: 'categories', filter: 'md40' }, data);

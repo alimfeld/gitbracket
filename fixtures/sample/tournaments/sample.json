@@ -73,7 +73,7 @@
   "matches": {
     "md40": [
       {
-        "id": "m1",
+        "id": 1,
         "pool": "A",
         "venue": "court-1",
         "scheduled": "2025-07-14T09:00:00-04:00",
@@ -105,7 +105,7 @@
         ]
       },
       {
-        "id": "m2",
+        "id": 2,
         "pool": "A",
         "venue": "court-2",
         "scheduled": "2025-07-14T09:00:00-04:00",
@@ -141,7 +141,7 @@
         ]
       },
       {
-        "id": "m3",
+        "id": 3,
         "pool": "A",
         "venue": "court-1",
         "scheduled": "2025-07-14T09:45:00-04:00",
@@ -173,7 +173,7 @@
         ]
       },
       {
-        "id": "m4",
+        "id": 4,
         "pool": "A",
         "venue": "court-2",
         "scheduled": "2025-07-14T09:45:00-04:00",
@@ -209,7 +209,7 @@
         ]
       },
       {
-        "id": "m5",
+        "id": 5,
         "pool": "A",
         "venue": "court-1",
         "scheduled": "2025-07-14T10:30:00-04:00",
@@ -241,7 +241,7 @@
         ]
       },
       {
-        "id": "m6",
+        "id": 6,
         "pool": "A",
         "venue": "court-2",
         "scheduled": "2025-07-14T10:30:00-04:00",
@@ -277,7 +277,7 @@
         ]
       },
       {
-        "id": "m7",
+        "id": 7,
         "venue": "court-1",
         "scheduled": "2025-07-14T11:15:00-04:00",
         "sides": [
@@ -295,7 +295,7 @@
         "forfeit": 1
       },
       {
-        "id": "m8",
+        "id": 8,
         "bestOf": 3,
         "venue": "court-2",
         "scheduled": "2025-07-14T11:15:00-04:00",
@@ -319,37 +319,37 @@
         ]
       },
       {
-        "id": "m9",
+        "id": 9,
         "bestOf": 3,
         "venue": "court-1",
         "scheduled": "2025-07-14T12:15:00-04:00",
         "sides": [
           {
             "kind": "match",
-            "match": "m7",
+            "match": 7,
             "result": "winner"
           },
           {
             "kind": "match",
-            "match": "m8",
+            "match": 8,
             "result": "winner"
           }
         ]
       },
       {
-        "id": "m10",
+        "id": 10,
         "bestOf": 3,
         "venue": "court-2",
         "scheduled": "2025-07-14T12:15:00-04:00",
         "sides": [
           {
             "kind": "match",
-            "match": "m7",
+            "match": 7,
             "result": "loser"
           },
           {
             "kind": "match",
-            "match": "m8",
+            "match": 8,
             "result": "loser"
           }
         ]
@@ -357,7 +357,7 @@
     ],
     "xd": [
       {
-        "id": "x1",
+        "id": 1,
         "pool": "A",
         "venue": "court-1",
         "scheduled": "2025-07-14T13:00:00-04:00",
@@ -389,7 +389,7 @@
         ]
       },
       {
-        "id": "x2",
+        "id": 2,
         "pool": "A",
         "venue": "court-2",
         "scheduled": "2025-07-14T13:00:00-04:00",
@@ -425,7 +425,7 @@
         ]
       },
       {
-        "id": "x3",
+        "id": 3,
         "pool": "A",
         "venue": "court-1",
         "scheduled": "2025-07-14T13:45:00-04:00",
@@ -457,7 +457,7 @@
         ]
       },
       {
-        "id": "x4",
+        "id": 4,
         "pool": "A",
         "venue": "court-2",
         "scheduled": "2025-07-14T13:45:00-04:00",
@@ -489,7 +489,7 @@
         ]
       },
       {
-        "id": "x5",
+        "id": 5,
         "pool": "A",
         "venue": "court-1",
         "scheduled": "2025-07-14T14:30:00-04:00",
@@ -521,7 +521,7 @@
         ]
       },
       {
-        "id": "x6",
+        "id": 6,
         "pool": "A",
         "venue": "court-2",
         "scheduled": "2025-07-14T14:30:00-04:00",
