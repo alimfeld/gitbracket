@@ -285,7 +285,7 @@ function assertPoolCoverage(teams, matches, poolSize) {
       );
     const want = (pool.length * (pool.length - 1)) / 2;
     if (new Set(pairs).size !== want) {
-      throw new Error(`pool ${names[p]}: ${new Set(pairs).size}/${want} pairings`);
+      throw new Error(`pool ${String.fromCharCode(65 + p)}: ${new Set(pairs).size}/${want} pairings`);
     }
   });
 }
