@@ -319,7 +319,7 @@ function winnerDepth(ctx, id, memo = new Map()) {
 // ---------- time ----------
 
 function fmtTime(t, tz) {
-  return new Intl.DateTimeFormat(undefined, { timeZone: tz, hour: 'numeric', minute: '2-digit' }).format(t);
+  return new Intl.DateTimeFormat(undefined, { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(t);
 }
 
 // Kiosk wall clock, second-granularity, in the tournament's timezone.
