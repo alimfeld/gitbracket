@@ -66,4 +66,105 @@ test('spec guards reject bad input fast', () => {
   assert.throws(() => generate({ ...MINI, date: '2026-02-30' }), /not a real calendar date/);
   assert.throws(() => generate({ ...MINI, teams: { md: MINI.teams.md, nope: [] } }), /undeclared category/);
   assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], final: 3 }] }), /final/);
+  assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], knockout: 'yes' }] }), /knockout/);
+  assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], placements: 3 }] }), /placements/);
+  assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], placements: 0 }] }), /placements/);
+  assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], placements: -2 }] }), /placements/);
+});
+
+test('knockout: false skips the knockout phase for a multi-pool category', () => {
+  const cats = [{ ...MINI.categories[0], knockout: false }, MINI.categories[1]];
+  const tourney = generate({ ...MINI, categories: cats });
+  const { errs } = validateRepo(repoOf(tourney));
+  assert.deepEqual(errs, []);
+  // md: 5 teams, 2 pools (3+2) → only pool matches (3+1 = 4), no knockout
+  assert.equal(tourney.matches.md.length, 4);
+  assert.ok(tourney.matches.md.every((m) => m.pool !== undefined), 'every md match has a pool');
+});
+
+test('knockout: true enables knockout for a single-pool category', () => {
+  // Use a 4-team single pool — would normally have no knockout
+  const cats = [MINI.categories[0], { ...MINI.categories[1], knockout: true }];
+  const teams = {
+    md: MINI.teams.md, // 5 teams, 2 pools → knockout already on by default
+    xd: [['ada', 'ben'], ['cid', 'dan'], ['eve', 'fin'], ['gus', 'huw']], // 4 teams, 1 pool
+  };
+  const tourney = generate({ ...MINI, categories: cats, teams });
+  const { errs } = validateRepo(repoOf(tourney));
+  assert.deepEqual(errs, []);
+  // xd: 4 teams, 1 pool → 6 pool matches + 4 knockout (2 R1 + 1 SF + 1 bronze) = 10
+  assert.equal(tourney.matches.xd.length, 10);
+  const ko = tourney.matches.xd.filter((m) => m.pool === undefined);
+  assert.equal(ko.length, 4);
+});
+
+test('knockout: false on single pool is equivalent to omitted', () => {
+  const cats = [MINI.categories[0], { ...MINI.categories[1], knockout: false }];
+  const tourney = generate({ ...MINI, categories: cats });
+  const { errs } = validateRepo(repoOf(tourney));
+  assert.deepEqual(errs, []);
+  // xd: 2 teams, 1 pool, knockout: false → 1 pool match, no knockout
+  assert.equal(tourney.matches.xd.length, 1);
+});
+
+test('placements: 2 suppresses the bronze match, final only', () => {
+  const cats = [{ ...MINI.categories[0], placements: 2 }, MINI.categories[1]];
+  const tourney = generate({ ...MINI, categories: cats });
+  const { errs } = validateRepo(repoOf(tourney));
+  assert.deepEqual(errs, []);
+  // md: 5 teams → 4 pool + 4 main bracket, no bronze = 8
+  assert.equal(tourney.matches.md.length, 8);
+  const ko = tourney.matches.md.filter((m) => m.pool === undefined);
+  assert.equal(ko.length, 4);
+  // no loser-of-semis match (the bronze)
+  assert.ok(ko.every((m) => m.sides.every((s) => s.kind !== 'match' || s.result !== 'loser' || false)), 'no match-within-round loser edge in knockout');
+});
+
+test('placements: 8 builds 5th-8th classification', () => {
+  // 8 teams in 2 pools of 4 → clear QF round
+  const teams = {
+    md: [['ada', 'ben'], ['cid', 'dan'], ['eve', 'fin'], ['gus', 'huw'], ['ida', 'jan'], ['kim', 'ada'], ['ben', 'cid'], ['dan', 'eve']],
+  };
+  // 8 distinct pairings for 8 teams
+  const mdTeams = [];
+  const players = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8'];
+  for (let i = 0; i < 8; i++) mdTeams.push([players[i]]);
+  const spec = {
+    ...MINI,
+    players: Object.fromEntries(players.map((p) => [p, p.toUpperCase()])),
+    categories: [{ ...MINI.categories[0], placements: 8 }],
+    teams: { md: mdTeams },
+  };
+  const tourney = generate(spec);
+  const { errs } = validateRepo({
+    ...repoOf(tourney),
+    index: [{ slug: 'mini', name: 'Mini Open' }],
+    tournaments: new Map([['mini', { tjson: tourney, matches: new Map(Object.entries(tourney.matches).map(([cid, ms]) => [cid, { matches: ms }])) }]]),
+  });
+  assert.deepEqual(errs, []);
+  // md: 8 teams, 2 pools of 4 → 12 pool + 7 main bracket + 1 bronze + 4 placement = 24
+  assert.equal(tourney.matches.md.length, 24);
+  const ko = tourney.matches.md.filter((m) => m.pool === undefined);
+  assert.equal(ko.length, 12); // 7 + 1 + 4
+  // Should have loser-of-match edges deeper than semis (QF losers)
+  const loserEdges = ko.filter((m) => m.sides.some((s) => s.kind === 'match' && s.result === 'loser'));
+  assert.ok(loserEdges.length > 1, 'multiple placement matches with loser edges');
+});
+
+test('knockout false + placements silently ignores placements', () => {
+  const spec = {
+    ...MINI,
+    categories: [{ ...MINI.categories[0], knockout: false, placements: 8 }],
+    teams: { md: MINI.teams.md }, // no xd — categories only has md
+  };
+  const tourney = generate(spec);
+  const idx = { slug: 'mini', name: 'Mini Open' };
+  const { errs } = validateRepo({
+    readErrs: [],
+    index: [idx],
+    tournaments: new Map([['mini', { tjson: tourney, matches: new Map([['md', { matches: tourney.matches.md }]]) }]]),
+  });
+  assert.deepEqual(errs, []);
+  // No knockout — placements is irrelevant
+  assert.equal(tourney.matches.md.length, 4);
 });

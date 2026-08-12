@@ -64,13 +64,41 @@ function splitPools(teams, poolSize) {
   return pools;
 }
 
+// Placement sub-bracket for n losers (n teams from one knockout round). Pairs
+// best vs worst recursively, producing a full bracket that determines every
+// rank in the range. For n=4 QF losers: 2 semis + 5th/6th + 7th/8th = 4 matches.
+// fin (bestOf/slotMinutes) is the spec's "final" override; it lands on the
+// bronze match only — deeper placement matches use the default knockout config.
+function buildPlacement(losers, mid, fin) {
+  const n = losers.length;
+  if (n < 2) return [];
+  if (n === 2) {
+    const m = { id: mid(), sides: [losers[0], losers[1]] };
+    if (fin && fin.bestOf !== undefined) m.bestOf = fin.bestOf;
+    if (fin && fin.slotMinutes !== undefined) m.slotMinutes = fin.slotMinutes;
+    return [m];
+  }
+  // n >= 4: pair best vs worst, then recurse winners (top half) and losers (bottom half)
+  const r1 = [];
+  const winners = [], losers2 = [];
+  for (let i = 0; i < n / 2; i++) {
+    const m = { id: mid(), sides: [losers[i], losers[n - 1 - i]] };
+    r1.push(m);
+    winners.push({ kind: 'match', match: m.id, result: 'winner' });
+    losers2.push({ kind: 'match', match: m.id, result: 'loser' });
+  }
+  return [...r1, ...buildPlacement(winners, mid, fin), ...buildPlacement(losers2, mid, fin)];
+}
+
 // Single elimination, everyone advances. Strength order = pool winners first,
 // then interleaved by rank (snake). The top seeds (byes = next power of two
 // minus field size) skip round 1; the rest pair best vs worst so the strongest
-// meet only late. Winners advance, semifinal losers play for 3rd place. The
-// final and bronze match take fin (the spec's per-category "final" override:
-// bestOf / slotMinutes) where present.
-function buildKnockout(pools, names, mid, fin) {
+// meet only late. Winners advance, the final takes fin (the spec's per-category
+// "final" override: bestOf / slotMinutes) where present. Placement depth is
+// controlled by placements (power of 2, default 4 = 3rd/4th play-off;
+// 8 adds 5th-8th classification, etc).
+function buildKnockout(pools, names, mid, fin, placements) {
+  placements = placements || 4;
   const total = pools.reduce((s, p) => s + p.length, 0);
   let M = 1;
   while (M < total) M *= 2;
@@ -94,17 +122,18 @@ function buildKnockout(pools, names, mid, fin) {
   // interleave per pool if a seeding-quality pass is ever needed.
 
   const matches = [];
+  const rounds = []; // track every round for placement construction
   const ms1 = [];
   for (let i = 0; i < r1Sides.length; i += 2) {
     const m = { id: mid(), sides: [r1Sides[i], r1Sides[i + 1]] };
     ms1.push(m);
     matches.push(m);
   }
+  rounds.push(ms1);
   const winners = ms1.map((m) => ({ kind: 'match', match: m.id, result: 'winner' }));
   // Round 2 interleaves byes with round-1 winners, spreading byes out. When byes
   // exceed round-1 matches (5/9/10/11-team fields) two byed seeds must meet —
   // structurally forced, nothing crashes.
-  let semis = ms1.length === 2 ? ms1 : null; // the round feeding the final, for the bronze match
   let round = [];
   for (let i = 0; i < Math.max(byeSides.length, winners.length); i++) {
     if (i < byeSides.length) round.push(byeSides[i]);
@@ -129,26 +158,27 @@ function buildKnockout(pools, names, mid, fin) {
       next.push({ kind: 'match', match: m.id, result: 'winner' });
     }
     matches.push(...ms);
-    if (ms.length === 2) semis = ms; // the round feeding the final
+    rounds.push(ms);
     round = next;
   }
 
   const finalM = matches[matches.length - 1];
   if (fin.bestOf !== undefined) finalM.bestOf = fin.bestOf;
   if (fin.slotMinutes !== undefined) finalM.slotMinutes = fin.slotMinutes;
-  matches.push({
-    id: mid(),
-    bestOf: fin.bestOf, // undefined = no override; JSON.stringify drops the key
-    slotMinutes: fin.slotMinutes,
-    sides: [
-      { kind: 'match', match: semis[0].id, result: 'loser' },
-      { kind: 'match', match: semis[1].id, result: 'loser' },
-    ],
-  });
 
-  if (matches.length !== total) {
-    throw new Error(`knockout: ${matches.length} matches, expected ${total}`);
+  // Build placement matches for each round whose losers' rank range fits within placements.
+  // Rounds tracked from first to final: rounds[rounds.length-1] = final (1 match),
+  // rounds[rounds.length-2] = semis (2 matches → losers rank 3-4), etc.
+  for (let ri = rounds.length - 2; ri >= 0; ri--) {
+    const n = rounds[ri].length; // number of losers from this round
+    if (placements >= 2 * n) {
+      const losers = rounds[ri].map(m => ({ kind: 'match', match: m.id, result: 'loser' }));
+      // Only the bronze bracket (from the round before the final) gets the final override
+      const override = (ri === rounds.length - 2 && n === 2) ? fin : {};
+      matches.push(...buildPlacement(losers, mid, override));
+    }
   }
+
   return matches;
 }
 
@@ -172,7 +202,12 @@ function buildCategory(teams, cat, poolSize) {
     }
   });
 
-  if (pools.length > 1) matches.push(...buildKnockout(pools, names, mid, cat.final || {}));
+  // knockout flag: undefined/true = build when multi-pool; false = never; true on
+  // single-pool = everyone advances to knockout
+  const doKo = (pools.length > 1 || cat.knockout === true);
+  if (doKo && cat.knockout !== false) {
+    matches.push(...buildKnockout(pools, names, mid, cat.final || {}, cat.placements));
+  }
   return matches;
 }
 
@@ -310,6 +345,14 @@ function generate(spec) {
   for (const c of categories) {
     if (c.final !== undefined && (typeof c.final !== 'object' || Array.isArray(c.final))) {
       throw new Error(`spec: category ${c.id}: final must be an object { bestOf?, slotMinutes? }, got ${JSON.stringify(c.final)}`);
+    }
+    if (c.knockout !== undefined && typeof c.knockout !== 'boolean') {
+      throw new Error(`spec: category ${c.id}: knockout must be a boolean (true/false), got ${JSON.stringify(c.knockout)}`);
+    }
+    if (c.placements !== undefined) {
+      if (typeof c.placements !== 'number' || c.placements < 2 || (c.placements & (c.placements - 1)) !== 0) {
+        throw new Error(`spec: category ${c.id}: placements must be a power of 2 >= 2, got ${JSON.stringify(c.placements)}`);
+      }
     }
   }
 
