@@ -16,7 +16,7 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const { spawnSync } = require('child_process');
-const { makeCat, isDone, resolveSide, sideLabel, schedTime, gamesText, fmtTime, matchLabel, poolStandings } = require('../site/derive.js');
+const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, gamesText, fmtTime, matchLabel, koColumn, poolStandings } = require('../site/derive.js');
 const { loadRepo, writeTournament } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 const { buildKnockout } = require('./schedule.js');
@@ -129,26 +129,68 @@ function writeEdit(siteRoot, repo, slug, catId, apply) {
   return { file };
 }
 
+function formatMatchLine(m, ctx, tz, stage, sidew, idw, venuew, stagew) {
+  const t = schedTime(m);
+  const time = t === null ? C.yellow('TBD'.padStart(8)) : C.dim(fmtTime(t, tz).padStart(8));
+  const v = m.venue || 'TBD';
+  const venue = (m.venue ? C.magenta : C.yellow)(v.padEnd(venuew || v.length));
+  const g = gamesText(m);
+  const score = m.forfeit !== undefined ? C.yellow(`forfeit ${m.forfeit}`) : g ? C.green(g) : C.dim('–');
+  const s0 = sideLabel(m.sides[0], ctx);
+  const s1 = sideLabel(m.sides[1], ctx);
+  const sides = s0 + C.dim(' vs ') + s1;
+  const sidePad = sidew !== undefined ? ' '.repeat(Math.max(0, sidew - (s0.length + 4 + s1.length))) : '';
+  const stagePad = stagew !== undefined ? ' '.repeat(Math.max(0, stagew - stage.length)) : '';
+  return `${C.bold(idw ? m.id.padEnd(idw) : m.id)}  ${C.dim(stage)}${stagePad}  ${sides}${sidePad}  ${time}  ${venue}  ${score}`;
+}
+
 function listText(repo, slug, cat) {
   const info = repo.tournaments.get(slug);
   const tjson = info.tjson;
-  const shown = listEligible(repo, slug).filter(r => r.cat === cat);
+  const cjson = info.matches.get(cat);
+  const meta = tjson.categories.find(c => c.id === cat);
+  const ctx = makeCat({ meta, matches: cjson.matches }, tjson);
+  const tz = tjson.timezone || 'UTC';
   const entry = repo.index.find(e => e && e.slug === slug);
-  const idw = Math.max(...shown.map(r => r.m.id.length));
-  const stagew = Math.max(...shown.map(r => matchLabel(r.m, r.ctx).length));
-  const venuew = Math.max(...shown.map(r => (r.m.venue || 'TBD').length));
-  const out = [`${C.bold((entry && entry.name) || slug)} / ${C.bold(C.cyan(cat))} — ${shown.length} scorable match${shown.length === 1 ? '' : 'es'}:`];
-  for (const r of shown) {
-    const m = r.m, ctx = r.ctx, tz = tjson.timezone || 'UTC';
-    const t = schedTime(m);
-    const stage = matchLabel(m, ctx);
-    const time = t === null ? C.yellow('TBD'.padStart(8)) : C.dim(fmtTime(t, tz).padStart(8));
-    const venue = m.venue ? C.magenta(m.venue.padEnd(venuew)) : C.yellow('TBD'.padEnd(venuew));
-    const g = gamesText(m);
-    const score = m.forfeit !== undefined ? C.yellow(`forfeit ${m.forfeit}`) : g ? C.green(g) : C.dim('–');
-    out.push(`  ${C.bold(m.id.padEnd(idw))}  ${C.dim(stage.padEnd(stagew))} ${time}  ${venue} ${sideLabel(m.sides[0], ctx)}${C.dim(' vs ')}${sideLabel(m.sides[1], ctx)}  ${score}`);
+  const lines = [`${C.bold((entry && entry.name) || slug)} / ${C.bold(C.cyan(cat))}`];
+
+  const poolIds = [...new Set(cjson.matches.filter(m => m.pool).map(m => m.pool))].sort();
+  for (const pid of poolIds) {
+    lines.push('', `${C.cyan('Pool ' + pid)}:`);
+    const st = poolStandings(ctx, pid, true);
+    if (st) {
+      for (let i = 0; i < st.length; i++) {
+        const r = st[i];
+        const pd = r.pd >= 0 ? `+${r.pd}` : `${r.pd}`;
+        lines.push(`  ${i + 1}. ${r.wins}-${r.losses}  ${teamLabel(r.ids, ctx)}  (${pd})`);
+      }
+    }
   }
-  return out.join('\n');
+
+  // Flat match listing with stage labels, no section headers
+  const all = cjson.matches.map(m => ({ m, stage: matchLabel(m, ctx) }));
+  all.sort((a, b) => {
+    const pa = a.m.pool !== undefined, pb = b.m.pool !== undefined;
+    if (pa !== pb) return pa ? -1 : 1; // pool matches first
+    if (pa) return a.m.pool.localeCompare(b.m.pool) || a.m.id.localeCompare(b.m.id);
+    // KO: earlier round first (higher column), then placement after final, then ID
+    const ca = koColumn(a.m, ctx), cb = koColumn(b.m, ctx);
+    if (ca !== cb) return cb - ca;
+    const pa2 = a.stage.startsWith('3rd') || a.stage.startsWith('5th') || a.stage.startsWith('7th') ? 1 : 0;
+    const pb2 = b.stage.startsWith('3rd') || b.stage.startsWith('5th') || b.stage.startsWith('7th') ? 1 : 0;
+    if (pa2 !== pb2) return pa2 - pb2;
+    return a.m.id.localeCompare(b.m.id);
+  });
+  const idw = Math.max(...all.map(r => r.m.id.length));
+  const stagew = Math.max(...all.map(r => r.stage.length));
+  const sidew = Math.max(...all.map(r => sideLabel(r.m.sides[0], ctx).length + 4 + sideLabel(r.m.sides[1], ctx).length));
+  const venuew = Math.max(...all.map(r => (r.m.venue || 'TBD').length));
+  if (all.length) lines.push('');
+  for (const { m, stage } of all) {
+    lines.push('    ' + formatMatchLine(m, ctx, tz, stage, sidew, idw, venuew, stagew));
+  }
+
+  return lines.join('\n');
 }
 
 // Conventional-commit messages per edit kind — grep-able match-day history:
