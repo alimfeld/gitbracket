@@ -324,7 +324,7 @@ function fmtTime(t, tz) {
 
 // Kiosk wall clock, second-granularity, in the tournament's timezone.
 function fmtClock(t, tz) {
-  return new Intl.DateTimeFormat(undefined, { timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(t);
+  return new Intl.DateTimeFormat(undefined, { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(t);
 }
 
 function dayKey(t, tz) {
