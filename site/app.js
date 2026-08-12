@@ -397,8 +397,8 @@ function boot() {
 
 if (typeof document !== 'undefined') boot();
 
-// CommonJS exports for node tools (tests, validate, cli, schedule import from
-// app.js or derive.js directly); browser <script> ignores these.
+// CommonJS exports for node tests; browser <script> ignores these. Derive
+// functions come from derive.js directly (required above, on globalThis).
 if (typeof module !== 'undefined') {
-  module.exports = { ...require('./derive.js'), parseRoute, loadAll, renderIndex, renderStandings, renderVenue, renderPlayer };
+  module.exports = { parseRoute, loadAll, renderIndex, renderStandings, renderVenue, renderPlayer };
 }

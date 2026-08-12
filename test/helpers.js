@@ -6,7 +6,7 @@
 const path = require('path');
 const { loadRepo } = require('../src/repo.js');
 const { validateRepo } = require('../src/validate.js');
-const { makeCat } = require('../site/app.js');
+const { makeCat } = require('../site/derive.js');
 
 const FIX = (...parts) => path.join(__dirname, '..', 'fixtures', ...parts);
 
