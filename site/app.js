@@ -159,12 +159,13 @@ function sideRow(m, ctx, i) {
 function kioskCard(r, status) {
   const m = r.m, ctx = r.ctx;
   const state = matchState(m, ctx);
-  const meta = [esc(ctx.name), esc(matchLabel(m, ctx)), esc(state), esc(fmtTime(r.t, ctx.tz))].filter(Boolean).join(' · '); // category first, then pool; venue is the group header now
+  const t = esc(fmtTime(r.t, ctx.tz));
+  const meta = [esc(ctx.name), esc(matchLabel(m, ctx)), esc(state)].filter(Boolean).join(' · ');
   const badge = { overdue: 'Late', live: 'Live', next: 'Next' }[status];
   return `<article>
     ${sideRow(m, ctx, 0)}
     ${sideRow(m, ctx, 1)}
-    <div class="meta"><span class="badge" data-status="${status}">${badge}</span>${meta}</div>
+    <div class="meta"><span class="badge" data-status="${status}">${badge}</span>${meta} · <strong>${t}</strong></div>
   </article>`;
 }
 
