@@ -5,7 +5,7 @@
 // in node; this file is only the data loading, the HTML renderers, and the
 // boot.
 
-const POLL_MS = 30000;
+const POLL_MS = 10000;
 
 // derive.js is a plain script in the browser (functions on globalThis); in
 // node, pull it in so this file's bodies can call the same names.
