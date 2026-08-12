@@ -161,7 +161,7 @@ function kioskCard(r, status) {
   const state = matchState(m, ctx);
   const t = esc(fmtTime(r.t, ctx.tz));
   const meta = [esc(ctx.name), esc(matchLabel(m, ctx)), esc(state)].filter(Boolean).join(' · ');
-  const badge = { overdue: 'Late', live: 'Live', next: 'Next' }[status];
+  const badge = { overdue: 'Late', live: 'Now', next: 'Next' }[status];
   return `<article>
     ${sideRow(m, ctx, 0)}
     ${sideRow(m, ctx, 1)}
