@@ -111,17 +111,19 @@ function listText(repo, slug, cat) {
   const tjson = info.tjson;
   const shown = listEligible(repo, slug).filter(r => r.cat === cat);
   const entry = repo.index.find(e => e && e.slug === slug);
-  const idw = Math.max(...shown.map(r => r.m.id.length)); // pad match ids so the stage column aligns
+  const idw = Math.max(...shown.map(r => r.m.id.length));
+  const stagew = Math.max(...shown.map(r => matchLabel(r.m, r.ctx).length));
+  const venuew = Math.max(...shown.map(r => (r.m.venue || 'TBD').length));
   const out = [`${C.bold((entry && entry.name) || slug)} / ${C.bold(C.cyan(cat))} — ${shown.length} scorable match${shown.length === 1 ? '' : 'es'}:`];
   for (const r of shown) {
     const m = r.m, ctx = r.ctx, tz = tjson.timezone || 'UTC';
     const t = schedTime(m);
     const stage = matchLabel(m, ctx);
     const time = t === null ? C.yellow('TBD'.padStart(8)) : C.dim(fmtTime(t, tz).padStart(8));
-    const venue = m.venue ? C.magenta(m.venue.padEnd(8)) : C.yellow('TBD'.padEnd(8));
+    const venue = m.venue ? C.magenta(m.venue.padEnd(venuew)) : C.yellow('TBD'.padEnd(venuew));
     const g = gamesText(m);
     const score = m.forfeit !== undefined ? C.yellow(`forfeit ${m.forfeit}`) : g ? C.green(g) : C.dim('–');
-    out.push(`  ${C.bold(m.id.padEnd(idw))}  ${C.dim(stage.padEnd(6))} ${time}  ${venue} ${sideLabel(m.sides[0], ctx)}${C.dim(' vs ')}${sideLabel(m.sides[1], ctx)}  ${score}`);
+    out.push(`  ${C.bold(m.id.padEnd(idw))}  ${C.dim(stage.padEnd(stagew))} ${time}  ${venue} ${sideLabel(m.sides[0], ctx)}${C.dim(' vs ')}${sideLabel(m.sides[1], ctx)}  ${score}`);
   }
   return out.join('\n');
 }
