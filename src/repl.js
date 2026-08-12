@@ -384,7 +384,7 @@ function applyAndCommit(state, kind, matchId, apply) {
   const info = repo.tournaments.get(slug);
   const cjson = info.matches.get(cat);
   const ctx = makeCat({ meta: info.tjson.categories.find(c => c.id === cat), matches: cjson.matches }, info.tjson);
-  const m = ctx.byId.get(matchId);
+  const m = ctx.byId.get(Number(matchId));
   const detail = kind === 'score' ? gamesText(m)
     : kind === 'forfeit' ? `side ${m.forfeit}`
     : kind === 'time' ? `→ ${m.scheduled}`
