@@ -279,7 +279,7 @@ function renderPlayer(route, data) {
       day.push(`<article${isDoneMatch ? ' data-done' : ''}>
         <div class="side"><span>${t === null ? 'TBD' : fmtTime(t, ctx.tz)}</span><span>${esc(venue)}</span></div>
         <div>vs ${esc(opp || slotLabel(m.sides[1 - r.i], ctx))}</div>
-        <div class="meta">${badge}${esc(ctx.name)} · ${esc(withP)}${state ? ' · ' + esc(state) : ''}</div>
+        <div class="meta">${badge}${esc(ctx.name)} · ${esc(matchLabel(m, ctx))} · ${esc(withP)}${state ? ' · ' + esc(state) : ''}</div>
       </article>`);
     }
     while (bi < blocks.length) day.push(possibleLine(blocks[bi++]));
