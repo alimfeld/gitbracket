@@ -1,9 +1,10 @@
 {
+  "$schema": "schema.json",
   "slug": "2026-mammut60",
   "name": "Mammut Open 60+",
   "timezone": "Europe/Zurich",
   "date": "2026-10-03",
-  "poolSize": 4,
+  "poolSize": 5,
   "blocks": {
     "md": "09:00",
     "wd": "09:00",
@@ -74,23 +75,62 @@
   ],
   "teams": {
     "md": [
-      ["charles", "beni"],
-      ["hase", "patrick"],
-      ["matthias", "hanspeter"],
-      ["koni", "otto"],
-      ["reto", "charly"],
-      ["kurt", "tom"]
+      [
+        "charles",
+        "beni"
+      ],
+      [
+        "hase",
+        "patrick"
+      ],
+      [
+        "matthias",
+        "hanspeter"
+      ],
+      [
+        "koni",
+        "otto"
+      ],
+      [
+        "reto",
+        "charly"
+      ],
+      [
+        "kurt",
+        "tom"
+      ]
     ],
     "wd": [
-      ["doris", "nicole"],
-      ["karin", "eveline"]
+      [
+        "doris",
+        "nicole"
+      ],
+      [
+        "karin",
+        "eveline"
+      ]
     ],
     "xd": [
-      ["doris", "matthias"],
-      ["karin", "hase"],
-      ["nicole", "kurt"],
-      ["patrick", "nelly"],
-      ["otto", "elke"]
+      [
+        "doris",
+        "matthias"
+      ],
+      [
+        "karin",
+        "hase"
+      ],
+      [
+        "nicole",
+        "kurt"
+      ],
+      [
+        "patrick",
+        "nelly"
+      ],
+      [
+        "otto",
+        "elke"
+      ]
     ]
   }
 }

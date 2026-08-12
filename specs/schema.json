@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "$id": "https://gitbracket.dev/specs/schema.json",
+  "title": "GitBracket spec",
+  "description": "Tournament schedule specification consumed by `node gb.js schedule specs/<slug>.json`. Each spec generates one tournament file under site/tournaments/<slug>.json.",
+  "type": "object",
+  "required": ["slug", "name", "timezone", "date", "poolSize", "blocks", "venues", "players", "categories", "teams"],
+  "properties": {
+    "slug": {
+      "description": "URL-safe tournament identifier, used as the filename and in route fragments.",
+      "type": "string",
+      "pattern": "^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$"
+    },
+    "name": {
+      "description": "Human-readable tournament name, shown on the list and tournament pages.",
+      "type": "string",
+      "minLength": 1
+    },
+    "timezone": {
+      "description": "IANA timezone for all scheduled times, e.g. Europe/Zurich.",
+      "type": "string",
+      "minLength": 1
+    },
+    "date": {
+      "description": "Event date in YYYY-MM-DD format. Must be a real calendar date (no 2026-02-30). Cross-midnight sessions use the start date.",
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "poolSize": {
+      "description": "Maximum teams per round-robin pool. Pools are filled evenly so sizes differ by at most one.",
+      "type": "integer",
+      "minimum": 2
+    },
+    "blocks": {
+      "description": "Start time per category in HH:MM (24h), mapped by category id. Each category's matches begin at this time and advance in slotMinutes steps.",
+      "type": "object",
+      "patternProperties": {
+        "^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$": {
+          "type": "string",
+          "pattern": "^\\d{2}:\\d{2}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "venues": {
+      "description": "Available courts/venues, mapped by venue id. The order determines court-assignment priority (first venue gets the first available slot).",
+      "type": "object",
+      "minProperties": 1,
+      "patternProperties": {
+        "^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "players": {
+      "description": "Registered players, mapped by player id. Incomplete registrations stay out until the pair is complete.",
+      "type": "object",
+      "patternProperties": {
+        "^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "categories": {
+      "description": "Competition categories (e.g. Men's Doubles, Mixed). Each category can have its own bestOf, slot length, final overrides, knockout toggle, and placement depth.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "bestOf", "slotMinutes"],
+        "properties": {
+          "id": {
+            "description": "Category identifier, referenced by blocks and teams.",
+            "type": "string",
+            "pattern": "^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$"
+          },
+          "name": {
+            "description": "Human-readable category name shown on standings and schedule pages.",
+            "type": "string",
+            "minLength": 1
+          },
+          "bestOf": {
+            "description": "Games per match. Applied to both groups and knockout stages (overridable via final.bestOf). Must be odd.",
+            "type": "integer",
+            "minimum": 1
+          },
+          "slotMinutes": {
+            "description": "Match slot length in minutes. Applied to both groups and knockout (overridable via final.slotMinutes).",
+            "type": "integer",
+            "minimum": 1
+          },
+          "final": {
+            "description": "Overrides for the final and bronze matches (bestOf and/or slotMinutes). Without it they use the stage defaults.",
+            "type": "object",
+            "properties": {
+              "bestOf": {
+                "description": "Games for the final and 3rd-place match. Must be odd.",
+                "type": "integer",
+                "minimum": 1
+              },
+              "slotMinutes": {
+                "description": "Slot length for the final and 3rd-place match, minutes.",
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "minProperties": 1,
+            "additionalProperties": false
+          },
+          "knockout": {
+            "description": "Whether to build a single-elimination knockout after the group phase. Default true for multi-pool categories, false for single-pool. Set true to enable knockout from a single pool (everyone advances); set false to suppress knockout even with multiple pools.",
+            "type": "boolean"
+          },
+          "placements": {
+            "description": "Highest rank to determine via placement matches. Power of 2 >= 2: 2 = final only (no bronze), 4 = 3rd/4th play-off (default), 8 = adds 5th-8th classification, 16 = adds 9th-16th, etc. Only matters when knockout is active.",
+            "type": "integer",
+            "minimum": 2
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "teams": {
+      "description": "Team registrations per category. Each team is an array of player ids (1 for singles, 2 for doubles). Shuffle before the final run for a fair pool draw.",
+      "type": "object",
+      "patternProperties": {
+        "^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$"
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
