@@ -61,6 +61,20 @@ function applyVenue(cjson, matchId, venueId) {
   });
 }
 
+function buildScheduled(hhmm, tz) {
+  if (!/^\d{1,2}:\d{2}$/.test(hhmm)) return null;
+  const [h, m] = hhmm.split(':');
+  if (+h > 23 || +m > 59) return null;
+  const now = new Date();
+  const date = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+  const offset = new Intl.DateTimeFormat('en-CA', { timeZone: tz, timeZoneName: 'longOffset' }).formatToParts(now).find(p => p.type === 'timeZoneName').value.replace('GMT', '');
+  return `${date}T${h.padStart(2,'0')}:${m}:00${offset}`;
+}
+
+function applyTime(cjson, matchId, isoString) {
+  return findMatch(cjson, matchId, m => { m.scheduled = isoString; });
+}
+
 // Replace all knockout matches for a category (no pool) with new ones.
 // Pool matches are preserved.
 function applyRebracket(cjson, newKO) {
@@ -143,7 +157,7 @@ function commitMessage(kind, slug, cat, matchId, detail) {
   return `${kind}(${slug}): ${cat}/${matchId} ${detail}`;
 }
 
-const VERBS = ['ls', 'cd', 'q', 'help', 'score', 'ff', 'venue', 'rebracket', 'push', 'pull', 'status', 'validate'];
+const VERBS = ['ls', 'cd', 'q', 'help', 'score', 'ff', 'time', 'venue', 'rebracket', 'push', 'pull', 'status', 'validate'];
 
 // Any line is <verb> <args> — the first word is always a command.
 function parseCmd(line) {
@@ -214,6 +228,7 @@ ${C.bold('score & manage (inside a category):')}
   score <match> <a:b> [a:b …]   set games — a prefix is a mid-match update, re-score corrects
   ff <match> <0|1>              forfeit: side 0 or 1 forfeits
   venue <match> <venue>         move a match to another court
+  time <match> <hh:mm>          shift a match to another time today
   rebracket <player> […] [2|4|8]  rebuild KO omitting teams; optional placements depth (default 4)
 
 ${C.bold('sync (every edit commits itself):')}
@@ -239,7 +254,7 @@ function completer(state) {
     else if (verb === 'cd') {
       cands = state.slug === null ? [...state.repo.tournaments.keys()]
         : state.cat === null ? (state.repo.tournaments.get(state.slug).tjson.categories || []).map(c => c.id) : [];
-    } else if ((verb === 'score' || verb === 'ff' || verb === 'venue') && parts.length === 2 && state.cat) {
+    } else if ((verb === 'score' || verb === 'ff' || verb === 'time' || verb === 'venue') && parts.length === 2 && state.cat) {
       const cjson = state.repo.tournaments.get(state.slug).matches.get(state.cat);
       cands = cjson ? cjson.matches.map(m => m.id) : [];
     } else if (verb === 'venue' && parts.length === 3) {
@@ -328,7 +343,10 @@ function applyAndCommit(state, kind, matchId, apply) {
   const cjson = info.matches.get(cat);
   const ctx = makeCat({ meta: info.tjson.categories.find(c => c.id === cat), matches: cjson.matches }, info.tjson);
   const m = ctx.byId.get(matchId);
-  const detail = kind === 'score' ? gamesText(m) : kind === 'forfeit' ? `side ${m.forfeit}` : `→ ${m.venue}`;
+  const detail = kind === 'score' ? gamesText(m)
+    : kind === 'forfeit' ? `side ${m.forfeit}`
+    : kind === 'time' ? `→ ${m.scheduled}`
+    : `→ ${m.venue}`;
   const msg = commitMessage(kind, slug, cat, matchId, detail);
   git(root, ['add', path.relative(root, res.file)]);
   const c = git(root, ['commit', '-m', msg]);
@@ -336,6 +354,7 @@ function applyAndCommit(state, kind, matchId, apply) {
   const sha = git(root, ['rev-parse', '--short', 'HEAD']).out.trim();
   const sum = m.forfeit !== undefined
     ? `${cat}/${matchId} → side ${m.forfeit} forfeits — side ${1 - m.forfeit} wins`
+    : kind === 'time' ? `${cat}/${matchId} → ${m.scheduled}`
     : `${cat}/${matchId} → ${gamesText(m)}${isDone(m, ctx) ? ' — done' : ''}`;
   return `${sum}\ncommitted ${sha}: ${msg}`;
 }
@@ -360,6 +379,14 @@ function editCmd(state, kind, args) {
     const [matchId, venueId] = args;
     if (!matchId || !venueId) return 'usage: venue <match> <venue>';
     return applyAndCommit(state, 'venue', matchId, c => applyVenue(c, matchId, venueId));
+  }
+  if (kind === 'time') {
+    const [matchId, hhmm] = args;
+    if (!matchId || !hhmm) return 'usage: time <match> <hh:mm>';
+    const tz = state.repo.tournaments.get(state.slug).tjson.timezone;
+    const iso = buildScheduled(hhmm, tz);
+    if (!iso) return `bad time ${JSON.stringify(hhmm)} — expected hh:mm, e.g. 10:30`;
+    return applyAndCommit(state, 'time', matchId, c => applyTime(c, matchId, iso));
   }
 }
 
@@ -472,7 +499,7 @@ function dispatch(kind, args, state) {
     if (args.length === 0) return 'usage: rebracket <player> [player …] [2|4|8]';
     return rebracketCmd(state, args);
   }
-  if (kind === 'score' || kind === 'ff' || kind === 'venue') {
+  if (kind === 'score' || kind === 'ff' || kind === 'time' || kind === 'venue') {
     if (state.cat === null) return 'cd into a category first';
     return editCmd(state, kind, args);
   }
@@ -524,4 +551,4 @@ function main(root) {
   replMain(root, siteRoot, repo);
 }
 
-module.exports = { main, isScorable, parseGame, applyScore, applyForfeit, applyVenue, applyRebracket, listEligible, listText, writeEdit, commitMessage, parseCmd, navigate, catSummary };
+module.exports = { main, isScorable, parseGame, buildScheduled, applyScore, applyForfeit, applyVenue, applyTime, applyRebracket, listEligible, listText, writeEdit, commitMessage, parseCmd, navigate, catSummary };

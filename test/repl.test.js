@@ -69,6 +69,24 @@ test('repl applyVenue: moves a match; unknown venue is rejected by the validator
   assert(hasErr(validateRepo(repo2), /unknown venue "bogus-court"/), 'undeclared venue rejected');
 });
 
+test('repl buildScheduled: builds ISO-8601 from hh:mm and timezone', () => {
+  const r = repl.buildScheduled('09:00', 'America/New_York');
+  assert(/^\d{4}-\d{2}-\d{2}T09:00:00[+-]\d{2}:\d{2}$/.test(r), `expected ISO with offset, got ${r}`);
+  const r2 = repl.buildScheduled('9:00', 'America/New_York');
+  assert(r2.includes('T09:00:00'), 'single-digit hour pads to 09');
+  assert(repl.buildScheduled('25:00', 'UTC') === null, 'bad hour returns null');
+});
+
+test('repl applyTime: sets scheduled field, repo validates', () => {
+  const repo = loadRepo(FIX('sample'));
+  const cjson = repo.tournaments.get('sample').matches.get('md40');
+  assert(repl.applyTime(cjson, 'm2', '2025-07-14T16:00:00-04:00') === null, 'applyTime reports no error');
+  assert(cjson.matches.find(m => m.id === 'm2').scheduled === '2025-07-14T16:00:00-04:00', 'scheduled set');
+  assert(repl.applyTime(cjson, 'nope', '2025-07-14T16:00:00-04:00') === 'unknown match nope', 'unknown match reported');
+  const { errs } = validateRepo(repo);
+  assert(errs.length === 0, 'edited repo still validates: ' + errs.join('; '));
+});
+
 test('repl rejects edits the validator would refuse', () => {
   const repo = loadRepo(FIX('sample'));
   const cjson = repo.tournaments.get('sample').matches.get('md40');
@@ -91,6 +109,7 @@ test('repl parseCmd: every line is a command — the first word is the verb', ()
   assert.deepEqual(repl.parseCmd('score m1 11:9 11:7'), { kind: 'score', args: ['m1', '11:9', '11:7'] });
   assert.deepEqual(repl.parseCmd('ff m1 1'), { kind: 'ff', args: ['m1', '1'] });
   assert.deepEqual(repl.parseCmd('venue m1 court-2'), { kind: 'venue', args: ['m1', 'court-2'] });
+  assert.deepEqual(repl.parseCmd('time m1 10:30'), { kind: 'time', args: ['m1', '10:30'] });
   assert.deepEqual(repl.parseCmd('push'), { kind: 'push', args: [] });
   assert.deepEqual(repl.parseCmd('cd md40'), { kind: 'cd', args: ['md40'] });
   assert.deepEqual(repl.parseCmd('q'), { kind: 'q', args: [] });
@@ -117,6 +136,7 @@ test('repl commitMessage: conventional types with tournament scope', () => {
   assert.equal(repl.commitMessage('score', '2026-mammut60', 'md40', 'm1', '11:9 · 11:7'), 'score(2026-mammut60): md40/m1 11:9 · 11:7');
   assert.equal(repl.commitMessage('forfeit', '2026-mammut60', 'md', 'm7', 'side 1'), 'forfeit(2026-mammut60): md/m7 side 1');
   assert.equal(repl.commitMessage('venue', '2026-mammut60', 'xd', 'm3', '→ court-2'), 'venue(2026-mammut60): xd/m3 → court-2');
+  assert.equal(repl.commitMessage('time', '2026-mammut60', 'md40', 'm1', '→ 2025-07-14T16:00:00-04:00'), 'time(2026-mammut60): md40/m1 → 2025-07-14T16:00:00-04:00');
 });
 
 test('repl writeEdit: rollback on validation failure, write on success (real disk)', () => {
