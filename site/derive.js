@@ -209,7 +209,8 @@ function reachableKo(ctx, pid) {
 
 // Longest chain of knockout matches starting at id (the match itself counts):
 // winner and loser branches are exclusive, so this is the max a team can still
-// play from that point. O(N²) per id but memoized and brackets are tiny.
+// play from that point. ponytail: O(N²) per id, memoized — fine while brackets
+// are tiny; a reverse-edge index is the upgrade if they ever grow.
 function chainLen(ctx, id, memo = new Map()) {
   if (memo.has(id)) return memo.get(id);
   memo.set(id, 0); // cycle guard — validate rejects cycles anyway

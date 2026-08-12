@@ -7,13 +7,14 @@ details. When docs and code disagree, code wins.
 
 - **Write access is push access.** No server, no accounts — git is the whole
   system.
-- **derive.js is the single source of the site's domain model.** Validator, CLI,
+- **derive.js is the single source of the site's domain model.** Validator, REPL,
   generator, and renderers all consume it — extend it, never reimplement the
   model elsewhere. The integrity gate must not depend on renderer code.
   Tool-only logic lives in `src/`, never in the shipping surface.
-- **A corrected score reseeds the bracket at render.** Nothing derived is
-  stored; a match is done when it has a result.
-- **Slots are category-local, consumed exactly once, acyclic.**
+- **A corrected score reseeds the bracket at render.** Nothing about results is
+  stored; a match is done when it has a result. Schedules are the exception —
+  generated from a spec and stored, so regenerate before results go in.
+- **Slots are category-local, consumed at most once, acyclic.**
 - **One file per tournament** — atomic reads, cross-category edits in one
   place.
 - **Dev tooling stays at the root and never ships.** `site/` is the shipping
@@ -23,7 +24,7 @@ details. When docs and code disagree, code wins.
   ship.
 - **A behavior change is a fixture + a test.** New validator rules and derive
   behavior need a committed scenario under `fixtures/` (a self-contained mini
-  repo) and an assertion in `test/`, loaded through the same `loadRepo` as
+  site root) and an assertion in `test/`, loaded through the same `loadRepo` as
   real checkouts. Tests load and assert only — never mutate data, never
   depend on live `site/tournaments/`.
 - **Git is the concurrency design.** A rejected push means someone pushed
@@ -53,6 +54,8 @@ One question decides placement for any new function: does the browser run it?
   when two or more tools share it — repo I/O and tool-only predicates already
   live there. Root files (`gb.js`, `.githooks/`) dispatch and gate only; logic
   lives in `src/`.
+- **Specs → `specs/`**, one file per tournament, consumed only by `schedule.js`;
+  regenerate before results go in.
 
 ## Conventions
 

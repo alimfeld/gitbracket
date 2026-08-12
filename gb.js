@@ -8,17 +8,10 @@
 //   node gb.js validate [slug]      validate the repo (or one tournament), no REPL
 //   node gb.js schedule <spec>      generate a tournament from a spec file
 
-const fs = require('fs');
-const path = require('path');
+const { findRoot } = require('./src/tools.js');
 const repl = require('./src/repl.js');
 const validate = require('./src/validate.js');
 const schedule = require('./src/schedule.js');
-
-function findRoot() {
-  let dir = process.cwd();
-  while (!fs.existsSync(path.join(dir, 'site', 'tournaments.json')) && dir !== path.dirname(dir)) dir = path.dirname(dir);
-  return dir;
-}
 
 const USAGE = 'usage: node gb.js [validate [slug]] [schedule <specs/xxx.json>]';
 

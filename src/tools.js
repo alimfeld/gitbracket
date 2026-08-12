@@ -24,6 +24,15 @@ function isRealDate(y, m, d) {
   return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
 }
 
+// Repo-root discovery for the CLI entry (gb.js dispatches, this walks): find
+// the ancestor directory holding site/tournaments.json, so `node gb.js` works
+// from anywhere under the repo.
+function findRoot(from) {
+  let dir = from || process.cwd();
+  while (!fs.existsSync(path.join(dir, 'site', 'tournaments.json')) && dir !== path.dirname(dir)) dir = path.dirname(dir);
+  return dir;
+}
+
 function readJson(file, errs) {
   try {
     return JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -61,4 +70,4 @@ function writeTournament(siteRoot, slug, tjson) {
   fs.writeFileSync(path.join(siteRoot, 'tournaments', `${slug}.json`), JSON.stringify(tjson, null, 2) + '\n');
 }
 
-module.exports = { loadRepo, writeTournament, slotsOverlap, isRealDate };
+module.exports = { loadRepo, writeTournament, slotsOverlap, isRealDate, findRoot };

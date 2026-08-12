@@ -321,7 +321,7 @@ function boot() {
   // Auto-refresh only on the kiosk; the other views are read-on-load.
   const setKiosk = on => {
     if (on && !pollTimer) {
-      // ponytail: jitter so a hall of kiosk screens doesn't fetch in lockstep
+      // jitter so a hall of kiosk screens doesn't fetch in lockstep
       pollTimer = setInterval(tick, POLL_MS + Math.random() * 5000);
       // Wall clock, tournament-local time. Kept out of the render HTML (empty
       // span) so the lastHtml change-guard isn't tripped every second; the poll

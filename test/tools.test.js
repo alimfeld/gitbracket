@@ -12,7 +12,7 @@ const os = require('os');
 const path = require('path');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { loadRepo, isRealDate } = require('../src/tools.js');
+const { loadRepo, isRealDate, findRoot } = require('../src/tools.js');
 const { FIX } = require('./helpers.js');
 
 test('repo loadRepo: unreadable tournament files land in readErrs, the rest still load', () => {
@@ -37,4 +37,18 @@ test('tools isRealDate: real dates pass, rolled-over and non-numeric dates fail'
   assert(!isRealDate(2026, 2, 30), '2026-02-30 rolls over');
   assert(!isRealDate(2026, 13, 1) && !isRealDate(2026, 0, 1), 'months out of range');
   assert(!isRealDate(2026, 'xx', 1) && !isRealDate('x', 2, 30), 'non-numeric parts — the guard the old inline check missed');
+});
+
+test('tools findRoot: walks up to the repo root from a nested dir', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gitbracket-'));
+  try {
+    fs.mkdirSync(path.join(tmp, 'site', 'tournaments'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'site', 'tournaments.json'), '[]');
+    fs.mkdirSync(path.join(tmp, 'a', 'b'), { recursive: true });
+    assert.equal(findRoot(path.join(tmp, 'a', 'b')), tmp, 'nested dir resolves to the repo root');
+    assert.equal(findRoot(tmp), tmp, 'the repo root resolves to itself');
+    assert.equal(findRoot('/'), '/', 'no repo above: stops at the filesystem root');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
 });

@@ -2,9 +2,10 @@
 //
 // Reads a spec (specs/<slug>.json) and writes the full site/tournaments/<slug>.json
 // file from scratch: the skeleton (venues, categories, players) plus every
-// match. The spec is the single source — the tournament file is derived and
-// regenerated wholesale, so nothing in it is ever hand-edited. The index
-// (site/tournaments.json) is kept in sync too.
+// match. The spec is the single source for the schedule — the file is
+// regenerated wholesale, so structure is never hand-edited; scores and venue
+// moves go through the REPL. The index (site/tournaments.json) is kept in sync
+// too.
 //
 // Format: each category's teams run a round-robin of pools up to poolSize,
 // then a single-elimination knockout everyone advances into. Every match gets
