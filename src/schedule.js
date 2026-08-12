@@ -169,9 +169,11 @@ function buildKnockout(pools, names, mid, fin, placements) {
   // Build placement matches for each round whose losers' rank range fits within placements.
   // Rounds tracked from first to final: rounds[rounds.length-1] = final (1 match),
   // rounds[rounds.length-2] = semis (2 matches → losers rank 3-4), etc.
+  // A round at distance dist from the final has loser range up to 2^(dist+1);
+  // only build if that fits within placements (default 4 = bronze only).
   for (let ri = rounds.length - 2; ri >= 0; ri--) {
     const n = rounds[ri].length; // number of losers from this round
-    if (placements >= 2 * n) {
+    if (2 ** (rounds.length - ri) <= placements) {
       const losers = rounds[ri].map(m => ({ kind: 'match', match: m.id, result: 'loser' }));
       // Only the bronze bracket (from the round before the final) gets the final override
       const override = (ri === rounds.length - 2 && n === 2) ? fin : {};

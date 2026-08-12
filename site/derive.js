@@ -286,8 +286,9 @@ function placementLabel(m, ctx) {
   const c = chainOf(m);
   if (!c) return null;
   const lastLoser = m.sides.some(s => s && s.kind === 'match' && s.result === 'loser');
+  const isTerminal = !ctx.matches.some(X => X.sides && X.sides.some(s => s && s.kind === 'match' && s.match === m.id && s.result === 'loser'));
   const low = 2 ** c.d + 1; // top rank of the loser range
-  if (lastLoser && c.h < c.d) { // intermediate classification round (e.g. 5th–8th semis)
+  if (lastLoser && c.h < c.d && !isTerminal) { // intermediate classification round (e.g. 5th–8th semis)
     return `${ordinal(low)}–${ordinal(low + 2 ** (c.d - c.h + 1) - 1)} semi`;
   }
   // last round of the classification bracket: winner edge resolves the top pair,
