@@ -268,15 +268,18 @@ function renderPlayer(route, data) {
       const oppSet = resolveSide(m.sides[1 - r.i], ctx);
       const opp = oppSet ? teamLabel(oppSet, ctx) : null;
       const w = winnerIdx(m, ctx);
+      const isDoneMatch = w !== null;
+      const isLive = !isDoneMatch && (m.games || []).length;
+      const badge = isDoneMatch ? '<span class="p-badge" data-kind="done">Done</span>'
+        : isLive ? '<span class="p-badge" data-kind="live">Now</span>' : '';
       const state = m.forfeit !== undefined ? (w === r.i ? 'W (forfeit)' : 'L (forfeit)')
         : (w === null ? matchState(m, ctx) : `${w === r.i ? 'W' : 'L'} · ${gamesText(m)}`);
-      const withP = r.partner.length ? teamLabel(r.partner, ctx) : '— (singles)';
+      const withP = r.partner.length ? `with ${teamLabel(r.partner, ctx)}` : 'singles';
       const venue = m.venue ? ctx.venues.get(m.venue) || m.venue : 'TBD';
-      day.push(`<article>
+      day.push(`<article${isDoneMatch ? ' data-done' : ''}>
         <div class="side"><span>${t === null ? 'TBD' : fmtTime(t, ctx.tz)}</span><span>${esc(venue)}</span></div>
         <div>vs ${esc(opp || slotLabel(m.sides[1 - r.i], ctx))}</div>
-        <div>with ${esc(withP)}</div>
-        <div class="meta">${esc(ctx.name)}${state ? ' · ' + esc(state) : ''}</div>
+        <div class="meta">${badge}${esc(ctx.name)} · ${esc(withP)}${state ? ' · ' + esc(state) : ''}</div>
       </article>`);
     }
     while (bi < blocks.length) day.push(possibleLine(blocks[bi++]));

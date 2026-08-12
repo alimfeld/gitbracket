@@ -31,6 +31,7 @@ a { color: var(--accent); }
 
 /* cards — every article is a card; .stack is a vertical run of them (player schedule) */
 article { display: flex; flex-direction: column; gap: .3rem; border: 1px solid var(--line); border-radius: .5rem; padding: .6rem .8rem; background: #fff; }
+article[data-done] { opacity: .55; }
 .stack { display: flex; flex-direction: column; gap: .6rem; }
 .stack .side { font-weight: 600; } /* player header line: time · venue */
 .side { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; }
@@ -38,6 +39,9 @@ article { display: flex; flex-direction: column; gap: .3rem; border: 1px solid v
 .score span { font-weight: 600; min-width: 1.3em; text-align: right; }
 [data-win] { font-weight: 700; }
 .meta { font-size: .8rem; color: var(--muted); }
+.p-badge { display: inline-block; font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: .08rem .45rem .1rem; border-radius: 999px; margin-right: .35rem; vertical-align: .15em; }
+.p-badge[data-kind="done"] { background: #d4edda; color: #155724; }
+.p-badge[data-kind="live"] { background: #fff3cd; color: #856404; }
 
 /* navs — breadcrumbs plus the pills variant */
 nav { color: var(--muted); margin: 0 0 .5rem; }
