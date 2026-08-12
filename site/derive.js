@@ -8,7 +8,6 @@
 // Loaded as a plain script before app.js in the browser (functions land on
 // globalThis); in node it's a CommonJS module.
 
-const SLOT_MIN = 45; // default match length, minutes
 const ID_RE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 
 // Canonical side identity: an unordered player set as a sorted '|'-joined string.
@@ -32,13 +31,14 @@ function makeCat(c, tjson) {
 }
 
 // Effective slot length for a match, ms: match override > per-stage category
-// config (groups/knockout — a match is groups iff it has a pool) > default.
+// config (groups/knockout — a match is groups iff it has a pool).
 // The single resolution point for the kiosk "now" window, the validator's venue
-// overlap window, and the generator's slot grid.
+// overlap window, and the generator's slot grid. Every generated tournament and
+// fixture with scheduled matches has slotMinutes set, so there's no default.
 function matchSlotMs(m, ctx) {
   const stage = m && m.pool !== undefined ? 'groups' : 'knockout';
   const cfg = (ctx && ctx.slotMinutes) || {};
-  return ((m && m.slotMinutes) || cfg[stage] || SLOT_MIN) * 60 * 1000;
+  return ((m && m.slotMinutes) || cfg[stage]) * 60 * 1000;
 }
 
 

@@ -101,16 +101,16 @@ test('slot resolution: loser path (bronze/placement)', () => {
   assert(resolveSide(m10.sides[1], md) === null, 'loser of in-play m8 -> TBD');
 });
 
-test('matchSlotMs: match override > per-stage category config > default', () => {
-  assert(matchSlotMs({}, { slotMinutes: { groups: 60 } }) === 45 * 60000, 'groups config does not leak into knockout');
+test('matchSlotMs: match override > per-stage category config, no default', () => {
   assert(matchSlotMs({ pool: 'A' }, { slotMinutes: { groups: 60 } }) === 60 * 60000, 'pool match takes the groups slot');
   assert(matchSlotMs({}, { slotMinutes: { knockout: 60 } }) === 60 * 60000, 'knockout match takes the knockout slot');
   assert(matchSlotMs({ slotMinutes: 90 }, { slotMinutes: { knockout: 60 } }) === 90 * 60000, 'match override wins');
-  assert(matchSlotMs({}, {}) === 45 * 60000, 'default is 45 minutes');
+  assert(Number.isNaN(matchSlotMs({}, {})), 'no config, no override → NaN');
+  assert(Number.isNaN(matchSlotMs({}, { slotMinutes: { groups: 60 } })), 'groups config does not leak into knockout → NaN');
 });
 
 test('kioskStatus: overdue / now / upcoming badge per open card', () => {
-  const ctx = makeCat({ meta: { bestOf: { knockout: 3 } }, matches: [
+  const ctx = makeCat({ meta: { bestOf: { knockout: 3 }, slotMinutes: { groups: 30, knockout: 45 } }, matches: [
     { id: 'm1', scheduled: '2025-07-14T09:00:00Z', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }], games: [{ a: 11, b: 5 }, { a: 11, b: 4 }] },
     { id: 'm2', scheduled: '2025-07-14T08:30:00Z', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },
     { id: 'm3', scheduled: '2025-07-14T09:45:00Z', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },

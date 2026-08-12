@@ -17,6 +17,10 @@
       "name": "K1",
       "bestOf": {
         "groups": 3
+      },
+      "slotMinutes": {
+        "groups": 45,
+        "knockout": 45
       }
     },
     {
@@ -24,6 +28,10 @@
       "name": "K2",
       "bestOf": {
         "groups": 3
+      },
+      "slotMinutes": {
+        "groups": 45,
+        "knockout": 45
       }
     }
   ],

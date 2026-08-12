@@ -18,6 +18,10 @@
       "bestOf": {
         "groups": 3,
         "knockout": 3
+      },
+      "slotMinutes": {
+        "groups": 45,
+        "knockout": 45
       }
     }
   ],

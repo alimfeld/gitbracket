@@ -18,6 +18,10 @@
       "bestOf": {
         "groups": 3,
         "knockout": 1
+      },
+      "slotMinutes": {
+        "groups": 45,
+        "knockout": 45
       }
     },
     {
@@ -25,6 +29,10 @@
       "name": "Mixed Doubles",
       "bestOf": {
         "groups": 3
+      },
+      "slotMinutes": {
+        "groups": 45,
+        "knockout": 45
       }
     }
   ],
