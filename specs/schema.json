@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
-  "$id": "https://gitbracket.dev/specs/schema.json",
+  "$id": "schema.json",
   "title": "GitBracket spec",
   "description": "Tournament schedule specification consumed by `node gb.js schedule specs/<slug>.json`. Each spec generates one tournament file under site/tournaments/<slug>.json.",
   "type": "object",

@@ -502,8 +502,10 @@ function rebracketCmd(state, dropPlayers) {
   }
   for (let i = 2; i < newKO.length; i++) {
     const oi = oldKO.length - (newKO.length - i);
-    newKO[i].scheduled = oldKO[oi].scheduled;
-    newKO[i].venue = oldKO[oi].venue;
+    if (oi >= 0 && oi < oldKO.length) {
+      newKO[i].scheduled = oldKO[oi].scheduled;
+      newKO[i].venue = oldKO[oi].venue;
+    }
   }
 
   // Write, validate, rollback on failure (writeEdit handles all of that)
@@ -593,4 +595,4 @@ function main(root) {
   replMain(root, siteRoot, repo);
 }
 
-module.exports = { main, isScorable, parseGame, buildScheduled, applyScore, applyForfeit, applyVenue, applyTime, applyRebracket, listEligible, listText, writeEdit, commitMessage, parseCmd, navigate, catSummary };
+module.exports = { isScorable, parseGame, buildScheduled, applyScore, applyForfeit, applyVenue, applyTime, applyRebracket, listEligible, writeEdit, commitMessage, parseCmd, navigate };

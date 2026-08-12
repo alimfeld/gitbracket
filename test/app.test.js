@@ -260,6 +260,23 @@ test('placementLabel: 3rd/5th/7th place and classification semis', () => {
   assert(L(12) === '7th place', 'losers of classification semis -> 7th place');
 });
 
+test('place8: 8-team classification bracket labels resolve from a committed fixture', () => {
+  const p8 = catOf('place8', 't');
+  const L = id => placementLabel(p8.byId.get(id), p8);
+  // Round 1 (QF): pool slots, not placement matches
+  assert(L(13) === null && L(14) === null && L(15) === null && L(16) === null, 'R1 pool-slot matches are not placement');
+  // Semifinals and final are not placement
+  assert(L(17) === null && L(18) === null && L(19) === null, 'SF and final are not placement');
+  // Bronze match (losers of SFs)
+  assert(L(20) === '3rd place', 'losers of semis -> 3rd place');
+  // Classification semis (losers of QFs)
+  assert(L(21) === '5th–8th semi', 'losers of QF round 1 -> classification semi');
+  assert(L(22) === '5th–8th semi', 'losers of QF round 2 -> classification semi');
+  // Classification finals
+  assert(L(23) === '5th place', 'winners of classification semis -> 5th place');
+  assert(L(24) === '7th place', 'losers of classification semis -> 7th place');
+});
+
 test('renderers: all four render from a repo and escape repo-sourced strings', () => {
   const dataOf = name => {
     const repo = loadRepo(FIX(name));

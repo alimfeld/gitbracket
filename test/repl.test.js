@@ -13,16 +13,12 @@ const { makeCat } = require('../site/derive.js');
 const repl = require('../src/repl.js');
 const { FIX, hasErr } = require('./helpers.js');
 
-const catOf = (repo, slug, catId) => {
-  const info = repo.tournaments.get(slug);
-  return makeCat({ meta: info.tjson.categories.find(c => c.id === catId), matches: info.matches.get(catId).matches }, info.tjson);
-};
-
 // scorable = both sides resolve to players; the validator's rule, exposed so
 // `ls` and the guard on scored matches share one definition.
 test('repl isScorable: resolved sides only', () => {
   const repo = loadRepo(FIX('sample'));
-  const ctx = catOf(repo, 'sample', 'md40');
+  const info = repo.tournaments.get('sample');
+  const ctx = makeCat({ meta: info.tjson.categories.find(c => c.id === 'md40'), matches: info.matches.get('md40').matches }, info.tjson);
   assert(repl.isScorable(ctx.byId.get(1), ctx), '1: two players sides — scorable');
   assert(repl.isScorable(ctx.byId.get(7), ctx), '7: forfeit, two resolved pool slots — scorable');
   assert(repl.isScorable(ctx.byId.get(8), ctx), '8: two resolved pool slots, in play — scorable');
@@ -163,3 +159,4 @@ test('repl writeEdit: rollback on validation failure, write on success (real dis
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
+

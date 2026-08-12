@@ -48,7 +48,8 @@ const V = [ // [name, fixture dir, ok, expected message regex]
   ['game with no winner (a equals b)', 'bad-tie-game', r => r.errs.length > 0, /no winner/],
   ['invalid timezone', 'bad-invalid-tz', r => r.errs.length > 0, /not a valid IANA timezone/],
   ['tournament file missing its name', 'bad-no-name', r => r.errs.length > 0, /name must be a non-empty string/],
-  ['tournament file name mismatches the index', 'bad-name-mismatch', r => r.errs.length > 0, /does not match the index/]
+  ['tournament file name mismatches the index', 'bad-name-mismatch', r => r.errs.length > 0, /does not match the index/],
+  ['8-team classification fixture validates', 'place8', r => r.errs.length === 0 && r.warns.length === 0, null]
 ];
 for (const [name, dir, ok, re] of V) {
   test(name, () => {

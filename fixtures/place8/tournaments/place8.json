@@ -1,0 +1,662 @@
+{
+  "name": "Place8",
+  "timezone": "UTC",
+  "venues": [
+    {
+      "id": "court-1",
+      "name": "Court 1"
+    },
+    {
+      "id": "court-2",
+      "name": "Court 2"
+    },
+    {
+      "id": "court-3",
+      "name": "Court 3"
+    },
+    {
+      "id": "court-4",
+      "name": "Court 4"
+    }
+  ],
+  "categories": [
+    {
+      "id": "t",
+      "name": "Place8",
+      "bestOf": {
+        "groups": 1,
+        "knockout": 1
+      },
+      "slotMinutes": {
+        "groups": 30,
+        "knockout": 30
+      }
+    }
+  ],
+  "players": [
+    {
+      "id": "p1",
+      "name": "P1"
+    },
+    {
+      "id": "p2",
+      "name": "P2"
+    },
+    {
+      "id": "p3",
+      "name": "P3"
+    },
+    {
+      "id": "p4",
+      "name": "P4"
+    },
+    {
+      "id": "p5",
+      "name": "P5"
+    },
+    {
+      "id": "p6",
+      "name": "P6"
+    },
+    {
+      "id": "p7",
+      "name": "P7"
+    },
+    {
+      "id": "p8",
+      "name": "P8"
+    }
+  ],
+  "matches": {
+    "t": [
+      {
+        "id": 1,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p1"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p4"
+            ]
+          }
+        ],
+        "venue": "court-1",
+        "scheduled": "2026-06-01T09:00:00+00:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 3
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p2"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p3"
+            ]
+          }
+        ],
+        "venue": "court-2",
+        "scheduled": "2026-06-01T09:00:00+00:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 7
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p1"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p3"
+            ]
+          }
+        ],
+        "venue": "court-1",
+        "scheduled": "2026-06-01T09:30:00+00:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 5
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p4"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p2"
+            ]
+          }
+        ],
+        "venue": "court-2",
+        "scheduled": "2026-06-01T09:30:00+00:00",
+        "games": [
+          {
+            "a": 7,
+            "b": 11
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p1"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p2"
+            ]
+          }
+        ],
+        "venue": "court-1",
+        "scheduled": "2026-06-01T10:00:00+00:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 9
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p3"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p4"
+            ]
+          }
+        ],
+        "venue": "court-2",
+        "scheduled": "2026-06-01T10:00:00+00:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 7
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "pool": "B",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p5"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p8"
+            ]
+          }
+        ],
+        "venue": "court-3",
+        "scheduled": "2026-06-01T09:00:00+00:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 3
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "pool": "B",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p6"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p7"
+            ]
+          }
+        ],
+        "venue": "court-4",
+        "scheduled": "2026-06-01T09:00:00+00:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 7
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "pool": "B",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p5"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p7"
+            ]
+          }
+        ],
+        "venue": "court-3",
+        "scheduled": "2026-06-01T09:30:00+00:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 5
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "pool": "B",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p8"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p6"
+            ]
+          }
+        ],
+        "venue": "court-4",
+        "scheduled": "2026-06-01T09:30:00+00:00",
+        "games": [
+          {
+            "a": 7,
+            "b": 11
+          }
+        ]
+      },
+      {
+        "id": 11,
+        "pool": "B",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p5"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p6"
+            ]
+          }
+        ],
+        "venue": "court-3",
+        "scheduled": "2026-06-01T10:00:00+00:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 9
+          }
+        ]
+      },
+      {
+        "id": 12,
+        "pool": "B",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p7"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p8"
+            ]
+          }
+        ],
+        "venue": "court-4",
+        "scheduled": "2026-06-01T10:00:00+00:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 7
+          }
+        ]
+      },
+      {
+        "id": 13,
+        "sides": [
+          {
+            "kind": "pool",
+            "pool": "A",
+            "rank": 1
+          },
+          {
+            "kind": "pool",
+            "pool": "B",
+            "rank": 4
+          }
+        ],
+        "venue": "court-1",
+        "scheduled": "2026-06-01T10:30:00+00:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 4
+          }
+        ]
+      },
+      {
+        "id": 14,
+        "sides": [
+          {
+            "kind": "pool",
+            "pool": "B",
+            "rank": 1
+          },
+          {
+            "kind": "pool",
+            "pool": "A",
+            "rank": 4
+          }
+        ],
+        "venue": "court-2",
+        "scheduled": "2026-06-01T10:30:00+00:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 5
+          }
+        ]
+      },
+      {
+        "id": 15,
+        "sides": [
+          {
+            "kind": "pool",
+            "pool": "A",
+            "rank": 2
+          },
+          {
+            "kind": "pool",
+            "pool": "B",
+            "rank": 3
+          }
+        ],
+        "venue": "court-3",
+        "scheduled": "2026-06-01T10:30:00+00:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 6
+          }
+        ]
+      },
+      {
+        "id": 16,
+        "sides": [
+          {
+            "kind": "pool",
+            "pool": "B",
+            "rank": 2
+          },
+          {
+            "kind": "pool",
+            "pool": "A",
+            "rank": 3
+          }
+        ],
+        "venue": "court-4",
+        "scheduled": "2026-06-01T10:30:00+00:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 7
+          }
+        ]
+      },
+      {
+        "id": 17,
+        "sides": [
+          {
+            "kind": "match",
+            "match": 13,
+            "result": "winner"
+          },
+          {
+            "kind": "match",
+            "match": 14,
+            "result": "winner"
+          }
+        ],
+        "venue": "court-1",
+        "scheduled": "2026-06-01T11:00:00+00:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 8
+          }
+        ]
+      },
+      {
+        "id": 18,
+        "sides": [
+          {
+            "kind": "match",
+            "match": 15,
+            "result": "winner"
+          },
+          {
+            "kind": "match",
+            "match": 16,
+            "result": "winner"
+          }
+        ],
+        "venue": "court-2",
+        "scheduled": "2026-06-01T11:00:00+00:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 9
+          }
+        ]
+      },
+      {
+        "id": 19,
+        "sides": [
+          {
+            "kind": "match",
+            "match": 17,
+            "result": "winner"
+          },
+          {
+            "kind": "match",
+            "match": 18,
+            "result": "winner"
+          }
+        ],
+        "venue": "court-1",
+        "scheduled": "2026-06-01T11:30:00+00:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 5
+          }
+        ]
+      },
+      {
+        "id": 20,
+        "sides": [
+          {
+            "kind": "match",
+            "match": 17,
+            "result": "loser"
+          },
+          {
+            "kind": "match",
+            "match": 18,
+            "result": "loser"
+          }
+        ],
+        "venue": "court-2",
+        "scheduled": "2026-06-01T11:30:00+00:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 7
+          }
+        ]
+      },
+      {
+        "id": 21,
+        "sides": [
+          {
+            "kind": "match",
+            "match": 13,
+            "result": "loser"
+          },
+          {
+            "kind": "match",
+            "match": 16,
+            "result": "loser"
+          }
+        ],
+        "venue": "court-3",
+        "scheduled": "2026-06-01T11:00:00+00:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 6
+          }
+        ]
+      },
+      {
+        "id": 22,
+        "sides": [
+          {
+            "kind": "match",
+            "match": 14,
+            "result": "loser"
+          },
+          {
+            "kind": "match",
+            "match": 15,
+            "result": "loser"
+          }
+        ],
+        "venue": "court-4",
+        "scheduled": "2026-06-01T11:00:00+00:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 7
+          }
+        ]
+      },
+      {
+        "id": 23,
+        "sides": [
+          {
+            "kind": "match",
+            "match": 21,
+            "result": "winner"
+          },
+          {
+            "kind": "match",
+            "match": 22,
+            "result": "winner"
+          }
+        ],
+        "venue": "court-3",
+        "scheduled": "2026-06-01T11:30:00+00:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 8
+          }
+        ]
+      },
+      {
+        "id": 24,
+        "sides": [
+          {
+            "kind": "match",
+            "match": 21,
+            "result": "loser"
+          },
+          {
+            "kind": "match",
+            "match": 22,
+            "result": "loser"
+          }
+        ],
+        "venue": "court-4",
+        "scheduled": "2026-06-01T11:30:00+00:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 9
+          }
+        ]
+      }
+    ]
+  }
+}
