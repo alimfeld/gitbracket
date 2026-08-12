@@ -16,7 +16,7 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const { spawnSync } = require('child_process');
-const { makeCat, isDone, resolveSide, sideLabel, schedTime, gamesText, fmtTime } = require('../site/derive.js');
+const { makeCat, isDone, resolveSide, sideLabel, schedTime, gamesText, fmtTime, matchLabel } = require('../site/derive.js');
 const { loadRepo, writeTournament } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 
@@ -116,7 +116,7 @@ function listText(repo, slug, cat) {
   for (const r of shown) {
     const m = r.m, ctx = r.ctx, tz = tjson.timezone || 'UTC';
     const t = schedTime(m);
-    const stage = m.pool !== undefined ? `Pool ${m.pool}` : 'KO';
+    const stage = matchLabel(m, ctx);
     const time = t === null ? C.yellow('TBD'.padStart(8)) : C.dim(fmtTime(t, tz).padStart(8));
     const venue = m.venue ? C.magenta(m.venue.padEnd(8)) : C.yellow('TBD'.padEnd(8));
     const g = gamesText(m);
