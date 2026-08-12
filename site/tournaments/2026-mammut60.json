@@ -636,6 +636,95 @@
         ],
         "venue": "court-2",
         "scheduled": "2026-10-03T15:00:00+02:00"
+      },
+      {
+        "id": "m11",
+        "sides": [
+          {
+            "kind": "pool",
+            "pool": "A",
+            "rank": 4
+          },
+          {
+            "kind": "pool",
+            "pool": "A",
+            "rank": 5
+          }
+        ],
+        "venue": "court-1",
+        "scheduled": "2026-10-03T15:30:00+02:00"
+      },
+      {
+        "id": "m12",
+        "sides": [
+          {
+            "kind": "pool",
+            "pool": "A",
+            "rank": 2
+          },
+          {
+            "kind": "pool",
+            "pool": "A",
+            "rank": 3
+          }
+        ],
+        "venue": "court-2",
+        "scheduled": "2026-10-03T15:30:00+02:00"
+      },
+      {
+        "id": "m13",
+        "sides": [
+          {
+            "kind": "pool",
+            "pool": "A",
+            "rank": 1
+          },
+          {
+            "kind": "match",
+            "match": "m11",
+            "result": "winner"
+          }
+        ],
+        "venue": "court-1",
+        "scheduled": "2026-10-03T16:00:00+02:00"
+      },
+      {
+        "id": "m14",
+        "sides": [
+          {
+            "kind": "match",
+            "match": "m12",
+            "result": "winner"
+          },
+          {
+            "kind": "match",
+            "match": "m13",
+            "result": "winner"
+          }
+        ],
+        "bestOf": 3,
+        "slotMinutes": 60,
+        "venue": "court-1",
+        "scheduled": "2026-10-03T16:30:00+02:00"
+      },
+      {
+        "id": "m15",
+        "sides": [
+          {
+            "kind": "match",
+            "match": "m12",
+            "result": "loser"
+          },
+          {
+            "kind": "match",
+            "match": "m13",
+            "result": "loser"
+          }
+        ],
+        "bestOf": 3,
+        "slotMinutes": 60,
+        "venue": "court-2",
+        "scheduled": "2026-10-03T16:30:00+02:00"
       }
     ]
   }

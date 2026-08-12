@@ -70,7 +70,8 @@
       "final": {
         "bestOf": 3,
         "slotMinutes": 60
-      }
+      },
+      "knockout": true
     }
   ],
   "teams": {
