@@ -74,4 +74,4 @@ One page, fragment-routed. `#<slug>` is a tournament's standings;
 
 ## Tools
 
-- **`gb.js`** — the one CLI. `node gb.js` starts the match-day REPL (navigate, score, move venues; every edit commits itself); `node gb.js validate [slug]` checks data without the REPL; `node gb.js schedule <spec>` generates a tournament file from a spec (`specs/<slug>.json`). The commands live as modules under `src/`; `site/` stays the shipping surface.
+**`gb.js`** — the one CLI. `node gb.js` starts the match-day REPL (navigate, score, move venues; every edit commits itself); `node gb.js validate [slug]` checks data without the REPL; `node gb.js schedule <spec>` generates a tournament file from a spec (`specs/<slug>.json`). The commands live as modules under `src/`; `site/` stays the shipping surface.
