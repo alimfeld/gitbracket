@@ -271,7 +271,7 @@ ${C.bold('score & manage (inside a category):')}
   ff <match> <0|1>              forfeit: side 0 or 1 forfeits
   venue <match> <venue>         move a match to another court
   time <match> <hh:mm>          shift a match to another time today
-  rebracket <player> […] [2|4|8]  rebuild KO omitting teams; optional placements depth (default 4)
+  rebracket <player> […]        rebuild KO omitting teams; placements/slots from existing bracket
 
 ${C.bold('sync (every edit commits itself):')}
   push  pull  status  validate
@@ -459,18 +459,28 @@ function rebracketCmd(state, dropPlayers) {
   if (!dropped) return `no team contains ${dropPlayers.join(', ')} — check player IDs`;
   if (remainingCount < 2) return 'fewer than 2 teams remain — no knockout possible';
 
-  // Get final override from existing KO matches
-  const oldKO = cjson.matches.filter(m => !m.pool).sort((a, b) => schedTime(a) - schedTime(b));
-  const finalM = oldKO.find(m => m.bestOf !== undefined);
+  // Reject if any KO match already has a result — rebracket wipes the KO shell
+  const scoredKO = cjson.matches.filter(m => !m.pool && (m.games || m.forfeit !== undefined));
+  if (scoredKO.length) return `${scoredKO.length} KO match${scoredKO.length === 1 ? ' has' : 'es have'} results — can't rebracket after KO started`;
+
+  // Collect existing KO matches and derive properties from them
+  const oldKO = cjson.matches.filter(m => !m.pool).sort((a, b) => a.id - b.id);
+
+  // Derive placements from existing bracket: count loser-edge matches.
+  // 0 = placements 2 (no bronze), 1 = placements 4 (bronze only),
+  // >1 = placements 8 (5th-8th classification).
+  const loserFed = oldKO.filter(m => m.sides.some(s => s && s.kind === 'match' && s.result === 'loser'));
+  const placements = loserFed.length === 0 ? 2 : loserFed.length > 1 ? 8 : 4;
+
+  // Extract final override from the old final: no loser incoming, no winner outgoing.
+  const finalM = oldKO.find(m =>
+    !m.sides.some(s => s && s.kind === 'match' && s.result === 'loser')
+    && !oldKO.some(X => X.sides && X.sides.some(s => s && s.kind === 'match' && s.result === 'winner' && s.match === m.id)));
   const fin = finalM ? { bestOf: finalM.bestOf, slotMinutes: finalM.slotMinutes } : {};
 
-  const last = dropPlayers[dropPlayers.length - 1];
-  const placements = last === '2' || last === '8' ? Number(dropPlayers.pop()) : 4;
-
-  // Build new knockout from remaining teams in all pools
-  let next = 11;
-  while (cjson.matches.some(m => m.id === next)) next++;
-  const mid = () => next++;
+  // Build new knockout reusing freed KO IDs for a contiguous set
+  const idPool = oldKO.map(m => m.id);
+  const mid = () => idPool.shift();
   const newKO = buildKnockout(
     perPool.map(p => p.teams),
     perPool.map(p => p.pool),
@@ -494,18 +504,25 @@ function rebracketCmd(state, dropPlayers) {
     }
   }
 
-  // SFs get the earliest old slots, final and bronze get the latest.
-  // The old classification-round slot (e.g. 16:00) falls out and is freed.
-  for (let i = 0; i < 2 && i < newKO.length && i < oldKO.length; i++) {
-    newKO[i].scheduled = oldKO[i].scheduled;
-    newKO[i].venue = oldKO[i].venue;
-  }
-  for (let i = 2; i < newKO.length; i++) {
-    const oi = oldKO.length - (newKO.length - i);
-    if (oi >= 0 && oi < oldKO.length) {
-      newKO[i].scheduled = oldKO[oi].scheduled;
-      newKO[i].venue = oldKO[oi].venue;
+  // Greedy schedule: sort old KO slots by time, assign each new match the
+  // first slot whose venue doesn't overlap with prior assignments. Handles
+  // any bracket size, venue count, and slotMinutes — no structural pairing.
+  const oldByTime = [...oldKO].sort((a, b) => schedTime(a) - schedTime(b));
+  const busy = []; // { venue, end }
+  for (const m of newKO) {
+    const slotMs = matchSlotMs(m, ctx);
+    for (let oi = 0; oi < oldByTime.length; oi++) {
+      const old = oldByTime[oi];
+      const t = schedTime(old);
+      if (t === null) continue;
+      if (busy.some(b => b.venue === old.venue && t < b.end)) continue;
+      m.scheduled = old.scheduled;
+      m.venue = old.venue;
+      busy.push({ venue: old.venue, end: t + slotMs });
+      oldByTime.splice(oi, 1);
+      break;
     }
+    // no slot found → match stays TBD, validation will catch it
   }
 
   // Write, validate, rollback on failure (writeEdit handles all of that)
@@ -540,7 +557,7 @@ function dispatch(kind, args, state) {
   }
   if (kind === 'rebracket') {
     if (state.cat === null) return 'cd into a category first';
-    if (args.length === 0) return 'usage: rebracket <player> [player …] [2|4|8]';
+    if (args.length === 0) return 'usage: rebracket <player> [player …]';
     return rebracketCmd(state, args);
   }
   if (kind === 'score' || kind === 'ff' || kind === 'time' || kind === 'venue') {
