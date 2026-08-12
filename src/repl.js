@@ -612,4 +612,4 @@ function main(root) {
   replMain(root, siteRoot, repo);
 }
 
-module.exports = { isScorable, parseGame, buildScheduled, applyScore, applyForfeit, applyVenue, applyTime, applyRebracket, listEligible, writeEdit, commitMessage, parseCmd, navigate };
+module.exports = { isScorable, parseGame, buildScheduled, applyScore, applyForfeit, applyVenue, applyTime, applyRebracket, listEligible, writeEdit, commitMessage, parseCmd, navigate, main };
