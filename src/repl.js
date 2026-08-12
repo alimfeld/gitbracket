@@ -111,13 +111,17 @@ function listText(repo, slug, cat) {
   const tjson = info.tjson;
   const shown = listEligible(repo, slug).filter(r => r.cat === cat);
   const entry = repo.index.find(e => e && e.slug === slug);
-  const out = [`${(entry && entry.name) || slug} — ${shown.length} scorable match${shown.length === 1 ? '' : 'es'}:`];
+  const idw = Math.max(...shown.map(r => r.m.id.length)); // pad match ids so the stage column aligns
+  const out = [`${C.bold((entry && entry.name) || slug)} / ${C.bold(C.cyan(cat))} — ${shown.length} scorable match${shown.length === 1 ? '' : 'es'}:`];
   for (const r of shown) {
     const m = r.m, ctx = r.ctx, tz = tjson.timezone || 'UTC';
     const t = schedTime(m);
     const stage = m.pool !== undefined ? `Pool ${m.pool}` : 'KO';
-    const score = m.forfeit !== undefined ? `forfeit ${m.forfeit}` : (gamesText(m) || '–');
-    out.push(`  ${r.cat} ${m.id}  ${stage.padEnd(6)} ${t === null ? 'TBD' : fmtTime(t, tz)}  ${(m.venue || 'TBD').padEnd(8)} ${sideLabel(m.sides[0], ctx)} vs ${sideLabel(m.sides[1], ctx)}  ${score}`);
+    const time = t === null ? C.yellow('TBD'.padStart(8)) : C.dim(fmtTime(t, tz).padStart(8));
+    const venue = m.venue ? C.magenta(m.venue.padEnd(8)) : C.yellow('TBD'.padEnd(8));
+    const g = gamesText(m);
+    const score = m.forfeit !== undefined ? C.yellow(`forfeit ${m.forfeit}`) : g ? C.green(g) : C.dim('–');
+    out.push(`  ${C.bold(m.id.padEnd(idw))}  ${C.dim(stage.padEnd(6))} ${time}  ${venue} ${sideLabel(m.sides[0], ctx)}${C.dim(' vs ')}${sideLabel(m.sides[1], ctx)}  ${score}`);
   }
   return out.join('\n');
 }
@@ -161,7 +165,9 @@ function catSummary(info, cat) {
   const matches = (cjson && cjson.matches) || [];
   const ctx = makeCat({ meta: cat, matches }, info.tjson);
   const done = matches.filter(m => isDone(m, ctx)).length;
-  return `${cat.id} — ${cat.name} · ${matches.length} match${matches.length === 1 ? '' : 'es'}, ${done} done`;
+  const name = C.cyan(cat.name);
+  const doneTxt = done === 0 ? C.dim('0') : done === matches.length ? C.green(done) : C.yellow(done);
+  return `${C.bold(C.cyan(cat.id))} — ${name} · ${matches.length} match${matches.length === 1 ? '' : 'es'}, ${doneTxt} done`;
 }
 
 // ---------- git + repo I/O (thin shell, not unit-tested) ----------
@@ -187,24 +193,27 @@ function syncSuffix(root) {
 
 // ---------- REPL ----------
 
-const HELP = `navigate:
+function helpText() {
+  return `${C.bold('navigate:')}
   ls                     list this level
   cd <slug|category>     enter — cd .. / cd / go up / root, cd alone shows the path
   q                      quit (every edit is committed; nothing is lost)
 
-score & manage (inside a category):
+${C.bold('score & manage (inside a category):')}
   score <match> <a:b> [a:b …]   set games — a prefix is a mid-match update, re-score corrects
   ff <match> <0|1>              forfeit: side 0 or 1 forfeits
   venue <match> <venue>         move a match to another court
 
-sync (every edit commits itself):
+${C.bold('sync (every edit commits itself):')}
   push  pull  status  validate
 
-prompt: ↑n = n unpushed commits, ↓n = n behind, * = dirty tree. Tab completes.`;
+${C.dim('prompt: ↑n = n unpushed commits, ↓n = n behind, * = dirty tree. Tab completes.')}`;
+}
 
 function makePrompt(state) {
   const p = state.slug ? `${state.slug}${state.cat ? '/' + state.cat : ''}` : '';
-  return `gitbracket${p ? ':' + p : ''}${syncSuffix(state.root)}> `;
+  const sync = syncSuffix(state.root).replace('*', C.yellow('*'));
+  return `gitbracket${p ? ':' + C.cyan(p) : ''}${sync ? C.dim(sync) : ''}> `;
 }
 
 function completer(state) {
@@ -234,7 +243,7 @@ function listing(state) {
     return state.repo.index.map(e => {
       const info = state.repo.tournaments.get(e.slug);
       const n = info && info.tjson ? (info.tjson.categories || []).length : 0;
-      return `${e.name}  (${e.slug}) — ${n} categor${n === 1 ? 'y' : 'ies'}`;
+      return `${C.bold(C.cyan(e.name))}  (${e.slug}) — ${n} categor${n === 1 ? 'y' : 'ies'}`;
     }).join('\n');
   }
   const info = state.repo.tournaments.get(state.slug);
@@ -273,6 +282,27 @@ function gitPull(state) {
 
 function gitStatus(root) {
   return git(root, ['status', '-sb']).out.trim() || '(clean)';
+}
+
+// ---------- shallow ANSI paint (TTY only — piped output stays plain) ----------
+
+const C = (() => {
+  const tty = process.stdout.isTTY; // colors are no-ops when piped — callers need no guard
+  const w = (code, s) => tty ? `\x1b[${code}m${s}\x1b[0m` : s;
+  return { bold: s => w(1, s), dim: s => w(2, s), red: s => w(31, s), yellow: s => w(33, s), green: s => w(32, s), cyan: s => w(36, s), magenta: s => w(35, s) };
+})();
+
+// Color the final output string — commands and pure functions stay plain.
+function paint(s) {
+  if (!s) return s;
+  if (s.includes('not written') || s.includes('but the commit failed') || s.startsWith('push rejected')) return C.red(s);
+  return s.split('\n').map(l =>
+    /^(error:|unknown |bad |\d+ error\(s\))/.test(l) ? C.red(l)
+    : /^(warn:|usage:|\(\d+ warning\(s\)\))/.test(l) ? C.yellow(l)
+    : /committed |— done$|wins$|^validate: ok$|^pushed$|^pulled/.test(l) ? C.green(l)
+    : /^→ /.test(l) ? C.cyan(l)
+    : l
+  ).join('\n');
 }
 
 // Apply + write + commit one edit; every successful edit is a commit, so the
@@ -339,7 +369,7 @@ function dispatch(kind, args, state) {
   if (kind === 'pull') return gitPull(state);
   if (kind === 'status') return gitStatus(state.root);
   if (kind === 'validate') return validateText(state.repo);
-  if (kind === 'help') return HELP;
+  if (kind === 'help') return helpText();
 }
 
 const curPath = state => `${state.slug || '/'}${state.cat ? '/' + state.cat : ''}`;
@@ -352,10 +382,10 @@ function replMain(root, siteRoot, repo) {
   }
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout, completer: completer(state), historySize: 500 });
   const show = () => { rl.setPrompt(makePrompt(state)); rl.prompt(); };
-  console.log('gitbracket — tab completes, help for commands, q to quit');
+  console.log(C.dim('gitbracket — tab completes, help for commands, q to quit'));
   rl.on('line', line => {
     const t = line.trim();
-    if (!t) console.log(listing(state));
+    if (!t) console.log(paint(listing(state)));
     else {
       const { kind, args } = parseCmd(t);
       if (kind === 'q') { rl.close(); return; }
@@ -364,14 +394,14 @@ function replMain(root, siteRoot, repo) {
         const info = state.slug ? state.repo.tournaments.get(state.slug) : null;
         const target = state.slug === null ? state.repo.tournaments.has(word)
           : state.cat === null && info && (info.tjson.categories || []).some(c => c.id === word);
-        console.log(`unknown command ${word}${target ? ` — did you mean cd ${word}?` : ''} — help`);
+        console.log(paint(`unknown command ${word}${target ? ` — did you mean cd ${word}?` : ''} — help`));
       } else {
-        console.log(dispatch(kind, args, state));
+        console.log(paint(dispatch(kind, args, state)));
       }
     }
     show();
   });
-  rl.on('close', () => { console.log('bye'); });
+  rl.on('close', () => { console.log(C.dim('bye')); });
   show();
 }
 
