@@ -17,7 +17,7 @@ const path = require('path');
 const readline = require('readline');
 const { spawnSync } = require('child_process');
 const { makeCat, isDone, resolveSide, sideLabel, schedTime, gamesText, fmtTime } = require('../site/derive.js');
-const { loadRepo, writeTournament } = require('./repo.js');
+const { loadRepo, writeTournament } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 
 // ---------- pure logic (tests drive these on fixture repos) ----------

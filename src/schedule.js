@@ -27,8 +27,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const { matchSlotMs, slotsOverlap, pairSig, dayKey, ID_RE } = require('../site/derive.js');
-const { writeTournament } = require('./repo.js');
+const { matchSlotMs, pairSig, dayKey, ID_RE } = require('../site/derive.js');
+const { writeTournament, slotsOverlap, isRealDate } = require('./tools.js');
 
 // Round-robin pairings, circle method: array of rounds, each a list of pairs.
 function roundRobin(teams) {
@@ -300,8 +300,7 @@ function generate(spec) {
   if (!Number.isInteger(poolSize) || poolSize < 2) throw new Error(`spec: poolSize must be an integer >= 2, got ${JSON.stringify(poolSize)}`);
   // Date.parse rolls impossible calendar dates (2025-02-30 -> Mar 2); catch them like the validator does.
   const [yy, mm, dd] = String(eventDate).split('-').map(Number);
-  const d = new Date(Date.UTC(yy, mm - 1, dd));
-  if (!Number.isInteger(yy) || d.getUTCFullYear() !== yy || d.getUTCMonth() !== mm - 1 || d.getUTCDate() !== dd) {
+  if (!isRealDate(yy, mm, dd)) {
     throw new Error(`spec: date ${JSON.stringify(eventDate)} is not a real calendar date`);
   }
   // The one silent failure the gate can't see: a non-object final (bestOf on a number

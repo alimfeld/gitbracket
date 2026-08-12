@@ -1,12 +1,28 @@
 'use strict';
 
-// Shared repo I/O: read a repo into memory, write tournament files.
-// The "site root" is the directory holding tournaments.json — for a real repo
-// that's <repo>/site, for fixtures/ it's the fixture directory itself.
+// Logic shared by the tools (validator, generator, REPL) that the site never
+// ships — repo I/O plus tool-only domain predicates. site/ is the shipping
+// surface; anything only a tool consumes lives here, so derive.js stays
+// exactly the site's domain model. (The "site root" is the directory holding
+// tournaments.json — for a real repo that's <repo>/site, for fixtures/ it's
+// the fixture directory itself.)
 
 const fs = require('fs');
 const path = require('path');
 const { ID_RE } = require('../site/derive.js');
+
+// Window collision test: shared by the validator's venue-overlap rule and the
+// generator's court/player occupancy — one predicate, no drift. (matchSlotMs,
+// its sibling that sizes a window, stays in derive.js: the site's kiosk uses it.)
+const slotsOverlap = (a0, a1, b0, b1) => a0 < b1 && b0 < a1;
+
+// Impossible calendar dates (2025-02-30) roll over in Date.UTC; check the
+// round-trip. Used by the validator (scheduled) and the generator (spec date).
+function isRealDate(y, m, d) {
+  if (!Number.isInteger(y) || !Number.isInteger(m) || !Number.isInteger(d)) return false;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+}
 
 function readJson(file, errs) {
   try {
@@ -45,4 +61,4 @@ function writeTournament(siteRoot, slug, tjson) {
   fs.writeFileSync(path.join(siteRoot, 'tournaments', `${slug}.json`), JSON.stringify(tjson, null, 2) + '\n');
 }
 
-module.exports = { loadRepo, writeTournament };
+module.exports = { loadRepo, writeTournament, slotsOverlap, isRealDate };

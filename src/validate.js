@@ -1,13 +1,13 @@
 'use strict';
 
 // GitBracket validator — schema + cross-file checks, run via `node gb.js
-// validate [slug]`. I/O (loadRepo in repo.js) is separate from checks
+// validate [slug]`. I/O (loadRepo in src/tools.js) is separate from checks
 // (validateRepo) so tests can run the whole validator against fixtures/ in
 // memory. Never writes — the gate stays pure.
 
 const path = require('path');
-const { loadRepo } = require('./repo.js');
-const { ID_RE, pairSig, matchSlotMs, slotsOverlap, makeCat, isDone, poolStandings, resolveSide, isDeadTie } = require('../site/derive.js');
+const { loadRepo, isRealDate, slotsOverlap } = require('./tools.js');
+const { ID_RE, pairSig, matchSlotMs, makeCat, isDone, poolStandings, resolveSide, isDeadTie } = require('../site/derive.js');
 
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/;
 const RESULTS = ['winner', 'loser'];
@@ -287,8 +287,7 @@ function validateCategory(cFile, cjson, cat, players, venues, tjson, errs, warns
     }
     // Date.parse rolls over impossible calendar dates (2025-02-30 -> Mar 2); catch them.
     const [y, mo, da] = s.slice(0, 10).split('-').map(Number);
-    const d = new Date(Date.UTC(y, mo - 1, da));
-    if (d.getUTCFullYear() !== y || d.getUTCMonth() !== mo - 1 || d.getUTCDate() !== da) err(where, `scheduled ${s} is not a real calendar date`);
+    if (!isRealDate(y, mo, da)) err(where, `scheduled ${s} is not a real calendar date`);
   }
 
   // ---- pass B: slots, scoring, scheduling ----

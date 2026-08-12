@@ -9,7 +9,7 @@ const assert = require('node:assert/strict');
 const { makeCat, winnerIdx, isDone, poolStandings, resolveSide, sameRecord, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, kioskStatus, matchLabel } = require('../site/derive.js');
 const { parseRoute, loadAll, renderIndex, renderStandings, renderVenue, renderPlayer } = require('../site/app.js');
 const { FIX, catOf } = require('./helpers.js');
-const { loadRepo } = require('../src/repo.js');
+const { loadRepo } = require('../src/tools.js');
 
 test('parseRoute: fragment routing — bare slug defaults to categories, every segment id-gated', () => {
   assert.deepEqual(parseRoute(''), { view: 'index' }, 'no fragment: tournament list');

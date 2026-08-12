@@ -7,9 +7,10 @@ details. When docs and code disagree, code wins.
 
 - **Write access is push access.** No server, no accounts — git is the whole
   system.
-- **derive.js is the single source of the domain model.** Validator, CLI,
+- **derive.js is the single source of the site's domain model.** Validator, CLI,
   generator, and renderers all consume it — extend it, never reimplement the
   model elsewhere. The integrity gate must not depend on renderer code.
+  Tool-only logic lives in `src/`, never in the shipping surface.
 - **A corrected score reseeds the bracket at render.** Nothing derived is
   stored; a match is done when it has a result.
 - **Slots are category-local, consumed exactly once, acyclic.**
@@ -38,6 +39,20 @@ details. When docs and code disagree, code wins.
   workflow stamps them.
 - **Mark deliberate shortcuts** with a `ponytail:` comment naming the ceiling
   and the upgrade path.
+
+## Where code lives
+
+One question decides placement for any new function: does the browser run it?
+
+- **Yes → `site/`** (the shipping surface). Shared computations go in
+  `derive.js` — the gate and the renderer must not drift apart. Pure
+  fetch/render/boot goes in `app.js`; markup and styling in `index.html` /
+  `style.css`.
+- **No → `src/`** (the tool layer, never ships). Keep it in the tool that
+  uses it (`validate.js`, `schedule.js`, `repl.js`); put it in `src/tools.js`
+  when two or more tools share it — repo I/O and tool-only predicates already
+  live there. Root files (`gb.js`, `.githooks/`) dispatch and gate only; logic
+  lives in `src/`.
 
 ## Conventions
 

@@ -1,11 +1,12 @@
 'use strict';
 // derive.js — pure derive + time logic for GitBracket.
-// The one source of the domain model: the validator (validate.js), the score
-// REPL (repl.js), the match generator (schedule.js), and the renderers (app.js)
-// all share these functions, so the integrity gate doesn't depend on renderer
-// code and the renderer doesn't reimplement the model. Loaded as a plain
-// script before app.js in the browser (functions land on globalThis); in node
-// it's a CommonJS module.
+// The one source of the site's domain model: the validator (validate.js), the
+// score REPL (repl.js), the match generator (schedule.js), and the renderers
+// (app.js) all share these functions, so the integrity gate doesn't depend on
+// renderer code and the renderer doesn't reimplement the model. Tool-only
+// predicates live in src/tools.js, not here — this file ships to the browser.
+// Loaded as a plain script before app.js in the browser (functions land on
+// globalThis); in node it's a CommonJS module.
 
 const SLOT_MIN = 45; // default match length, minutes
 const ID_RE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
@@ -40,9 +41,6 @@ function matchSlotMs(m, ctx) {
   return ((m && m.slotMinutes) || cfg[stage] || SLOT_MIN) * 60 * 1000;
 }
 
-// Window test for a match's slot: shared by the validator's venue-overlap rule
-// and the generator's court/player occupancy — one predicate, no drift.
-const slotsOverlap = (a0, a1, b0, b1) => a0 < b1 && b0 < a1;
 
 // Raw game wins per side, target not applied — base for winnerIdx (target gate).
 function countWins(games) {
@@ -414,5 +412,5 @@ function matchLabel(m, ctx) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { ID_RE, pairSig, makeCat, matchSlotMs, slotsOverlap, winnerIdx, isDone, sameRecord, isDeadTie, poolStandings, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, fmtClock, dayKey, schedTime, gamesText, matchState, fmtDiff, kioskStatus, roundName, koColumn, matchLabel };
+  module.exports = { ID_RE, pairSig, makeCat, matchSlotMs, winnerIdx, isDone, sameRecord, isDeadTie, poolStandings, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, fmtClock, dayKey, schedTime, gamesText, matchState, fmtDiff, kioskStatus, roundName, koColumn, matchLabel };
 }

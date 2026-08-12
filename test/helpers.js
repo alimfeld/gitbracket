@@ -4,7 +4,7 @@
 // Auto-discovery runs this file too; it defines no tests, which is fine.
 
 const path = require('path');
-const { loadRepo } = require('../src/repo.js');
+const { loadRepo } = require('../src/tools.js');
 const { validateRepo } = require('../src/validate.js');
 const { makeCat } = require('../site/derive.js');
 
