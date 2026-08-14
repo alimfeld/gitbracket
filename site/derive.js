@@ -411,11 +411,6 @@ function gamesText(m) {
   return (m.games || []).map(g => `${g.a}:${g.b}`).join(' · ');
 }
 
-function matchState(m, ctx) {
-  return m.forfeit !== undefined ? 'forfeit'
-    : (!isDone(m, ctx) && (m.games || []).length ? `in play · ${gamesText(m)}` : '');
-}
-
 function fmtDiff(n) {
   return (n > 0 ? '+' : '') + n;
 }
@@ -485,5 +480,5 @@ function matchLabel(m, ctx) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { ID_RE, pairSig, makeCat, matchSlotMs, bestOfOf, winnerIdx, isDone, sameRecord, isDeadTie, poolStandings, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, fmtClock, dayKey, schedTime, gamesText, matchState, fmtDiff, kioskStatus, roundName, koColumn, matchLabel };
+  module.exports = { ID_RE, pairSig, makeCat, matchSlotMs, bestOfOf, winnerIdx, isDone, sameRecord, isDeadTie, poolStandings, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, fmtClock, dayKey, schedTime, gamesText, fmtDiff, kioskStatus, roundName, koColumn, matchLabel };
 }

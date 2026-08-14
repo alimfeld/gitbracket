@@ -120,7 +120,7 @@ function renderStandings(route, data) {
       });
       parts.push('</tbody></table>');
       parts.push('<section class="grid">');
-      for (const m of poolMs) parts.push(matchCard(m, ctx));
+      for (const m of poolMs) parts.push(matchCard(m, ctx, { meta: ['catId', 'matchId', 'label', 'court', 'time'] }));
       parts.push('</section>');
     }
     const ko = ctx.matches.filter(m => m && m.pool === undefined);
@@ -140,25 +140,32 @@ function bracketHtml(ctx, ko) {
   cols.forEach((ms, r) => {
     parts.push(`<h4>${roundName(cols.length - 1 - r)}</h4>`);
     parts.push('<section class="grid">');
-    for (const m of ms) parts.push(matchCard(m, ctx));
+    for (const m of ms) parts.push(matchCard(m, ctx, { meta: ['catId', 'matchId', 'label', 'court', 'time'] }));
     parts.push('</section>');
   });
   return parts.join('');
 }
 
-function matchCard(m, ctx) {
-  const state = (m.games || []).length && !isDone(m, ctx) ? ' — in play' : '';
-  return `<article>${sideRow(m, ctx, 0)}${sideRow(m, ctx, 1)}<div class="meta">${cardMetaParts(m, ctx).join(' · ')}${state}</div></article>`;
-}
-
-// Shared card meta parts — category · match · label · venue · time. The join
-// is the caller's: player cards bold venue/time so the schedule scans fast,
-// tournament cards join plain.
-function cardMetaParts(m, ctx) {
+// The one match card for every view — tournament, kiosk, player. opts.meta is
+// the items to show, from the fixed vocabulary (catId · catName · matchId ·
+// label · court · time), in order: tournament shows all but catName; kiosk and
+// player drop court/time and show catName. opts.head is an
+// optional [left, right] headline row (kiosk: time | status badge, player:
+// time | court); each cell is an item key or pre-rendered HTML. opts.done dims
+// a finished card.
+function matchCard(m, ctx, opts = {}) {
   const t = schedTime(m);
-  return [esc(ctx.id), esc(m.id), esc(matchLabel(m, ctx)),
-    m.venue ? esc(ctx.venues.get(m.venue) || m.venue) : 'TBD',
-    t !== null ? fmtTime(t, ctx.tz) : 'TBD'];
+  const item = {
+    catId: esc(ctx.id),
+    catName: esc(ctx.name),
+    matchId: esc(m.id),
+    label: esc(matchLabel(m, ctx)),
+    court: m.venue ? esc(ctx.venues.get(m.venue) || m.venue) : 'TBD',
+    time: t !== null ? esc(fmtTime(t, ctx.tz)) : 'TBD',
+  };
+  const meta = opts.meta.map(k => item[k]).join(' · ');
+  const head = opts.head ? `<div class="head">${opts.head.map(c => `<span>${item[c] ?? c}</span>`).join('')}</div>` : '';
+  return `<article${opts.done ? ' data-done' : ''}>${head}${sideRow(m, ctx, 0)}${sideRow(m, ctx, 1)}<div class="meta">${meta}</div></article>`;
 }
 
 // Shared by bracket cards (standings) and the kiosk.
@@ -176,18 +183,8 @@ function sideRow(m, ctx, i) {
   return `<div class="side"${w === i ? ' data-win' : ''}><span>${esc(sideLabel(m.sides[i], ctx))}</span><span class="score">${score}</span></div>`;
 }
 
-function kioskCard(r, status) {
-  const m = r.m, ctx = r.ctx;
-  const state = matchState(m, ctx);
-  const t = esc(fmtTime(r.t, ctx.tz));
-  const meta = [esc(ctx.name), esc(matchLabel(m, ctx)), esc(state)].filter(Boolean).join(' · ');
-  const badge = { overdue: 'Late', live: 'Now', next: 'Next' }[status];
-  return `<article>
-    ${sideRow(m, ctx, 0)}
-    ${sideRow(m, ctx, 1)}
-    <div class="meta"><span class="badge" data-status="${status}">${badge}</span>${meta} · <strong>${t}</strong></div>
-  </article>`;
-}
+// Kiosk status key -> badge text, rendered right in the card headline.
+const KIOSK_LABEL = { overdue: 'Late', live: 'Now', next: 'Next' };
 
 // Every category as a context — shared by the venue and player renderers.
 function catCtxs(data) {
@@ -226,7 +223,14 @@ function renderVenue(route, data) {
     any = true;
     const col = [];
     col.push(`<h2>${esc(venueNames.get(id) || id)}</h2>`);
-    for (const r of open) col.push(kioskCard(r, kioskStatus(r, now)));
+    col.push('<div class="stack">'); // same card stack as the player schedule
+    for (const r of open) {
+      const st = kioskStatus(r, now);
+      // headline: time left, next/now/late badge right; meta keeps no court or time
+      col.push(matchCard(r.m, r.ctx, { meta: ['catName', 'matchId', 'label'],
+        head: ['time', `<span class="badge" data-status="${st}">${KIOSK_LABEL[st]}</span>`] }));
+    }
+    col.push('</div>');
     cols.push(`<section>${col.join('')}</section>`);
   }
   parts.push(v ? cols.join('') : `<div>${cols.join('')}</div>`);
@@ -290,22 +294,16 @@ function renderPlayer(route, data) {
     const blocks = (blocksByDay.get(key) || []).sort((a, b) => a.min - b.min);
     let bi = 0;
     for (const r of g) {
-      const t = schedTime(r.m);
+      const t = schedTime(r.m), m = r.m, ctx = r.ctx;
       while (bi < blocks.length && blocks[bi].min < t) day.push(possibleLine(blocks[bi++]));
-      const m = r.m, ctx = r.ctx;
-      const w = winnerIdx(m, ctx);
-      const isDoneMatch = w !== null;
-      const isLive = !isDoneMatch && (m.games || []).length;
-      const badge = isDoneMatch ? '<span class="p-badge" data-kind="done">Done</span>'
-        : isLive ? '<span class="p-badge" data-kind="live">Now</span>' : '';
       // one side row per team — per-game points beside their own name, winner
-      // bolded; the same sideRow as the bracket cards.
-      const meta = cardMetaParts(m, ctx).map((p, i) => i >= 3 ? `<strong>${p}</strong>` : p).join(' · ');
-      day.push(`<article${isDoneMatch ? ' data-done' : ''}>
-        ${sideRow(m, ctx, r.i)}
-        ${sideRow(m, ctx, 1 - r.i)}
-        <div class="meta">${badge}${meta}</div>
-      </article>`);
+      // bolded; the same sideRow as the bracket cards. Headline: time left,
+      // court right — meta keeps only cat · match · label.
+      day.push(matchCard(m, ctx, {
+        done: isDone(m, ctx),
+        meta: ['catName', 'matchId', 'label'],
+        head: ['time', 'court'],
+      }));
     }
     while (bi < blocks.length) day.push(possibleLine(blocks[bi++]));
     parts.push(`<div class="stack">${day.join('')}</div>`);

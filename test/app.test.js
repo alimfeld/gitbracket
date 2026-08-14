@@ -329,11 +329,14 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(standings.includes('>md40</a>') && !standings.includes('>Men&#39;s Doubles 40+</a>'), 'standings pills show the plain category id');
   const venue = renderVenue({ slug: 'sample', view: 'venues' }, data);
   assert(venue.includes('Court 1') && venue.includes('Ada Lovelace'), 'venue page renders venue boards with match rows');
+  assert(venue.includes('class="badge" data-status=') && !venue.includes('<strong>'), 'kiosk card: status badge in the headline, no time/court in the meta');
+  assert(venue.includes("Men&#39;s Doubles 40+ · 9 · Final"), 'kiosk meta shows the long category name on the shared card');
   assert(!venue.includes('<nav>'), 'kiosk has no breadcrumb');
   assert(standings.includes('>Men&#39;s Doubles 40+ (md40)</h2>'), 'category headings append the plain category id');
   const ppage = renderPlayer({ slug: 'sample', view: 'players', filter: 'p1' }, data);
   assert(ppage.includes('<h1>Ada Lovelace</h1>') && !ppage.includes('cat-label'), 'player page: plain name, no category labels');
-  assert(ppage.includes('Pool A · <strong>Court 1</strong> · <strong>09:00</strong>'), 'player card bolds venue/time for scanning');
+  assert(ppage.includes('<div class="head"><span>09:00</span><span>Court 1</span></div>'), 'player card headline: time left, court right');
+  assert(ppage.includes("Men&#39;s Doubles 40+ · 1 · Pool A") && !ppage.includes('Men&#39;s Doubles 40+ · 1 · Pool A · '), 'player card meta: long cat name · match · label, no court/time');
   assert(ppage.includes('class="ph"'), 'player match cards render unplayed score slots too');
   assert(ppage.includes('Ada Lovelace'), 'player page finds the player');
   assert(ppage.includes('<nav><a href="#">Home</a> > <a href="#sample">Sample</a> > <a href="#sample/players">Players</a></nav>'), 'player page breadcrumb: Home > Tournament > Players');
