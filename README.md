@@ -39,7 +39,7 @@ number. A side is one of three kinds:
 
 ```jsonc
 // players — the actual people; singles: one id, doubles: two
-{ "id": "m1", "pool": "A", "venue": "court-3", "scheduled": "2025-07-14T09:00:00-04:00",
+{ "id": 1, "pool": "A", "venue": "court-3", "scheduled": "2025-07-14T09:00:00-04:00",
   "sides": [
     { "kind": "players", "ids": ["p1", "p3"] },
     { "kind": "players", "ids": ["p2", "p4"] }
@@ -47,15 +47,15 @@ number. A side is one of three kinds:
   "games": [{ "a": 11, "b": 9 }, { "a": 11, "b": 7 }] }      // a result = done
 
 // match — the winner (or loser) of an earlier match
-{ "id": "m9", "sides": [
+{ "id": 9, "sides": [
   { "kind": "players", "ids": ["p1", "p3"] },
-  { "kind": "match",  "match": "m1", "result": "winner" }
+  { "kind": "match",  "match": 1, "result": "winner" }
 ] }
 
 // pool — the Nth-ranked team of a pool
-{ "id": "m12", "sides": [
+{ "id": 12, "sides": [
   { "kind": "pool",  "pool": "A", "rank": 1 },
-  { "kind": "match", "match": "m9", "result": "loser" }
+  { "kind": "match", "match": 9, "result": "loser" }
 ] }
 ```
 
