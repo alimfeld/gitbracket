@@ -16,16 +16,19 @@ const ID_RE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 const pairSig = ids => [...ids].sort().join('|');
 
 function makeCat(c, tjson) {
-  // null/non-object entries: validate.js reports them, renders skip them
+  // null/non-object entries: validate.js reports them, renders skip them.
+  // Non-array players/venues too — the validator calls this while reporting
+  // the broken shape, so it must not throw on it.
   const matches = (c.matches || []).filter(m => m && typeof m === 'object');
+  const arr = x => Array.isArray(x) ? x : [];
   return {
     matches,
     byId: new Map(matches.map(m => [m.id, m])),
     bestOf: (c.meta && c.meta.bestOf) || {},
-    names: new Map(((tjson && tjson.players) || []).filter(p => p && typeof p === 'object').map(p => [p.id, p.name])),
+    names: new Map(arr(tjson && tjson.players).filter(p => p && typeof p === 'object').map(p => [p.id, p.name])),
     tz: (tjson && tjson.timezone) || 'UTC',
     slotMinutes: (c.meta && c.meta.slotMinutes) || {},
-    venues: new Map(((tjson && tjson.venues) || []).filter(v => v && typeof v === 'object').map(v => [v.id, v.name])),
+    venues: new Map(arr(tjson && tjson.venues).filter(v => v && typeof v === 'object').map(v => [v.id, v.name])),
     name: (c.meta && c.meta.name) || '',
     id: (c.meta && c.meta.id) || ''
   };
@@ -51,6 +54,18 @@ function countWins(games) {
     else if (g.b > g.a) w[1]++;
   }
   return w;
+}
+
+// Net game differential of a played match from side 0's viewpoint:
+// gd = won minus lost games, pd = points for minus points against. Side 1's
+// numbers are the negations — standings and head-to-head tally both use it.
+function gameDiff(games) {
+  let gd = 0, pd = 0;
+  for (const g of games) {
+    gd += g.a > g.b ? 1 : -1;
+    pd += g.a - g.b;
+  }
+  return { gd, pd };
 }
 
 // Effective best-of for a match: match override > per-stage category config.
@@ -108,11 +123,7 @@ function poolStandings(ctx, pool, partial) {
     (w === 0 ? r0 : r1).wins++;
     (w === 0 ? r1 : r0).losses++;
     if (m.forfeit === undefined) {
-      let gd = 0, pd = 0;
-      for (const g of m.games) {
-        gd += g.a > g.b ? 1 : -1; // game differential: won minus lost
-        pd += g.a - g.b;
-      }
+      const { gd, pd } = gameDiff(m.games);
       r0.gd += gd; r0.pd += pd;
       r1.gd -= gd; r1.pd -= pd;
     }
@@ -135,8 +146,7 @@ function mutualKeys(list, ms, ctx) {
     const ka = h.get(a), kb = h.get(b);
     (w === 0 ? ka : kb).hw++;
     if (m.forfeit === undefined) {
-      let gd = 0, pd = 0;
-      for (const g of m.games) { gd += g.a > g.b ? 1 : -1; pd += g.a - g.b; }
+      const { gd, pd } = gameDiff(m.games);
       ka.hg += gd; ka.hp += pd; kb.hg -= gd; kb.hp -= pd;
     }
   }

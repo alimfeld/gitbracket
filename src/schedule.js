@@ -329,6 +329,18 @@ function generate(spec) {
   // ---- spec surface (fail fast; the gate below would catch most of these too) ----
   if (typeof slug !== 'string' || !ID_RE.test(slug)) throw new Error(`spec: slug ${JSON.stringify(slug)} must match ${ID_RE}`);
   if (!Number.isInteger(poolSize) || poolSize < 2) throw new Error(`spec: poolSize must be an integer >= 2, got ${JSON.stringify(poolSize)}`);
+  // A missing/mistyped field used to crash as a raw TypeError (Object.entries
+  // on undefined) instead of a named spec error — same gate, named message.
+  if (typeof name !== 'string' || !name) throw new Error(`spec: name must be a non-empty string, got ${JSON.stringify(name)}`);
+  if (typeof timezone !== 'string' || !timezone) throw new Error(`spec: timezone must be a non-empty string, got ${JSON.stringify(timezone)}`);
+  const objMap = (v, field) => {
+    if (typeof v !== 'object' || v === null || Array.isArray(v)) throw new Error(`spec: ${field} must be an id -> value map, got ${JSON.stringify(v)}`);
+  };
+  objMap(venues, 'venues');
+  objMap(players, 'players');
+  objMap(teams, 'teams');
+  objMap(blockStart, 'blocks');
+  if (!Array.isArray(categories)) throw new Error(`spec: categories must be an array, got ${JSON.stringify(categories)}`);
   // Date.parse rolls impossible calendar dates (2025-02-30 -> Mar 2); catch them like the validator does.
   const [yy, mm, dd] = String(eventDate).split('-').map(Number);
   if (!isRealDate(yy, mm, dd)) {

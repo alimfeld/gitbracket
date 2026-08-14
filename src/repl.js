@@ -16,7 +16,7 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const { spawnSync } = require('child_process');
-const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, gamesText, fmtTime, matchLabel, koColumn, poolStandings, matchSlotMs, fmtDiff, bestOfOf, dayKey } = require('../site/derive.js');
+const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, gamesText, fmtTime, matchLabel, koColumn, placementLabel, poolStandings, matchSlotMs, fmtDiff, bestOfOf, dayKey } = require('../site/derive.js');
 const { loadRepo, writeTournament, tzOffset } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 const { buildKnockout } = require('./schedule.js');
@@ -144,6 +144,40 @@ function formatMatchLine(m, ctx, tz, stage, sidew, idw, venuew, stagew) {
   return `${C.bold(idw ? String(m.id).padEnd(idw) : m.id)}  ${C.dim(stage)}${stagePad}  ${sides}${sidePad}  ${time}  ${venue}  ${score}`;
 }
 
+// Placement depth of an existing bracket: a loser edge from a round at
+// winner-depth d (koColumn: 2^d participants) opens the loser range up to
+// 2^(d+1) ranks — semi -> 4 (bronze), QF -> 8 (5th-8th), R16 -> 16. No loser
+// edges at all means no placement play-off (a 2-team final only). The old
+// loser-edge-count heuristic capped out at 8 and re-inferred a 16-rank
+// bracket as an 8-rank one, silently dropping the 9th-16th matches.
+function inferPlacements(oldKO, ctx) {
+  let p = 2;
+  for (const m of oldKO) {
+    if (!m || !Array.isArray(m.sides)) continue;
+    for (const s of m.sides) {
+      if (s && s.kind === 'match' && s.result === 'loser') {
+        const X = ctx.byId.get(s.match);
+        if (X) p = Math.max(p, 2 ** (koColumn(X, ctx) + 1));
+      }
+    }
+  }
+  return p;
+}
+
+// KO listing order: earlier round first (higher column), then placement
+// matches after the main-bracket match of the same column, then id. Keys off
+// the placement model itself (placementLabel), not label prefixes — a
+// '9th–16th semi' is placement too, and the old startsWith('3rd'|'5th'|'7th')
+// check silently interleaved any deeper classification with the main bracket.
+function koCompare(a, b, ctx) {
+  const ca = koColumn(a.m, ctx), cb = koColumn(b.m, ctx);
+  if (ca !== cb) return cb - ca;
+  const pa = placementLabel(a.m, ctx) !== null ? 1 : 0;
+  const pb = placementLabel(b.m, ctx) !== null ? 1 : 0;
+  if (pa !== pb) return pa - pb;
+  return a.m.id - b.m.id;
+}
+
 function listText(repo, slug, cat) {
   const info = repo.tournaments.get(slug);
   const tjson = info.tjson;
@@ -175,13 +209,7 @@ function listText(repo, slug, cat) {
     const pa = a.m.pool !== undefined, pb = b.m.pool !== undefined;
     if (pa !== pb) return pa ? -1 : 1; // pool matches first
     if (pa) return a.m.pool.localeCompare(b.m.pool) || a.m.id - b.m.id;
-    // KO: earlier round first (higher column), then placement after final, then ID
-    const ca = koColumn(a.m, ctx), cb = koColumn(b.m, ctx);
-    if (ca !== cb) return cb - ca;
-    const pa2 = a.stage.startsWith('3rd') || a.stage.startsWith('5th') || a.stage.startsWith('7th') ? 1 : 0;
-    const pb2 = b.stage.startsWith('3rd') || b.stage.startsWith('5th') || b.stage.startsWith('7th') ? 1 : 0;
-    if (pa2 !== pb2) return pa2 - pb2;
-    return a.m.id - b.m.id;
+    return koCompare(a, b, ctx); // earlier round first, placement after the same-column main match
   });
   const idw = Math.max(...all.map(r => String(r.m.id).length));
   const stagew = Math.max(...all.map(r => r.stage.length));
@@ -468,11 +496,8 @@ function rebracketCmd(state, dropPlayers) {
   // Collect existing KO matches and derive properties from them
   const oldKO = cjson.matches.filter(m => !m.pool).sort((a, b) => a.id - b.id);
 
-  // Derive placements from existing bracket: count loser-edge matches.
-  // 0 = placements 2 (no bronze), 1 = placements 4 (bronze only),
-  // >1 = placements 8 (5th-8th classification).
-  const loserFed = oldKO.filter(m => m.sides.some(s => s && s.kind === 'match' && s.result === 'loser'));
-  const placements = loserFed.length === 0 ? 2 : loserFed.length > 1 ? 8 : 4;
+  // Placement depth from the deepest loser edge: semi -> 4, QF -> 8, R16 -> 16.
+  const placements = inferPlacements(oldKO, ctx);
 
   // Extract final override from the old final: no loser incoming, no winner outgoing.
   const finalM = oldKO.find(m =>
@@ -614,4 +639,4 @@ function main(root) {
   replMain(root, siteRoot, repo);
 }
 
-module.exports = { isScorable, parseGame, buildScheduled, applyScore, applyForfeit, applyVenue, applyTime, applyRebracket, listEligible, writeEdit, commitMessage, parseCmd, navigate, main };
+module.exports = { isScorable, parseGame, buildScheduled, applyScore, applyForfeit, applyVenue, applyTime, applyRebracket, listEligible, writeEdit, commitMessage, parseCmd, navigate, main, inferPlacements, koCompare };

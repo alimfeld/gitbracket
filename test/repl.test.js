@@ -160,3 +160,39 @@ test('repl writeEdit: rollback on validation failure, write on success (real dis
   }
 });
 
+
+// The two bracket re-derivations must survive any placement depth, not just
+// the 4/8 the generator defaults to: a 16-team classification bracket is a
+// different data shape, and both old heuristics silently degraded it.
+const { buildKnockout } = require('../src/schedule.js');
+const { koColumn, placementLabel } = require('../site/derive.js');
+
+function koContext(placements) {
+  let n = 1;
+  const ko = buildKnockout([[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], ['A'], () => n++, {}, placements);
+  return { ko, ctx: makeCat({ meta: { id: 't' }, matches: ko }, {}) };
+}
+
+test('repl inferPlacements: loser-edge depth, any placement depth', () => {
+  for (const want of [2, 4, 8, 16]) {
+    const { ko, ctx } = koContext(want);
+    assert(repl.inferPlacements(ko, ctx) === want, `inferred ${repl.inferPlacements(ko, ctx)} want ${want}`);
+  }
+});
+
+test('repl koCompare: placements sort after the same-column main-bracket match', () => {
+  const { ko, ctx } = koContext(16); // 9th-16th classification interleaves columns with QF/SF otherwise
+  const all = ko.map(m => ({ m })).sort((a, b) => repl.koCompare(a, b, ctx));
+  const byCol = new Map();
+  for (const { m } of all) {
+    const col = koColumn(m, ctx);
+    if (!byCol.has(col)) byCol.set(col, []);
+    byCol.get(col).push(m);
+  }
+  for (const [col, ms] of byCol) {
+    const main = ms.filter(m => placementLabel(m, ctx) === null);
+    const pl = ms.filter(m => placementLabel(m, ctx) !== null);
+    assert((pl.length === 0 || main.length === 0 || main[main.length - 1].id < pl[0].id),
+      `col ${col}: placement matches must follow main-bracket matches`);
+  }
+});

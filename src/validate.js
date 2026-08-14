@@ -69,7 +69,17 @@ function validateTournamentData(slug, indexName, info, errs, warns) {
   const categories = new Map();
   const players = new Map();
 
-  (tjson.venues || []).forEach((v, i) => {
+  // Array-top-level shape: a non-array here used to crash the validator mid-
+  // run (forEach on a string) instead of reporting; the gate must never throw.
+  const list = (v, field) => {
+    if (v !== undefined && !Array.isArray(v)) err(tFile, `${field} must be an array, got ${JSON.stringify(v)}`);
+    return Array.isArray(v) ? v : [];
+  };
+  const venuesArr = list(tjson.venues, 'venues');
+  const categoriesArr = list(tjson.categories, 'categories');
+  const playersArr = list(tjson.players, 'players');
+
+  venuesArr.forEach((v, i) => {
     const where = `${tFile} venues[${i}]`;
     if (!v || typeof v !== 'object') { err(where, 'entry must be an object'); return; }
     if (typeof v.id !== 'string' || !ID_RE.test(v.id)) err(where, `id ${JSON.stringify(v.id)} must match ${ID_RE}`);
@@ -78,7 +88,7 @@ function validateTournamentData(slug, indexName, info, errs, warns) {
     venues.add(v.id);
   });
 
-  (tjson.categories || []).forEach((c, i) => {
+  categoriesArr.forEach((c, i) => {
     const where = `${tFile} categories[${i}]`;
     if (!c || typeof c !== 'object') { err(where, 'entry must be an object'); return; }
     if (typeof c.id !== 'string' || !ID_RE.test(c.id)) err(where, `id ${JSON.stringify(c.id)} must match ${ID_RE}`);
@@ -96,7 +106,7 @@ function validateTournamentData(slug, indexName, info, errs, warns) {
     }
   });
 
-  (tjson.players || []).forEach((p, i) => {
+  playersArr.forEach((p, i) => {
     const where = `${tFile} players[${i}]`;
     if (!p || typeof p !== 'object') { err(where, 'entry must be an object'); return; }
     if (typeof p.id !== 'string' || !ID_RE.test(p.id)) err(where, `id ${JSON.stringify(p.id)} must match ${ID_RE}`);

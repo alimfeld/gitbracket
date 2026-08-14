@@ -70,6 +70,14 @@ test('spec guards reject bad input fast', () => {
   assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], placements: 3 }] }), /placements/);
   assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], placements: 0 }] }), /placements/);
   assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], placements: -2 }] }), /placements/);
+  // missing/mistyped spec surface fails as a named spec error, not a TypeError
+  assert.throws(() => generate({ ...MINI, venues: undefined }), /venues must be an id -> value map/);
+  assert.throws(() => generate({ ...MINI, players: [] }), /players must be an id -> value map/);
+  assert.throws(() => generate({ ...MINI, teams: undefined }), /teams must be an id -> value map/);
+  assert.throws(() => generate({ ...MINI, blocks: undefined }), /blocks must be an id -> value map/);
+  assert.throws(() => generate({ ...MINI, categories: 'oops' }), /categories must be an array/);
+  assert.throws(() => generate({ ...MINI, name: undefined }), /name must be a non-empty string/);
+  assert.throws(() => generate({ ...MINI, timezone: undefined }), /timezone must be a non-empty string/);
 });
 
 test('knockout: false skips the knockout phase for a multi-pool category', () => {
