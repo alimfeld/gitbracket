@@ -57,7 +57,41 @@ gh repo delete gitbracket-test --yes
   git push     # redeploys with the latest code
   ```
 
+## Leaner alternative: a branch and a local server
+
+When you only need to see the app — rendering, the kiosk poll, the REPL
+edit → commit → push flow — skip the throwaway repo. Work on a branch in
+your own checkout and serve the static site from your machine.
+
+```bash
+# ── setup (one time) ──
+git checkout -b test
+python3 -m http.server 8000 --directory site   # serve the same files Pages serves
+# open http://localhost:8000
+git push -u origin test            # once — the upstream the REPL's push needs
+
+# ── iterate (as many times as needed) ──
+node gb.js               # edit scores → commits land on the branch; the
+                         # REPL's `push` pushes them to the branch
+# reload the tab; the kiosk's poll picks changes up by itself
+
+# ── cleanup (or keep it) ──
+git checkout main
+git branch -d test
+git push origin --delete test
+```
+
+The branch replaces the throwaway repo as the isolation boundary: the
+REPL's `push` goes to `origin/test`, and Pages deploys `main` only — nothing
+ships. No `gh`, no repo create/delete, no `/tmp` clone — `python3 -m http.server`
+is the whole server.
+
+Local serving matches the deployed app — same files, same relative fetches
+(`cache: no-cache`, so reloads are fresh). It skips only what a real
+deployment answers: CDN latency, 304 revalidation, HTTPS, `?v=` stamping.
+Use the Pages recipe for those, this one for everything else.
+
 ## Prerequisites
 
-- [GitHub CLI](https://cli.github.com/) (`gh`) — authenticated
-- Git, Node.js, permissions to create public repos
+- **Throwaway-repo recipe:** [GitHub CLI](https://cli.github.com/) (`gh`) — authenticated; Git, Node.js; permissions to create public repos
+- **Branch recipe:** Git, Node.js, and any static-file server (`python3 -m http.server` or equivalent)
