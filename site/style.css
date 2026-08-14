@@ -85,7 +85,7 @@ body.venue header { display: flex; justify-content: space-between; align-items: 
 body.venue .board { display: flex; gap: 2.5rem; align-items: flex-start; flex-wrap: wrap; }
 body.venue main section { flex: 1 1 24rem; min-width: 0; }
 body.venue .stack { gap: 1.5rem; } /* kiosk cards are big — more air than the base .6rem */
-body.venue .badge { display: inline-block; font-size: .8em; font-weight: 700; padding: .1em .6em; border-radius: 999px; }
-body.venue .badge[data-status="overdue"] { background: #7c2d1e; color: #ffb3ab; }
-body.venue .badge[data-status="live"] { background: #ffd166; color: #000; }
-body.venue .badge[data-status="next"] { background: #232321; color: #9a9a94; border: 1px solid #3a3a38; }
+/* status colors ride article[data-status]; the headline time is the colored cell */
+body.venue article[data-status="overdue"] .head span { color: #ffb3ab; }
+body.venue article[data-status="live"] .head span { color: #ffd166; }
+body.venue article[data-status="next"] .head span { color: #9a9a94; }

@@ -154,9 +154,9 @@ function bracketHtml(ctx, ko) {
 // the items to show, from the fixed vocabulary (catId · catName · matchId ·
 // label · court · time), in order: tournament shows all but catName; kiosk and
 // player drop court/time and show catName. opts.head is an
-// optional [left, right] headline row (kiosk: time | status badge, player:
-// time | court); each cell is an item key or pre-rendered HTML. opts.done dims
-// a finished card.
+// optional [left, right] headline row (kiosk: time, player: time | court);
+// each cell is an item key or pre-rendered HTML. opts.done dims a finished
+// card; opts.status rides on the article as data-status (kiosk time coloring).
 function matchCard(m, ctx, opts = {}) {
   const t = schedTime(m);
   const item = {
@@ -169,7 +169,7 @@ function matchCard(m, ctx, opts = {}) {
   };
   const meta = opts.meta.map(k => item[k]).join(' · ');
   const head = opts.head ? `<div class="head">${opts.head.map(c => `<span>${item[c] ?? c}</span>`).join('')}</div>` : '';
-  return `<article${opts.done ? ' data-done' : ''}>${head}${sideRow(m, ctx, 0)}${sideRow(m, ctx, 1)}<div class="meta">${meta}</div></article>`;
+  return `<article${opts.done ? ' data-done' : ''}${opts.status ? ` data-status="${opts.status}"` : ''}>${head}${sideRow(m, ctx, 0)}${sideRow(m, ctx, 1)}<div class="meta">${meta}</div></article>`;
 }
 
 // Shared by bracket cards (standings) and the kiosk.
@@ -186,9 +186,6 @@ function sideRow(m, ctx, i) {
       }).join('');
   return `<div class="side"${w === i ? ' data-win' : ''}><span>${esc(sideLabel(m.sides[i], ctx))}</span><span class="score">${score}</span></div>`;
 }
-
-// Kiosk status key -> badge text, rendered right in the card headline.
-const KIOSK_LABEL = { overdue: 'Late', live: 'Now', next: 'Next' };
 
 // Every category as a context — shared by the venue and player renderers.
 function catCtxs(data) {
@@ -230,9 +227,9 @@ function renderVenue(route, data) {
     col.push('<div class="stack">'); // same card stack as the player schedule
     for (const r of open) {
       const st = kioskStatus(r, now);
-      // headline: time left, next/now/late badge right; meta keeps no court or time
+      // status colors the headline time; meta keeps no court or time
       col.push(matchCard(r.m, r.ctx, { meta: ['catName', 'matchId', 'label'],
-        head: ['time', `<span class="badge" data-status="${st}">${KIOSK_LABEL[st]}</span>`] }));
+        head: ['time'], status: st }));
     }
     col.push('</div>');
     cols.push(`<section>${col.join('')}</section>`);

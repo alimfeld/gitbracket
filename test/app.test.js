@@ -329,7 +329,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(standings.includes('>md40</a>') && !standings.includes('>Men&#39;s Doubles 40+</a>'), 'standings pills show the plain category id');
   const venue = renderVenue({ slug: 'sample', view: 'venues' }, data);
   assert(venue.includes('Court 1') && venue.includes('Ada Lovelace'), 'venue page renders venue boards with match rows');
-  assert(venue.includes('class="badge" data-status=') && !venue.includes('<strong>'), 'kiosk card: status badge in the headline, no time/court in the meta');
+  assert(venue.includes('<article data-status=') && !venue.includes('badge'), 'kiosk card: status rides the article (headline time is colored), no badge, no time/court in the meta');
   assert(venue.includes("Men&#39;s Doubles 40+ · 9 · Final"), 'kiosk meta shows the long category name on the shared card');
   assert(!venue.includes('<nav>'), 'kiosk has no breadcrumb');
   assert(standings.includes('>Men&#39;s Doubles 40+ (md40)</h2>'), 'category headings append the plain category id');
