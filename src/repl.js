@@ -16,8 +16,8 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const { spawnSync } = require('child_process');
-const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, gamesText, fmtTime, matchLabel, koColumn, poolStandings, matchSlotMs, fmtDiff, bestOfOf } = require('../site/derive.js');
-const { loadRepo, writeTournament } = require('./tools.js');
+const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, gamesText, fmtTime, matchLabel, koColumn, poolStandings, matchSlotMs, fmtDiff, bestOfOf, dayKey } = require('../site/derive.js');
+const { loadRepo, writeTournament, tzOffset } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 const { buildKnockout } = require('./schedule.js');
 
@@ -65,10 +65,8 @@ function buildScheduled(hhmm, tz) {
   if (!/^\d{1,2}:\d{2}$/.test(hhmm)) return null;
   const [h, m] = hhmm.split(':');
   if (+h > 23 || +m > 59) return null;
-  const now = new Date();
-  const date = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
-  const offset = new Intl.DateTimeFormat('en-CA', { timeZone: tz, timeZoneName: 'longOffset' }).formatToParts(now).find(p => p.type === 'timeZoneName').value.replace('GMT', '');
-  return `${date}T${h.padStart(2,'0')}:${m}:00${offset}`;
+  const date = dayKey(Date.now(), tz); // tz-local date
+  return `${date}T${h.padStart(2,'0')}:${m}:00${tzOffset(tz, date)}`;
 }
 
 function applyTime(cjson, matchId, isoString) {

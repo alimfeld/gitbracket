@@ -29,7 +29,7 @@
 const fs = require('fs');
 const path = require('path');
 const { matchSlotMs, pairSig, dayKey, ID_RE } = require('../site/derive.js');
-const { writeTournament, slotsOverlap, isRealDate } = require('./tools.js');
+const { writeTournament, slotsOverlap, isRealDate, tzOffset } = require('./tools.js');
 
 // Round-robin pairings, circle method: array of rounds, each a list of pairs.
 function roundRobin(teams) {
@@ -214,13 +214,6 @@ function buildCategory(teams, cat, poolSize) {
 }
 
 // ---------- scheduling ----------
-
-// IANA tz -> "+02:00"-style offset on eventDate (Europe/Zurich in Sep is CEST).
-function tzOffset(tz, eventDate) {
-  const p = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'longOffset' })
-    .formatToParts(new Date(eventDate + 'T12:00:00Z')).find((x) => x.type === 'timeZoneName');
-  return p && p.value !== 'GMT' ? p.value.replace('GMT', '') : '+00:00';
-}
 
 // Greedy court + time assignment across all categories. Matches run in build
 // order — pools first (players known), then knockout in dependency order. A

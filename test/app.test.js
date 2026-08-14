@@ -8,6 +8,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { makeCat, winnerIdx, isDone, poolStandings, resolveSide, sameRecord, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, kioskStatus, matchLabel } = require('../site/derive.js');
 const { parseRoute, loadAll, renderIndex, renderStandings, renderVenue, renderPlayer } = require('../site/app.js');
+const { generate } = require('../src/schedule.js');
 const { FIX, catOf } = require('./helpers.js');
 const { loadRepo } = require('../src/tools.js');
 
@@ -211,9 +212,9 @@ test('bracket depth', () => {
 });
 
 test('koColumn: a bye\'d semi sits in the semifinal column, not with round 1', () => {
-  // XD 2026 shape: 5 teams from uneven pools — sf2 is pool-vs-pool (a bye
-  // into the semis) while sf1 plays a round-1 survivor. Depth says sf2 is
-  // round 1; koColumn must say semifinal.
+  // Unbalanced field: sf2 is pool-vs-pool (a bye into the semis) while sf1
+  // plays a round-1 survivor. Depth says sf2 is round 1; koColumn must say
+  // semifinal.
   const ko = makeCat({ meta: {}, matches: [
     { id: 'r1', sides: [{ kind: 'pool', pool: 'B', rank: 2 }, { kind: 'pool', pool: 'A', rank: 3 }] },
     { id: 'sf1', sides: [{ kind: 'pool', pool: 'A', rank: 1 }, { kind: 'match', match: 'r1', result: 'winner' }] },
@@ -281,6 +282,32 @@ test('placementLabel: 3rd/5th/7th place and classification semis', () => {
   assert(L(9) === '5th–8th semi', 'losers of quarters -> classification semi');
   assert(L(11) === '5th place', 'winners of classification semis -> 5th place');
   assert(L(12) === '7th place', 'losers of classification semis -> 7th place');
+});
+
+test('placementLabel: depth-3 classification (16 teams, placements 16) labels every slot', () => {
+  const teams = Array.from({ length: 16 }, (_, i) => [`p${i}`]);
+  const tourney = generate({
+    slug: 'deep', name: 'Deep', timezone: 'UTC', date: '2026-05-02', poolSize: 4,
+    blocks: { t: '09:00' }, venues: { 'court-1': 'Court 1' },
+    players: Object.fromEntries(teams.map(([id]) => [id, id])),
+    categories: [{ id: 't', name: 'Single', bestOf: 1, slotMinutes: 30, placements: 16 }],
+    teams: { t: teams },
+  });
+  const ctx = makeCat({ meta: tourney.categories[0], matches: tourney.matches.t }, tourney);
+  const labels = ctx.matches.filter(m => m.pool === undefined).map(m => matchLabel(m, ctx));
+  const count = l => labels.filter(x => x === l).length;
+  assert.equal(count('Final'), 1);
+  assert.equal(count('SF'), 2);
+  assert.equal(count('QF'), 4);
+  assert.equal(count('R16'), 8);
+  assert.equal(count('3rd place'), 1, 'bronze');
+  assert.equal(count('5th–8th semi'), 2, 'QF losers');
+  assert.equal(count('5th place'), 1, '5th/6th');
+  assert.equal(count('7th place'), 1, '7th/8th');
+  assert.equal(count('9th–16th semi'), 4, 'R16 losers');
+  assert.equal(count('9th–12th semi'), 2, 'winner-fed depth-3 semis');
+  assert.equal(count('13th–16th semi'), 2, 'loser-fed depth-3 semis');
+  for (const l of ['9th place', '11th place', '13th place', '15th place']) assert.equal(count(l), 1, l);
 });
 
 test('place8: 8-team classification bracket labels resolve from a committed fixture', () => {

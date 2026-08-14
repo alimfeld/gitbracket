@@ -356,7 +356,7 @@ function boot() {
       // re-render replaces the span, so look it up fresh each tick.
       clockTimer = setInterval(() => {
         const el = document.getElementById('k-clock');
-        if (el) el.textContent = fmtClock(Date.now(), (data && data.tjson && data.tjson.timezone) || 'UTC');
+        if (el) el.textContent = fmtTime(Date.now(), (data && data.tjson && data.tjson.timezone) || 'UTC');
       }, 1000);
     } else if (!on && pollTimer) {
       clearInterval(pollTimer); pollTimer = null;

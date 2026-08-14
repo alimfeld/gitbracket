@@ -331,47 +331,52 @@ const ordRules = new Intl.PluralRules('en', { type: 'ordinal' });
 const ordinal = n => n + ({ one: 'st', two: 'nd', few: 'rd' }[ordRules.select(n)] || 'th');
 
 // Classification label for a placement match (3rd/5th/7th place, classification
-// semis). Winner-bracket matches (QF/SF/final) return null. The chain walks
-// match slots down: loser edges count hops; the origin is the winner-bracket
-// round whose losers started the chain, measured as depth from the final.
+// semis), null for main-bracket matches. Model: every placement match has a
+// rank range — the possible final ranks of its two teams. A loser edge from a
+// main-bracket round opens the round's loser range; inside the placement
+// bracket a winner edge takes the top half of its feeder's range, a loser edge
+// the bottom half. A match whose loser edge feeds nothing decides a rank (the
+// top of its range); otherwise it's a classification semi over the range.
 function placementLabel(m, ctx) {
-  if (!ctx._chainMemo) ctx._chainMemo = new Map();
-  const memo = ctx._chainMemo;
-  const chainOf = (mm) => {
-    if (memo.has(mm.id)) return memo.get(mm.id);
-    memo.set(mm.id, null); // in-progress guard, same as matchRound
-    let best = null;
-    for (const s of mm.sides) {
-      if (!s || s.kind !== 'match') continue;
-      const X = ctx.byId.get(s.match);
-      if (!X) continue;
-      const c = chainOf(X);
-      const here = s.result === 'loser'
-        ? (c ? { d: c.d, h: c.h + 1 } : { d: winnerDepth(ctx, X.id), h: 1 })
-        : c; // winner edge from a placement match continues the chain
-      if (here && (!best || here.h > best.h)) best = here;
-    }
-    memo.set(mm.id, best);
-    return best;
-  };
-  const c = chainOf(m);
-  if (!c) return null;
-  const lastLoser = m.sides.some(s => s && s.kind === 'match' && s.result === 'loser');
-  const isTerminal = !ctx.matches.some(X => X.sides && X.sides.some(s => s && s.kind === 'match' && s.match === m.id && s.result === 'loser'));
-  const low = 2 ** c.d + 1; // top rank of the loser range
-  if (lastLoser && c.h < c.d && !isTerminal) { // intermediate classification round (e.g. 5th–8th semis)
-    return `${ordinal(low)}–${ordinal(low + 2 ** (c.d - c.h + 1) - 1)} semi`;
+  if (!ctx._plMemo) ctx._plMemo = new Map();
+  const r = plRange(m, ctx, ctx._plMemo);
+  if (!r) return null;
+  const terminal = !ctx.matches.some(X => X.sides && X.sides.some(s => s && s.kind === 'match' && s.match === m.id && s.result === 'loser'));
+  return terminal ? `${ordinal(r.lo)} place` : `${ordinal(r.lo)}–${ordinal(r.hi)} semi`;
+}
+
+// Half of a placement feeder's range: winner edges take the top, loser edges
+// the bottom — the rank semantics the bracket assigns, whatever the pairing.
+const half = (r, top) => { const w = (r.hi - r.lo + 1) / 2; return top ? { lo: r.lo, hi: r.lo + w - 1 } : { lo: r.lo + w, hi: r.hi }; };
+
+// Loser range of a main-bracket round at winnerDepth d: it can lose ranks
+// [2^d + 1, 2^(d+1)] — d=1 (semis) loses 3rd–4th, d=2 (quarters) 5th–8th.
+const loserRange = (X, ctx) => { const d = winnerDepth(ctx, X.id); return { lo: 2 ** d + 1, hi: 2 ** (d + 1) }; };
+
+// Possible final ranks of the two teams in a placement match, null for
+// main-bracket matches. Memoized per category like koColumn's columns.
+function plRange(m, ctx, memo) {
+  if (memo.has(m.id)) return memo.get(m.id);
+  memo.set(m.id, null); // in-progress guard — validate rejects cycles; this only stops a hang if one slips past the gate
+  let lo = Infinity, hi = -Infinity;
+  for (const s of m.sides) {
+    if (!s || s.kind !== 'match') continue;
+    const X = ctx.byId.get(s.match);
+    if (!X) continue;
+    const inner = plRange(X, ctx, memo);
+    const r = inner ? half(inner, s.result === 'winner')
+      : s.result === 'loser' ? loserRange(X, ctx) : null;
+    if (r) { lo = Math.min(lo, r.lo); hi = Math.max(hi, r.hi); }
   }
-  // last round of the classification bracket: winner edge resolves the top pair,
-  // loser edge the bottom pair (3rd place is a single match, so it stays low)
-  return `${ordinal(lastLoser && c.d > 1 ? low + 2 : low)} place`;
+  const out = hi === -Infinity ? null : { lo, hi };
+  memo.set(m.id, out);
+  return out;
 }
 
 // Winner-edge distance to the final (0 = the final itself): the round a loser
 // edge branches from, for placement labels. matchRound can't do this — a bye'd
-// semi fed by pool slots has depth 0 from the leaves yet sits one round below
-// the final (XD 2026 m6), and a wrong d mislabels the bronze match as a
-// classification round.
+// semi fed by pool slots has leaf-depth 0 yet sits one round below the final,
+// and a wrong d mislabels the bronze match as a classification round.
 function winnerDepth(ctx, id, memo = new Map()) {
   if (memo.has(id)) return memo.get(id);
   memo.set(id, -1); // in-progress guard, same as matchRound
@@ -390,11 +395,6 @@ function winnerDepth(ctx, id, memo = new Map()) {
 // ---------- time ----------
 
 function fmtTime(t, tz) {
-  return new Intl.DateTimeFormat(undefined, { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(t);
-}
-
-// Kiosk wall clock, second-granularity, in the tournament's timezone.
-function fmtClock(t, tz) {
   return new Intl.DateTimeFormat(undefined, { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(t);
 }
 
@@ -427,16 +427,16 @@ function kioskStatus(r, now) {
 // Knockout round names by distance from the final: each round back doubles
 // participants (2 -> Final, 4 -> Semifinals, 8 -> Quarterfinals, ...). With
 // byes a first round of 2 matches is still structurally Quarterfinals; names
-// key off koColumn, so a bye'd semi (XD 2026: match 7, two pool slots) reads as
-// a semifinal, not a first-round match.
+// key off koColumn, so a bye'd semi (two pool slots) reads as a semifinal, not
+// a first-round match.
 function roundName(depthFromEnd) {
   const n = 2 << depthFromEnd;
   return { 2: 'Final', 4: 'Semifinals', 8: 'Quarterfinals' }[n] || `Round of ${n}`;
 }
 
 // Bracket column: 0 is the final column, each winner edge one column back.
-// Depth-from-leaves (matchRound) can't place a bye'd semi — XD 2026's match 7 has
-// two pool slots, so depth 0, yet its winner feeds the final. Winner edges
+// Depth-from-leaves (matchRound) can't place a bye'd semi — two pool slots give
+// it depth 0, yet its winner feeds the final. Winner edges
 // into a placement sub-bracket (5th place fed by the 5th–8th semis) do not
 // extend the chain, so it always terminates at the final. Placement matches
 // sit one column after the round their feeders branched from (bronze with the
@@ -480,5 +480,5 @@ function matchLabel(m, ctx) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { ID_RE, pairSig, makeCat, matchSlotMs, bestOfOf, winnerIdx, isDone, sameRecord, isDeadTie, poolStandings, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, fmtClock, dayKey, schedTime, gamesText, fmtDiff, kioskStatus, roundName, koColumn, matchLabel };
+  module.exports = { ID_RE, pairSig, makeCat, matchSlotMs, bestOfOf, winnerIdx, isDone, sameRecord, isDeadTie, poolStandings, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, dayKey, schedTime, gamesText, fmtDiff, kioskStatus, roundName, koColumn, matchLabel };
 }
