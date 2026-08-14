@@ -26,7 +26,8 @@ function makeCat(c, tjson) {
     tz: (tjson && tjson.timezone) || 'UTC',
     slotMinutes: (c.meta && c.meta.slotMinutes) || {},
     venues: new Map(((tjson && tjson.venues) || []).filter(v => v && typeof v === 'object').map(v => [v.id, v.name])),
-    name: (c.meta && c.meta.name) || ''
+    name: (c.meta && c.meta.name) || '',
+    id: (c.meta && c.meta.id) || ''
   };
 }
 

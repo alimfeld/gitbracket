@@ -70,6 +70,18 @@ async function loadAll(route, indexOnly) {
 
 // ---------- renderers ----------
 
+// Breadcrumb trail: every crumb is a link — the current page lives in the h1.
+// Home > Tournament > Players; the tournament page adds a right-aligned Players link.
+const crumbs = items => items.map(([href, label]) => `<a href="${esc(href)}">${esc(label)}</a>`).join(' > ');
+
+// Category pills: one toggle pattern for the standings and picker views.
+// base is 'categories' or 'players'; clicking the active pill drops back to dropHref.
+const catPills = (cats, slug, base, activeId, dropHref) => cats.map(c => {
+  const active = c.id === activeId;
+  const href = active ? dropHref : `#${esc(slug)}/${base}/${esc(c.id)}`;
+  return `<a href="${esc(href)}"${active ? ' aria-current="true"' : ''}>${esc(c.id)}</a>`;
+}).join('');
+
 function renderIndex(route, data) {
   const items = data.index
     .filter(e => e && typeof e.slug === 'string' && ID_RE.test(e.slug))
@@ -79,19 +91,12 @@ function renderIndex(route, data) {
 
 function renderStandings(route, data) {
   if (!data.tjson) return '<p>Missing tournament data — has the tournament been pushed?</p>';
-  const parts = [`<header><nav><a href="#">Home</a> · <a href="#${esc(data.t.slug)}/players">Player schedules</a></nav><h1>${esc(data.t.name)}</h1>`];
-  // nav from the full category list, not the route-filtered cats — a filtered page must still show every pill
-  const nav = (data.tjson.categories || []).map(c => {
-    const active = route.filter === c.id;
-    // clicking the active category drops the filter (toggle off)
-    const href = active ? `#${esc(data.t.slug)}` : `#${esc(data.t.slug)}/categories/${esc(c.id)}`;
-    return `<a href="${href}"${active ? ' aria-current="true"' : ''}>${esc(c.name)}</a>`;
-  });
-  parts.push(`<nav class="pills">${nav.join('')}</nav></header>`);
+  const parts = [`<header><nav class="split">${crumbs([['#', 'Home']])}<a href="#${esc(data.t.slug)}/players">Players</a></nav><h1>${esc(data.t.name)}</h1>`];
+  parts.push(`<nav class="pills">${catPills(data.tjson.categories || [], data.t.slug, 'categories', route.filter, `#${esc(data.t.slug)}`)}</nav></header>`);
   for (const c of data.cats) {
     if (route.filter && c.meta.id !== route.filter) continue; // pills keep every category; only the section list narrows
     const ctx = makeCat(c, data.tjson);
-    parts.push(`<h2>${esc(c.meta.name)}</h2>`);
+    parts.push(`<h2>${esc(c.meta.name)} (${esc(c.meta.id)})</h2>`);
     const byPool = new Map(); // pool -> matches, first-seen order
     for (const m of ctx.matches) {
       if (m && m.pool !== undefined) {
@@ -224,14 +229,22 @@ function possibleLine(b) {
 
 function renderPlayer(route, data) {
   if (!data.tjson) return '<p>Missing tournament data — has the tournament been pushed?</p>';
-  const pid = route.filter; // no id → the picker
+  const pid = route.filter; // no id → the picker; a category pill also lands here
   const players = (data.tjson.players || []).filter(p => p && typeof p === 'object' && typeof p.id === 'string');
-  if (!pid) { // no player id — the picker
-    const items = players.map(p => `<li><a href="#${esc(data.t.slug)}/players/${esc(p.id)}">${esc(p.name || p.id)}</a></li>`);
-    return `<header><nav><a href="#">Home</a> · <a href="#${esc(data.t.slug)}">${esc(data.t.name)}</a></nav><h1>Players</h1></header><p>Pick a player to see their schedule</p><ul>${items.join('') || '<li>No players.</li>'}</ul>`;
+  const p = pid ? players.find(x => x.id === pid) : null;
+  if (!p) {
+    if (pid && !(data.tjson.categories || []).some(c => c.id === pid)) return '<p>Player not found.</p>';
+    // picker: name followed by the category labels, filterable by the pills
+    const ctxs = catCtxs(data);
+    const pills = catPills(data.tjson.categories || [], data.t.slug, 'players', pid, `#${esc(data.t.slug)}/players`);
+    const sel = ctxs.find(c => c.id === pid);
+    const items = players.filter(pl => !sel || playerMatches(sel, pl.id).length).map(pl => {
+      const lbls = ctxs.map(c => playerMatches(c, pl.id).length ? `<span class="cat-label">${esc(c.id)}</span>` : '').join('');
+      const cluster = lbls ? `<span>${lbls}</span>` : '';
+      return `<li><a href="#${esc(data.t.slug)}/players/${esc(pl.id)}">${esc(pl.name || pl.id)}</a>${cluster}</li>`;
+    }).join('');
+    return `<header><nav>${crumbs([['#', 'Home'], [`#${esc(data.t.slug)}`, data.t.name]])}</nav><h1>Players</h1><nav class="pills">${pills}</nav></header><ul class="players">${items || `<li>${sel ? 'No players in this category.' : 'No players.'}</li>`}</ul>`;
   }
-  const p = players.find(x => x.id === pid);
-  if (!p) return '<p>Player not found.</p>';
   const rows = [];
   const ctxs = catCtxs(data);
   for (const ctx of ctxs) {
@@ -255,7 +268,7 @@ function renderPlayer(route, data) {
     if (!blocksByDay.has(key)) blocksByDay.set(key, []);
     blocksByDay.get(key).push({ ctx, ...span });
   }
-  const parts = [`<header><nav><a href="#">Home</a> · <a href="#${esc(data.t.slug)}">${esc(data.t.name)}</a></nav><h1>${esc(p.name)}</h1></header>`];
+  const parts = [`<header><nav>${crumbs([['#', 'Home'], [`#${esc(data.t.slug)}`, data.t.name], [`#${esc(data.t.slug)}/players`, 'Players']])}</nav><h1>${esc(p.name)}</h1></header>`];
   for (const [key, g] of groups) {
     parts.push(`<h2>${esc(key)}</h2>`);
     const day = [];

@@ -45,9 +45,14 @@ article[data-done] { opacity: .55; }
 
 /* navs — breadcrumbs plus the pills variant */
 nav { color: var(--muted); margin: 0 0 .5rem; }
+nav.split { display: flex; justify-content: space-between; align-items: baseline; } /* breadcrumb left, Players link right */
 .pills { display: flex; gap: .5rem; flex-wrap: wrap; margin: 0 0 1.5rem; }
 .pills a { padding: .35rem .8rem; border: 1px solid var(--line); border-radius: 999px; text-decoration: none; }
 .pills a[aria-current] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.cat-label { display: inline-block; font-size: .7rem; font-weight: 600; letter-spacing: .04em; padding: .15rem .5rem; border: 1px solid var(--line); border-radius: 999px; margin-left: .35rem; vertical-align: .2em; } /* pill-shaped, small: sits beside the player name */
+/* picker: the ul owns two shared columns (widest name / rest), each li is a subgrid row so the label clusters start at the same x */
+.players { display: grid; grid-template-columns: auto 1fr; column-gap: .8rem; }
+.players li { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: baseline; }
 
 /* lists — every ul is the index or player picker list */
 ul { list-style: none; padding: 0; }
