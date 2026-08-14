@@ -62,6 +62,12 @@ number. A side is one of three kinds:
 Nothing is stored that can be derived — a match is done when it has a
 result, and standings and brackets follow from the data.
 
+Pool rankings use the standard round-robin ladder: wins, then head-to-head
+against the tied teams (mutual-match wins, game differential, point
+differential), then overall game and point differential. A group still tied
+after the whole ladder is a dead tie — its bracket slot stays TBD for the
+organizer to settle.
+
 ## Views
 
 One page, fragment-routed. `#<slug>` is a tournament's standings;

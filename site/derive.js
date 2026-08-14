@@ -72,8 +72,8 @@ function isDone(m, ctx) {
 const sameRecord = (a, b) => a.wins === b.wins && a.gd === b.gd && a.pd === b.pd;
 
 function isDeadTie(st, rank) {
-  const rec = st[rank - 1], above = st[rank - 2], below = st[rank];
-  return !!rec && ((above && sameRecord(rec, above)) || (below && sameRecord(rec, below)));
+  const rec = st[rank - 1];
+  return !!rec && !!rec.tie; // tie flag: the ladder exhausted without separating it
 }
 
 function poolStandings(ctx, pool, partial) {
@@ -111,9 +111,73 @@ function poolStandings(ctx, pool, partial) {
       r1.gd -= gd; r1.pd -= pd;
     }
   }
-  const list = [...recs.values()];
-  list.sort((x, y) => y.wins - x.wins || y.gd - x.gd || y.pd - x.pd);
-  return list;
+  return poolLadder([...recs.values()], ms, ctx);
+}
+
+// Head-to-head keys within a set of teams: wins, game diff, point diff over
+// exactly the matches where both sides are in the set. Forfeits count as wins
+// but carry no differential, matching the overall tally.
+function mutualKeys(list, ms, ctx) {
+  const h = new Map(list.map(r => [r.sig, { hw: 0, hg: 0, hp: 0 }]));
+  for (const m of ms) {
+    const [s0, s1] = m.sides;
+    if (!s0 || !s1 || s0.kind !== 'players' || s1.kind !== 'players') continue;
+    const a = pairSig(s0.ids), b = pairSig(s1.ids);
+    if (!h.has(a) || !h.has(b)) continue;
+    const w = winnerIdx(m, ctx);
+    if (w === null) continue;
+    const ka = h.get(a), kb = h.get(b);
+    (w === 0 ? ka : kb).hw++;
+    if (m.forfeit === undefined) {
+      let gd = 0, pd = 0;
+      for (const g of m.games) { gd += g.a > g.b ? 1 : -1; pd += g.a - g.b; }
+      ka.hg += gd; ka.hp += pd; kb.hg -= gd; kb.hp -= pd;
+    }
+  }
+  return h;
+}
+
+// Classification ladder (FIBA / Six Invitational / Esports Wales): wins decide
+// first, against the whole pool; within each wins-block the ladder runs head
+// to head — wins, game differential, point differential over the block's
+// mutual matches only — then overall game/point differential. After a rung
+// separates some teams, the rest repeat the ladder restricted to themselves
+// (mutual keys recompute over the smaller set — a pair always splits via their
+// mutual match); a block still tied on the whole ladder is a dead tie
+// (flagged, renders TBD — the organizer arbitrates). Stable sort keeps
+// equal-key teams in creation order.
+function poolLadder(list, ms, ctx) {
+  const out = [];
+  const order = (set) => {
+    if (set.length <= 1) { out.push(...set); return; }
+    const h = mutualKeys(set, ms, ctx);
+    const cmp = (a, b) => {
+      const ka = [h.get(a.sig).hw, h.get(a.sig).hg, h.get(a.sig).hp, a.gd, a.pd];
+      const kb = [h.get(b.sig).hw, h.get(b.sig).hg, h.get(b.sig).hp, b.gd, b.pd];
+      for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return kb[i] - ka[i];
+      return 0;
+    };
+    set.sort(cmp); // every caller passes a fresh slice
+    for (let i = 0; i < set.length;) {
+      let j = i + 1;
+      while (j < set.length && cmp(set[i], set[j]) === 0) j++;
+      const cluster = set.slice(i, j);
+      if (cluster.length === 1) out.push(cluster[0]);
+      else if (cluster.length === set.length) {
+        for (const r of cluster) r.tie = true;
+        out.push(...cluster);
+      } else order(cluster);
+      i = j;
+    }
+  };
+  const top = [...list].sort((a, b) => b.wins - a.wins);
+  for (let i = 0; i < top.length;) {
+    let j = i + 1;
+    while (j < top.length && top[j].wins === top[i].wins) j++;
+    order(top.slice(i, j));
+    i = j;
+  }
+  return out;
 }
 
 function resolveSide(side, ctx, memo = new Map()) {

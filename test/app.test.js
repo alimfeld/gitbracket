@@ -64,13 +64,36 @@ test('pool A standings: 4 sides, order, leader record', () => {
   assert(st[0].wins === 3 && st[0].gd === 6 && st[0].pd === 31, 'leader record');
 });
 
-test('standings tiebreak: wins, then game differential, then point differential', () => {
+test('standings tiebreak: wins, then head-to-head, then differentials', () => {
   const ctx = catOf('tiebreak', 't');
   const st = poolStandings(ctx, 'A');
   assert(st && st.length === 4, 'pool A has 4 sides');
-  assert(st[0].sig === 'p1' && st[1].sig === 'p2', 'p1 (gd +2) ranks above p2 (gd +1) despite the lower point differential');
+  assert(st[0].sig === 'p1' && st[1].sig === 'p2', 'p1 beat p2 head-to-head — the higher point differential does not rescue p2');
   assert(st[0].wins === 2 && st[0].gd === 2 && st[0].pd === 3, 'p1 record');
   assert(st[1].wins === 2 && st[1].gd === 1 && st[1].pd === 5, 'p2 record');
+});
+
+test('h2h ladder: head-to-head winner ranks above the overall-differential leader', () => {
+  const ctx = catOf('h2h', 't');
+  const st = poolStandings(ctx, 'A');
+  assert(st && st.length === 4, 'pool A has 4 sides');
+  assert(st[0].sig === 'p1' && st[1].sig === 'p2', 'p1 won the p1-p2 match — p2 leads overall gd yet ranks 2nd');
+  assert(st[0].wins === 2 && st[0].gd === 1 && st[1].wins === 2 && st[1].gd === 2, 'same wins, p2 better overall gd');
+  assert(st[2].sig === 'p3' && st[3].sig === 'p4', 'lower pair also splits by h2h');
+  assert(!isDeadTie(st, 1) && !isDeadTie(st, 2), 'both resolved — no TBD');
+  const slot = resolveSide(ctx.byId.get(13).sides[0], ctx);
+  assert(slot && slot.has('p1'), 'rank-1 slot takes the h2h winner, not the gd leader');
+});
+
+test('h2h ladder: tied trio recurses — the pair splits via their mutual match', () => {
+  const ctx = catOf('h2h', 't');
+  const st = poolStandings(ctx, 'B');
+  assert(st && st.length === 4, 'pool B has 4 sides');
+  assert(st[0].sig === 'p5', 'p5 separates on overall gd');
+  assert(sameRecord(st[1], st[2]) && st[1].sig === 'p6' && st[2].sig === 'p7', 'p6 and p7 share a full record — only the mutual match separates them');
+  assert(!isDeadTie(st, 2), '2nd place resolves via recursion, not TBD');
+  const slot = resolveSide(ctx.byId.get(14).sides[0], ctx);
+  assert(slot && slot.has('p6'), 'rank-2 slot resolves to p6');
 });
 
 test('xd pool order', () => {

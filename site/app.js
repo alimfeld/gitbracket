@@ -112,8 +112,9 @@ function renderStandings(route, data) {
       let rank = 0;
       st.forEach((r, i) => {
         const tied = isDeadTie(st, i + 1);
-        // shared rank for ties: same record as the row above keeps the group's first rank (1 1 1 4)
-        if (i === 0 || !sameRecord(st[i - 1], r)) rank = i + 1;
+        // a dead-tie group shares its first rank (1 1 1 4); every resolved row —
+        // head-to-head separations included — is its own rank
+        if (!tied || i === 0 || !st[i - 1].tie) rank = i + 1;
         const team = teamLabel(r.ids, ctx);
         parts.push(`<tr${tied ? ' data-tie' : ''}><td>${rank}</td><td>${team}</td><td>${r.wins}</td><td>${r.losses}</td><td>${fmtDiff(r.gd)}</td><td>${fmtDiff(r.pd)}</td></tr>`);
       });
