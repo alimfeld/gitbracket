@@ -74,6 +74,14 @@ async function loadAll(route, indexOnly) {
 // Home > Tournament > Players; the tournament page adds a right-aligned Players link.
 const crumbs = items => items.map(([href, label]) => `<a href="${esc(href)}">${esc(label)}</a>`).join(' > ');
 
+// The one missing-data message, verbatim in every view and the boot retry.
+const MISSING = '<p>Missing tournament data — has the tournament been pushed?</p>';
+
+// The one card grid — standings pools and bracket rounds are the same
+// component (the CSS .grid comment says so); same meta list, same builder.
+const FULL_META = ['catId', 'matchId', 'label', 'court', 'time'];
+const matchGrid = (ms, ctx) => `<section class="grid">${ms.map(m => matchCard(m, ctx, { meta: FULL_META })).join('')}</section>`;
+
 // Category pills: one toggle pattern for the standings and picker views.
 // base is 'categories' or 'players'; clicking the active pill drops back to dropHref.
 const catPills = (cats, slug, base, activeId, dropHref) => cats.map(c => {
@@ -90,7 +98,7 @@ function renderIndex(route, data) {
 }
 
 function renderStandings(route, data) {
-  if (!data.tjson) return '<p>Missing tournament data — has the tournament been pushed?</p>';
+  if (!data.tjson) return MISSING;
   const parts = [`<header><nav class="split">${crumbs([['#', 'Home']])}<a href="#${esc(data.t.slug)}/players">Players</a></nav><h1>${esc(data.t.name)}</h1>`];
   parts.push(`<nav class="pills">${catPills(data.tjson.categories || [], data.t.slug, 'categories', route.filter, `#${esc(data.t.slug)}`)}</nav></header>`);
   for (const c of data.cats) {
@@ -116,12 +124,10 @@ function renderStandings(route, data) {
         // head-to-head separations included — is its own rank
         if (!tied || i === 0 || !st[i - 1].tie) rank = i + 1;
         const team = teamLabel(r.ids, ctx);
-        parts.push(`<tr${tied ? ' data-tie' : ''}><td>${rank}</td><td>${team}</td><td>${r.wins}</td><td>${r.losses}</td><td>${fmtDiff(r.gd)}</td><td>${fmtDiff(r.pd)}</td></tr>`);
+        parts.push(`<tr${tied ? ' data-tie' : ''}><td>${rank}</td><td>${esc(team)}</td><td>${r.wins}</td><td>${r.losses}</td><td>${fmtDiff(r.gd)}</td><td>${fmtDiff(r.pd)}</td></tr>`);
       });
       parts.push('</tbody></table>');
-      parts.push('<section class="grid">');
-      for (const m of poolMs) parts.push(matchCard(m, ctx, { meta: ['catId', 'matchId', 'label', 'court', 'time'] }));
-      parts.push('</section>');
+      parts.push(matchGrid(poolMs, ctx));
     }
     const ko = ctx.matches.filter(m => m && m.pool === undefined);
     if (ko.length) parts.push(bracketHtml(ctx, ko));
@@ -139,9 +145,7 @@ function bracketHtml(ctx, ko) {
   const parts = ['<h3>Knockout</h3>'];
   cols.forEach((ms, r) => {
     parts.push(`<h4>${roundName(cols.length - 1 - r)}</h4>`);
-    parts.push('<section class="grid">');
-    for (const m of ms) parts.push(matchCard(m, ctx, { meta: ['catId', 'matchId', 'label', 'court', 'time'] }));
-    parts.push('</section>');
+    parts.push(matchGrid(ms, ctx));
   });
   return parts.join('');
 }
@@ -192,7 +196,7 @@ function catCtxs(data) {
 }
 
 function renderVenue(route, data) {
-  if (!data.tjson) return '<p>Missing tournament data — has the tournament been pushed?</p>';
+  if (!data.tjson) return MISSING;
   const v = route.filter; // #slug/venues/<id> narrows to one court; no id → all courts
   const rows = [];
   const ctxs = catCtxs(data);
@@ -233,7 +237,7 @@ function renderVenue(route, data) {
     col.push('</div>');
     cols.push(`<section>${col.join('')}</section>`);
   }
-  parts.push(v ? cols.join('') : `<div>${cols.join('')}</div>`);
+  parts.push(v ? cols.join('') : `<div class="board">${cols.join('')}</div>`);
   if (!any) parts.push('<p>Nothing scheduled.</p>');
   return parts.join('');
 }
@@ -247,7 +251,7 @@ function possibleLine(b) {
 }
 
 function renderPlayer(route, data) {
-  if (!data.tjson) return '<p>Missing tournament data — has the tournament been pushed?</p>';
+  if (!data.tjson) return MISSING;
   const pid = route.filter; // no id → the picker; a category pill also lands here
   const players = (data.tjson.players || []).filter(p => p && typeof p === 'object' && typeof p.id === 'string');
   const p = pid ? players.find(x => x.id === pid) : null;
@@ -381,7 +385,7 @@ function boot() {
   const load = r => {
     loadAll(r, r.view === 'index').then(d => {
       if (r.view !== 'index' && !d.tjson) { // fetch failed or unknown slug — with a board, keep it and retry silently
-        if (!data) app.innerHTML = '<p>Missing tournament data — has the tournament been pushed?</p>';
+        if (!data) app.innerHTML = MISSING;
         if (++fails <= MAX_FAILS) setTimeout(() => load(r), RETRY_MS); // deploy window or blip — retry a few times, then give up
         return;
       }

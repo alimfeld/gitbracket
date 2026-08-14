@@ -4,6 +4,7 @@
   --accent: #0a66c2;
   --muted: #6b6b70;
   --line: #d9d9d6;
+  --hairline: #eee;   /* row dividers — subtler than --line card borders */
 }
 * { box-sizing: border-box; }
 body {
@@ -31,7 +32,7 @@ a { color: var(--accent); }
 /* card grids — pool matches and bracket rounds */
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr)); gap: 1rem; margin-top: 1rem; }
 
-/* cards — every article is a card; .stack is a vertical run of them (player schedule) */
+/* cards — every article is a card; .stack is a vertical run of them (player schedule, kiosk columns) */
 article { display: flex; flex-direction: column; gap: .3rem; border: 1px solid var(--line); border-radius: .5rem; padding: .6rem .8rem; background: var(--paper); }
 article[data-done] { opacity: .55; }
 .stack { display: flex; flex-direction: column; gap: .6rem; }
@@ -56,13 +57,13 @@ nav.split { display: flex; justify-content: space-between; align-items: baseline
 
 /* lists — every ul is the index or player picker list */
 ul { list-style: none; padding: 0; }
-ul li { padding: .6rem 0; border-bottom: 1px solid #eee; font-size: 1.1em; }
-ul li a + a { font-size: .8em; margin-left: .6rem; } /* second link per row (kiosk) */
+ul li { padding: .6rem 0; border-bottom: 1px solid var(--hairline); font-size: 1.1em; }
+ul li a + a { font-size: .8em; margin-left: .6rem; } /* second link per row — the index "kiosk" shortcut */
 .note { font-size: .85em; color: var(--muted); border: 1px dashed var(--line); border-radius: .5rem; padding: .4rem .8rem; margin: 0; }
 
 /* standings table */
 table { border-collapse: collapse; width: 100%; }
-table th, table td { padding: .4rem .6rem; border-bottom: 1px solid #eee; }
+table th, table td { padding: .4rem .6rem; border-bottom: 1px solid var(--hairline); }
 table th { text-align: left; font-size: .8em; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
 table th:not(:first-child), table td:not(:first-child) { text-align: right; }
 tr[data-tie] td { background: #fff3cd; }
@@ -81,7 +82,7 @@ body.venue {
 }
 body.venue header { display: flex; justify-content: space-between; align-items: baseline; }
 #k-clock { font-size: 1.6em; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; } /* matches the h1 height */
-body.venue main > div { display: flex; gap: 2.5rem; align-items: flex-start; flex-wrap: wrap; }
+body.venue .board { display: flex; gap: 2.5rem; align-items: flex-start; flex-wrap: wrap; }
 body.venue main section { flex: 1 1 24rem; min-width: 0; }
 body.venue .stack { gap: 1.5rem; } /* kiosk cards are big — more air than the base .6rem */
 body.venue .badge { display: inline-block; font-size: .8em; font-weight: 700; padding: .1em .6em; border-radius: 999px; }
