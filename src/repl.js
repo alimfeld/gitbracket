@@ -16,7 +16,7 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const { spawnSync } = require('child_process');
-const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, gamesText, fmtTime, matchLabel, koColumn, poolStandings, matchSlotMs, fmtDiff } = require('../site/derive.js');
+const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, gamesText, fmtTime, matchLabel, koColumn, poolStandings, matchSlotMs, fmtDiff, bestOfOf } = require('../site/derive.js');
 const { loadRepo, writeTournament } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 const { buildKnockout } = require('./schedule.js');
@@ -134,8 +134,10 @@ function formatMatchLine(m, ctx, tz, stage, sidew, idw, venuew, stagew) {
   const time = t === null ? C.yellow('TBD'.padStart(8)) : C.dim(fmtTime(t, tz).padStart(8));
   const v = m.venue || 'TBD';
   const venue = (m.venue ? C.magenta : C.yellow)(v.padEnd(venuew || v.length));
-  const g = gamesText(m);
-  const score = m.forfeit !== undefined ? C.yellow(`forfeit ${m.forfeit}`) : g ? C.green(g) : C.dim('–');
+  // slot shape = best-of, same as the cards: real games render, the rest are ·
+  const parts = (m.games || []).map(g => `${g.a}-${g.b}`);
+  while (parts.length < (bestOfOf(m, ctx) || 1)) parts.push('·');
+  const score = m.forfeit !== undefined ? C.yellow(`forfeit ${m.forfeit}`) : C.green(parts.join(' '));
   const s0 = sideLabel(m.sides[0], ctx);
   const s1 = sideLabel(m.sides[1], ctx);
   const sides = s0 + C.dim(' vs ') + s1;

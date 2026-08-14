@@ -33,10 +33,10 @@ a { color: var(--accent); }
 article { display: flex; flex-direction: column; gap: .3rem; border: 1px solid var(--line); border-radius: .5rem; padding: .6rem .8rem; background: #fff; }
 article[data-done] { opacity: .55; }
 .stack { display: flex; flex-direction: column; gap: .6rem; }
-.stack .side { font-weight: 600; } /* player header line: time · venue */
 .side { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; }
 .score { margin-left: auto; display: flex; gap: .4rem; }
 .score span { font-weight: 600; min-width: 1.3em; text-align: right; }
+.score span.ph { opacity: .3; } /* unplayed best-of slot: the shape is the label */
 [data-win] { font-weight: 700; }
 .meta { font-size: .8rem; color: var(--muted); }
 .p-badge { display: inline-block; font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: .08rem .45rem .1rem; border-radius: 999px; margin-right: .35rem; vertical-align: .15em; }

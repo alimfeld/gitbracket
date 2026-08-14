@@ -53,12 +53,18 @@ function countWins(games) {
   return w;
 }
 
+// Effective best-of for a match: match override > per-stage category config.
+// Single resolution point, same shape as matchSlotMs.
+function bestOfOf(m, ctx) {
+  const stage = m.pool !== undefined ? 'groups' : 'knockout';
+  return m.bestOf ?? ctx.bestOf[stage];
+}
+
 function winnerIdx(m, ctx) {
   if (m.forfeit !== undefined) return m.forfeit === 0 ? 1 : 0;
   const games = m.games;
   if (!Array.isArray(games) || games.length === 0) return null;
-  const stage = m.pool !== undefined ? 'groups' : 'knockout';
-  const target = Math.ceil((m.bestOf ?? ctx.bestOf[stage]) / 2);
+  const target = Math.ceil(bestOfOf(m, ctx) / 2);
   const [w0, w1] = countWins(games);
   if (w0 >= target) return 0;
   if (w1 >= target) return 1;
@@ -479,5 +485,5 @@ function matchLabel(m, ctx) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { ID_RE, pairSig, makeCat, matchSlotMs, winnerIdx, isDone, sameRecord, isDeadTie, poolStandings, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, fmtClock, dayKey, schedTime, gamesText, matchState, fmtDiff, kioskStatus, roundName, koColumn, matchLabel };
+  module.exports = { ID_RE, pairSig, makeCat, matchSlotMs, bestOfOf, winnerIdx, isDone, sameRecord, isDeadTie, poolStandings, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, fmtClock, dayKey, schedTime, gamesText, matchState, fmtDiff, kioskStatus, roundName, koColumn, matchLabel };
 }

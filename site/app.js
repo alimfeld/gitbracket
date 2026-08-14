@@ -147,19 +147,33 @@ function bracketHtml(ctx, ko) {
 }
 
 function matchCard(m, ctx) {
-  const t = schedTime(m);
-  const meta = [m.venue ? esc(ctx.venues.get(m.venue) || m.venue) : 'TBD', t !== null ? fmtTime(t, ctx.tz) : 'TBD'].join(' · ');
   const state = (m.games || []).length && !isDone(m, ctx) ? ' — in play' : '';
-  return `<article>${sideRow(m, ctx, 0)}${sideRow(m, ctx, 1)}<div class="meta">${esc(m.id)} · ${esc(matchLabel(m, ctx))} · ${meta}${state}</div></article>`;
+  return `<article>${sideRow(m, ctx, 0)}${sideRow(m, ctx, 1)}<div class="meta">${cardMetaParts(m, ctx).join(' · ')}${state}</div></article>`;
+}
+
+// Shared card meta parts — category · match · label · venue · time. The join
+// is the caller's: player cards bold venue/time so the schedule scans fast,
+// tournament cards join plain.
+function cardMetaParts(m, ctx) {
+  const t = schedTime(m);
+  return [esc(ctx.id), esc(m.id), esc(matchLabel(m, ctx)),
+    m.venue ? esc(ctx.venues.get(m.venue) || m.venue) : 'TBD',
+    t !== null ? fmtTime(t, ctx.tz) : 'TBD'];
 }
 
 // Shared by bracket cards (standings) and the kiosk.
 function sideRow(m, ctx, i) {
   const w = winnerIdx(m, ctx);
   const games = m.games || [];
+  // one slot per best-of game: played games render their points, the rest stay
+  // as faint placeholders — the slot shape IS the best-of, so no label needed
+  const bo = bestOfOf(m, ctx) || 1; // unset stage config -> one unmarked slot
   const score = m.forfeit === i ? '<span>forfeit</span>'
-    : (games.length ? games.map(g => `<span>${i === 0 ? g.a : g.b}</span>`).join('') : '');
-  return `<div class="side"${w === i ? ' data-win' : ''}><span>${sideLabel(m.sides[i], ctx)}</span><span class="score">${score}</span></div>`;
+    : Array.from({ length: bo }, (_, g) => {
+        const game = games[g];
+        return `<span${game ? '' : ' class="ph"'}>${game ? (i === 0 ? game.a : game.b) : '·'}</span>`;
+      }).join('');
+  return `<div class="side"${w === i ? ' data-win' : ''}><span>${esc(sideLabel(m.sides[i], ctx))}</span><span class="score">${score}</span></div>`;
 }
 
 function kioskCard(r, status) {
@@ -279,21 +293,18 @@ function renderPlayer(route, data) {
       const t = schedTime(r.m);
       while (bi < blocks.length && blocks[bi].min < t) day.push(possibleLine(blocks[bi++]));
       const m = r.m, ctx = r.ctx;
-      const oppSet = resolveSide(m.sides[1 - r.i], ctx);
-      const opp = oppSet ? teamLabel(oppSet, ctx) : null;
       const w = winnerIdx(m, ctx);
       const isDoneMatch = w !== null;
       const isLive = !isDoneMatch && (m.games || []).length;
       const badge = isDoneMatch ? '<span class="p-badge" data-kind="done">Done</span>'
         : isLive ? '<span class="p-badge" data-kind="live">Now</span>' : '';
-      const state = m.forfeit !== undefined ? (w === r.i ? 'W (forfeit)' : 'L (forfeit)')
-        : (w === null ? matchState(m, ctx) : `${w === r.i ? 'W' : 'L'} · ${gamesText(m)}`);
-      const withP = r.partner.length ? `with ${teamLabel(r.partner, ctx)}` : 'singles';
-      const venue = m.venue ? ctx.venues.get(m.venue) || m.venue : 'TBD';
+      // one side row per team — per-game points beside their own name, winner
+      // bolded; the same sideRow as the bracket cards.
+      const meta = cardMetaParts(m, ctx).map((p, i) => i >= 3 ? `<strong>${p}</strong>` : p).join(' · ');
       day.push(`<article${isDoneMatch ? ' data-done' : ''}>
-        <div class="side"><span>${t === null ? 'TBD' : fmtTime(t, ctx.tz)}</span><span>${esc(venue)}</span></div>
-        <div>vs ${esc(opp || slotLabel(m.sides[1 - r.i], ctx))}</div>
-        <div class="meta">${badge}${esc(ctx.name)} · ${esc(matchLabel(m, ctx))} · ${esc(withP)}${state ? ' · ' + esc(state) : ''}</div>
+        ${sideRow(m, ctx, r.i)}
+        ${sideRow(m, ctx, 1 - r.i)}
+        <div class="meta">${badge}${meta}</div>
       </article>`);
     }
     while (bi < blocks.length) day.push(possibleLine(blocks[bi++]));
