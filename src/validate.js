@@ -7,7 +7,7 @@
 
 const path = require('path');
 const { loadRepo, isRealDate, slotsOverlap } = require('./tools.js');
-const { ID_RE, pairSig, matchSlotMs, makeCat, isDone, poolStandings, resolveSide, isDeadTie } = require('../site/derive.js');
+const { ID_RE, pairSig, matchSlotMs, makeCat, isDone, poolStandings, resolveSide, isDeadTie, bestOfOf } = require('../site/derive.js');
 
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/;
 const RESULTS = ['winner', 'loser'];
@@ -341,8 +341,10 @@ function validateCategory(cFile, cjson, cat, players, venues, tjson, errs, warns
     const hasForfeit = m.forfeit !== undefined;
     if (hasGames && hasForfeit) err(where, 'games and forfeit are mutually exclusive');
     if (hasGames) {
-      const b = (typeof m.bestOf === 'number' ? m.bestOf : stageBest(m.pool !== undefined ? 'groups' : 'knockout'));
-      const target = (b !== undefined && b % 2 === 1) ? (b + 1) / 2 : undefined;
+      // override precedence from derive.js (match > stage) — a non-number bestOf
+      // is reported above, so the numeric guard is all this check adds
+      const b = bestOfOf(m, { bestOf });
+      const target = (typeof b === 'number' && b % 2 === 1) ? (b + 1) / 2 : undefined;
       validateGames(m.games, target, where, err);
     }
     if (hasForfeit && m.forfeit !== 0 && m.forfeit !== 1) {
