@@ -192,7 +192,7 @@ function catCtxs(data) {
   return data.cats.map(c => makeCat(c, data.tjson));
 }
 
-function renderVenue(route, data) {
+function renderVenue(route, data, now = Date.now()) {
   if (!data.tjson) return MISSING;
   const v = route.filter; // #slug/venues/<id> narrows to one court; no id → all courts
   const rows = [];
@@ -206,7 +206,6 @@ function renderVenue(route, data) {
     }
   }
   rows.sort((a, b) => a.t - b.t);
-  const now = Date.now();
   // venues with matches — a declared-but-unused court is simply absent
   const venueNames = new Map((data.tjson.venues || []).map(x => [x.id, x.name]));
   const venues = (data.tjson.venues || []).map(x => x.id).filter(id => rows.some(r => r.m.venue === id));
@@ -227,9 +226,10 @@ function renderVenue(route, data) {
     col.push('<div class="stack">'); // same card stack as the player schedule
     for (const r of open) {
       const st = kioskStatus(r, now);
-      // status colors the headline time; meta keeps no court or time
+      // status colors the headline time; a late start gets a remark beside it in the
+      // same cell (raw HTML cell — the documented pre-rendered head cell)
       col.push(matchCard(r.m, r.ctx, { meta: ['catName', 'matchId', 'label'],
-        head: ['time'], status: st }));
+        head: [st === 'overdue' ? `${esc(fmtTime(r.t, r.ctx.tz))} <span class="delayed">delayed</span>` : 'time'], status: st }));
     }
     col.push('</div>');
     cols.push(`<section>${col.join('')}</section>`);

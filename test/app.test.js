@@ -357,6 +357,11 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   const venue = renderVenue({ slug: 'sample', view: 'venues' }, data);
   assert(venue.includes('Court 1') && venue.includes('Ada Lovelace'), 'venue page renders venue boards with match rows');
   assert(venue.includes('<article data-status=') && !venue.includes('badge'), 'kiosk card: status rides the article (headline time is colored), no badge, no time/court in the meta');
+  const early = renderVenue({ slug: 'sample', view: 'venues' }, data, Date.parse('2025-07-14T08:00:00-04:00'));
+  const late = renderVenue({ slug: 'sample', view: 'venues' }, data, Date.parse('2025-07-14T16:00:00-04:00'));
+  assert(!early.includes('delayed</span>'), 'before the first start: no delayed remark');
+  assert(late.includes('12:15 <span class="delayed">delayed</span>'), 'slot fully elapsed: the headline time carries the remark beside it');
+  assert(late.match(/<span class="delayed">delayed<\/span>/g).length === late.match(/<article data-status="overdue"/g).length, 'every overdue card has the remark, and only overdue cards do');
   assert(venue.includes("Men&#39;s Doubles 40+ · 9 · Final"), 'kiosk meta shows the long category name on the shared card');
   assert(!venue.includes('<nav>'), 'kiosk has no breadcrumb');
   assert(standings.includes('>Men&#39;s Doubles 40+ (md40)</h2>'), 'category headings append the plain category id');

@@ -87,5 +87,6 @@ body.venue main section { flex: 1 1 24rem; min-width: 0; }
 body.venue .stack { gap: 1.5rem; } /* kiosk cards are big — more air than the base .6rem */
 /* status colors ride article[data-status]; the headline time is the colored cell */
 body.venue article[data-status="overdue"] .head span { color: #ffb3ab; }
+body.venue .head .delayed { font-size: .55em; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; } /* inherits the overdue red */
 body.venue article[data-status="live"] .head span { color: #ffd166; }
 body.venue article[data-status="next"] .head span { color: #9a9a94; }
