@@ -125,14 +125,10 @@ test('placements: 2 suppresses the bronze match, final only', () => {
   const ko = tourney.matches.md.filter((m) => m.pool === undefined);
   assert.equal(ko.length, 4);
   // no loser-of-semis match (the bronze)
-  assert.ok(ko.every((m) => m.sides.every((s) => s.kind !== 'match' || s.result !== 'loser' || false)), 'no match-within-round loser edge in knockout');
+  assert.ok(ko.every((m) => m.sides.every((s) => s.kind !== 'match' || s.result !== 'loser')), 'no match-within-round loser edge in knockout');
 });
 
 test('placements: 8 builds 5th-8th classification', () => {
-  // 8 teams in 2 pools of 4 → clear QF round
-  const teams = {
-    md: [['ada', 'ben'], ['cid', 'dan'], ['eve', 'fin'], ['gus', 'huw'], ['ida', 'jan'], ['kim', 'ada'], ['ben', 'cid'], ['dan', 'eve']],
-  };
   // 8 distinct pairings for 8 teams
   const mdTeams = [];
   const players = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8'];
@@ -144,11 +140,7 @@ test('placements: 8 builds 5th-8th classification', () => {
     teams: { md: mdTeams },
   };
   const tourney = generate(spec);
-  const { errs } = validateRepo({
-    ...repoOf(tourney),
-    index: [{ slug: 'mini', name: 'Mini Open' }],
-    tournaments: new Map([['mini', { tjson: tourney, matches: new Map(Object.entries(tourney.matches).map(([cid, ms]) => [cid, { matches: ms }])) }]]),
-  });
+  const { errs } = validateRepo(repoOf(tourney));
   assert.deepEqual(errs, []);
   // md: 8 teams, 2 pools of 4 → 12 pool + 7 main bracket + 1 bronze + 4 placement = 24
   assert.equal(tourney.matches.md.length, 24);

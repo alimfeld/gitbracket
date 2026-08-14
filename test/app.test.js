@@ -6,11 +6,13 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { makeCat, winnerIdx, isDone, poolStandings, resolveSide, sameRecord, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, kioskStatus, matchLabel, schedTime } = require('../site/derive.js');
+const { makeCat, winnerIdx, isDone, poolStandings, resolveSide, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, kioskStatus, matchLabel, schedTime } = require('../site/derive.js');
 const { parseRoute, loadAll, renderIndex, renderStandings, renderVenue, renderPlayer } = require('../site/app.js');
 const { generate } = require('../src/schedule.js');
 const { FIX, catOf } = require('./helpers.js');
 const { loadRepo } = require('../src/tools.js');
+
+const sameRecord = (a, b) => a.wins === b.wins && a.gd === b.gd && a.pd === b.pd; // test-only — derive.js doesn't ship it
 
 test('parseRoute: fragment routing — bare slug defaults to categories, every segment id-gated', () => {
   assert.deepEqual(parseRoute(''), { view: 'index' }, 'no fragment: tournament list');
@@ -133,7 +135,7 @@ test('matchSlotMs: match override > per-stage category config, no default', () =
   assert(Number.isNaN(matchSlotMs({}, { slotMinutes: { groups: 60 } })), 'groups config does not leak into knockout → NaN');
 });
 
-test('kioskStatus: overdue / now / upcoming badge per open card', () => {
+test('kioskStatus: overdue / now / upcoming status per open card', () => {
   const ctx = makeCat({ meta: { bestOf: { knockout: 3 }, slotMinutes: { groups: 30, knockout: 45 } }, matches: [
     { id: 'm1', scheduled: '2025-07-14T09:00:00', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }], games: [{ a: 11, b: 5 }, { a: 11, b: 4 }] },
     { id: 'm2', scheduled: '2025-07-14T08:30:00', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },
@@ -147,7 +149,7 @@ test('kioskStatus: overdue / now / upcoming badge per open card', () => {
   const st = id => kioskStatus(rows.find(r => r.m.id === id), now);
   assert(st('m2') === 'overdue', 'slot fully elapsed without a result: overdue');
   assert(st('m3') === 'live' && st('m6') === 'live', 'started and still inside its slot: Now');
-  assert(isDone(ctx.byId.get('m1'), ctx), 'a done match leaves the board — no badge');
+  assert(isDone(ctx.byId.get('m1'), ctx), 'a done match leaves the board');
   assert(st('m4') === 'next' && st('m5') === 'next', 'future starts: upcoming');
   assert(st('m6') === 'live', 'the boundary instant (now === t) belongs to Now, not Next');
 });
@@ -356,7 +358,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(standings.includes('>md40</a>') && !standings.includes('>Men&#39;s Doubles 40+</a>'), 'standings pills show the plain category id');
   const venue = renderVenue({ slug: 'sample', view: 'venues' }, data);
   assert(venue.includes('Court 1') && venue.includes('Ada Lovelace'), 'venue page renders venue boards with match rows');
-  assert(venue.includes('<article data-status=') && !venue.includes('badge'), 'kiosk card: status rides the article (headline time is colored), no badge, no time/court in the meta');
+  assert(venue.includes('<article data-status=') && !venue.includes('badge'), 'kiosk card: status rides the article (headline time colored); meta keeps cat · label only');
   const early = renderVenue({ slug: 'sample', view: 'venues' }, data, Date.parse('2025-07-14T08:00:00-04:00'));
   const late = renderVenue({ slug: 'sample', view: 'venues' }, data, Date.parse('2025-07-14T16:00:00-04:00'));
   assert(!early.includes('delayed</span>'), 'before the first start: no delayed remark');

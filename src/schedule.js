@@ -74,8 +74,8 @@ function buildPlacement(losers, mid, fin) {
   if (n < 2) return [];
   if (n === 2) {
     const m = { id: mid(), sides: [losers[0], losers[1]] };
-    if (fin && fin.bestOf !== undefined) m.bestOf = fin.bestOf;
-    if (fin && fin.slotMinutes !== undefined) m.slotMinutes = fin.slotMinutes;
+    if (fin.bestOf !== undefined) m.bestOf = fin.bestOf; // fin is always {} or the spec's final object — all callers pass one
+    if (fin.slotMinutes !== undefined) m.slotMinutes = fin.slotMinutes;
     return [m];
   }
   // n >= 4: pair best vs worst, then recurse winners (top half) and losers (bottom half)

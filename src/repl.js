@@ -16,7 +16,7 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const { spawnSync } = require('child_process');
-const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, gamesText, fmtTime, matchLabel, koColumn, placementLabel, poolStandings, matchSlotMs, fmtDiff, bestOfOf, dayKey, tzOffset } = require('../site/derive.js');
+const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, gamesText, fmtTime, matchLabel, koColumn, placementLabel, poolStandings, matchSlotMs, fmtDiff, bestOfOf, dayKey } = require('../site/derive.js');
 const { loadRepo, writeTournament } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 const { buildKnockout } = require('./schedule.js');
@@ -101,9 +101,8 @@ function listEligible(repo, slug) {
 }
 
 // Apply an edit to one match, validate the whole repo, write — or roll the file
-// back and report the validator's errors. The write
-// (JSON.stringify(tournament, null, 2) + '\n') is byte-identical to the file
-// apart from the edited match, so a commit diff shows only that match.
+// back and report the validator's errors. (writeTournament's byte-identical
+// formatting keeps the commit diff to the one edited match.)
 function writeEdit(siteRoot, repo, slug, catId, apply) {
   const info = repo.tournaments.get(slug);
   if (!info || !info.tjson) return { err: `unknown tournament ${slug}` };
@@ -240,10 +239,7 @@ function parseCmd(line) {
 // Resolve a cd target against the current position. state = { repo, slug, cat }.
 function navigate(state, token) {
   if (token === '/') return { slug: null, cat: null };
-  if (token === '..') {
-    if (state.slug === null) return { slug: null, cat: null };
-    return state.cat === null ? { slug: null, cat: null } : { slug: state.slug, cat: null };
-  }
+  if (token === '..') return state.cat === null ? { slug: null, cat: null } : { slug: state.slug, cat: null };
   if (state.slug === null) {
     if (!state.repo.tournaments.has(token)) return { err: `unknown tournament ${token} — tab completes` };
     return { slug: token, cat: null };

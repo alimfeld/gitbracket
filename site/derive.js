@@ -90,8 +90,6 @@ function isDone(m, ctx) {
   return winnerIdx(m, ctx) !== null;
 }
 
-const sameRecord = (a, b) => a.wins === b.wins && a.gd === b.gd && a.pd === b.pd;
-
 function isDeadTie(st, rank) {
   const rec = st[rank - 1];
   return !!rec && !!rec.tie; // tie flag: the ladder exhausted without separating it
@@ -408,9 +406,9 @@ function winnerDepth(ctx, id, memo = new Map()) {
 // CEST), noon-UTC so one date lands one stable offset — a DST-switch day picks
 // the post-switch offset throughout. Wall-clock scheduled strings resolve via
 // this, so the data stays readable local time and stays right if clock rules
-// change — no stamped offsets that can go stale. The generator stored offsets
-// before; now it stores local time and the tz (already in the file) does the
-// work, shared by tools and site from this one place.
+// change — no stamped offsets that can go stale. The generator stores local
+// time and the tz (already in the file) does the work — shared by tools and
+// site from this one place.
 function tzOffset(tz, date) {
   const p = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'longOffset' })
     .formatToParts(new Date(date + 'T12:00:00Z')).find((x) => x.type === 'timeZoneName');
@@ -443,7 +441,7 @@ function fmtDiff(n) {
   return (n > 0 ? '+' : '') + n;
 }
 
-// Card badge status: overdue = full slot elapsed without a result, live = started
+// Card status: overdue = full slot elapsed without a result, live = started
 // but inside its slot, else next (> not >=: the boundary instant belongs to live).
 function kioskStatus(r, now) {
   const t = r.t;
@@ -508,5 +506,5 @@ function matchLabel(m, ctx) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { ID_RE, pairSig, makeCat, matchSlotMs, bestOfOf, winnerIdx, isDone, sameRecord, isDeadTie, poolStandings, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, dayKey, tzOffset, schedTime, gamesText, fmtDiff, kioskStatus, roundName, koColumn, matchLabel };
+  module.exports = { ID_RE, pairSig, makeCat, matchSlotMs, bestOfOf, winnerIdx, isDone, isDeadTie, poolStandings, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, dayKey, tzOffset, schedTime, gamesText, fmtDiff, kioskStatus, roundName, koColumn, matchLabel };
 }
