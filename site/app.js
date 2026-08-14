@@ -224,7 +224,7 @@ function possibleLine(b) {
   const range = b.min === b.max ? `at ${fmtTime(b.min, b.ctx.tz)}` : `between ${fmtTime(b.min, b.ctx.tz)} and ${fmtTime(b.max, b.ctx.tz)}`;
   const noun = b.count === 1 ? 'match' : 'matches';
   const howMany = b.count > 1 ? `Up to ${b.count} more` : '1 more';
-  return `<p class="note">${howMany} ${esc(b.ctx.name)} ${noun} possible ${range} · depends on results</p>`;
+  return `<p class="note">${howMany} ${noun} in ${esc(b.ctx.name)} could start ${range}, if results allow</p>`;
 }
 
 function renderPlayer(route, data) {
