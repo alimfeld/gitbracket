@@ -79,7 +79,7 @@ const MISSING = '<p>Missing tournament data — has the tournament been pushed?<
 
 // The one card grid — standings pools and bracket rounds are the same
 // component (the CSS .grid comment says so); same meta list, same builder.
-const FULL_META = ['catId', 'matchId', 'label', 'court', 'time'];
+const FULL_META = ['matchId', 'label', 'court', 'time'];
 const matchGrid = (ms, ctx) => `<section class="grid">${ms.map(m => matchCard(m, ctx, { meta: FULL_META })).join('')}</section>`;
 
 // Category pills: one toggle pattern for the standings and picker views.
@@ -151,16 +151,15 @@ function bracketHtml(ctx, ko) {
 }
 
 // The one match card for every view — tournament, kiosk, player. opts.meta is
-// the items to show, from the fixed vocabulary (catId · catName · matchId ·
-// label · court · time), in order: tournament shows all but catName; kiosk and
-// player drop court/time and show catName. opts.head is an
-// optional [left, right] headline row (kiosk: time, player: time | court);
-// each cell is an item key or pre-rendered HTML. opts.done dims a finished
-// card; opts.status rides on the article as data-status (kiosk time coloring).
+// the items to show, from the fixed vocabulary (catName · matchId · label ·
+// court · time), in order: tournament shows matchId · label · court · time;
+// kiosk and player just catName · label. opts.head is an optional
+// [left, right] headline row (kiosk: time, player: time | court); each cell is
+// an item key or pre-rendered HTML. opts.done dims a finished card;
+// opts.status rides on the article as data-status (kiosk time coloring).
 function matchCard(m, ctx, opts = {}) {
   const t = schedTime(m);
   const item = {
-    catId: esc(ctx.id),
     catName: esc(ctx.name),
     matchId: esc(m.id),
     label: esc(matchLabel(m, ctx)),
@@ -228,7 +227,7 @@ function renderVenue(route, data, now = Date.now()) {
       const st = kioskStatus(r, now);
       // status colors the headline time; a late start gets a remark beside it in the
       // same cell (raw HTML cell — the documented pre-rendered head cell)
-      col.push(matchCard(r.m, r.ctx, { meta: ['catName', 'matchId', 'label'],
+      col.push(matchCard(r.m, r.ctx, { meta: ['catName', 'label'],
         head: [st === 'overdue' ? `${esc(fmtTime(r.t, r.ctx.tz))} <span class="delayed">delayed</span>` : 'time'], status: st }));
     }
     col.push('</div>');
@@ -299,10 +298,10 @@ function renderPlayer(route, data) {
       while (bi < blocks.length && blocks[bi].min < t) day.push(possibleLine(blocks[bi++]));
       // one side row per team — per-game points beside their own name, winner
       // bolded; the same sideRow as the bracket cards. Headline: time left,
-      // court right — meta keeps only cat · match · label.
+      // court right — meta keeps only cat · label.
       day.push(matchCard(m, ctx, {
         done: isDone(m, ctx),
-        meta: ['catName', 'matchId', 'label'],
+        meta: ['catName', 'label'],
         head: ['time', 'court'],
       }));
     }

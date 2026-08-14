@@ -348,7 +348,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(!standings.includes('BO3'), 'no best-of label — the score slots carry it');
   assert(standings.includes('class="ph"'), 'unplayed best-of slots render as placeholders');
   assert(standings.includes('Ada Lovelace'), 'standings renders player names');
-  assert(standings.includes('md40 · 1 · Pool A · Court 1 · 09:00'), 'standings card meta: category · match · label · venue · time');
+  assert(standings.includes('1 · Pool A · Court 1 · 09:00') && !standings.includes('md40 · 1 · Pool A'), 'standings card meta: match · label · venue · time, no category id');
   assert(standings.includes('<nav class="split"><a href="#">Home</a><a href="#sample/players">Players</a></nav>'), 'standings: crumb is Home only, Players links on the right');
   const filtered = renderStandings({ slug: 'sample', view: 'categories', filter: 'md40' }, data);
   assert((filtered.match(/<h2>/g) || []).length === 1 && filtered.includes('Pool A'), 'category filter narrows to one section');
@@ -362,13 +362,13 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(!early.includes('delayed</span>'), 'before the first start: no delayed remark');
   assert(late.includes('12:15 <span class="delayed">delayed</span>'), 'slot fully elapsed: the headline time carries the remark beside it');
   assert(late.match(/<span class="delayed">delayed<\/span>/g).length === late.match(/<article data-status="overdue"/g).length, 'every overdue card has the remark, and only overdue cards do');
-  assert(venue.includes("Men&#39;s Doubles 40+ · 9 · Final"), 'kiosk meta shows the long category name on the shared card');
+  assert(venue.includes("Men&#39;s Doubles 40+ · Final") && !venue.includes("Men&#39;s Doubles 40+ · 9 ·"), 'kiosk meta shows the long category name and label, no match id');
   assert(!venue.includes('<nav>'), 'kiosk has no breadcrumb');
   assert(standings.includes('>Men&#39;s Doubles 40+ (md40)</h2>'), 'category headings append the plain category id');
   const ppage = renderPlayer({ slug: 'sample', view: 'players', filter: 'p1' }, data);
   assert(ppage.includes('<h1>Ada Lovelace</h1>') && !ppage.includes('cat-label'), 'player page: plain name, no category labels');
   assert(ppage.includes('<div class="head"><span>09:00</span><span>Court 1</span></div>'), 'player card headline: time left, court right');
-  assert(ppage.includes("Men&#39;s Doubles 40+ · 1 · Pool A") && !ppage.includes('Men&#39;s Doubles 40+ · 1 · Pool A · '), 'player card meta: long cat name · match · label, no court/time');
+  assert(ppage.includes("Men&#39;s Doubles 40+ · Pool A") && !ppage.includes('Men&#39;s Doubles 40+ · Pool A · '), 'player card meta: long cat name · label, no match id, no court/time');
   assert(ppage.includes('class="ph"'), 'player match cards render unplayed score slots too');
   assert(ppage.includes('Ada Lovelace'), 'player page finds the player');
   assert(ppage.includes('<nav><a href="#">Home</a> > <a href="#sample">Sample</a> > <a href="#sample/players">Players</a></nav>'), 'player page breadcrumb: Home > Tournament > Players');
