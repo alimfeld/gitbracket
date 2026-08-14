@@ -16,7 +16,7 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const { spawnSync } = require('child_process');
-const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, gamesText, fmtTime, matchLabel, koColumn, poolStandings, matchSlotMs } = require('../site/derive.js');
+const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, gamesText, fmtTime, matchLabel, koColumn, poolStandings, matchSlotMs, fmtDiff } = require('../site/derive.js');
 const { loadRepo, writeTournament } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 const { buildKnockout } = require('./schedule.js');
@@ -155,16 +155,18 @@ function listText(repo, slug, cat) {
   const lines = [`${C.bold((entry && entry.name) || slug)} / ${C.bold(C.cyan(cat))}`];
 
   const poolIds = [...new Set(cjson.matches.filter(m => m.pool).map(m => m.pool))].sort();
+  // all pools at once, so column widths align across them (matches do the same)
+  const head = ['#', 'Team', 'W', 'L', 'GD', 'PD']; // same headers as the site's standings table
+  const tables = [];
   for (const pid of poolIds) {
-    lines.push('', `${C.cyan('Pool ' + pid)}:`);
     const st = poolStandings(ctx, pid, true);
-    if (st) {
-      for (let i = 0; i < st.length; i++) {
-        const r = st[i];
-        const pd = r.pd >= 0 ? `+${r.pd}` : `${r.pd}`;
-        lines.push(`  ${i + 1}. ${r.wins}-${r.losses}  ${teamLabel(r.ids, ctx)}  (${pd})`);
-      }
-    }
+    tables.push({ pid, rows: st && st.map((r, i) => [String(i + 1), teamLabel(r.ids, ctx), String(r.wins), String(r.losses), fmtDiff(r.gd), fmtDiff(r.pd)]) });
+  }
+  const wid = head.map((h, c) => Math.max(h.length, ...tables.flatMap(t => t.rows || []).map(r => r[c].length)));
+  const fmt = cells => '  ' + cells.map((c, i) => (i === 1 ? c.padEnd(wid[i]) : c.padStart(wid[i]))).join('  ');
+  for (const { pid, rows } of tables) {
+    lines.push('', `${C.cyan('Pool ' + pid)}:`);
+    if (rows) lines.push(fmt(head), ...rows.map(fmt));
   }
 
   // Flat match listing with stage labels, no section headers
