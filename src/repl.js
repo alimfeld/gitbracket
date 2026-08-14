@@ -549,7 +549,9 @@ function rebracketCmd(state, dropPlayers) {
       oldByTime.splice(oi, 1);
       break;
     }
-    // no slot found → match stays TBD, validation will catch it
+    // no slot found — a match without scheduled/venue passes the gate and
+    // renders TBD silently, so refuse instead of writing it
+    if (!m.scheduled || !m.venue) return 'not enough free schedule slots to re-slot every knockout match — nothing written';
   }
 
   // Write, validate, rollback on failure (writeEdit handles all of that)
