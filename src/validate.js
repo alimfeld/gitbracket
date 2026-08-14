@@ -7,9 +7,10 @@
 
 const path = require('path');
 const { loadRepo, isRealDate, slotsOverlap } = require('./tools.js');
-const { ID_RE, pairSig, matchSlotMs, makeCat, isDone, poolStandings, resolveSide, isDeadTie, bestOfOf } = require('../site/derive.js');
+const { ID_RE, pairSig, matchSlotMs, makeCat, isDone, poolStandings, resolveSide, isDeadTie, bestOfOf, tzOffset } = require('../site/derive.js');
 
-const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/;
+// Local wall time, no offset/Z — the tournament's IANA timezone interprets it.
+const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/;
 const RESULTS = ['winner', 'loser'];
 
 // All checks, in memory. Labels are repo-relative paths (site/tournaments/<slug>/...).
@@ -142,7 +143,8 @@ function validateTournamentData(slug, indexName, info, errs, warns) {
     for (const m of cjson.matches) {
       if (!m || typeof m !== 'object' || m.venue === undefined || m.scheduled === undefined) continue;
       if (isDone(m, ctx)) continue;
-      const t = Date.parse(m.scheduled);
+      const w = m.scheduled;
+      const t = Date.parse(w + tzOffset(tjson.timezone, w.slice(0, 10)));
       if (Number.isNaN(t)) continue;
       sched.push({ f: `${tFile} matches.${cat.id}`, m, t, ctx });
     }
@@ -282,19 +284,14 @@ function validateCategory(cFile, cjson, cat, players, venues, tjson, errs, warns
   const ctx = makeCat({ meta: cat, matches }, tjson);
   function checkScheduled(s, where) {
     if (typeof s !== 'string' || !ISO_RE.test(s)) {
-      err(where, `scheduled ${JSON.stringify(s)} must be ISO-8601 with an explicit offset, e.g. 2025-07-14T09:00:00-04:00`);
+      err(where, `scheduled ${JSON.stringify(s)} must be local ISO-8601 wall time, e.g. 2025-07-14T09:00:00 — no offset or Z, the tournament timezone interprets it`);
       return;
     }
-    if (Number.isNaN(Date.parse(s))) err(where, `scheduled ${s} does not parse as an instant`);
+    // Local wall time parses machine-locally; anchor it in the tournament tz
+    // like the site does, so the check is the same everywhere.
+    if (Number.isNaN(Date.parse(s + tzOffset(tjson.timezone, s.slice(0, 10))))) err(where, `scheduled ${s} does not parse as an instant`);
     const hh = Number(s.slice(11, 13)); // Date.parse rolls 24:00 over to the next day; catch it
     if (hh > 23) err(where, `scheduled ${s} has hour ${hh} — hours run 00-23`);
-    const om = /[+-](\d{2}):(\d{2})$/.exec(s);
-    if (om) {
-      const oh = Number(om[1]), omm = Number(om[2]);
-      if (oh > 14 || (oh === 14 && omm > 0) || omm > 59) {
-        err(where, `scheduled ${s} offset ${om[0]} is outside ISO-8601's ±14:00 — a typo here silently shifts every instant`);
-      }
-    }
     // Date.parse rolls over impossible calendar dates (2025-02-30 -> Mar 2); catch them.
     const [y, mo, da] = s.slice(0, 10).split('-').map(Number);
     if (!isRealDate(y, mo, da)) err(where, `scheduled ${s} is not a real calendar date`);

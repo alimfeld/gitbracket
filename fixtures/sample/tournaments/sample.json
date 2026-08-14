@@ -76,7 +76,7 @@
         "id": 1,
         "pool": "A",
         "venue": "court-1",
-        "scheduled": "2025-07-14T09:00:00-04:00",
+        "scheduled": "2025-07-14T09:00:00",
         "sides": [
           {
             "kind": "players",
@@ -108,7 +108,7 @@
         "id": 2,
         "pool": "A",
         "venue": "court-2",
-        "scheduled": "2025-07-14T09:00:00-04:00",
+        "scheduled": "2025-07-14T09:00:00",
         "sides": [
           {
             "kind": "players",
@@ -144,7 +144,7 @@
         "id": 3,
         "pool": "A",
         "venue": "court-1",
-        "scheduled": "2025-07-14T09:45:00-04:00",
+        "scheduled": "2025-07-14T09:45:00",
         "sides": [
           {
             "kind": "players",
@@ -176,7 +176,7 @@
         "id": 4,
         "pool": "A",
         "venue": "court-2",
-        "scheduled": "2025-07-14T09:45:00-04:00",
+        "scheduled": "2025-07-14T09:45:00",
         "sides": [
           {
             "kind": "players",
@@ -212,7 +212,7 @@
         "id": 5,
         "pool": "A",
         "venue": "court-1",
-        "scheduled": "2025-07-14T10:30:00-04:00",
+        "scheduled": "2025-07-14T10:30:00",
         "sides": [
           {
             "kind": "players",
@@ -244,7 +244,7 @@
         "id": 6,
         "pool": "A",
         "venue": "court-2",
-        "scheduled": "2025-07-14T10:30:00-04:00",
+        "scheduled": "2025-07-14T10:30:00",
         "sides": [
           {
             "kind": "players",
@@ -279,7 +279,7 @@
       {
         "id": 7,
         "venue": "court-1",
-        "scheduled": "2025-07-14T11:15:00-04:00",
+        "scheduled": "2025-07-14T11:15:00",
         "sides": [
           {
             "kind": "pool",
@@ -298,7 +298,7 @@
         "id": 8,
         "bestOf": 3,
         "venue": "court-2",
-        "scheduled": "2025-07-14T11:15:00-04:00",
+        "scheduled": "2025-07-14T11:15:00",
         "sides": [
           {
             "kind": "pool",
@@ -322,7 +322,7 @@
         "id": 9,
         "bestOf": 3,
         "venue": "court-1",
-        "scheduled": "2025-07-14T12:15:00-04:00",
+        "scheduled": "2025-07-14T12:15:00",
         "sides": [
           {
             "kind": "match",
@@ -340,7 +340,7 @@
         "id": 10,
         "bestOf": 3,
         "venue": "court-2",
-        "scheduled": "2025-07-14T12:15:00-04:00",
+        "scheduled": "2025-07-14T12:15:00",
         "sides": [
           {
             "kind": "match",
@@ -360,7 +360,7 @@
         "id": 1,
         "pool": "A",
         "venue": "court-1",
-        "scheduled": "2025-07-14T13:00:00-04:00",
+        "scheduled": "2025-07-14T13:00:00",
         "sides": [
           {
             "kind": "players",
@@ -392,7 +392,7 @@
         "id": 2,
         "pool": "A",
         "venue": "court-2",
-        "scheduled": "2025-07-14T13:00:00-04:00",
+        "scheduled": "2025-07-14T13:00:00",
         "sides": [
           {
             "kind": "players",
@@ -428,7 +428,7 @@
         "id": 3,
         "pool": "A",
         "venue": "court-1",
-        "scheduled": "2025-07-14T13:45:00-04:00",
+        "scheduled": "2025-07-14T13:45:00",
         "sides": [
           {
             "kind": "players",
@@ -460,7 +460,7 @@
         "id": 4,
         "pool": "A",
         "venue": "court-2",
-        "scheduled": "2025-07-14T13:45:00-04:00",
+        "scheduled": "2025-07-14T13:45:00",
         "sides": [
           {
             "kind": "players",
@@ -492,7 +492,7 @@
         "id": 5,
         "pool": "A",
         "venue": "court-1",
-        "scheduled": "2025-07-14T14:30:00-04:00",
+        "scheduled": "2025-07-14T14:30:00",
         "sides": [
           {
             "kind": "players",
@@ -524,7 +524,7 @@
         "id": 6,
         "pool": "A",
         "venue": "court-2",
-        "scheduled": "2025-07-14T14:30:00-04:00",
+        "scheduled": "2025-07-14T14:30:00",
         "sides": [
           {
             "kind": "players",

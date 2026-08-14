@@ -48,7 +48,7 @@
         "id": 1,
         "pool": "A",
         "venue": "court-1",
-        "scheduled": "2025-07-14T09:00:00-04:00",
+        "scheduled": "2025-07-14T09:00:00",
         "sides": [
           {
             "kind": "players",
@@ -68,7 +68,7 @@
         "id": 2,
         "pool": "A",
         "venue": "court-1",
-        "scheduled": "2025-07-14T09:50:00-04:00",
+        "scheduled": "2025-07-14T09:50:00",
         "sides": [
           {
             "kind": "players",

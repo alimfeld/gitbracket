@@ -318,7 +318,7 @@ function possibleSpan(ctx, pid) {
   if (!open.length && rows.some(r => r.m.pool !== undefined) && !ko.length) {
     open = ctx.matches.filter(m => m.pool === undefined).map(m => m.id);
   }
-  const ts = open.map(id => schedTime(ctx.byId.get(id))).filter(t => t !== null);
+  const ts = open.map(id => schedTime(ctx.byId.get(id), ctx.tz)).filter(t => t !== null);
   if (!ts.length) return null;
   return { min: Math.min(...ts), max: Math.max(...ts), count: Math.max(...open.map(id => chainLen(ctx, id))) };
 }
@@ -404,6 +404,19 @@ function winnerDepth(ctx, id, memo = new Map()) {
 
 // ---------- time ----------
 
+// IANA tz -> "+02:00"-style offset on a calendar date (Europe/Zurich in Sep is
+// CEST), noon-UTC so one date lands one stable offset — a DST-switch day picks
+// the post-switch offset throughout. Wall-clock scheduled strings resolve via
+// this, so the data stays readable local time and stays right if clock rules
+// change — no stamped offsets that can go stale. The generator stored offsets
+// before; now it stores local time and the tz (already in the file) does the
+// work, shared by tools and site from this one place.
+function tzOffset(tz, date) {
+  const p = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'longOffset' })
+    .formatToParts(new Date(date + 'T12:00:00Z')).find((x) => x.type === 'timeZoneName');
+  return p && p.value !== 'GMT' ? p.value.replace('GMT', '') : '+00:00';
+}
+
 function fmtTime(t, tz) {
   return new Intl.DateTimeFormat(undefined, { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(t);
 }
@@ -412,8 +425,13 @@ function dayKey(t, tz) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(t);
 }
 
-function schedTime(m) {
-  const t = Date.parse(m.scheduled || '');
+// A scheduled field is local wall time in the tournament's tz (no offset in
+// the data — the tz at the top of the file interprets it). Anchor it to an
+// instant here, the single derivation point.
+function schedTime(m, tz) {
+  const s = m.scheduled || '';
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(s)) return null;
+  const t = Date.parse(s + tzOffset(tz, s.slice(0, 10)));
   return Number.isNaN(t) ? null : t;
 }
 
@@ -490,5 +508,5 @@ function matchLabel(m, ctx) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { ID_RE, pairSig, makeCat, matchSlotMs, bestOfOf, winnerIdx, isDone, sameRecord, isDeadTie, poolStandings, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, dayKey, schedTime, gamesText, fmtDiff, kioskStatus, roundName, koColumn, matchLabel };
+  module.exports = { ID_RE, pairSig, makeCat, matchSlotMs, bestOfOf, winnerIdx, isDone, sameRecord, isDeadTie, poolStandings, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, dayKey, tzOffset, schedTime, gamesText, fmtDiff, kioskStatus, roundName, koColumn, matchLabel };
 }

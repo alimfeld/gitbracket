@@ -38,8 +38,10 @@ A match has two stages: `groups` (has a `pool`) and `knockout` (no pool).
 number. A side is one of three kinds:
 
 ```jsonc
-// players — the actual people; singles: one id, doubles: two
-{ "id": 1, "pool": "A", "venue": "court-3", "scheduled": "2025-07-14T09:00:00-04:00",
+// players — the actual people; singles: one id, doubles: two.
+// scheduled is local wall time in the tournament's `timezone` — no offset in
+// the string, the IANA zone at the top of the file interprets it.
+{ "id": 1, "pool": "A", "venue": "court-3", "scheduled": "2025-07-14T09:00:00",
   "sides": [
     { "kind": "players", "ids": ["p1", "p3"] },
     { "kind": "players", "ids": ["p2", "p4"] }

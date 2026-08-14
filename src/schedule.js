@@ -28,8 +28,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const { matchSlotMs, pairSig, dayKey, ID_RE } = require('../site/derive.js');
-const { writeTournament, slotsOverlap, isRealDate, tzOffset } = require('./tools.js');
+const { matchSlotMs, pairSig, dayKey, tzOffset, ID_RE } = require('../site/derive.js');
+const { writeTournament, slotsOverlap, isRealDate } = require('./tools.js');
 
 // Round-robin pairings, circle method: array of rounds, each a list of pairs.
 function roundRobin(teams) {
@@ -255,9 +255,10 @@ function scheduleMatches(categories, venues, tz, slotCfgOf, eventDate, blockStar
           (w) => slotsOverlap(t, t + slotMs, w.start, w.end) && [...players].some((p) => w.players.has(p)));
         if (venue && !blocked) {
           m.venue = venue;
-          // local date + time from the event tz — a fixed eventDate prefix would
-          // backdate a slot crossing midnight by 24h
-          m.scheduled = `${dayKey(t, tz)}T${fmt.format(new Date(t))}:00${offset}`;
+          // local wall date + time in the event tz, no offset — the tz in the
+          // file interprets it. A fixed eventDate prefix would backdate a slot
+          // crossing midnight by 24h, so the day comes from the instant.
+          m.scheduled = `${dayKey(t, tz)}T${fmt.format(new Date(t))}:00`;
           courtUse.set(venue, [...(courtUse.get(venue) ?? []), { start: t, end: t + slotMs }]);
           endOf.set(m.id, t + slotMs);
           if (m.pool !== undefined) poolDone.set(m.pool, Math.max(poolDone.get(m.pool) ?? start, t + slotMs));

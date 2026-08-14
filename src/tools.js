@@ -16,16 +16,6 @@ const { ID_RE } = require('../site/derive.js');
 // its sibling that sizes a window, stays in derive.js: the site's kiosk uses it.)
 const slotsOverlap = (a0, a1, b0, b1) => a0 < b1 && b0 < a1;
 
-// IANA tz -> "+02:00"-style offset on eventDate (Europe/Zurich in Sep is CEST),
-// noon-UTC so a calendar date lands one stable offset. Shared by the match-day
-// REPL and the generator; derivation at 12:00Z is also what the event-date
-// schedule uses, so a DST-switch day picks the post-switch offset throughout.
-function tzOffset(tz, eventDate) {
-  const p = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'longOffset' })
-    .formatToParts(new Date(eventDate + 'T12:00:00Z')).find((x) => x.type === 'timeZoneName');
-  return p && p.value !== 'GMT' ? p.value.replace('GMT', '') : '+00:00';
-}
-
 // Impossible calendar dates (2025-02-30) roll over in Date.UTC; check the
 // round-trip. Used by the validator (scheduled) and the generator (spec date).
 function isRealDate(y, m, d) {
@@ -80,4 +70,4 @@ function writeTournament(siteRoot, slug, tjson) {
   fs.writeFileSync(path.join(siteRoot, 'tournaments', `${slug}.json`), JSON.stringify(tjson, null, 2) + '\n');
 }
 
-module.exports = { loadRepo, writeTournament, slotsOverlap, isRealDate, tzOffset, findRoot };
+module.exports = { loadRepo, writeTournament, slotsOverlap, isRealDate, findRoot };

@@ -65,9 +65,9 @@ test('repl applyVenue: moves a match; unknown venue is rejected by the validator
   assert(hasErr(validateRepo(repo2), /unknown venue "bogus-court"/), 'undeclared venue rejected');
 });
 
-test('repl buildScheduled: builds ISO-8601 from hh:mm and timezone', () => {
+test('repl buildScheduled: builds local ISO-8601 wall time from hh:mm and timezone', () => {
   const r = repl.buildScheduled('09:00', 'America/New_York');
-  assert(/^\d{4}-\d{2}-\d{2}T09:00:00[+-]\d{2}:\d{2}$/.test(r), `expected ISO with offset, got ${r}`);
+  assert(/^\d{4}-\d{2}-\d{2}T09:00:00$/.test(r), `expected local wall time, got ${r}`);
   const r2 = repl.buildScheduled('9:00', 'America/New_York');
   assert(r2.includes('T09:00:00'), 'single-digit hour pads to 09');
   assert(repl.buildScheduled('25:00', 'UTC') === null, 'bad hour returns null');
@@ -76,9 +76,9 @@ test('repl buildScheduled: builds ISO-8601 from hh:mm and timezone', () => {
 test('repl applyTime: sets scheduled field, repo validates', () => {
   const repo = loadRepo(FIX('sample'));
   const cjson = repo.tournaments.get('sample').matches.get('md40');
-  assert(repl.applyTime(cjson, '2', '2025-07-14T16:00:00-04:00') === null, 'applyTime reports no error');
-  assert(cjson.matches.find(m => m.id === 2).scheduled === '2025-07-14T16:00:00-04:00', 'scheduled set');
-  assert(repl.applyTime(cjson, 'nope', '2025-07-14T16:00:00-04:00') === 'unknown match nope', 'unknown match reported');
+  assert(repl.applyTime(cjson, '2', '2025-07-14T16:00:00') === null, 'applyTime reports no error');
+  assert(cjson.matches.find(m => m.id === 2).scheduled === '2025-07-14T16:00:00', 'scheduled set');
+  assert(repl.applyTime(cjson, 'nope', '2025-07-14T16:00:00') === 'unknown match nope', 'unknown match reported');
   const { errs } = validateRepo(repo);
   assert(errs.length === 0, 'edited repo still validates: ' + errs.join('; '));
 });

@@ -6,7 +6,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { makeCat, winnerIdx, isDone, poolStandings, resolveSide, sameRecord, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, kioskStatus, matchLabel } = require('../site/derive.js');
+const { makeCat, winnerIdx, isDone, poolStandings, resolveSide, sameRecord, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, kioskStatus, matchLabel, schedTime } = require('../site/derive.js');
 const { parseRoute, loadAll, renderIndex, renderStandings, renderVenue, renderPlayer } = require('../site/app.js');
 const { generate } = require('../src/schedule.js');
 const { FIX, catOf } = require('./helpers.js');
@@ -135,15 +135,15 @@ test('matchSlotMs: match override > per-stage category config, no default', () =
 
 test('kioskStatus: overdue / now / upcoming badge per open card', () => {
   const ctx = makeCat({ meta: { bestOf: { knockout: 3 }, slotMinutes: { groups: 30, knockout: 45 } }, matches: [
-    { id: 'm1', scheduled: '2025-07-14T09:00:00Z', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }], games: [{ a: 11, b: 5 }, { a: 11, b: 4 }] },
-    { id: 'm2', scheduled: '2025-07-14T08:30:00Z', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },
-    { id: 'm3', scheduled: '2025-07-14T09:45:00Z', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },
-    { id: 'm4', scheduled: '2025-07-14T10:30:00Z', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },
-    { id: 'm5', scheduled: '2025-07-14T11:15:00Z', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },
-    { id: 'm6', scheduled: '2025-07-14T10:00:00Z', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },
+    { id: 'm1', scheduled: '2025-07-14T09:00:00', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }], games: [{ a: 11, b: 5 }, { a: 11, b: 4 }] },
+    { id: 'm2', scheduled: '2025-07-14T08:30:00', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },
+    { id: 'm3', scheduled: '2025-07-14T09:45:00', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },
+    { id: 'm4', scheduled: '2025-07-14T10:30:00', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },
+    { id: 'm5', scheduled: '2025-07-14T11:15:00', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },
+    { id: 'm6', scheduled: '2025-07-14T10:00:00', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },
   ] }, { timezone: 'UTC', players: [] });
   const now = Date.parse('2025-07-14T10:00:00Z'); // m2's slot ended 09:15 — long overdue
-  const rows = ctx.matches.map(m => ({ m, t: Date.parse(m.scheduled), ctx }));
+  const rows = ctx.matches.map(m => ({ m, t: schedTime(m, ctx.tz), ctx }));
   const st = id => kioskStatus(rows.find(r => r.m.id === id), now);
   assert(st('m2') === 'overdue', 'slot fully elapsed without a result: overdue');
   assert(st('m3') === 'live' && st('m6') === 'live', 'started and still inside its slot: Now');

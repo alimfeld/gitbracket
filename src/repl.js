@@ -16,8 +16,8 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const { spawnSync } = require('child_process');
-const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, gamesText, fmtTime, matchLabel, koColumn, placementLabel, poolStandings, matchSlotMs, fmtDiff, bestOfOf, dayKey } = require('../site/derive.js');
-const { loadRepo, writeTournament, tzOffset } = require('./tools.js');
+const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, gamesText, fmtTime, matchLabel, koColumn, placementLabel, poolStandings, matchSlotMs, fmtDiff, bestOfOf, dayKey, tzOffset } = require('../site/derive.js');
+const { loadRepo, writeTournament } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 const { buildKnockout } = require('./schedule.js');
 
@@ -66,7 +66,7 @@ function buildScheduled(hhmm, tz) {
   const [h, m] = hhmm.split(':');
   if (+h > 23 || +m > 59) return null;
   const date = dayKey(Date.now(), tz); // tz-local date
-  return `${date}T${h.padStart(2,'0')}:${m}:00${tzOffset(tz, date)}`;
+  return `${date}T${h.padStart(2,'0')}:${m}:00`; // wall time — the tournament tz interprets it
 }
 
 function applyTime(cjson, matchId, isoString) {
@@ -95,7 +95,7 @@ function listEligible(repo, slug) {
       if (isScorable(m, ctx)) rows.push({ cat: cat.id, m, ctx });
     }
   }
-  const t = r => schedTime(r.m) ?? Infinity; // unscheduled matches sort last
+  const t = r => schedTime(r.m, r.ctx.tz) ?? Infinity; // unscheduled matches sort last
   rows.sort((a, b) => isDone(a.m, a.ctx) - isDone(b.m, b.ctx) || t(a) - t(b) || a.m.id - b.m.id);
   return rows;
 }
@@ -128,7 +128,7 @@ function writeEdit(siteRoot, repo, slug, catId, apply) {
 }
 
 function formatMatchLine(m, ctx, tz, stage, sidew, idw, venuew, stagew) {
-  const t = schedTime(m);
+  const t = schedTime(m, tz);
   const time = t === null ? C.yellow('TBD'.padStart(8)) : C.dim(fmtTime(t, tz).padStart(8));
   const v = m.venue || 'TBD';
   const venue = (m.venue ? C.magenta : C.yellow)(v.padEnd(venuew || v.length));
@@ -534,13 +534,13 @@ function rebracketCmd(state, dropPlayers) {
   // Greedy schedule: sort old KO slots by time, assign each new match the
   // first slot whose venue doesn't overlap with prior assignments. Handles
   // any bracket size, venue count, and slotMinutes — no structural pairing.
-  const oldByTime = [...oldKO].sort((a, b) => schedTime(a) - schedTime(b));
+  const oldByTime = [...oldKO].sort((a, b) => schedTime(a, ctx.tz) - schedTime(b, ctx.tz));
   const busy = []; // { venue, end }
   for (const m of newKO) {
     const slotMs = matchSlotMs(m, ctx);
     for (let oi = 0; oi < oldByTime.length; oi++) {
       const old = oldByTime[oi];
-      const t = schedTime(old);
+      const t = schedTime(old, ctx.tz);
       if (t === null) continue;
       if (busy.some(b => b.venue === old.venue && t < b.end)) continue;
       m.scheduled = old.scheduled;
@@ -569,7 +569,7 @@ function rebracketCmd(state, dropPlayers) {
   const lines = newKO.map(m => {
     const s0 = sideLabel(m.sides[0], ctx);
     const s1 = sideLabel(m.sides[1], ctx);
-    return `  ${m.id}: ${s0} vs ${s1} @ ${fmtTime(schedTime(m), tjson.timezone)} ${m.venue}`;
+    return `  ${m.id}: ${s0} vs ${s1} @ ${fmtTime(schedTime(m, tjson.timezone), tjson.timezone)} ${m.venue}`;
   });
   return `rebracketed ${cat} — ${newKO.length} KO match${newKO.length === 1 ? '' : 'es'}:\n` + lines.join('\n') + `\ncommit ${sha}: ${msg}`;
 }

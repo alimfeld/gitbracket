@@ -158,7 +158,7 @@ function bracketHtml(ctx, ko) {
 // an item key or pre-rendered HTML. opts.done dims a finished card;
 // opts.status rides on the article as data-status (kiosk time coloring).
 function matchCard(m, ctx, opts = {}) {
-  const t = schedTime(m);
+  const t = schedTime(m, ctx.tz);
   const item = {
     catName: esc(ctx.name),
     matchId: esc(m.id),
@@ -199,7 +199,7 @@ function renderVenue(route, data, now = Date.now()) {
   for (const ctx of ctxs) {
     for (const m of ctx.matches) {
       if (!m || m.venue === undefined) continue;
-      const t = schedTime(m);
+      const t = schedTime(m, ctx.tz);
       if (t === null) continue;
       rows.push({ m, t, ctx });
     }
@@ -271,10 +271,10 @@ function renderPlayer(route, data) {
       rows.push({ m, ctx, i, team, partner: [...team].filter(id => id !== pid) });
     }
   }
-  rows.sort((a, b) => (schedTime(a.m) ?? Infinity) - (schedTime(b.m) ?? Infinity));
+  rows.sort((a, b) => (schedTime(a.m, a.ctx.tz) ?? Infinity) - (schedTime(b.m, b.ctx.tz) ?? Infinity));
   const groups = new Map();
   for (const r of rows) {
-    const t = schedTime(r.m);
+    const t = schedTime(r.m, r.ctx.tz);
     const key = t === null ? 'Time TBD' : dayKey(t, r.ctx.tz);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(r);
@@ -294,7 +294,7 @@ function renderPlayer(route, data) {
     const blocks = (blocksByDay.get(key) || []).sort((a, b) => a.min - b.min);
     let bi = 0;
     for (const r of g) {
-      const t = schedTime(r.m), m = r.m, ctx = r.ctx;
+      const t = schedTime(r.m, r.ctx.tz), m = r.m, ctx = r.ctx;
       while (bi < blocks.length && blocks[bi].min < t) day.push(possibleLine(blocks[bi++]));
       // one side row per team — per-game points beside their own name, winner
       // bolded; the same sideRow as the bracket cards. Headline: time left,
