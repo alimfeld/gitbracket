@@ -242,8 +242,7 @@ function renderVenue(route, data, now = Date.now()) {
 function possibleLine(b) {
   const range = b.min === b.max ? `at ${fmtTime(b.min, b.ctx.tz)}` : `between ${fmtTime(b.min, b.ctx.tz)} and ${fmtTime(b.max, b.ctx.tz)}`;
   const noun = b.count === 1 ? 'match' : 'matches';
-  const howMany = b.count > 1 ? `Up to ${b.count} more` : '1 more';
-  return `<p class="note">${howMany} ${noun} in ${esc(b.ctx.name)} could start ${range}, if results allow</p>`;
+  return `<p class="note">${b.count} more ${noun} possible in ${esc(b.ctx.name)} starting ${range}</p>`;
 }
 
 function renderPlayer(route, data) {
