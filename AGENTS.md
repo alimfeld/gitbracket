@@ -19,9 +19,10 @@ details. When docs and code disagree, code wins.
   place.
 - **Dev tooling stays at the root and never ships.** `site/` is the shipping
   surface.
-- **Never weaken a check to make data pass — fix the data.** Pre-commit and
-  the Pages workflow both run validate + tests, so a bypassed hook can't
-  ship.
+- **Never weaken a check to make data pass — fix the data.** Pre-commit runs
+  validate + tests; the deploy gate runs them again on the shipping platform
+  (today: Vercel's build command; `pages.yml` is a manual fallback redeploy),
+  so a bypassed hook can't ship.
 - **A behavior change is a fixture + a test.** New validator rules and derive
   behavior need a committed scenario under `fixtures/` (a self-contained mini
   site root) and an assertion in `test/`, loaded through the same `loadRepo` as
