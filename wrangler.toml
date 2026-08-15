@@ -1,6 +1,6 @@
 # Deploy config for the Workers static-assets path (push-triggered via Workers Builds).
 # Dashboard: Settings > Builds > Build caching ON (or every build re-downloads wrangler).
-# Build command:  npm ci && npm run gate   (the gate; a fail stops the deploy)
+# Build command:  npm run gate   (deps already auto-installed by the pipeline; a gate fail stops the deploy)
 # Deploy command: npx wrangler deploy
 # ponytail: package.json exists despite AGENTS.md's "no npm" rule — wrangler is
 # deploy plumbing in the build container only; scripts still run with node.
