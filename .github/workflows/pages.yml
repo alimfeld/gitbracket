@@ -1,6 +1,4 @@
 name: Deploy to GitHub Pages
-# Dormant fallback since 2026-08: Vercel deploys on push; this keeps GH Pages
-# serving the last snapshot and re-deploys manually when Vercel is unavailable.
 on:
   workflow_dispatch:
 permissions:

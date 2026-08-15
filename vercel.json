@@ -1,5 +1,4 @@
 {
-  "buildCommand": "npm run gate",
-  "outputDirectory": "site",
-  "installCommand": ""
+  "buildCommand": "node gb.js validate && node --test",
+  "outputDirectory": "site"
 }
