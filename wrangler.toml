@@ -1,5 +1,9 @@
 # Deploy config for the Workers static-assets path (push-triggered via Workers Builds).
-# The dashboard build command runs the gate:  node gb.js validate && node --test
+# Dashboard: Settings > Builds > Build caching ON (or every build re-downloads wrangler).
+# Build command:  npm ci && node gb.js validate && node --test   (the gate; a fail stops the deploy)
+# Deploy command: npx wrangler deploy
+# ponytail: package.json exists despite AGENTS.md's "no npm" rule — wrangler is
+# deploy plumbing in the build container only; scripts still run with node.
 # GitHub Pages keeps serving until this path is proven, then pages.yml goes.
 name = "gitbracket"
 compatibility_date = "2026-01-01"
