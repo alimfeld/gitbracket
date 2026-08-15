@@ -61,6 +61,9 @@ One question decides placement for any new function: does the browser run it?
 
 ## Conventions
 
+- **No commits without an ask** — never stage, commit, push, or publish
+  unless the user explicitly instructed it; leave the change uncommitted and
+  report it as such.
 - **Conventional commits** — `feat:`, `fix:`, `refactor:`, `perf:`, `ci:`,
   with a scope when it helps, as the existing history does.
 - **No package.json, no npm** — scripts run with `node` directly; tests run
