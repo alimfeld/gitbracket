@@ -12,6 +12,12 @@ const validate = require('./validate.js');
 // exits 1 on data errors, so nothing dirty ever reaches the upload.
 function main(root) {
   validate.main(root);
+  return ship(root);
+}
+
+// Upload site/ to the domain in site/CNAME. Split from main so the REPL's
+// publish command can ship without validate.main's process.exit.
+function ship(root) {
   // surge ≥0.43: `surge <path> publish` reads the domain from site/CNAME.
   const r = spawnSync('surge', ['site/', 'publish'], { cwd: root, stdio: 'inherit' });
   if (r.error) {
@@ -21,4 +27,4 @@ function main(root) {
   return r.status === null ? 1 : r.status;
 }
 
-module.exports = { main };
+module.exports = { main, ship };

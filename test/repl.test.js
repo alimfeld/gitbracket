@@ -106,7 +106,7 @@ test('repl parseCmd: every line is a command — the first word is the verb', ()
   assert.deepEqual(repl.parseCmd('ff 1 1'), { kind: 'ff', args: ['1', '1'] });
   assert.deepEqual(repl.parseCmd('venue 1 court-2'), { kind: 'venue', args: ['1', 'court-2'] });
   assert.deepEqual(repl.parseCmd('time 1 10:30'), { kind: 'time', args: ['1', '10:30'] });
-  assert.deepEqual(repl.parseCmd('push'), { kind: 'push', args: [] });
+  assert.deepEqual(repl.parseCmd('publish'), { kind: 'publish', args: [] });
   assert.deepEqual(repl.parseCmd('cd md40'), { kind: 'cd', args: ['md40'] });
   assert.deepEqual(repl.parseCmd('q'), { kind: 'q', args: [] });
   assert.deepEqual(repl.parseCmd('md40'), { kind: 'unknown', args: [] }, 'bare words are not commands');

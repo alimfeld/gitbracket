@@ -9,8 +9,9 @@
 // command — the first word is always a verb, so targets (slugs, categories,
 // matches) only ever appear as cd/score args and can't collide with commands.
 // Every successful edit is validated (the real validateRepo) and committed
-// immediately. The prompt shows sync state: ↑n unpushed commits, ↓n behind,
-// * dirty tree. Tab completes at every level.
+// immediately. publish ships site/ (validate gate, then surge) and records the
+// published HEAD in refs/gb/last-publish. The prompt shows: ↑n commits since
+// last publish, ↓n behind upstream, * dirty tree. Tab completes at every level.
 
 const fs = require('fs');
 const path = require('path');
@@ -20,6 +21,7 @@ const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, gamesText
 const { loadRepo, writeTournament } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 const { buildKnockout } = require('./schedule.js');
+const { ship } = require('./publish.js');
 
 // ---------- pure logic (tests drive these on fixture repos) ----------
 
@@ -228,7 +230,7 @@ function commitMessage(kind, slug, cat, matchId, detail) {
   return `${kind}(${slug}): ${cat}/${matchId} ${detail}`;
 }
 
-const VERBS = ['ls', 'cd', 'q', 'help', 'score', 'ff', 'time', 'venue', 'rebracket', 'push', 'pull', 'status', 'validate'];
+const VERBS = ['ls', 'cd', 'q', 'help', 'score', 'ff', 'time', 'venue', 'rebracket', 'publish', 'pull', 'status', 'validate'];
 
 // Any line is <verb> <args> — the first word is always a command.
 function parseCmd(line) {
@@ -273,12 +275,15 @@ function git(root, args) {
 }
 
 function syncSuffix(root) {
-  const ahead = git(root, ['rev-list', '--count', '@{u}..HEAD']);
+  // unpublished = commits since the last publish (refs/gb/last-publish, written
+  // by publish); behind = commits others pushed upstream. Before the first
+  // publish there is no ref — the indicator is simply unavailable.
+  const unpub = git(root, ['rev-list', '--count', 'refs/gb/last-publish..HEAD']);
   const behind = git(root, ['rev-list', '--count', 'HEAD..@{u}']);
-  if (ahead.code || behind.code) return ''; // no upstream — indicator unavailable
+  if (unpub.code || behind.code) return '';
   const dirty = git(root, ['status', '--porcelain']);
   let s = '';
-  if (ahead.out.trim() !== '0') s += ` ↑${ahead.out.trim()}`;
+  if (unpub.out.trim() !== '0') s += ` ↑${unpub.out.trim()}`;
   if (behind.out.trim() !== '0') s += ` ↓${behind.out.trim()}`;
   if (dirty.code === 0 && dirty.out.length) s += ' *';
   return s;
@@ -300,9 +305,9 @@ ${C.bold('score & manage (inside a category):')}
   rebracket <player> […]        rebuild KO omitting teams; placements/slots from existing bracket
 
 ${C.bold('sync (every edit commits itself):')}
-  push  pull  status  validate
+  publish  pull  status  validate
 
-${C.dim('prompt: ↑n = n unpushed commits, ↓n = n behind, * = dirty tree. Tab completes.')}`;
+${C.dim('prompt: ↑n = n commits since last publish, ↓n = n behind upstream, * = dirty tree. Tab completes.')}`;
 }
 
 function makePrompt(state) {
@@ -353,11 +358,14 @@ function validateText(repo) {
   return lines.join('\n') + (errs.length ? `\n${errs.length} error(s)` : ` (${warns.length} warning(s))`);
 }
 
-function gitPush(root) {
-  const r = git(root, ['push']);
-  if (r.code === 0) return 'pushed';
-  const rejected = /rejected|! \[rejected\]/.test(r.err + r.out);
-  return (rejected ? 'push rejected — someone pushed first: run pull (rebases), then push\n' : '') + r.err.trim();
+function gitPublish(state) {
+  // Gate on disk, not memory — surge uploads site/ from disk, so validate
+  // exactly what ships. (publish.main's gate exits the process — unusable here.)
+  const { errs } = validateRepo(loadRepo(state.siteRoot));
+  if (errs.length) return errs.join('\n') + '\nnot published — validation error(s)';
+  if (ship(state.root) !== 0) return 'not published — see the surge output above';
+  git(state.root, ['update-ref', 'refs/gb/last-publish', 'HEAD']);
+  return 'published';
 }
 
 function gitPull(state) {
@@ -390,11 +398,11 @@ const C = (() => {
 // Color the final output string — commands and pure functions stay plain.
 function paint(s) {
   if (!s) return s;
-  if (s.includes('not written') || s.includes('but the commit failed') || s.startsWith('push rejected')) return C.red(s);
+  if (s.includes('not written') || s.includes('but the commit failed') || s.startsWith('not published')) return C.red(s);
   return s.split('\n').map(l =>
     /^(error:|unknown |bad |\d+ error\(s\))/.test(l) ? C.red(l)
     : /^(warn:|usage:|\(\d+ warning\(s\)\))/.test(l) ? C.yellow(l)
-    : /committed |— done$|wins$|^validate: ok$|^pushed$|^pulled/.test(l) ? C.green(l)
+    : /committed |— done$|wins$|^validate: ok$|^published$|^pulled/.test(l) ? C.green(l)
     : /^→ /.test(l) ? C.cyan(l)
     : l
   ).join('\n');
@@ -589,7 +597,7 @@ function dispatch(kind, args, state) {
     if (state.cat === null) return 'cd into a category first';
     return editCmd(state, kind, args);
   }
-  if (kind === 'push') return gitPush(state.root);
+  if (kind === 'publish') return gitPublish(state);
   if (kind === 'pull') return gitPull(state);
   if (kind === 'status') return gitStatus(state.root);
   if (kind === 'validate') return validateText(state.repo);
