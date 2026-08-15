@@ -22,7 +22,7 @@ function esc(s) {
 
 async function fetchJson(url) {
   try {
-    // Revalidate with the CDN every poll: Pages honors If-None-Match, so
+    // Revalidate with the CDN every poll: where the host honors If-None-Match,
     // unchanged data returns a 0-byte 304 instead of a full re-download, and
     // changed data still arrives fresh on the next poll.
     const res = await fetch(url, { cache: 'no-cache' });
@@ -314,7 +314,7 @@ function renderPlayer(route, data) {
 // ---------- boot ----------
 
 // Read-once views (index/categories/players) don't poll — but a load that lands
-// in a Pages deploy window or a network blip must not leave a permanent
+// in a deploy window or a network blip must not leave a permanent
 // "missing" page. Two cheap recoveries, neither of which fires on the happy
 // path: re-fetch when the tab returns to the foreground, and a bounded retry
 // when the snapshot is detectably failed (no index entry, or no tournament data
@@ -324,8 +324,8 @@ function renderPlayer(route, data) {
 function boot() {
   const app = document.querySelector('main');
   const renderers = { index: renderIndex, categories: renderStandings, venues: renderVenue, players: renderPlayer };
-  const pageTitle = (r, d) => { // index: GitBracket; standings/kiosk: bare tournament; players: "name — Players" or "name — player"
-    if (r.view === 'index' || !d.t) return 'GitBracket';
+  const pageTitle = (r, d) => { // index: Bracket; standings/kiosk: bare tournament; players: "name — Players" or "name — player"
+    if (r.view === 'index' || !d.t) return 'Bracket';
     if (r.view === 'players') {
       if (r.filter) {
         const p = ((d.tjson && d.tjson.players) || []).find(x => x && x.id === r.filter);

@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <title>GitBracket</title>
+  <title>Bracket</title>
   <rect width="64" height="64" rx="14" fill="#0a66c2"/>
   <circle cx="16" cy="19" r="9" fill="#fff"/>
   <circle cx="16" cy="45" r="9" fill="#fff"/>

@@ -1,72 +1,21 @@
-# Testing with a throwaway GitHub Pages repo
+# Testing against a live deployment
 
-Test kiosk behaviour, CDN latency, 304 caching, and polling on a real GitHub
-Pages deployment — without touching the production repo's history or workflow.
+Test kiosk behaviour, CDN latency, 304 caching, and polling against a real
+deployment — without touching the production live domain. Two recipes: the
+branch recipe covers everything except real CDN behaviour; the scratch-domain
+recipe covers that.
 
-## How it works
+## Everything else: a branch and a local server
 
-Create a public test repo, push the latest main from the production remote
-(not your local branch), enable Pages, clone it somewhere isolated, edit scores
-via the REPL, push from inside the REPL, and check the live URL. Delete
-everything when done.
-
-The clone's `origin` is always and only the test repo — you can't
-accidentally push to production. No remotes are added to the original repo.
-
-Uses HTTPS (not SSH) — `gh` handles authentication via its own token and
-sets up the git credential helper transparently.
-
-## Recipe
-
-```bash
-# ── setup (one time) ──
-gh repo create gitbracket-test --public
-gh api "repos/:owner/gitbracket-test/pages" -X POST -f build_type=workflow 2>/dev/null || true
-git fetch origin main
-git push "https://github.com/$(gh api user -q .login)/gitbracket-test.git" FETCH_HEAD:refs/heads/main
-gh repo clone gitbracket-test /tmp/gitbracket-test
-
-# ── iterate (as many times as needed) ──
-cd /tmp/gitbracket-test
-node gb.js               # edit scores → push from inside the REPL
-# check https://<user>.github.io/gitbracket-test/
-
-# ── cleanup (zero trace) ──
-rm -rf /tmp/gitbracket-test
-gh repo delete gitbracket-test --yes
-```
-
-## Notes
-
-- `git fetch origin main` then `FETCH_HEAD:main` pushes the exact commit the
-  production remote's main currently points to — not your potentially stale
-  local branch.
-- `gh repo create` with `--public` is required — GitHub Pages on free
-  accounts needs a public repo. No remotes are added to your original checkout.
-- `gh repo clone` uses your existing `gh` auth token — no SSH keys needed.
-- All work happens in `/tmp/gitbracket-test` where `origin` is the test repo.
-  The REPL's built-in `push` command pushes there safely.
-- To pull in changes from the production repo (e.g. rendering fixes, new
-  tools), add it as an upstream remote and merge:
-
-  ```bash
-  cd /tmp/gitbracket-test
-  git remote add upstream "https://github.com/$(gh api user -q .login)/gitbracket.git"
-  git fetch upstream
-  git merge upstream/main
-  git push     # redeploys with the latest code
-  ```
-
-## Leaner alternative: a branch and a local server
-
-When you only need to see the app — rendering, the kiosk poll, the REPL
-edit → commit → push flow — skip the throwaway repo. Work on a branch in
-your own checkout and serve the static site from your machine.
+Work on a branch in your own checkout and serve the static site from your
+machine. Rendering, the kiosk poll, and the REPL edit → commit → push flow
+all work here — it skips only what a real deployment answers: CDN latency,
+304 revalidation, HTTPS.
 
 ```bash
 # ── setup (one time) ──
 git checkout -b test
-python3 -m http.server 8000 --directory site   # serve the same files Pages serves
+python3 -m http.server 8000 --directory site   # serve the same files surge serves
 # open http://localhost:8000
 git push -u origin test            # once — the upstream the REPL's push needs
 
@@ -81,17 +30,41 @@ git branch -d test
 git push origin --delete test
 ```
 
-The branch replaces the throwaway repo as the isolation boundary: the
-REPL's `push` goes to `origin/test`, and Pages deploys `main` only — nothing
-ships. No `gh`, no repo create/delete, no `/tmp` clone — `python3 -m http.server`
-is the whole server.
-
+The branch is the testing boundary: `gb.js publish` ships whatever checkout
+you run it from to the live domain — so never publish from the test branch.
 Local serving matches the deployed app — same files, same relative fetches
-(`cache: no-cache`, so reloads are fresh). It skips only what a real
-deployment answers: CDN latency, 304 revalidation, HTTPS.
-Use the Pages recipe for those, this one for everything else.
+(`cache: no-cache`, so reloads are fresh).
+
+Use the scratch-domain recipe below for real CDN answers, this one for
+everything else.
+
+## CDN behaviour: a scratch clone, its own surge domain
+
+The live domain lives in `site/CNAME`, so a throwaway domain is a one-line
+edit in a scratch clone: publish from the probe, hit real CDN cache/304/HTTPS
+behaviour there, delete the clone and the domain is gone. Production's
+domain is never touched.
+
+```bash
+# ── setup (one time) ──
+git fetch origin main
+git clone "https://github.com/$(gh api user -q .login)/gitbracket.git" /tmp/gitbracket-probe
+cd /tmp/gitbracket-probe
+echo probe-$(date +%s).surge.sh > site/CNAME   # a fresh throwaway domain
+
+# ── iterate (as many times as needed) ──
+node gb.js               # edit scores → committed locally by the REPL
+node gb.js publish       # ships only the probe domain (validate gate)
+# open https://$(cat site/CNAME) — CDN latency, 304s, HTTPS
+
+# ── cleanup (zero trace) ──
+rm -rf /tmp/gitbracket-probe   # deleting the clone retires the domain
+```
+
+The probe's origin is the production repo, so never run the REPL's `push`
+here — the REPL's commits stay local and die with the clone.
 
 ## Prerequisites
 
-- **Throwaway-repo recipe:** [GitHub CLI](https://cli.github.com/) (`gh`) — authenticated; Git, Node.js; permissions to create public repos
-- **Branch recipe:** Git, Node.js, and any static-file server (`python3 -m http.server` or equivalent)
+- **Branch recipe:** Git, Node.js, any static-file server (`python3 -m http.server` or equivalent)
+- **CDN recipe:** the [surge CLI](https://surge.sh) authenticated (one-time `npm install -g surge` + `surge login`), [GitHub CLI](https://cli.github.com/) (`gh`), Git, Node.js

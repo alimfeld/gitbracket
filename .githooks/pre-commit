@@ -1,6 +1,6 @@
 #!/bin/sh
 # Run the validator + test suite before every commit: the hook is the fast
-# local gate, the Pages workflow re-runs both on every push, so a bypassed
+# local gate, gb.js publish re-runs validate before it ships, so a bypassed
 # hook can't ship.
 set -e
 cd "$(git rev-parse --show-toplevel)"

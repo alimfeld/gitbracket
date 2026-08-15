@@ -2,7 +2,7 @@
 
 GitBracket runs tournaments as code. A tournament lives in a git repo — the
 data, the history, and the frontend are the whole system. No accounts, no
-server, no app: a push deploys, and anyone with the link can follow along.
+server, no app: a publish deploys, and anyone with the link can follow along.
 
 Works for any win/lose tournament — pickleball, tennis, darts, quiz. Draws
 are not supported.
@@ -82,4 +82,4 @@ One page, fragment-routed. `#<slug>` is a tournament's standings;
 
 ## Tools
 
-**`gb.js`** — the one CLI. `node gb.js` starts the match-day REPL (navigate, score, move venues; every edit commits itself); `node gb.js validate [slug]` checks data without the REPL; `node gb.js schedule <spec>` generates a tournament file from a spec (`specs/<slug>.json`). The commands live as modules under `src/`; `site/` stays the shipping surface.
+**`gb.js`** — the one CLI. `node gb.js` starts the match-day REPL (navigate, score, move venues; every edit commits itself); `node gb.js validate [slug]` checks data without the REPL; `node gb.js schedule <spec>` generates a tournament file from a spec (`specs/<slug>.json`); `node gb.js publish` ships `site/` to the domain in `site/CNAME`. The commands live as modules under `src/`; `site/` stays the shipping surface.

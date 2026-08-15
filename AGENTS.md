@@ -5,8 +5,10 @@ details. When docs and code disagree, code wins.
 
 ## Architectural principles
 
-- **Write access is push access.** No server, no accounts — git is the whole
-  system.
+- **Write is edit, ship is publish.** No server, no accounts — git is the
+  record, not the transport: only `gb.js publish` ships, uploading `site/` to
+  the domain in `site/CNAME`. One director publishes; git stays the audit
+  trail and the rollback.
 - **derive.js is the single source of the site's domain model.** Validator, REPL,
   generator, and renderers all consume it — extend it, never reimplement the
   model elsewhere. The integrity gate must not depend on renderer code.
@@ -20,9 +22,9 @@ details. When docs and code disagree, code wins.
 - **Dev tooling stays at the root and never ships.** `site/` is the shipping
   surface.
 - **Never weaken a check to make data pass — fix the data.** Pre-commit runs
-  validate + tests; the shipping platform's deploy gate runs them again
-  (Vercel's build command; `pages.yml` redeploys GH Pages on demand), so a
-  bypassed hook can't ship.
+  validate + tests; `gb.js publish` (the only shipper) re-runs validate as
+  its first step — tests are the dev gate, validate is the data gate, and
+  only the director ships — so a bypassed hook can't ship.
 - **A behavior change is a fixture + a test.** New validator rules and derive
   behavior need a committed scenario under `fixtures/` (a self-contained mini
   site root) and an assertion in `test/`, loaded through the same `loadRepo` as
@@ -30,7 +32,8 @@ details. When docs and code disagree, code wins.
   depend on live `site/tournaments/`.
 - **Git is the concurrency design.** A rejected push means someone pushed
   first: `git pull --rebase && git push`. No retry loops, no CAS. One scorer
-  owns one tournament.
+  owns one tournament. Publishing is outside git — last-write-wins on the
+  CDN, safe because one director ships.
 - **Renderers never throw** — missing data renders empty, unresolvable slots
   render a descriptive label. Cycles and reference errors are the validator's
   job.
@@ -62,4 +65,4 @@ One question decides placement for any new function: does the browser run it?
   with a scope when it helps, as the existing history does.
 - **No package.json, no npm** — scripts run with `node` directly; tests run
   with `node --test` (node:test), in the repo root, exactly as the pre-commit
-  hook and the Pages workflow run them.
+  hook runs them.

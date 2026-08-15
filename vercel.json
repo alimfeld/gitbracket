@@ -1,4 +1,0 @@
-{
-  "buildCommand": "node gb.js validate && node --test",
-  "outputDirectory": "site"
-}
