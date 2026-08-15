@@ -15,9 +15,9 @@ const { FIX, hasErr } = require('./helpers.js');
 
 test('repl applyScore: sets games, clears a forfeit, repo still validates', () => {
   const repo = loadRepo(FIX('sample'));
-  const cjson = repo.tournaments.get('sample').matches.get('md40');
-  assert(repl.applyScore(cjson, '7', [{ a: 11, b: 5 }]) === null, 'applyScore reports no error');
-  const m7 = cjson.matches.find(m => m.id === 7);
+  const matches = repo.tournaments.get('sample').matches.get('md40');
+  assert(repl.applyScore(matches, '7', [{ a: 11, b: 5 }]) === null, 'applyScore reports no error');
+  const m7 = matches.find(m => m.id === 7);
   assert(m7.forfeit === undefined && m7.games.length === 1, 'forfeit replaced by games');
   const { errs } = validateRepo(repo);
   assert(errs.length === 0, 'edited repo still validates: ' + errs.join('; '));
@@ -25,9 +25,9 @@ test('repl applyScore: sets games, clears a forfeit, repo still validates', () =
 
 test('repl applyForfeit: sets forfeit, clears games, repo still validates', () => {
   const repo = loadRepo(FIX('sample'));
-  const cjson = repo.tournaments.get('sample').matches.get('md40');
-  assert(repl.applyForfeit(cjson, '2', 1) === null, 'applyForfeit reports no error');
-  const m2 = cjson.matches.find(m => m.id === 2);
+  const matches = repo.tournaments.get('sample').matches.get('md40');
+  assert(repl.applyForfeit(matches, '2', 1) === null, 'applyForfeit reports no error');
+  const m2 = matches.find(m => m.id === 2);
   assert(m2.forfeit === 1 && m2.games === undefined, 'games replaced by forfeit');
   const { errs } = validateRepo(repo);
   assert(errs.length === 0, 'edited repo still validates: ' + errs.join('; '));
@@ -35,10 +35,10 @@ test('repl applyForfeit: sets forfeit, clears games, repo still validates', () =
 
 test('repl applyVenue: moves a match; unknown venue is rejected by the validator', () => {
   const repo = loadRepo(FIX('sample'));
-  const cjson = repo.tournaments.get('sample').matches.get('md40');
-  assert(repl.applyVenue(cjson, '2', 'court-2') === null, 'applyVenue reports no error');
-  assert(cjson.matches.find(m => m.id === 2).venue === 'court-2', 'venue moved');
-  assert(repl.applyVenue(cjson, 'nope', 'court-2') === 'unknown match nope', 'unknown match reported');
+  const matches = repo.tournaments.get('sample').matches.get('md40');
+  assert(repl.applyVenue(matches, '2', 'court-2') === null, 'applyVenue reports no error');
+  assert(matches.find(m => m.id === 2).venue === 'court-2', 'venue moved');
+  assert(repl.applyVenue(matches, 'nope', 'court-2') === 'unknown match nope', 'unknown match reported');
   const repo2 = loadRepo(FIX('sample'));
   repl.applyVenue(repo2.tournaments.get('sample').matches.get('md40'), '2', 'bogus-court');
   assert(hasErr(validateRepo(repo2), /unknown venue "bogus-court"/), 'undeclared venue rejected');
@@ -54,18 +54,18 @@ test('repl buildScheduled: builds local ISO-8601 wall time from hh:mm and timezo
 
 test('repl applyTime: sets scheduled field, repo validates', () => {
   const repo = loadRepo(FIX('sample'));
-  const cjson = repo.tournaments.get('sample').matches.get('md40');
-  assert(repl.applyTime(cjson, '2', '2025-07-14T16:00:00') === null, 'applyTime reports no error');
-  assert(cjson.matches.find(m => m.id === 2).scheduled === '2025-07-14T16:00:00', 'scheduled set');
-  assert(repl.applyTime(cjson, 'nope', '2025-07-14T16:00:00') === 'unknown match nope', 'unknown match reported');
+  const matches = repo.tournaments.get('sample').matches.get('md40');
+  assert(repl.applyTime(matches, '2', '2025-07-14T16:00:00') === null, 'applyTime reports no error');
+  assert(matches.find(m => m.id === 2).scheduled === '2025-07-14T16:00:00', 'scheduled set');
+  assert(repl.applyTime(matches, 'nope', '2025-07-14T16:00:00') === 'unknown match nope', 'unknown match reported');
   const { errs } = validateRepo(repo);
   assert(errs.length === 0, 'edited repo still validates: ' + errs.join('; '));
 });
 
 test('repl rejects edits the validator would refuse', () => {
   const repo = loadRepo(FIX('sample'));
-  const cjson = repo.tournaments.get('sample').matches.get('md40');
-  repl.applyScore(cjson, '7', [{ a: 11, b: 5 }, { a: 11, b: 3 }]); // knockout target is 1 game
+  const matches = repo.tournaments.get('sample').matches.get('md40');
+  repl.applyScore(matches, '7', [{ a: 11, b: 5 }, { a: 11, b: 3 }]); // knockout target is 1 game
   const { errs } = validateRepo(repo);
   assert(hasErr({ errs }, /after a side already reached the target/), 'game past the target is rejected');
   const repo2 = loadRepo(FIX('sample'));
@@ -126,13 +126,13 @@ test('repl writeEdit: rollback on validation failure, write on success (real dis
     const bad = repl.writeEdit(dataRoot, repo, 'sample', 'md40', c => repl.applyScore(c, '7', [{ a: 11, b: 5 }, { a: 11, b: 3 }]));
     assert(bad.errs && bad.errs.length > 0 && !bad.file, 'bad edit reports validation errors');
     assert(fs.readFileSync(file, 'utf8') === before, 'rejected edit rolls the file back byte-identical');
-    const m7mem = repo.tournaments.get('sample').matches.get('md40').matches.find(m => m.id === 7);
+    const m7mem = repo.tournaments.get('sample').matches.get('md40').find(m => m.id === 7);
     assert(m7mem.forfeit === 1 && m7mem.games === undefined, 'rejected edit restores the in-memory match too');
     const good = repl.writeEdit(dataRoot, repo, 'sample', 'md40', c => repl.applyScore(c, '7', [{ a: 11, b: 5 }]));
     assert(!good.errs && good.file, 'good edit writes the file');
     const reread = loadRepo(dataRoot);
     assert(validateRepo(reread).errs.length === 0, 'written repo validates');
-    const m7 = reread.tournaments.get('sample').matches.get('md40').matches.find(m => m.id === 7);
+    const m7 = reread.tournaments.get('sample').matches.get('md40').find(m => m.id === 7);
     assert(m7.games.length === 1 && m7.forfeit === undefined, 'games applied and the forfeit cleared');
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });

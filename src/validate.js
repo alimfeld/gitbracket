@@ -7,10 +7,8 @@
 
 const path = require('path');
 const { loadRepo, isRealDate, slotsOverlap } = require('./tools.js');
-const { ID_RE, pairSig, matchSlotMs, makeCat, isDone, poolStandings, resolveSide, isDeadTie, bestOfOf, schedTime, tzOffset } = require('../site/derive.js');
+const { ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, isDone, poolStandings, resolveSide, isDeadTie, bestOfOf, schedTime, tzOffset } = require('../site/derive.js');
 
-// Local wall time, no offset/Z — the tournament's IANA timezone interprets it.
-const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/;
 const RESULTS = ['winner', 'loser'];
 
 // All checks, in memory. Labels are repo-relative paths (site/tournaments/<slug>/...).
@@ -125,9 +123,9 @@ function validateTournamentData(slug, indexName, info, errs, warns) {
   }
 
   for (const cat of categories.values()) {
-    const cjson = info.matches.get(cat.id);
-    if (cjson === undefined) continue; // category with no matches entry is valid
-    validateCategory(`${tFile} matches.${cat.id}`, cjson, cat, players, venues, tjson, errs, warns);
+    const ms = info.matches.get(cat.id);
+    if (ms === undefined) continue; // category with no matches entry is valid
+    validateCategory(`${tFile} matches.${cat.id}`, ms, cat, players, venues, tjson, errs, warns);
   }
 
   // ---- venue overlap on unplayed scheduled matches, across ALL categories ----
@@ -137,10 +135,10 @@ function validateTournamentData(slug, indexName, info, errs, warns) {
   // even when starts are more than the default apart.
   const sched = [];
   for (const cat of categories.values()) {
-    const cjson = info.matches.get(cat.id);
-    if (cjson === undefined || typeof cjson !== 'object' || !Array.isArray(cjson.matches)) continue;
-    const ctx = makeCat({ meta: cat, matches: cjson.matches }, tjson);
-    for (const m of cjson.matches) {
+    const ms = info.matches.get(cat.id);
+    if (!Array.isArray(ms)) continue;
+    const ctx = makeCat({ meta: cat, matches: ms }, tjson);
+    for (const m of ms) {
       if (!m || typeof m !== 'object' || m.venue === undefined || m.scheduled === undefined) continue;
       if (isDone(m, ctx)) continue;
       const w = m.scheduled;
@@ -161,11 +159,9 @@ function validateTournamentData(slug, indexName, info, errs, warns) {
   }
 }
 
-function validateCategory(cFile, cjson, cat, players, venues, tjson, errs, warns) {
+function validateCategory(cFile, matches, cat, players, venues, tjson, errs, warns) {
   const err = (f, m) => errs.push(`${f}: ${m}`);
   const warn = (f, m) => warns.push(`${f}: ${m}`);
-  if (typeof cjson !== 'object' || cjson === null) { err(cFile, 'must be an object'); return; }
-  const matches = cjson.matches;
   if (!Array.isArray(matches)) { err(cFile, 'matches must be an array'); return; }
 
   const bestOf = cat.bestOf;

@@ -9,6 +9,8 @@
 // globalThis); in node it's a CommonJS module.
 
 const ID_RE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
+// Local wall time, no offset/Z — the tournament's IANA timezone interprets it.
+const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/;
 
 // Canonical side identity: an unordered player set as a sorted '|'-joined string.
 // The one convention shared by standings (app), pair checks (validate), and the
@@ -431,7 +433,7 @@ function dayKey(t, tz) {
 // instant here, the single derivation point.
 function schedTime(m, tz) {
   const s = m.scheduled || '';
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(s)) return null;
+  if (!ISO_RE.test(s)) return null;
   const t = Date.parse(s + tzOffset(tz, s.slice(0, 10)));
   return Number.isNaN(t) ? null : t;
 }
@@ -509,5 +511,5 @@ function matchLabel(m, ctx) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { ID_RE, pairSig, makeCat, matchSlotMs, bestOfOf, winnerIdx, isDone, isDeadTie, poolStandings, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, dayKey, tzOffset, schedTime, gamesText, fmtDiff, kioskStatus, roundName, koColumn, matchLabel };
+  module.exports = { ID_RE, ISO_RE, pairSig, makeCat, matchSlotMs, bestOfOf, winnerIdx, isDone, isDeadTie, poolStandings, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, dayKey, tzOffset, schedTime, gamesText, fmtDiff, kioskStatus, roundName, koColumn, matchLabel };
 }

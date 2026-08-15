@@ -34,7 +34,7 @@ function repoOf(tourney) {
     index: [{ slug: 'mini', name: 'Mini Open' }],
     tournaments: new Map([['mini', {
       tjson: tourney,
-      matches: new Map(Object.entries(tourney.matches).map(([cid, ms]) => [cid, { matches: ms }])),
+      matches: new Map(Object.entries(tourney.matches)),
     }]]),
   };
 }
@@ -162,7 +162,7 @@ test('knockout false + placements silently ignores placements', () => {
   const { errs } = validateRepo({
     readErrs: [],
     index: [idx],
-    tournaments: new Map([['mini', { tjson: tourney, matches: new Map([['md', { matches: tourney.matches.md }]]) }]]),
+    tournaments: new Map([['mini', { tjson: tourney, matches: new Map([['md', tourney.matches.md]]) }]]),
   });
   assert.deepEqual(errs, []);
   // No knockout — placements is irrelevant

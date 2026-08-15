@@ -31,30 +31,30 @@ function parseGame(s) {
   return mm ? { a: +mm[1], b: +mm[2] } : null;
 }
 
-// Mutate cjson in memory; return an error string or null. Never touches disk —
-// the caller rolls back on validation failure.
-function findMatch(cjson, matchId, fn) {
-  const m = (cjson.matches || []).find(x => x && x.id === Number(matchId));
+// Mutate the category's match list in memory; return an error string or null.
+// Never touches disk — the caller rolls back on validation failure.
+function findMatch(matches, matchId, fn) {
+  const m = (matches || []).find(x => x && x.id === Number(matchId));
   if (!m) return `unknown match ${matchId}`;
   return fn(m) ?? null;
 }
 
-function applyScore(cjson, matchId, games) {
-  return findMatch(cjson, matchId, m => {
+function applyScore(matches, matchId, games) {
+  return findMatch(matches, matchId, m => {
     m.games = games;
     delete m.forfeit; // a correction replaces a forfeit
   });
 }
 
-function applyForfeit(cjson, matchId, sideIdx) {
-  return findMatch(cjson, matchId, m => {
+function applyForfeit(matches, matchId, sideIdx) {
+  return findMatch(matches, matchId, m => {
     m.forfeit = sideIdx;
     delete m.games;
   });
 }
 
-function applyVenue(cjson, matchId, venueId) {
-  return findMatch(cjson, matchId, m => {
+function applyVenue(matches, matchId, venueId) {
+  return findMatch(matches, matchId, m => {
     m.venue = venueId; // unknown venue + court double-booking are caught by validateRepo
   });
 }
@@ -67,15 +67,15 @@ function buildScheduled(hhmm, tz) {
   return `${date}T${h.padStart(2,'0')}:${m}:00`; // wall time — the tournament tz interprets it
 }
 
-function applyTime(cjson, matchId, isoString) {
-  return findMatch(cjson, matchId, m => { m.scheduled = isoString; });
+function applyTime(matches, matchId, isoString) {
+  return findMatch(matches, matchId, m => { m.scheduled = isoString; });
 }
 
 // Replace all knockout matches for a category (no pool) with new ones.
 // Pool matches are preserved.
-function applyRebracket(cjson, newKO) {
-  const pools = cjson.matches.filter(m => m.pool !== undefined);
-  cjson.matches = pools.concat(newKO).sort((a, b) => a.id - b.id);
+function applyRebracket(matches, newKO) {
+  const pools = matches.filter(m => m.pool !== undefined);
+  matches.splice(0, matches.length, ...pools.concat(newKO).sort((a, b) => a.id - b.id));
   return null;
 }
 
@@ -87,20 +87,20 @@ function writeEdit(siteRoot, repo, slug, catId, apply) {
   if (!info || !info.tjson) return { err: `unknown tournament ${slug}` };
   const cats = (info.tjson.categories || []).map(c => c.id);
   if (!cats.includes(catId)) return { err: `unknown category ${catId} — have: ${cats.join(', ')}` };
-  const cjson = info.matches.get(catId);
-  if (!cjson) return { err: `no matches for category ${catId}` };
+  const ms = info.matches.get(catId);
+  if (!ms) return { err: `no matches for category ${catId}` };
   const file = path.join(siteRoot, 'tournaments', `${slug}.json`);
   const before = fs.readFileSync(file, 'utf8');
-  const aerr = apply(cjson);
+  const aerr = apply(ms);
   if (aerr) return { err: aerr };
   const { errs } = validateRepo(repo);
   if (errs.length) {
-    cjson.matches = (JSON.parse(before).matches || {})[catId] || []; // undo the in-memory edit too — a same-process retry must start from the original
+    ms.splice(0, ms.length, ...((JSON.parse(before).matches || {})[catId] || [])); // undo the in-memory edit too — a same-process retry must start from the original
     fs.writeFileSync(file, before);
     return { errs };
   }
   const matches = {};
-  for (const [cid, c] of info.matches) matches[cid] = c.matches;
+  for (const [cid, arr] of info.matches) matches[cid] = arr;
   writeTournament(siteRoot, slug, { ...info.tjson, matches });
   return { file };
 }
@@ -159,14 +159,14 @@ function koCompare(a, b, ctx) {
 function listText(repo, slug, cat) {
   const info = repo.tournaments.get(slug);
   const tjson = info.tjson;
-  const cjson = info.matches.get(cat);
+  const matches = info.matches.get(cat);
   const meta = tjson.categories.find(c => c.id === cat);
-  const ctx = makeCat({ meta, matches: cjson.matches }, tjson);
+  const ctx = makeCat({ meta, matches }, tjson);
   const tz = tjson.timezone || 'UTC';
   const entry = repo.index.find(e => e && e.slug === slug);
   const lines = [`${C.bold((entry && entry.name) || slug)} / ${C.bold(C.cyan(cat))}`];
 
-  const poolIds = [...new Set(cjson.matches.filter(m => m.pool).map(m => m.pool))].sort();
+  const poolIds = [...new Set(matches.filter(m => m.pool).map(m => m.pool))].sort();
   // all pools at once, so column widths align across them (matches do the same)
   const head = ['#', 'Team', 'W', 'L', 'GD', 'PD']; // same headers as the site's standings table
   const tables = [];
@@ -182,7 +182,7 @@ function listText(repo, slug, cat) {
   }
 
   // Flat match listing with stage labels, no section headers
-  const all = cjson.matches.map(m => ({ m, stage: matchLabel(m, ctx) }));
+  const all = matches.map(m => ({ m, stage: matchLabel(m, ctx) }));
   all.sort((a, b) => {
     const pa = a.m.pool !== undefined, pb = b.m.pool !== undefined;
     if (pa !== pb) return pa ? -1 : 1; // pool matches first
@@ -233,8 +233,7 @@ function navigate(state, token) {
 
 // One tournament's line for the category listing: id, name, match counts.
 function catSummary(info, cat) {
-  const cjson = info.matches.get(cat.id);
-  const matches = (cjson && cjson.matches) || [];
+  const matches = info.matches.get(cat.id) || [];
   const ctx = makeCat({ meta: cat, matches }, info.tjson);
   const done = matches.filter(m => isDone(m, ctx)).length;
   const name = C.cyan(cat.name);
@@ -306,8 +305,8 @@ function completer(state) {
       cands = state.slug === null ? [...state.repo.tournaments.keys()]
         : state.cat === null ? (state.repo.tournaments.get(state.slug).tjson.categories || []).map(c => c.id) : [];
     } else if ((verb === 'score' || verb === 'ff' || verb === 'time' || verb === 'venue') && parts.length === 2 && state.cat) {
-      const cjson = state.repo.tournaments.get(state.slug).matches.get(state.cat);
-      cands = cjson ? cjson.matches.map(m => m.id) : [];
+      const arr = state.repo.tournaments.get(state.slug).matches.get(state.cat);
+      cands = arr ? arr.map(m => m.id) : [];
     } else if (verb === 'venue' && parts.length === 3) {
       cands = (state.repo.tournaments.get(state.slug).tjson.venues || []).map(v => v.id);
     }
@@ -421,8 +420,8 @@ function applyAndCommit(state, kind, matchId, apply) {
   if (res.err) return res.err;
   if (res.errs) return res.errs.join('\n') + '\nnot written — validation error(s), file rolled back';
   const info = repo.tournaments.get(slug);
-  const cjson = info.matches.get(cat);
-  const ctx = makeCat({ meta: info.tjson.categories.find(c => c.id === cat), matches: cjson.matches }, info.tjson);
+  const matches = info.matches.get(cat);
+  const ctx = makeCat({ meta: info.tjson.categories.find(c => c.id === cat), matches }, info.tjson);
   const m = ctx.byId.get(Number(matchId));
   const detail = kind === 'score' ? gamesText(m)
     : kind === 'forfeit' ? `side ${m.forfeit}`
@@ -477,11 +476,11 @@ function rebracketCmd(state, dropPlayers) {
   const info = repo.tournaments.get(slug);
   const tjson = info.tjson;
   const catMeta = tjson.categories.find(c => c.id === cat);
-  const cjson = info.matches.get(cat);
-  const ctx = makeCat({ meta: catMeta, matches: cjson.matches }, tjson);
+  const matches = info.matches.get(cat);
+  const ctx = makeCat({ meta: catMeta, matches }, tjson);
 
   // Collect standings per pool, filter out dropouts
-  const poolIds = [...new Set(cjson.matches.filter(m => m.pool).map(m => m.pool))];
+  const poolIds = [...new Set(matches.filter(m => m.pool).map(m => m.pool))];
   if (poolIds.length === 0) return 'no pool matches in this category';
   const dropSet = new Set(dropPlayers);
   const perPool = [];
@@ -499,11 +498,11 @@ function rebracketCmd(state, dropPlayers) {
   if (remainingCount < 2) return 'fewer than 2 teams remain — no knockout possible';
 
   // Reject if any KO match already has a result — rebracket wipes the KO shell
-  const scoredKO = cjson.matches.filter(m => !m.pool && (m.games || m.forfeit !== undefined));
+  const scoredKO = matches.filter(m => !m.pool && (m.games || m.forfeit !== undefined));
   if (scoredKO.length) return `${scoredKO.length} KO match${scoredKO.length === 1 ? ' has' : 'es have'} results — can't rebracket after KO started`;
 
   // Collect existing KO matches and derive properties from them
-  const oldKO = cjson.matches.filter(m => !m.pool).sort((a, b) => a.id - b.id);
+  const oldKO = matches.filter(m => !m.pool).sort((a, b) => a.id - b.id);
 
   // Placement depth from the deepest loser edge: semi -> 4, QF -> 8, R16 -> 16.
   const placements = inferPlacements(oldKO, ctx);

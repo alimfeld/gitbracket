@@ -43,7 +43,7 @@ function readJson(file, errs) {
 }
 
 // Read a site root into memory:
-// { index, tournaments: Map<slug, { tjson, matches: Map<catId, cjson> }>, readErrs }.
+// { index, tournaments: Map<slug, { tjson, matches: Map<catId, match[]> }>, readErrs }.
 // validateRepo() runs every check on this structure; tests build it from fixtures/.
 function loadRepo(siteRoot) {
   const readErrs = [];
@@ -56,7 +56,7 @@ function loadRepo(siteRoot) {
       const tjson = readJson(tfile, readErrs);
       const matches = new Map();
       if (tjson && typeof tjson === 'object' && !Array.isArray(tjson) && tjson.matches && typeof tjson.matches === 'object' && !Array.isArray(tjson.matches)) {
-        for (const [cid, arr] of Object.entries(tjson.matches)) matches.set(cid, { matches: arr });
+        for (const [cid, arr] of Object.entries(tjson.matches)) matches.set(cid, arr);
       }
       tournaments.set(t.slug, { tjson, matches });
     }

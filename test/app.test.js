@@ -339,7 +339,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
         index: repo.index,
         t: repo.index[0],
         tjson: info.tjson,
-        cats: info.tjson.categories.map(c => ({ meta: c, matches: (info.matches.get(c.id) || {}).matches || [] })),
+        cats: info.tjson.categories.map(c => ({ meta: c, matches: info.matches.get(c.id) || [] })),
       },
     };
   };
