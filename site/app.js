@@ -87,7 +87,7 @@ const matchGrid = (ms, ctx) => `<section class="grid">${ms.map(m => matchCard(m,
 const catPills = (cats, slug, base, activeId, dropHref) => cats.map(c => {
   const active = c.id === activeId;
   const href = active ? dropHref : `#${esc(slug)}/${base}/${esc(c.id)}`;
-  return `<a href="${esc(href)}"${active ? ' aria-current="true"' : ''}>${esc(c.id)}</a>`;
+  return `<a href="${esc(href)}"${active ? ' aria-current="true"' : ''}>${esc(c.name)}</a>`;
 }).join('');
 
 function renderIndex(route, data) {
@@ -104,7 +104,7 @@ function renderStandings(route, data) {
   for (const c of data.cats) {
     if (route.filter && c.meta.id !== route.filter) continue; // pills keep every category; only the section list narrows
     const ctx = makeCat(c, data.tjson);
-    parts.push(`<h2>${esc(c.meta.name)} (${esc(c.meta.id)})</h2>`);
+    parts.push(`<h2>${esc(c.meta.name)}</h2>`);
     const byPool = new Map(); // pool -> matches, first-seen order
     for (const m of ctx.matches) {
       if (m && m.pool !== undefined) {
@@ -258,7 +258,7 @@ function renderPlayer(route, data) {
     const pills = catPills(data.tjson.categories || [], data.t.slug, 'players', pid, `#${esc(data.t.slug)}/players`);
     const sel = ctxs.find(c => c.id === pid);
     const items = players.filter(pl => !sel || playerMatches(sel, pl.id).length).map(pl => {
-      const lbls = ctxs.map(c => playerMatches(c, pl.id).length ? `<span class="cat-label">${esc(c.id)}</span>` : '').join('');
+      const lbls = ctxs.map(c => playerMatches(c, pl.id).length ? `<span class="cat-label">${esc(c.name)}</span>` : '').join('');
       const cluster = lbls ? `<span>${lbls}</span>` : '';
       return `<li><a href="#${esc(data.t.slug)}/players/${esc(pl.id)}">${esc(pl.name || pl.id)}</a>${cluster}</li>`;
     }).join('');

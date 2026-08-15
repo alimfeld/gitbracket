@@ -355,7 +355,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   const filtered = renderStandings({ slug: 'sample', view: 'categories', filter: 'md40' }, data);
   assert((filtered.match(/<h2>/g) || []).length === 1 && filtered.includes('Pool A'), 'category filter narrows to one section');
   assert(filtered.includes('#sample/categories/xd'), 'pills still list every category on a filtered page');
-  assert(standings.includes('>md40</a>') && !standings.includes('>Men&#39;s Doubles 40+</a>'), 'standings pills show the plain category id');
+  assert(standings.includes('>Men&#39;s Doubles 40+</a>') && !standings.includes('>md40</a>'), 'standings pills show the category name');
   const venue = renderVenue({ slug: 'sample', view: 'venues' }, data);
   assert(venue.includes('Court 1') && venue.includes('Ada Lovelace'), 'venue page renders venue boards with match rows');
   assert(venue.includes('<article data-status=') && !venue.includes('badge'), 'kiosk card: status rides the article (headline time colored); meta keeps cat · label only');
@@ -366,7 +366,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(late.match(/<span class="delayed">delayed<\/span>/g).length === late.match(/<article data-status="overdue"/g).length, 'every overdue card has the remark, and only overdue cards do');
   assert(venue.includes("Men&#39;s Doubles 40+ · Final") && !venue.includes("Men&#39;s Doubles 40+ · 9 ·"), 'kiosk meta shows the long category name and label, no match id');
   assert(!venue.includes('<nav>'), 'kiosk has no breadcrumb');
-  assert(standings.includes('>Men&#39;s Doubles 40+ (md40)</h2>'), 'category headings append the plain category id');
+  assert(standings.includes('>Men&#39;s Doubles 40+</h2>') && !standings.includes('md40)</h2>'), 'category headings show the category name only');
   const ppage = renderPlayer({ slug: 'sample', view: 'players', filter: 'p1' }, data);
   assert(ppage.includes('<h1>Ada Lovelace</h1>') && !ppage.includes('cat-label'), 'player page: plain name, no category labels');
   assert(ppage.includes('<div class="head"><span>09:00</span><span>Court 1</span></div>'), 'player card headline: time left, court right');
@@ -377,10 +377,10 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(ppage.includes('#sample'), 'player page links the tournament name to standings');
   const picker = renderPlayer({ slug: 'sample', view: 'players' }, data);
   assert(picker.includes('<nav><a href="#">Home</a> > <a href="#sample">Sample</a></nav>'), 'picker breadcrumb: Home > Tournament (Players lives in the h1)');
-  assert(picker.includes('<li><a href="#sample/players/p1">Ada Lovelace</a><span><span class="cat-label">md40</span><span class="cat-label">xd</span></span></li>'), 'picker rows: name link followed by a label cluster');
+  assert(picker.includes('<li><a href="#sample/players/p1">Ada Lovelace</a><span><span class="cat-label">Men&#39;s Doubles 40+</span><span class="cat-label">Mixed Doubles</span></span></li>'), 'picker rows: name link followed by a label cluster');
   assert(picker.includes('<ul class="players">'), 'picker list carries the aligning grid class');
   assert(picker.includes('#sample/players/md40') && picker.includes('#sample/players/xd'), 'picker has the same category pills as standings');
-  assert(picker.includes('>xd</a>'), 'picker pills show the plain category id too');
+  assert(picker.includes('>Mixed Doubles</a>') && !picker.includes('>xd</a>'), 'picker pills show the category name too');
   const pfiltered = renderPlayer({ slug: 'sample', view: 'players', filter: 'md40' }, data);
   assert(pfiltered.includes('<a href="#sample/players" aria-current="true">') && !pfiltered.includes('#sample/players/md40" aria-current'), 'active md40 pill toggles off to the full picker');
   assert(pfiltered.includes('Ada Lovelace'), 'filtered picker still renders the list');
