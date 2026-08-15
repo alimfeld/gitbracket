@@ -1,6 +1,9 @@
 {
   "name": "gitbracket",
   "private": true,
+  "scripts": {
+    "gate": "node gb.js validate && node --test"
+  },
   "devDependencies": {
     "wrangler": "^4.0.0"
   }
