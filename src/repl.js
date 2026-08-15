@@ -363,7 +363,7 @@ function gitPublish(state) {
   // exactly what ships. (publish.main's gate exits the process — unusable here.)
   const { errs } = validateRepo(loadRepo(state.siteRoot));
   if (errs.length) return errs.join('\n') + '\nnot published — validation error(s)';
-  if (ship(state.root) !== 0) return 'not published — see the surge output above';
+  if (ship(state.root) !== 0) return 'not published — see the output above';
   git(state.root, ['update-ref', 'refs/gb/last-publish', 'HEAD']);
   return 'published';
 }

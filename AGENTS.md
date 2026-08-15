@@ -6,9 +6,11 @@ details. When docs and code disagree, code wins.
 ## Architectural principles
 
 - **Write is edit, ship is publish.** No server, no accounts — git is the
-  record, not the transport: only `gb.js publish` ships, uploading `site/` to
-  the domain in `site/CNAME`. One director publishes; git stays the audit
-  trail and the rollback.
+  record, not the transport: only `gb.js publish` ships, from `main`, uploading
+  `site/` to the domain in `site/CNAME`. One director publishes; git stays the
+  audit trail and the rollback. TESTING.md's probe recipes are push-proof by
+  construction — no remote, scratch domain committed, and the main-only
+  publish guard in `src/publish.js`.
 - **derive.js is the single source of the site's domain model.** Validator, REPL,
   generator, and renderers all consume it — extend it, never reimplement the
   model elsewhere. The integrity gate must not depend on renderer code.

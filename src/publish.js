@@ -17,7 +17,16 @@ function main(root) {
 
 // Upload site/ to the domain in site/CNAME. Split from main so the REPL's
 // publish command can ship without validate.main's process.exit.
+// Ships only from main: makes the TESTING.md branch/probe recipes harmless
+// even when the probe goes wrong — a scratch checkout can't reach the live
+// domain by accident.
 function ship(root) {
+  const b = spawnSync('git', ['symbolic-ref', '--short', 'HEAD'], { cwd: root, encoding: 'utf8' });
+  const branch = (b.status === 0 ? b.stdout : '').trim();
+  if (branch !== 'main') {
+    console.error(`publish: will not ship from ${branch ? `branch ${branch}` : 'a detached HEAD'} — checkout main first`);
+    return 1;
+  }
   // surge ≥0.43: `surge <path> publish` reads the domain from site/CNAME.
   const r = spawnSync('surge', ['site/', 'publish'], { cwd: root, stdio: 'inherit' });
   if (r.error) {

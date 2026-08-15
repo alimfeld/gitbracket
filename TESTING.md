@@ -1,68 +1,61 @@
 # Testing against a live deployment
 
 Test kiosk behaviour, CDN latency, 304 caching, and polling against a real
-deployment — without touching the production live domain. Two recipes: the
-branch recipe covers everything except real CDN behaviour; the scratch-domain
-recipe covers that.
+deployment — without touching the production live domain.
 
-## Everything else: a branch and a local server
+Two recipes:
+- **Branch + local server** — everything except real CDN answers (latency, 304s, HTTPS).
+- **Scratch clone + throwaway surge domain** — real CDN behaviour.
 
-Work on a branch in your own checkout and serve the static site from your
-machine. Rendering, the kiosk poll, and the REPL edit → commit → push flow
-all work here — it skips only what a real deployment answers: CDN latency,
-304 revalidation, HTTPS.
+Both are push-proof by construction: `gb.js publish` only ships from `main`;
+the probe has no git remote; and its scratch domain is committed, so git ops
+can't restore the production CNAME.
+
+## Everything except CDN: a branch and a local server
+
+Serve `site/` locally on a branch. Nothing here pushes, and publish refuses
+off `main`.
 
 ```bash
 # ── setup (one time) ──
 git checkout -b test
-python3 -m http.server 8000 --directory site   # serve the same files surge serves
+python3 -m http.server 8000 --directory site   # same files surge serves
 # open http://localhost:8000
-git push -u origin test            # once — the upstream the REPL's push needs
 
-# ── iterate (as many times as needed) ──
-node gb.js               # edit scores → commits land on the branch; the
-                         # REPL's `push` pushes them to the branch
-# reload the tab; the kiosk's poll picks changes up by itself
+# ── iterate ──
+node gb.js               # edits commit locally; nothing ships off main
+# reload — the kiosk poll picks changes up by itself
 
-# ── cleanup (or keep it) ──
-git checkout main
-git branch -d test
-git push origin --delete test
+# ── cleanup ──
+git checkout main && git branch -d test
 ```
 
-The branch is the testing boundary: `gb.js publish` ships whatever checkout
-you run it from to the live domain — so never publish from the test branch.
-Local serving matches the deployed app — same files, same relative fetches
-(`cache: no-cache`, so reloads are fresh).
+To get test-branch changes out, merge to `main` first; the director
+publishes. Local serving matches the deployed app — same files, same relative
+fetches (`cache: no-cache`, so reloads are fresh).
 
-Use the scratch-domain recipe below for real CDN answers, this one for
-everything else.
+## Real CDN: a scratch clone on its own surge domain
 
-## CDN behaviour: a scratch clone, its own surge domain
-
-The live domain lives in `site/CNAME`, so a throwaway domain is a one-line
-edit in a scratch clone: publish from the probe, hit real CDN cache/304/HTTPS
-behaviour there, delete the clone and the domain is gone. Production's
-domain is never touched.
+Clone, swap `site/CNAME` for a throwaway domain, publish from the probe,
+teardown, delete.
 
 ```bash
 # ── setup (one time) ──
-git fetch origin main
 git clone "https://github.com/$(gh api user -q .login)/gitbracket.git" /tmp/gitbracket-probe
 cd /tmp/gitbracket-probe
-echo probe-$(date +%s).surge.sh > site/CNAME   # a fresh throwaway domain
+git remote remove origin              # no remote → no push can leave
+echo probe-$(date +%s).surge.sh > site/CNAME   # throwaway domain
+git commit -am "probe: scratch surge domain"   # committed → git ops can't restore the live one
 
-# ── iterate (as many times as needed) ──
-node gb.js               # edit scores → committed locally by the REPL
-node gb.js publish       # ships only the probe domain (validate gate)
+# ── iterate ──
+node gb.js         # edit scores → committed locally
+node gb.js publish # ships only the probe domain (main branch, validate gate)
 # open https://$(cat site/CNAME) — CDN latency, 304s, HTTPS
 
 # ── cleanup (zero trace) ──
-rm -rf /tmp/gitbracket-probe   # deleting the clone retires the domain
+surge teardown "$(cat site/CNAME)"   # stays hosted until torn down — rm -rf alone leaks it
+rm -rf /tmp/gitbracket-probe
 ```
-
-The probe's origin is the production repo, so never run the REPL's `push`
-here — the REPL's commits stay local and die with the clone.
 
 ## Prerequisites
 
