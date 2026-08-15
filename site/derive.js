@@ -385,6 +385,9 @@ function plRange(m, ctx, memo) {
 // edge branches from, for placement labels. matchRound can't do this — a bye'd
 // semi fed by pool slots has leaf-depth 0 yet sits one round below the final,
 // and a wrong d mislabels the bronze match as a classification round.
+// koColumn walks the same winner chain but must NOT be reused here: plRange
+// calls this during koColumn's final-detection, while its memo is mid-build —
+// koColumn would answer with its in-progress -1 guard and corrupt rank ranges.
 function winnerDepth(ctx, id, memo = new Map()) {
   if (memo.has(id)) return memo.get(id);
   memo.set(id, -1); // in-progress guard, same as matchRound

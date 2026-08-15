@@ -266,8 +266,8 @@ function renderPlayer(route, data) {
   const rows = [];
   const ctxs = catCtxs(data);
   for (const ctx of ctxs) {
-    for (const { m, i, team } of playerMatches(ctx, pid)) {
-      rows.push({ m, ctx, i, team, partner: [...team].filter(id => id !== pid) });
+    for (const { m } of playerMatches(ctx, pid)) {
+      rows.push({ m, ctx });
     }
   }
   rows.sort((a, b) => (schedTime(a.m, a.ctx.tz) ?? Infinity) - (schedTime(b.m, b.ctx.tz) ?? Infinity));

@@ -13,27 +13,6 @@ const { makeCat } = require('../site/derive.js');
 const repl = require('../src/repl.js');
 const { FIX, hasErr } = require('./helpers.js');
 
-// scorable = both sides resolve to players; the validator's rule, exposed so
-// `ls` and the guard on scored matches share one definition.
-test('repl isScorable: resolved sides only', () => {
-  const repo = loadRepo(FIX('sample'));
-  const info = repo.tournaments.get('sample');
-  const ctx = makeCat({ meta: info.tjson.categories.find(c => c.id === 'md40'), matches: info.matches.get('md40').matches }, info.tjson);
-  assert(repl.isScorable(ctx.byId.get(1), ctx), '1: two players sides — scorable');
-  assert(repl.isScorable(ctx.byId.get(7), ctx), '7: forfeit, two resolved pool slots — scorable');
-  assert(repl.isScorable(ctx.byId.get(8), ctx), '8: two resolved pool slots, in play — scorable');
-  assert(!repl.isScorable(ctx.byId.get(9), ctx), '9: winner of in-play 8 — not scorable');
-  assert(!repl.isScorable(ctx.byId.get(10), ctx), '10: loser of in-play 8 — not scorable');
-});
-
-test('repl listEligible: pools + resolved slots, never match-slot feeders', () => {
-  const repo = loadRepo(FIX('sample'));
-  const rows = repl.listEligible(repo, 'sample').filter(r => r.cat === 'md40');
-  assert(rows.length === 8, `expected 8 scorable in sample md40 (got ${rows.length})`);
-  const ids = rows.map(r => r.m.id);
-  assert(!ids.includes('9') && !ids.includes('10'), 'feeder matches stay unlisted until their slots resolve');
-});
-
 test('repl applyScore: sets games, clears a forfeit, repo still validates', () => {
   const repo = loadRepo(FIX('sample'));
   const cjson = repo.tournaments.get('sample').matches.get('md40');

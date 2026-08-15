@@ -7,7 +7,7 @@
 
 const path = require('path');
 const { loadRepo, isRealDate, slotsOverlap } = require('./tools.js');
-const { ID_RE, pairSig, matchSlotMs, makeCat, isDone, poolStandings, resolveSide, isDeadTie, bestOfOf, tzOffset } = require('../site/derive.js');
+const { ID_RE, pairSig, matchSlotMs, makeCat, isDone, poolStandings, resolveSide, isDeadTie, bestOfOf, schedTime, tzOffset } = require('../site/derive.js');
 
 // Local wall time, no offset/Z — the tournament's IANA timezone interprets it.
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/;
@@ -287,9 +287,8 @@ function validateCategory(cFile, cjson, cat, players, venues, tjson, errs, warns
       err(where, `scheduled ${JSON.stringify(s)} must be local ISO-8601 wall time, e.g. 2025-07-14T09:00:00 — no offset or Z, the tournament timezone interprets it`);
       return;
     }
-    // Local wall time parses machine-locally; anchor it in the tournament tz
-    // like the site does, so the check is the same everywhere.
-    if (Number.isNaN(Date.parse(s + tzOffset(tjson.timezone, s.slice(0, 10))))) err(where, `scheduled ${s} does not parse as an instant`);
+    // Anchor in the tournament tz via schedTime — the one derivation, same as the site.
+    if (schedTime({ scheduled: s }, tjson.timezone) === null) err(where, `scheduled ${s} does not parse as an instant`);
     const hh = Number(s.slice(11, 13)); // Date.parse rolls 24:00 over to the next day; catch it
     if (hh > 23) err(where, `scheduled ${s} has hour ${hh} — hours run 00-23`);
     // Date.parse rolls over impossible calendar dates (2025-02-30 -> Mar 2); catch them.

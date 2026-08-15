@@ -18,18 +18,13 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const { spawnSync } = require('child_process');
-const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, gamesText, fmtTime, matchLabel, koColumn, placementLabel, poolStandings, matchSlotMs, fmtDiff, bestOfOf, dayKey } = require('../site/derive.js');
+const { makeCat, isDone, sideLabel, teamLabel, schedTime, gamesText, fmtTime, matchLabel, koColumn, placementLabel, poolStandings, matchSlotMs, fmtDiff, bestOfOf, dayKey } = require('../site/derive.js');
 const { loadRepo, writeTournament } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 const { buildKnockout } = require('./schedule.js');
 const { ship } = require('./publish.js');
 
 // ---------- pure logic (tests drive these on fixture repos) ----------
-
-function isScorable(m, ctx) {
-  return !!m && Array.isArray(m.sides) && m.sides.length === 2
-    && !!resolveSide(m.sides[0], ctx) && !!resolveSide(m.sides[1], ctx);
-}
 
 function parseGame(s) {
   const mm = /^(\d+)[:-](\d+)$/.exec(s);
@@ -82,25 +77,6 @@ function applyRebracket(cjson, newKO) {
   const pools = cjson.matches.filter(m => m.pool !== undefined);
   cjson.matches = pools.concat(newKO).sort((a, b) => a.id - b.id);
   return null;
-}
-
-// Every scorable match in the tournament: ready (no result) first, then by
-// scheduled time, then id.
-function listEligible(repo, slug) {
-  const info = repo.tournaments.get(slug);
-  if (!info || !info.tjson) return null;
-  const rows = [];
-  for (const cat of info.tjson.categories || []) {
-    const cjson = info.matches.get(cat.id);
-    if (!cjson) continue;
-    const ctx = makeCat({ meta: cat, matches: cjson.matches }, info.tjson);
-    for (const m of cjson.matches) {
-      if (isScorable(m, ctx)) rows.push({ cat: cat.id, m, ctx });
-    }
-  }
-  const t = r => schedTime(r.m, r.ctx.tz) ?? Infinity; // unscheduled matches sort last
-  rows.sort((a, b) => isDone(a.m, a.ctx) - isDone(b.m, b.ctx) || t(a) - t(b) || a.m.id - b.m.id);
-  return rows;
 }
 
 // Apply an edit to one match, validate the whole repo, write — or roll the file
@@ -675,4 +651,4 @@ function main(root) {
   replMain(root, siteRoot, repo);
 }
 
-module.exports = { isScorable, parseGame, buildScheduled, applyScore, applyForfeit, applyVenue, applyTime, applyRebracket, listEligible, writeEdit, commitMessage, parseCmd, navigate, main, inferPlacements, koCompare };
+module.exports = { parseGame, buildScheduled, applyScore, applyForfeit, applyVenue, applyTime, applyRebracket, writeEdit, commitMessage, parseCmd, navigate, main, inferPlacements, koCompare };
