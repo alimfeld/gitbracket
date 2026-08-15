@@ -9,9 +9,10 @@
 // command — the first word is always a verb, so targets (slugs, categories,
 // matches) only ever appear as cd/score args and can't collide with commands.
 // Every successful edit is validated (the real validateRepo) and committed
-// immediately. publish ships site/ (validate gate, then surge) and records the
-// published HEAD in refs/gb/last-publish. The prompt shows: ↑n commits since
-// last publish, ↓n behind upstream, * dirty tree. Tab completes at every level.
+// immediately. publish ships site/ (validate gate, then surge). The prompt
+// shows git facts only: ↑n = commits not on origin/main, ↓n = commits on
+// origin/main not local, * = dirty tree. status also compares the current
+// tournament's file against the live domain. Tab completes at every level.
 
 const fs = require('fs');
 const path = require('path');
@@ -275,16 +276,17 @@ function git(root, args) {
 }
 
 function syncSuffix(root) {
-  // unpublished = commits since the last publish (refs/gb/last-publish, written
-  // by publish); behind = commits others pushed upstream. Before the first
-  // publish there is no ref — the indicator is simply unavailable.
-  const unpub = git(root, ['rev-list', '--count', 'refs/gb/last-publish..HEAD']);
-  const behind = git(root, ['rev-list', '--count', 'HEAD..@{u}']);
-  if (unpub.code || behind.code) return '';
+  // Git facts only — the prompt must not depend on how publishing happened
+  // (gb.js publish, plain surge, CI) or on a remote being reachable. ↑ = commits
+  // not on origin/main (unshared, the thing you'd ship), ↓ = commits on
+  // origin/main you don't have. Each indicator grades independently: a missing
+  // remote silences only the one that needs it, never the others.
+  const ahead = git(root, ['rev-list', '--count', 'origin/main..HEAD']);
+  const behind = git(root, ['rev-list', '--count', 'HEAD..origin/main']);
   const dirty = git(root, ['status', '--porcelain']);
   let s = '';
-  if (unpub.out.trim() !== '0') s += ` ↑${unpub.out.trim()}`;
-  if (behind.out.trim() !== '0') s += ` ↓${behind.out.trim()}`;
+  if (ahead.code === 0 && ahead.out.trim() !== '0') s += ` ↑${ahead.out.trim()}`;
+  if (behind.code === 0 && behind.out.trim() !== '0') s += ` ↓${behind.out.trim()}`;
   if (dirty.code === 0 && dirty.out.length) s += ' *';
   return s;
 }
@@ -307,7 +309,7 @@ ${C.bold('score & manage (inside a category):')}
 ${C.bold('sync (every edit commits itself):')}
   publish  pull  status  validate
 
-${C.dim('prompt: ↑n = n commits since last publish, ↓n = n behind upstream, * = dirty tree. Tab completes.')}`;
+${C.dim('prompt: ↑n = n commits not on origin/main, ↓n = n on origin/main not local, * = dirty tree. Tab completes.')}`;
 }
 
 function makePrompt(state) {
@@ -364,7 +366,6 @@ function gitPublish(state) {
   const { errs } = validateRepo(loadRepo(state.siteRoot));
   if (errs.length) return errs.join('\n') + '\nnot published — validation error(s)';
   if (ship(state.root) !== 0) return 'not published — see the output above';
-  git(state.root, ['update-ref', 'refs/gb/last-publish', 'HEAD']);
   return 'published';
 }
 
@@ -385,6 +386,34 @@ function gitPull(state) {
 
 function gitStatus(root) {
   return git(root, ['status', '-sb']).out.trim() || '(clean)';
+}
+
+// Compare the one file this session edits — tournaments/<slug>.json — with
+// what the live domain serves, so `status` answers "is what I have what's
+// live?" without assuming how it got there (gb.js publish, plain surge, CI —
+// all invisible here, all covered). The file is a few KB, so a GET + text
+// compare is the whole check; no host-specific headers. Offline is "unknown",
+// never "stale" or "current". Thin shell, not unit-tested (network).
+async function liveStatus(state) {
+  if (state.slug === null) return ''; // no single tournament file at root
+  const domain = fs.readFileSync(path.join(state.siteRoot, 'CNAME'), 'utf8').trim();
+  const rel = `tournaments/${state.slug}.json`;
+  let body;
+  try {
+    const res = await fetch(`https://${domain}/${rel}`, { signal: AbortSignal.timeout(3000) });
+    if (!res.ok) return `live: HTTP ${res.status} for /${rel}`;
+    body = await res.text();
+  } catch {
+    return `live: can't reach ${domain} (offline — unknown)`;
+  }
+  if (body === fs.readFileSync(path.join(state.siteRoot, rel), 'utf8')) return `live: ${state.slug} is current`;
+  return `live: ${rel} differs — publish to converge`;
+}
+
+async function statusCmd(state) {
+  const live = await liveStatus(state);
+  const s = gitStatus(state.root);
+  return live ? `${s}\n${live}` : s;
 }
 
 // ---------- shallow ANSI paint (TTY only — piped output stays plain) ----------
@@ -599,7 +628,7 @@ function dispatch(kind, args, state) {
   }
   if (kind === 'publish') return gitPublish(state);
   if (kind === 'pull') return gitPull(state);
-  if (kind === 'status') return gitStatus(state.root);
+  if (kind === 'status') return statusCmd(state);
   if (kind === 'validate') return validateText(state.repo);
   if (kind === 'help') return helpText();
 }
@@ -615,12 +644,12 @@ function replMain(root, siteRoot, repo) {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout, completer: completer(state), historySize: 500 });
   const show = () => { rl.setPrompt(makePrompt(state)); rl.prompt(); };
   console.log(C.dim('gitbracket — tab completes, help for commands, q to quit'));
-  rl.on('line', line => {
+  rl.on('line', async line => {
     const t = line.trim();
     if (!t) console.log(paint(listing(state)));
     else {
       const { kind, args } = parseCmd(t);
-      if (kind === 'q') { rl.close(); return; }
+      if (kind === 'q') { state.quit = true; rl.close(); return; }
       if (kind === 'unknown') {
         const word = t.split(/\s+/)[0];
         const info = state.slug ? state.repo.tournaments.get(state.slug) : null;
@@ -628,12 +657,13 @@ function replMain(root, siteRoot, repo) {
           : state.cat === null && info && (info.tjson.categories || []).some(c => c.id === word);
         console.log(paint(`unknown command ${word}${target ? ` — did you mean cd ${word}?` : ''} — help`));
       } else {
-        console.log(paint(dispatch(kind, args, state)));
+        console.log(paint(await dispatch(kind, args, state)));
       }
     }
+    if (state.quit) return; // q/EOF landed while this async command was in flight
     show();
   });
-  rl.on('close', () => { console.log(C.dim('bye')); });
+  rl.on('close', () => { state.quit = true; console.log(C.dim('bye')); });
   show();
 }
 
