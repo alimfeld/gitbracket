@@ -88,7 +88,7 @@ is the whole server.
 
 Local serving matches the deployed app — same files, same relative fetches
 (`cache: no-cache`, so reloads are fresh). It skips only what a real
-deployment answers: CDN latency, 304 revalidation, HTTPS, `?v=` stamping.
+deployment answers: CDN latency, 304 revalidation, HTTPS.
 Use the Pages recipe for those, this one for everything else.
 
 ## Prerequisites

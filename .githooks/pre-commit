@@ -1,8 +1,7 @@
 #!/bin/sh
 # Run the validator + test suite before every commit: the hook is the fast
 # local gate, the Pages workflow re-runs both on every push, so a bypassed
-# hook can't ship. Asset version tokens (?v=) are stamped by the deploy
-# workflow, not here — the hook never rewrites the tree.
+# hook can't ship.
 set -e
 cd "$(git rev-parse --show-toplevel)"
 node gb.js validate || exit 1

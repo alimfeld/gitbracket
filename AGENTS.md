@@ -36,8 +36,6 @@ details. When docs and code disagree, code wins.
 - **Repo-sourced strings render as text, never HTML.**
 - **Minimal diffs.** Data edits stay byte-identical apart from the change, so
   a commit diff shows only the edit.
-- **Never stamp `?v=` manually, never commit stamped URLs** — the deploy
-  workflow stamps them.
 - **Mark deliberate shortcuts** with a `ponytail:` comment naming the ceiling
   and the upgrade path.
 
