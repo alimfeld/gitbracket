@@ -18,10 +18,9 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const { spawnSync } = require('child_process');
-const { makeCat, isDone, sideLabel, teamLabel, schedTime, gamesText, fmtTime, matchLabel, koColumn, placementLabel, poolStandings, matchSlotMs, fmtDiff, bestOfOf, dayKey } = require('../site/derive.js');
+const { makeCat, isDone, sideLabel, teamLabel, schedTime, gamesText, fmtTime, matchLabel, koColumn, placementLabel, poolStandings, fmtDiff, bestOfOf, countWins, sideLetter, otherSide, dayKey } = require('../site/derive.js');
 const { loadRepo, writeTournament } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
-const { buildKnockout } = require('./schedule.js');
 const { ship } = require('./publish.js');
 
 // ---------- pure logic (tests drive these on fixture repos) ----------
@@ -39,17 +38,33 @@ function findMatch(matches, matchId, fn) {
   return fn(m) ?? null;
 }
 
-function applyScore(matches, matchId, games) {
+// Score a match: games are the evidence, and once they reach the best-of
+// target the outcome is recorded as played (winner stored, per the model — the
+// validator proves the games agree). A prefix update (games below target)
+// stays in play; re-scoring replaces any earlier result.
+function applyScore(matches, matchId, games, ctx) {
   return findMatch(matches, matchId, m => {
     m.games = games;
-    delete m.forfeit; // a correction replaces a forfeit
+    delete m.result; // a correction replaces a result
+    const b = bestOfOf(m, ctx);
+    if (typeof b === 'number' && b % 2 === 1) {
+      const target = (b + 1) / 2;
+      const [w0, w1] = countWins(games);
+      if (w0 >= target || w1 >= target) m.result = { status: 'played', winner: sideLetter(w0 >= target ? 0 : 1) };
+    }
+    return null;
   });
 }
 
-function applyForfeit(matches, matchId, sideIdx) {
+// Record a result that isn't a played score: walkover names the side that
+// gives the match away (winner = the other side); void settles a match
+// nobody plays (both sides out) — no winner, nothing counts. Any games are
+// cleared, keeping games/result exclusivity a round-trip property.
+function applyResult(matches, matchId, status, loser) {
   return findMatch(matches, matchId, m => {
-    m.forfeit = sideIdx;
     delete m.games;
+    m.result = loser === undefined ? { status } : { status, winner: otherSide(loser) };
+    return null;
   });
 }
 
@@ -71,17 +86,12 @@ function applyTime(matches, matchId, isoString) {
   return findMatch(matches, matchId, m => { m.scheduled = isoString; });
 }
 
-// Replace all knockout matches for a category (no pool) with new ones.
-// Pool matches are preserved.
-function applyRebracket(matches, newKO) {
-  const pools = matches.filter(m => m.pool !== undefined);
-  matches.splice(0, matches.length, ...pools.concat(newKO).sort((a, b) => a.id - b.id));
-  return null;
-}
+
 
 // Apply an edit to one match, validate the whole repo, write — or roll the file
 // back and report the validator's errors. (writeTournament's byte-identical
-// formatting keeps the commit diff to the one edited match.)
+// formatting keeps the commit diff to the one edited match.) apply receives
+// the category context so score can read the best-of target.
 function writeEdit(siteRoot, repo, slug, catId, apply) {
   const info = repo.tournaments.get(slug);
   if (!info || !info.tjson) return { err: `unknown tournament ${slug}` };
@@ -89,9 +99,11 @@ function writeEdit(siteRoot, repo, slug, catId, apply) {
   if (!cats.includes(catId)) return { err: `unknown category ${catId} — have: ${cats.join(', ')}` };
   const ms = info.matches.get(catId);
   if (!ms) return { err: `no matches for category ${catId}` };
+  const meta = info.tjson.categories.find(c => c.id === catId);
+  const ctx = makeCat({ meta, matches: ms }, info.tjson);
   const file = path.join(siteRoot, 'tournaments', `${slug}.json`);
   const before = fs.readFileSync(file, 'utf8');
-  const aerr = apply(ms);
+  const aerr = apply(ms, ctx);
   if (aerr) return { err: aerr };
   const { errs } = validateRepo(repo);
   if (errs.length) {
@@ -113,33 +125,15 @@ function formatMatchLine(m, ctx, tz, stage, sidew, idw, venuew, stagew) {
   // slot shape = best-of, same as the cards: real games render, the rest are ·
   const parts = (m.games || []).map(g => `${g.a}-${g.b}`);
   while (parts.length < (bestOfOf(m, ctx) || 1)) parts.push('·');
-  const score = m.forfeit !== undefined ? C.yellow(`forfeit ${m.forfeit}`) : C.green(parts.join(' '));
+  const r = m.result;
+  const score = !r || r.status === 'played' ? C.green(parts.join(' '))
+    : C.yellow(r.status === 'void' ? 'void' : `W/O side ${otherSide(r.winner)}`);
   const s0 = sideLabel(m.sides[0], ctx);
   const s1 = sideLabel(m.sides[1], ctx);
   const sides = s0 + C.dim(' vs ') + s1;
   const sidePad = sidew !== undefined ? ' '.repeat(Math.max(0, sidew - (s0.length + 4 + s1.length))) : '';
   const stagePad = stagew !== undefined ? ' '.repeat(Math.max(0, stagew - stage.length)) : '';
   return `${C.bold(idw ? String(m.id).padEnd(idw) : m.id)}  ${C.dim(stage)}${stagePad}  ${sides}${sidePad}  ${time}  ${venue}  ${score}`;
-}
-
-// Placement depth of an existing bracket: a loser edge from a round at
-// winner-depth d (koColumn: 2^d participants) opens the loser range up to
-// 2^(d+1) ranks — semi -> 4 (bronze), QF -> 8 (5th-8th), R16 -> 16. No loser
-// edges at all means no placement play-off (a 2-team final only). The old
-// loser-edge-count heuristic capped out at 8 and re-inferred a 16-rank
-// bracket as an 8-rank one, silently dropping the 9th-16th matches.
-function inferPlacements(oldKO, ctx) {
-  let p = 2;
-  for (const m of oldKO) {
-    if (!m || !Array.isArray(m.sides)) continue;
-    for (const s of m.sides) {
-      if (s && s.kind === 'match' && s.result === 'loser') {
-        const X = ctx.byId.get(s.match);
-        if (X) p = Math.max(p, 2 ** (koColumn(X, ctx) + 1));
-      }
-    }
-  }
-  return p;
 }
 
 // KO listing order: earlier round first (higher column), then placement
@@ -207,7 +201,7 @@ function commitMessage(kind, slug, cat, matchId, detail) {
   return `${kind}(${slug}): ${cat}/${matchId} ${detail}`;
 }
 
-const VERBS = ['ls', 'cd', 'q', 'help', 'score', 'ff', 'time', 'venue', 'rebracket', 'publish', 'pull', 'status', 'validate'];
+const VERBS = ['ls', 'cd', 'q', 'help', 'score', 'wo', 'void', 'time', 'venue', 'publish', 'pull', 'status', 'validate'];
 
 // Any line is <verb> <args> — the first word is always a command.
 function parseCmd(line) {
@@ -276,10 +270,11 @@ function helpText() {
 
 ${C.bold('score & manage (inside a category):')}
   score <match> <a:b> [a:b …]   set games — a prefix is a mid-match update, re-score corrects
-  ff <match> <0|1>              forfeit: side 0 or 1 forfeits
+  wo <match> <a|b>              walkover: side a or b walks over — a player out: wo every
+                                remaining match of their team, the bracket self-heals
+  void <match>                  void: no winner, nothing counts (both sides out)
   venue <match> <venue>         move a match to another court
   time <match> <hh:mm>          shift a match to another time today
-  rebracket <player> […]        rebuild KO omitting teams; placements/slots from existing bracket
 
 ${C.bold('sync (every edit commits itself):')}
   publish  pull  status  validate
@@ -304,7 +299,7 @@ function completer(state) {
     else if (verb === 'cd') {
       cands = state.slug === null ? [...state.repo.tournaments.keys()]
         : state.cat === null ? (state.repo.tournaments.get(state.slug).tjson.categories || []).map(c => c.id) : [];
-    } else if ((verb === 'score' || verb === 'ff' || verb === 'time' || verb === 'venue') && parts.length === 2 && state.cat) {
+    } else if ((verb === 'score' || verb === 'wo' || verb === 'void' || verb === 'time' || verb === 'venue') && parts.length === 2 && state.cat) {
       const arr = state.repo.tournaments.get(state.slug).matches.get(state.cat);
       cands = arr ? arr.map(m => m.id) : [];
     } else if (verb === 'venue' && parts.length === 3) {
@@ -423,8 +418,9 @@ function applyAndCommit(state, kind, matchId, apply) {
   const matches = info.matches.get(cat);
   const ctx = makeCat({ meta: info.tjson.categories.find(c => c.id === cat), matches }, info.tjson);
   const m = ctx.byId.get(Number(matchId));
+  const r = m.result;
   const detail = kind === 'score' ? gamesText(m)
-    : kind === 'forfeit' ? `side ${m.forfeit}`
+    : r ? (r.status === 'void' ? 'void' : `side ${otherSide(r.winner)} walks over`)
     : kind === 'time' ? `→ ${m.scheduled}`
     : `→ ${m.venue}`;
   const msg = commitMessage(kind, slug, cat, matchId, detail);
@@ -432,8 +428,9 @@ function applyAndCommit(state, kind, matchId, apply) {
   const c = git(root, ['commit', '-m', msg]);
   if (c.code !== 0) return `wrote ${path.relative(root, res.file)} but the commit failed:\n${c.err}\n(file staged — commit it manually)`;
   const sha = git(root, ['rev-parse', '--short', 'HEAD']).out.trim();
-  const sum = m.forfeit !== undefined
-    ? `${cat}/${matchId} → side ${m.forfeit} forfeits — side ${1 - m.forfeit} wins`
+  const sum = r
+    ? r.status === 'void' ? `${cat}/${matchId} → void`
+      : `${cat}/${matchId} → side ${otherSide(r.winner)} walks over — side ${r.winner} wins`
     : kind === 'time' ? `${cat}/${matchId} → ${m.scheduled}`
     : `${cat}/${matchId} → ${gamesText(m)}${isDone(m, ctx) ? ' — done' : ''}`;
   return `${sum}\ncommitted ${sha}: ${msg}`;
@@ -446,14 +443,18 @@ function editCmd(state, kind, args) {
     const games = tokens.map(parseGame);
     const bad = tokens.findIndex((t, i) => !games[i]);
     if (bad !== -1) return `bad score ${JSON.stringify(tokens[bad])} — expected a:b, e.g. 11:9`;
-    return applyAndCommit(state, 'score', matchId, c => applyScore(c, matchId, games));
+    return applyAndCommit(state, 'score', matchId, (c, ctx) => applyScore(c, matchId, games, ctx));
   }
-  if (kind === 'ff') {
+  if (kind === 'wo') {
     const [matchId, side] = args;
-    const idx = Number(side);
-    if (!matchId || side === undefined) return 'usage: ff <match> <0|1>';
-    if (!Number.isInteger(idx) || (idx !== 0 && idx !== 1)) return 'forfeit side must be 0 or 1';
-    return applyAndCommit(state, 'forfeit', matchId, c => applyForfeit(c, matchId, idx));
+    if (!matchId || side === undefined) return 'usage: wo <match> <a|b>';
+    if (side !== 'a' && side !== 'b') return 'side must be a or b';
+    return applyAndCommit(state, 'walkover', matchId, c => applyResult(c, matchId, 'walkover', side));
+  }
+  if (kind === 'void') {
+    const [matchId] = args;
+    if (!matchId) return 'usage: void <match>';
+    return applyAndCommit(state, 'void', matchId, c => applyResult(c, matchId, 'void'));
   }
   if (kind === 'venue') {
     const [matchId, venueId] = args;
@@ -470,118 +471,6 @@ function editCmd(state, kind, args) {
   }
 }
 
-function rebracketCmd(state, dropPlayers) {
-  if (state.cat === null) return 'cd into a category first';
-  const { root, siteRoot, repo, slug, cat } = state;
-  const info = repo.tournaments.get(slug);
-  const tjson = info.tjson;
-  const catMeta = tjson.categories.find(c => c.id === cat);
-  const matches = info.matches.get(cat);
-  const ctx = makeCat({ meta: catMeta, matches }, tjson);
-
-  // Collect standings per pool, filter out dropouts
-  const poolIds = [...new Set(matches.filter(m => m.pool).map(m => m.pool))];
-  if (poolIds.length === 0) return 'no pool matches in this category';
-  const dropSet = new Set(dropPlayers);
-  const perPool = [];
-  let dropped = false, remainingCount = 0;
-  for (const pid of poolIds) {
-    const st = poolStandings(ctx, pid);
-    if (!st) return `pool ${pid} not fully decided — score/forfeit all pool matches first`;
-    const kept = st.filter(r => ![...r.ids].some(id => dropSet.has(id)));
-    if (kept.length !== st.length) dropped = true;
-    if (kept.length === 0 && poolIds.length > 1) return `pool ${pid} would be empty — dropping leaves a pool with no teams`;
-    remainingCount += kept.length;
-    perPool.push({ pool: pid, teams: kept.map(r => [...r.ids]) });
-  }
-  if (!dropped) return `no team contains ${dropPlayers.join(', ')} — check player IDs`;
-  if (remainingCount < 2) return 'fewer than 2 teams remain — no knockout possible';
-
-  // Reject if any KO match already has a result — rebracket wipes the KO shell
-  const scoredKO = matches.filter(m => !m.pool && (m.games || m.forfeit !== undefined));
-  if (scoredKO.length) return `${scoredKO.length} KO match${scoredKO.length === 1 ? ' has' : 'es have'} results — can't rebracket after KO started`;
-
-  // Collect existing KO matches and derive properties from them
-  const oldKO = matches.filter(m => !m.pool).sort((a, b) => a.id - b.id);
-
-  // Placement depth from the deepest loser edge: semi -> 4, QF -> 8, R16 -> 16.
-  const placements = inferPlacements(oldKO, ctx);
-
-  // Extract final override from the old final: no loser incoming, no winner outgoing.
-  const finalM = oldKO.find(m =>
-    !m.sides.some(s => s && s.kind === 'match' && s.result === 'loser')
-    && !oldKO.some(X => X.sides && X.sides.some(s => s && s.kind === 'match' && s.result === 'winner' && s.match === m.id)));
-  const fin = finalM ? { bestOf: finalM.bestOf, slotMinutes: finalM.slotMinutes } : {};
-
-  // Build new knockout reusing freed KO IDs for a contiguous set
-  const idPool = oldKO.map(m => m.id);
-  const mid = () => idPool.shift();
-  const newKO = buildKnockout(
-    perPool.map(p => p.teams),
-    perPool.map(p => p.pool),
-    mid, fin, placements
-  );
-
-  // Convert pool slot references to explicit player slots — the dropped
-  // team's rank no longer exists in the pool standings, but pool slots
-  // still resolve through the original data. Baking them avoids that.
-  for (const m of newKO) {
-    for (const s of m.sides) {
-      if (s.kind === 'pool') {
-        const pp = perPool.find(p => p.pool === s.pool);
-        if (pp && s.rank - 1 < pp.teams.length) {
-          s.kind = 'players';
-          s.ids = pp.teams[s.rank - 1];
-          delete s.pool;
-          delete s.rank;
-        }
-      }
-    }
-  }
-
-  // Greedy schedule: sort old KO slots by time, assign each new match the
-  // first slot whose venue doesn't overlap with prior assignments. Handles
-  // any bracket size, venue count, and slotMinutes — no structural pairing.
-  const oldByTime = [...oldKO].sort((a, b) => schedTime(a, ctx.tz) - schedTime(b, ctx.tz));
-  const busy = []; // { venue, end }
-  for (const m of newKO) {
-    const slotMs = matchSlotMs(m, ctx);
-    for (let oi = 0; oi < oldByTime.length; oi++) {
-      const old = oldByTime[oi];
-      const t = schedTime(old, ctx.tz);
-      if (t === null) continue;
-      if (busy.some(b => b.venue === old.venue && t < b.end)) continue;
-      m.scheduled = old.scheduled;
-      m.venue = old.venue;
-      busy.push({ venue: old.venue, end: t + slotMs });
-      oldByTime.splice(oi, 1);
-      break;
-    }
-    // no slot found — a match without scheduled/venue passes the gate and
-    // renders TBD silently, so refuse instead of writing it
-    if (!m.scheduled || !m.venue) return 'not enough free schedule slots to re-slot every knockout match — nothing written';
-  }
-
-  // Write, validate, rollback on failure (writeEdit handles all of that)
-  const res = writeEdit(siteRoot, repo, slug, cat, c => applyRebracket(c, newKO));
-  if (res.err) return res.err;
-  if (res.errs) return res.errs.join('\n') + '\nnot written — validation error(s), file rolled back';
-
-  // Commit
-  const msg = `rebracket(${slug}): ${cat} drop ${dropPlayers.join(', ')}`;
-  git(root, ['add', path.relative(root, res.file)]);
-  const cr = git(root, ['commit', '-m', msg]);
-  if (cr.code !== 0) return `rebracket written but commit failed:\n${cr.err}\n(file staged — commit it manually)`;
-
-  const sha = git(root, ['rev-parse', '--short', 'HEAD']).out.trim();
-  const lines = newKO.map(m => {
-    const s0 = sideLabel(m.sides[0], ctx);
-    const s1 = sideLabel(m.sides[1], ctx);
-    return `  ${m.id}: ${s0} vs ${s1} @ ${fmtTime(schedTime(m, tjson.timezone), tjson.timezone)} ${m.venue}`;
-  });
-  return `rebracketed ${cat} — ${newKO.length} KO match${newKO.length === 1 ? '' : 'es'}:\n` + lines.join('\n') + `\ncommit ${sha}: ${msg}`;
-}
-
 function dispatch(kind, args, state) {
   if (kind === 'ls') return listing(state);
   if (kind === 'cd') {
@@ -592,12 +481,7 @@ function dispatch(kind, args, state) {
     state.cat = r.cat;
     return '→ ' + curPath(state);
   }
-  if (kind === 'rebracket') {
-    if (state.cat === null) return 'cd into a category first';
-    if (args.length === 0) return 'usage: rebracket <player> [player …]';
-    return rebracketCmd(state, args);
-  }
-  if (kind === 'score' || kind === 'ff' || kind === 'time' || kind === 'venue') {
+  if (kind === 'score' || kind === 'wo' || kind === 'void' || kind === 'time' || kind === 'venue') {
     if (state.cat === null) return 'cd into a category first';
     return editCmd(state, kind, args);
   }
@@ -650,4 +534,4 @@ function main(root) {
   replMain(root, siteRoot, repo);
 }
 
-module.exports = { parseGame, buildScheduled, applyScore, applyForfeit, applyVenue, applyTime, applyRebracket, writeEdit, commitMessage, parseCmd, navigate, main, inferPlacements, koCompare };
+module.exports = { parseGame, buildScheduled, applyScore, applyResult, applyVenue, applyTime, writeEdit, commitMessage, parseCmd, navigate, main, koCompare };

@@ -1,5 +1,5 @@
 {
-  "name": "Bad Games Forfeit",
+  "name": "Bad Result Mismatch",
   "timezone": "UTC",
   "venues": [
     {
@@ -12,8 +12,12 @@
       "id": "t",
       "name": "T",
       "bestOf": {
-        "groups": 3,
-        "knockout": 3
+        "groups": 1,
+        "knockout": 1
+      },
+      "slotMinutes": {
+        "groups": 30,
+        "knockout": 30
       }
     }
   ],
@@ -25,6 +29,10 @@
     {
       "id": "p2",
       "name": "P2"
+    },
+    {
+      "id": "p3",
+      "name": "P3"
     }
   ],
   "matches": {
@@ -32,6 +40,8 @@
       {
         "id": 1,
         "pool": "A",
+        "venue": "court-1",
+        "scheduled": "2026-05-02T09:00:00",
         "sides": [
           {
             "kind": "players",
@@ -52,7 +62,10 @@
             "b": 9
           }
         ],
-        "forfeit": 0
+        "result": {
+          "status": "played",
+          "winner": "b"
+        }
       }
     ]
   }

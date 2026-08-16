@@ -104,18 +104,18 @@ test('xd pool order', () => {
   assert(st && st[0].sig === 'p1|p3' && st[0].wins === 3, 'xd pool order');
 });
 
-test('forfeit and partial-match detection', () => {
+test('walkover and partial-match detection', () => {
   const md = catOf('sample', 'md40');
-  assert(winnerIdx(md.byId.get(7), md) === 0, 'forfeit 1 -> side 0 wins');
+  assert(winnerIdx(md.byId.get(7), md) === 0, 'walkover side b -> side a wins');
   assert(winnerIdx(md.byId.get(8), md) === null, 'partial match is not done');
   assert(isDone(md.byId.get(7), md) && isDone(md.byId.get(1), md), 'done detection');
 });
 
-test('slot resolution: forfeit winner vs in-play TBD', () => {
+test('slot resolution: walkover winner vs in-play TBD', () => {
   const md = catOf('sample', 'md40');
   const m9 = md.byId.get(9);
   const w7 = resolveSide(m9.sides[0], md);
-  assert(w7 && w7.has('p1') && w7.has('p2'), 'winner of forfeit m7 resolves to p1/p2');
+  assert(w7 && w7.has('p1') && w7.has('p2'), 'winner of walkover m7 resolves to p1/p2');
   assert(resolveSide(m9.sides[1], md) === null, 'winner of in-play m8 -> TBD');
 });
 
@@ -123,7 +123,7 @@ test('slot resolution: loser path (bronze/placement)', () => {
   const md = catOf('sample', 'md40');
   const m10 = md.byId.get(10);
   const l7 = resolveSide(m10.sides[0], md);
-  assert(l7 && l7.has('p7') && l7.has('p8'), 'loser of forfeit m7 resolves to p7/p8');
+  assert(l7 && l7.has('p7') && l7.has('p8'), 'loser of walkover m7 resolves to p7/p8');
   assert(resolveSide(m10.sides[1], md) === null, 'loser of in-play m8 -> TBD');
 });
 
@@ -137,7 +137,7 @@ test('matchSlotMs: match override > per-stage category config, no default', () =
 
 test('kioskStatus: overdue / now / upcoming status per open card', () => {
   const ctx = makeCat({ meta: { bestOf: { knockout: 3 }, slotMinutes: { groups: 30, knockout: 45 } }, matches: [
-    { id: 'm1', scheduled: '2025-07-14T09:00:00', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }], games: [{ a: 11, b: 5 }, { a: 11, b: 4 }] },
+    { id: 'm1', scheduled: '2025-07-14T09:00:00', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }], games: [{ a: 11, b: 5 }, { a: 11, b: 4 }], result: { status: 'played', winner: 'a' } },
     { id: 'm2', scheduled: '2025-07-14T08:30:00', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },
     { id: 'm3', scheduled: '2025-07-14T09:45:00', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },
     { id: 'm4', scheduled: '2025-07-14T10:30:00', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },
@@ -177,7 +177,7 @@ test('possibleSpan: open knockout span, and pre-knockout fallback to the bracket
   assert(s && s.count === 1 && s.min === Date.parse('2025-07-14T12:15:00-04:00') && s.max === s.min, 'p5: final or bronze at 12:15 — one more match, not both');
   assert(possibleSpan(md, 'p1') === null && possibleSpan(md, 'p7') === null, 'confirmed knockout seat (final/bronze) leaves no open span');
   const tjson = require(FIX('sample', 'tournaments', 'sample.json'));
-  const pre = makeCat({ meta: tjson.categories[0], matches: md.matches.map(m => ({ ...m, games: [], forfeit: undefined })) }, tjson);
+  const pre = makeCat({ meta: tjson.categories[0], matches: md.matches.map(m => ({ ...m, games: [], result: undefined })) }, tjson);
   const s0 = possibleSpan(pre, 'p1');
   assert(s0 && s0.count === 2 && s0.min === Date.parse('2025-07-14T11:15:00-04:00') && s0.max === Date.parse('2025-07-14T12:15:00-04:00'), 'pre-event: up to 2 matches along one bracket path (m7 -> final/bronze, 11:15 to 12:15)');
 });
@@ -200,12 +200,37 @@ test('full bracket: every slot resolves end to end (winner and loser paths)', ()
   assert(l0 && l0.has('p6') && l1 && l1.has('p2'), 'bronze resolves to p6 vs p2');
 });
 
-test('forfeit inside a pool: counts a win, no gd/pd', () => {
+test('walkover inside a pool: counts a win, no gd/pd', () => {
   const full = catOf('full', 't');
   const st = poolStandings(full, 'A');
   const p1 = st.find(r => r.sig === 'p1');
-  assert(p1 && p1.wins === 2 && p1.gd === 2 && p1.pd === 11, 'p1: forfeit win + 2-0 win; gd/pd only from the played match');
+  assert(p1 && p1.wins === 2 && p1.gd === 2 && p1.pd === 11, 'p1: walkover win + 2-0 win; gd/pd only from the played match');
   assert(st[0].sig === 'p1' && st[1].sig === 'p2' && st[2].sig === 'p3', 'pool A order');
+});
+
+test('result statuses: walkover counts a win, void counts nothing, pool completes', () => {
+  const res = catOf('result', 't');
+  const st = poolStandings(res, 'A');
+  assert(st && st.length === 3, 'a void match does not stall the pool');
+  const rec = sig => st.find(r => r.sig === sig);
+  assert(rec('p1').wins === 1 && rec('p1').gd === 1 && rec('p1').pd === 2, 'played win counts gd/pd');
+  assert(rec('p3').wins === 1 && rec('p3').gd === 0 && rec('p3').pd === 0, 'walkover win counts, no gd/pd');
+  assert(rec('p2').wins === 0 && rec('p2').losses === 2, 'walkover loss counts, void contributes nothing to either side');
+  assert(st[0].sig === 'p1' && st[1].sig === 'p3', 'p1 separates on overall gd');
+  assert(winnerIdx(res.byId.get(3), res) === null && isDone(res.byId.get(3), res), 'void: settled, no winner');
+  const f = res.byId.get(4);
+  assert(resolveSide(f.sides[0], res) && resolveSide(f.sides[1], res), 'pool ranks resolve despite the void');
+});
+
+test('result statuses render: W/O and void on cards, settled matches off the kiosk', () => {
+  const repo = loadRepo(FIX('result'));
+  const info = repo.tournaments.get('result');
+  const data = { index: repo.index, t: repo.index[0], tjson: info.tjson, cats: info.tjson.categories.map(c => ({ meta: c, matches: info.matches.get(c.id) || [] })) };
+  const st = renderStandings({ slug: 'result', view: 'categories' }, data);
+  assert(st.includes('<span>void</span>') && st.includes('W/O'), 'void and walkover render on the cards');
+  const venue = renderVenue({ slug: 'result', view: 'venues' }, data, Date.parse('2026-05-02T09:30:00Z'));
+  assert(venue.includes('P1') && venue.includes('P3'), 'the open final is on the board');
+  assert(!venue.includes('<span>void</span>') && !venue.includes('W/O'), 'settled (incl. void) matches leave the kiosk');
 });
 
 test('bracket depth', () => {
@@ -263,7 +288,7 @@ test('slotLabel: unresolved slots describe the slot, not bare TBD', () => {
 test('poolStandings partial: unfinished pool still yields a live table', () => {
   const tjson = require(FIX('sample', 'tournaments', 'sample.json'));
   const md = catOf('sample', 'md40');
-  const unfinished = makeCat({ meta: tjson.categories[0], matches: md.matches.map(m => m.id === 6 ? { ...m, games: [] } : m) }, tjson);
+  const unfinished = makeCat({ meta: tjson.categories[0], matches: md.matches.map(m => m.id === 6 ? { ...m, games: [], result: undefined } : m) }, tjson);
   assert(poolStandings(unfinished, 'A') === null, 'strict form still TBDs an unfinished pool');
   const live = poolStandings(unfinished, 'A', true);
   assert(live && live.length === 4, 'partial form lists all sides');

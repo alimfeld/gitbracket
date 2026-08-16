@@ -54,7 +54,11 @@
             "a": 11,
             "b": 7
           }
-        ]
+        ],
+        "result": {
+          "status": "played",
+          "winner": "a"
+        }
       },
       {
         "id": 2,
@@ -82,7 +86,11 @@
             "a": 7,
             "b": 11
           }
-        ]
+        ],
+        "result": {
+          "status": "played",
+          "winner": "b"
+        }
       },
       {
         "id": 3,

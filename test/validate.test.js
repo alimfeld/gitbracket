@@ -17,7 +17,7 @@ const V = [ // [name, fixture dir, ok, expected message regex]
   ['slot source consumed twice', 'bad-consumed-twice', r => r.errs.length > 0, /consumed twice/],
   ['slot cycle', 'cycle', r => r.errs.length > 0, /cycle/],
   ['games after a side reached the target', 'bad-games-after-target', r => r.errs.length > 0, /already reached/],
-  ['games and forfeit together', 'bad-games-forfeit', r => r.errs.length > 0, /mutually exclusive/],
+  ['games and a walkover together', 'bad-games-walkover', r => r.errs.length > 0, /mutually exclusive/],
   ['scored match fed by an unfinished pool', 'bad-unfinished-feed', r => r.errs.length > 0, /resolved/],
   ['even bestOf override', 'bad-even-bestof', r => r.errs.length > 0, /odd/],
   ['bad scheduled string', 'bad-scheduled', r => r.errs.length > 0, /ISO-8601/],
@@ -50,7 +50,12 @@ const V = [ // [name, fixture dir, ok, expected message regex]
   ['tournament file missing its name', 'bad-no-name', r => r.errs.length > 0, /name must be a non-empty string/],
   ['tournament file name mismatches the index', 'bad-name-mismatch', r => r.errs.length > 0, /does not match the index/],
   ['non-array categories reported, not a crash', 'bad-not-array', r => r.errs.length > 0, /categories must be an array/],
-  ['8-team classification fixture validates', 'place8', r => r.errs.length === 0 && r.warns.length === 0, null]
+  ['8-team classification fixture validates', 'place8', r => r.errs.length === 0 && r.warns.length === 0, null],
+  ['all result statuses validate and pool completes', 'result', r => r.errs.length === 0 && r.warns.length === 0, null],
+  ['played result mismatches its games', 'bad-result-mismatch', r => r.errs.length > 0, /does not match the games/],
+  ['unknown result status', 'bad-result-status', r => r.errs.length > 0, /one of/],
+  ['games reaching the target without a result', 'bad-no-result', r => r.errs.length > 0, /record a result/],
+  ['void result with a winner', 'bad-void-winner', r => r.errs.length > 0, /no winner/]
 ];
 for (const [name, dir, ok, re] of V) {
   test(name, () => {

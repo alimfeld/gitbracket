@@ -1,0 +1,68 @@
+{
+  "name": "Bad No Result",
+  "timezone": "UTC",
+  "venues": [
+    {
+      "id": "court-1",
+      "name": "Court 1"
+    }
+  ],
+  "categories": [
+    {
+      "id": "t",
+      "name": "T",
+      "bestOf": {
+        "groups": 1,
+        "knockout": 1
+      },
+      "slotMinutes": {
+        "groups": 30,
+        "knockout": 30
+      }
+    }
+  ],
+  "players": [
+    {
+      "id": "p1",
+      "name": "P1"
+    },
+    {
+      "id": "p2",
+      "name": "P2"
+    },
+    {
+      "id": "p3",
+      "name": "P3"
+    }
+  ],
+  "matches": {
+    "t": [
+      {
+        "id": 1,
+        "pool": "A",
+        "venue": "court-1",
+        "scheduled": "2026-05-02T09:00:00",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p1"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p2"
+            ]
+          }
+        ],
+        "games": [
+          {
+            "a": 11,
+            "b": 9
+          }
+        ]
+      }
+    ]
+  }
+}

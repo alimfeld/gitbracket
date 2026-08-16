@@ -60,7 +60,11 @@
             "a": 11,
             "b": 9
           }
-        ]
+        ],
+        "result": {
+          "status": "played",
+          "winner": "a"
+        }
       },
       {
         "id": 2,
@@ -92,7 +96,11 @@
             "a": 11,
             "b": 9
           }
-        ]
+        ],
+        "result": {
+          "status": "played",
+          "winner": "a"
+        }
       },
       {
         "id": 3,
@@ -124,7 +132,11 @@
             "a": 12,
             "b": 10
           }
-        ]
+        ],
+        "result": {
+          "status": "played",
+          "winner": "a"
+        }
       },
       {
         "id": 4,
@@ -152,7 +164,11 @@
             "a": 11,
             "b": 9
           }
-        ]
+        ],
+        "result": {
+          "status": "played",
+          "winner": "a"
+        }
       },
       {
         "id": 5,
@@ -184,7 +200,11 @@
             "a": 11,
             "b": 5
           }
-        ]
+        ],
+        "result": {
+          "status": "played",
+          "winner": "a"
+        }
       },
       {
         "id": 6,
@@ -216,7 +236,11 @@
             "a": 9,
             "b": 11
           }
-        ]
+        ],
+        "result": {
+          "status": "played",
+          "winner": "b"
+        }
       }
     ]
   }

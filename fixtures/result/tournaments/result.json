@@ -1,33 +1,38 @@
 {
-  "name": "Tie3 Test",
+  "name": "Result Statuses",
   "timezone": "UTC",
-  "venues": [],
+  "venues": [
+    {
+      "id": "court-1",
+      "name": "Court 1"
+    }
+  ],
   "categories": [
     {
       "id": "t",
       "name": "T",
       "bestOf": {
-        "groups": 3,
-        "knockout": 3
+        "groups": 1,
+        "knockout": 1
+      },
+      "slotMinutes": {
+        "groups": 30,
+        "knockout": 30
       }
     }
   ],
   "players": [
     {
       "id": "p1",
-      "name": "A"
+      "name": "P1"
     },
     {
       "id": "p2",
-      "name": "B"
+      "name": "P2"
     },
     {
       "id": "p3",
-      "name": "C"
-    },
-    {
-      "id": "p4",
-      "name": "D"
+      "name": "P3"
     }
   ],
   "matches": {
@@ -35,6 +40,8 @@
       {
         "id": 1,
         "pool": "A",
+        "venue": "court-1",
+        "scheduled": "2026-05-02T09:00:00",
         "sides": [
           {
             "kind": "players",
@@ -50,10 +57,6 @@
           }
         ],
         "games": [
-          {
-            "a": 11,
-            "b": 9
-          },
           {
             "a": 11,
             "b": 9
@@ -67,6 +70,8 @@
       {
         "id": 2,
         "pool": "A",
+        "venue": "court-1",
+        "scheduled": "2026-05-02T09:00:00",
         "sides": [
           {
             "kind": "players",
@@ -81,55 +86,38 @@
             ]
           }
         ],
-        "games": [
-          {
-            "a": 11,
-            "b": 9
-          },
-          {
-            "a": 11,
-            "b": 9
-          }
-        ],
         "result": {
-          "status": "played",
-          "winner": "a"
+          "status": "walkover",
+          "winner": "b"
         }
       },
       {
         "id": 3,
         "pool": "A",
+        "venue": "court-1",
+        "scheduled": "2026-05-02T09:00:00",
         "sides": [
-          {
-            "kind": "players",
-            "ids": [
-              "p3"
-            ]
-          },
           {
             "kind": "players",
             "ids": [
               "p1"
             ]
-          }
-        ],
-        "games": [
-          {
-            "a": 11,
-            "b": 9
           },
           {
-            "a": 11,
-            "b": 9
+            "kind": "players",
+            "ids": [
+              "p3"
+            ]
           }
         ],
         "result": {
-          "status": "played",
-          "winner": "a"
+          "status": "void"
         }
       },
       {
         "id": 4,
+        "venue": "court-1",
+        "scheduled": "2026-05-02T10:00:00",
         "sides": [
           {
             "kind": "pool",
@@ -137,10 +125,9 @@
             "rank": 1
           },
           {
-            "kind": "players",
-            "ids": [
-              "p4"
-            ]
+            "kind": "pool",
+            "pool": "A",
+            "rank": 2
           }
         ]
       }

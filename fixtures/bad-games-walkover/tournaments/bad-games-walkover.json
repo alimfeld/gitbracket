@@ -1,62 +1,43 @@
 {
-  "name": "Cycle Test",
+  "name": "Bad Games Forfeit",
   "timezone": "UTC",
-  "venues": [],
+  "venues": [
+    {
+      "id": "court-1",
+      "name": "Court 1"
+    }
+  ],
   "categories": [
     {
       "id": "t",
       "name": "T",
       "bestOf": {
         "groups": 3,
-        "knockout": 1
+        "knockout": 3
       }
     }
   ],
   "players": [
     {
       "id": "p1",
-      "name": "A"
+      "name": "P1"
     },
     {
       "id": "p2",
-      "name": "B"
+      "name": "P2"
     }
   ],
   "matches": {
     "t": [
       {
         "id": 1,
+        "pool": "A",
         "sides": [
-          {
-            "kind": "match",
-            "match": 2,
-            "result": "winner"
-          },
           {
             "kind": "players",
             "ids": [
               "p1"
             ]
-          }
-        ],
-        "games": [
-          {
-            "a": 11,
-            "b": 9
-          }
-        ],
-        "result": {
-          "status": "played",
-          "winner": "a"
-        }
-      },
-      {
-        "id": 2,
-        "sides": [
-          {
-            "kind": "match",
-            "match": 1,
-            "result": "winner"
           },
           {
             "kind": "players",
@@ -72,10 +53,14 @@
           }
         ],
         "result": {
-          "status": "played",
-          "winner": "a"
+          "status": "walkover",
+          "winner": "b"
         }
       }
     ]
+  },
+  "result": {
+    "status": "walkover",
+    "winner": "b"
   }
 }

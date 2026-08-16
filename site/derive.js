@@ -48,7 +48,8 @@ function matchSlotMs(m, ctx) {
 }
 
 
-// Raw game wins per side, target not applied — base for winnerIdx (target gate).
+// Raw game wins per side, target not applied — base for the validator's
+// played-consistency check (winner must agree with the games).
 function countWins(games) {
   const w = [0, 0];
   for (const g of games) {
@@ -57,6 +58,12 @@ function countWins(games) {
   }
   return w;
 }
+
+// Results name sides 'a'/'b' like game scores; consumers index m.sides, so
+// the letter is translated here, once — the only letter<->index boundary.
+const sideIdx = w => w === 'a' ? 0 : 1;
+const sideLetter = i => i === 0 ? 'a' : 'b';
+const otherSide = s => s === 'a' ? 'b' : 'a';
 
 // Net game differential of a played match from side 0's viewpoint:
 // gd = won minus lost games, pd = points for minus points against. Side 1's
@@ -78,18 +85,16 @@ function bestOfOf(m, ctx) {
 }
 
 function winnerIdx(m, ctx) {
-  if (m.forfeit !== undefined) return m.forfeit === 0 ? 1 : 0;
-  const games = m.games;
-  if (!Array.isArray(games) || games.length === 0) return null;
-  const target = Math.ceil(bestOfOf(m, ctx) / 2);
-  const [w0, w1] = countWins(games);
-  if (w0 >= target) return 0;
-  if (w1 >= target) return 1;
-  return null;
+  // The stored winner IS the outcome — no per-status derivation. The games
+  // agree with it by validator rule; in-play matches have no result and are
+  // null here.
+  return m && m.result && m.result.winner !== undefined ? sideIdx(m.result.winner) : null;
 }
 
 function isDone(m, ctx) {
-  return winnerIdx(m, ctx) !== null;
+  // Any result settles the match — void included (a voided match is settled,
+  // never played, never overdue).
+  return !!m && m.result !== undefined;
 }
 
 function isDeadTie(st, rank) {
@@ -113,6 +118,7 @@ function poolStandings(ctx, pool, partial) {
   for (const m of ms) {
     const w = winnerIdx(m, ctx);
     if (w === null) {
+      if (m.result !== undefined) continue; // void: settled, counts nothing
       if (!partial) return null; // pool unfinished
       continue;
     }
@@ -122,7 +128,7 @@ function poolStandings(ctx, pool, partial) {
     if (!r0 || !r1) continue;
     (w === 0 ? r0 : r1).wins++;
     (w === 0 ? r1 : r0).losses++;
-    if (m.forfeit === undefined) {
+    if (m.result && m.result.status === 'played') {
       const { gd, pd } = gameDiff(m.games);
       r0.gd += gd; r0.pd += pd;
       r1.gd -= gd; r1.pd -= pd;
@@ -132,8 +138,8 @@ function poolStandings(ctx, pool, partial) {
 }
 
 // Head-to-head keys within a set of teams: wins, game diff, point diff over
-// exactly the matches where both sides are in the set. Forfeits count as wins
-// but carry no differential, matching the overall tally.
+// exactly the matches where both sides are in the set. Walkovers count as
+// wins but carry no differential, matching the overall tally.
 function mutualKeys(list, ms, ctx) {
   const h = new Map(list.map(r => [r.sig, { hw: 0, hg: 0, hp: 0 }]));
   for (const m of ms) {
@@ -142,10 +148,10 @@ function mutualKeys(list, ms, ctx) {
     const a = pairSig(s0.ids), b = pairSig(s1.ids);
     if (!h.has(a) || !h.has(b)) continue;
     const w = winnerIdx(m, ctx);
-    if (w === null) continue;
+    if (w === null) continue; // void contributes nothing, pending stalls nothing here
     const ka = h.get(a), kb = h.get(b);
     (w === 0 ? ka : kb).hw++;
-    if (m.forfeit === undefined) {
+    if (m.result && m.result.status === 'played') {
       const { gd, pd } = gameDiff(m.games);
       ka.hg += gd; ka.hp += pd; kb.hg -= gd; kb.hp -= pd;
     }
@@ -511,5 +517,5 @@ function matchLabel(m, ctx) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { ID_RE, ISO_RE, pairSig, makeCat, matchSlotMs, bestOfOf, winnerIdx, isDone, isDeadTie, poolStandings, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, dayKey, tzOffset, schedTime, gamesText, fmtDiff, kioskStatus, roundName, koColumn, matchLabel };
+  module.exports = { ID_RE, ISO_RE, pairSig, makeCat, matchSlotMs, bestOfOf, countWins, sideIdx, sideLetter, otherSide, winnerIdx, isDone, isDeadTie, poolStandings, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, dayKey, tzOffset, schedTime, gamesText, fmtDiff, kioskStatus, roundName, koColumn, matchLabel };
 }

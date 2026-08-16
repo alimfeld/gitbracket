@@ -7,9 +7,35 @@
 
 const path = require('path');
 const { loadRepo, isRealDate, slotsOverlap } = require('./tools.js');
-const { ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, isDone, poolStandings, resolveSide, isDeadTie, bestOfOf, schedTime, tzOffset } = require('../site/derive.js');
+const { ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, isDone, poolStandings, resolveSide, isDeadTie, bestOfOf, countWins, schedTime, tzOffset } = require('../site/derive.js');
 
 const RESULTS = ['winner', 'loser'];
+const RESULT_STATUSES = ['played', 'walkover', 'void'];
+// The standings-impact contract, one rule per status (derive.js's counting is
+// the same switch): played counts win+gd/pd from games; walkover counts a win
+// only; void counts nothing and settles the match.
+function validateResultShape(r, hasGames, target, m, where, err) {
+  if (!RESULT_STATUSES.includes(r.status)) {
+    err(where, `result.status must be one of ${RESULT_STATUSES.join(', ')}, got ${JSON.stringify(r.status)}`);
+  } else if (r.status === 'void') {
+    if (r.winner !== undefined) err(where, 'a void result has no winner');
+  } else {
+    if (r.winner !== 'a' && r.winner !== 'b') err(where, `result.winner must be 'a' or 'b', got ${JSON.stringify(r.winner)}`);
+    if (r.status === 'played') {
+      if (!hasGames) err(where, 'a played result records the games it was decided by');
+      else if (typeof target === 'number') {
+        const [w0, w1] = countWins(m.games);
+        if (w0 < target && w1 < target) err(where, 'a played result needs games that reach the best-of target');
+        else {
+          const derived = w0 >= target ? 'a' : 'b';
+          if (derived !== r.winner) err(where, `result.winner '${r.winner}' does not match the games — side ${derived} won`);
+        }
+      }
+    } else if (hasGames) {
+      err(where, 'games and a walkover result are mutually exclusive');
+    }
+  }
+}
 
 // All checks, in memory. Labels are repo-relative paths (site/tournaments/<slug>/...).
 function validateRepo(repo) {
@@ -329,20 +355,26 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
     }
 
     if (m.games !== undefined && !Array.isArray(m.games)) err(where, `games must be an array of {a, b} game objects, got ${JSON.stringify(m.games)}`);
+    if (m.result !== undefined && (typeof m.result !== 'object' || m.result === null || Array.isArray(m.result))) {
+      err(where, `result must be an object with a status (${RESULT_STATUSES.join(', ')}), got ${JSON.stringify(m.result)}`);
+    }
     const hasGames = Array.isArray(m.games);
-    const hasForfeit = m.forfeit !== undefined;
-    if (hasGames && hasForfeit) err(where, 'games and forfeit are mutually exclusive');
+    const r = (m.result && typeof m.result === 'object' && !Array.isArray(m.result)) ? m.result : undefined;
+    let target;
     if (hasGames) {
       // override precedence from derive.js (match > stage) — a non-number bestOf
       // is reported above, so the numeric guard is all this check adds
       const b = bestOfOf(m, { bestOf });
-      const target = (typeof b === 'number' && b % 2 === 1) ? (b + 1) / 2 : undefined;
+      target = (typeof b === 'number' && b % 2 === 1) ? (b + 1) / 2 : undefined;
       validateGames(m.games, target, where, err);
     }
-    if (hasForfeit && m.forfeit !== 0 && m.forfeit !== 1) {
-      err(where, `forfeit must index a side (0 or 1), got ${JSON.stringify(m.forfeit)}`);
+    if (r !== undefined) {
+      validateResultShape(r, hasGames, target, m, where, err);
+    } else if (hasGames && typeof target === 'number') {
+      const [w0, w1] = countWins(m.games);
+      if (w0 >= target || w1 >= target) err(where, 'games reach the best-of target — record a result (status + winner)');
     }
-    if ((hasGames || hasForfeit) && Array.isArray(m.sides) && m.sides.length === 2) {
+    if ((r !== undefined || hasGames) && Array.isArray(m.sides) && m.sides.length === 2) {
       if (!resolveSide(m.sides[0], ctx) || !resolveSide(m.sides[1], ctx)) {
         err(where, 'scored match must have both sides resolved to players — check the pool or match feeding the unresolved side');
       }

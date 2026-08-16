@@ -46,7 +46,8 @@ number. A side is one of three kinds:
     { "kind": "players", "ids": ["p1", "p3"] },
     { "kind": "players", "ids": ["p2", "p4"] }
   ],
-  "games": [{ "a": 11, "b": 9 }, { "a": 11, "b": 7 }] }      // a result = done
+  "games": [{ "a": 11, "b": 9 }, { "a": 11, "b": 7 }],
+  "result": { "status": "played", "winner": "a" } }
 
 // match — the winner (or loser) of an earlier match
 { "id": 9, "sides": [
@@ -61,8 +62,18 @@ number. A side is one of three kinds:
 ] }
 ```
 
-Nothing is stored that can be derived — a match is done when it has a
-result, and standings and brackets follow from the data.
+**Outcomes.** Games are the evidence; `result` is the outcome — a match is
+done when it has one, in play without one. `winner` is a side letter (`a` or
+`b`), the same letters game scores use.
+
+| result | winner | standings impact | notes |
+|---|---|---|---|
+| `played` | a\|b | win + gd/pd from games | games must reach the best-of target and agree with the winner |
+| `walkover` | a\|b | win only, no gd/pd | a side can't play — no games |
+| `void` | — | nothing counts | neither side can play — pools still complete |
+
+Nothing else stored can be derived — standings and brackets follow from the
+data.
 
 Pool rankings use the standard round-robin ladder: wins, then head-to-head
 against the tied teams (mutual-match wins, game differential, point
@@ -82,4 +93,4 @@ One page, fragment-routed. `#<slug>` is a tournament's standings;
 
 ## Tools
 
-**`gb.js`** — the one CLI. `node gb.js` starts the match-day REPL (navigate, score, move venues; every edit commits itself); `node gb.js validate [slug]` checks data without the REPL; `node gb.js schedule <spec>` generates a tournament file from a spec (`specs/<slug>.json`); `node gb.js publish` ships `site/` to the domain in `site/CNAME`. The commands live as modules under `src/`; `site/` stays the shipping surface.
+**`gb.js`** — the one CLI. `node gb.js` starts the match-day REPL (navigate, record scores, walkovers and voids, move venues; every edit commits itself); `node gb.js validate [slug]` checks data without the REPL; `node gb.js schedule <spec>` generates a tournament file from a spec (`specs/<slug>.json`); `node gb.js publish` ships `site/` to the domain in `site/CNAME`. The commands live as modules under `src/`; `site/` stays the shipping surface.

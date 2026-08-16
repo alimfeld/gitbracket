@@ -175,14 +175,21 @@ function matchCard(m, ctx, opts = {}) {
 function sideRow(m, ctx, i) {
   const w = winnerIdx(m, ctx);
   const games = m.games || [];
+  const r = m.result;
   // one slot per best-of game: played games render their points, the rest stay
   // as faint placeholders — the slot shape IS the best-of, so no label needed
   const bo = bestOfOf(m, ctx) || 1; // unset stage config -> one unmarked slot
-  const score = m.forfeit === i ? '<span>forfeit</span>'
-    : Array.from({ length: bo }, (_, g) => {
-        const game = games[g];
-        return `<span${game ? '' : ' class="ph"'}>${game ? (i === 0 ? game.a : game.b) : '·'}</span>`;
-      }).join('');
+  const slot = () => Array.from({ length: bo }, (_, g) => {
+    const game = games[g];
+    return `<span${game ? '' : ' class="ph"'}>${game ? (i === 0 ? game.a : game.b) : '·'}</span>`;
+  }).join('');
+  // the walked-over side gets the label; the winner side and voided matches
+  // keep the slot shape (matches the played look — the loser edge is where
+  // the story is). Void has no winner, so no data-win mark anywhere.
+  const score = !r || r.status === 'played' ? slot()
+    : r.status === 'void' ? '<span>void</span>'
+    : sideIdx(r.winner) !== i ? '<span>W/O</span>'
+    : slot();
   return `<div class="side"${w === i ? ' data-win' : ''}><span>${esc(sideLabel(m.sides[i], ctx))}</span><span class="score">${score}</span></div>`;
 }
 
