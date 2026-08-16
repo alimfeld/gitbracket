@@ -444,11 +444,9 @@ function applyAndCommit(state, kind, matchId, apply) {
   const c = git(root, ['commit', '-m', msg]);
   if (c.code !== 0) return `wrote ${path.relative(root, res.file)} but the commit failed:\n${c.err}\n(file staged — commit it manually)`;
   const sha = git(root, ['rev-parse', '--short', 'HEAD']).out.trim();
-  const sum = r
-    ? r.status === 'void' ? `${cat}/${matchId} → void`
-      : `${cat}/${matchId} → side ${r.winner} wins by walkover`
-    : kind === 'time' ? `${cat}/${matchId} → ${m.scheduled}`
-    : `${cat}/${matchId} → ${gamesText(m)}${isDone(m, ctx) ? ' — done' : ''}`;
+  // the echo mirrors the commit message — one dispatch (detail), plus the
+  // score-only "— done" flag, so a completed score can never read as a walkover
+  const sum = `${cat}/${matchId} → ${detail}${kind === 'score' && isDone(m, ctx) ? ' — done' : ''}`;
   return `${sum}\ncommitted ${sha}: ${msg}`;
 }
 
