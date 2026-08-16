@@ -4,7 +4,8 @@
 // from scratch (skeleton + every scheduled match), and keeps the index in
 // sync. The spec is the single source for the schedule — the file is
 // regenerated wholesale, so structure is never hand-edited; scores and venue
-// moves go through the REPL. Seed/format semantics: README.
+// moves go through the REPL. Seed/format semantics: README (Specs); the
+// worked example is specs/2026-mammut60.json.
 //
 // Run:  node gb.js schedule specs/<slug>.json   # then the pre-commit hook (or `node gb.js validate`) gates it
 //
@@ -348,6 +349,14 @@ function generate(spec) {
       if (typeof c.placements !== 'number' || c.placements < 2 || (c.placements & (c.placements - 1)) !== 0) {
         throw new Error(`spec: category ${c.id}: placements must be a power of 2 >= 2, got ${JSON.stringify(c.placements)}`);
       }
+    }
+    // A missing slotMinutes is only a validator warning, yet NaNs every slot
+    // window and piles every match on the first court — fail fast instead.
+    if (typeof c.bestOf !== 'number' || c.bestOf < 1 || c.bestOf % 2 !== 1) {
+      throw new Error(`spec: category ${c.id}: bestOf must be an odd positive integer, got ${JSON.stringify(c.bestOf)}`);
+    }
+    if (typeof c.slotMinutes !== 'number' || !Number.isInteger(c.slotMinutes) || c.slotMinutes < 1) {
+      throw new Error(`spec: category ${c.id}: slotMinutes must be a positive integer, got ${JSON.stringify(c.slotMinutes)}`);
     }
   }
 

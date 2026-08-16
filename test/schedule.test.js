@@ -70,6 +70,13 @@ test('spec guards reject bad input fast', () => {
   assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], placements: 3 }] }), /placements/);
   assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], placements: 0 }] }), /placements/);
   assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], placements: -2 }] }), /placements/);
+  // a missing slotMinutes used to pile every match on the first court at the
+  // block start, and pass the gate on a warning
+  assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], bestOf: 2 }] }), /bestOf/);
+  assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], bestOf: undefined }] }), /bestOf/);
+  assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], slotMinutes: 0 }] }), /slotMinutes/);
+  assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], slotMinutes: '30' }] }), /slotMinutes/);
+  assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], slotMinutes: undefined }] }), /slotMinutes/);
   // missing/mistyped spec surface fails as a named spec error, not a TypeError
   assert.throws(() => generate({ ...MINI, venues: undefined }), /venues must be an id -> value map/);
   assert.throws(() => generate({ ...MINI, players: [] }), /players must be an id -> value map/);
