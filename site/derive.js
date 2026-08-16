@@ -74,14 +74,15 @@ function isDone(m, ctx) {
 
 function isDeadTie(st, rank) {
   const rec = st[rank - 1];
-  return !!rec && !!rec.tie; // tie flag: the ladder exhausted without separating it
+  return !!rec && !!rec.tie; // tie cluster id: the ladder exhausted without separating it
 }
 
-// Competition ranks: a dead-tie group shares its first rank (1 1 1 4).
+// Competition ranks: a dead-tie cluster shares its first rank (1 1 3 3); the
+// flag carries its cluster id so adjacent ties don't merge.
 function poolRanks(st) {
   const ranks = [];
   for (let i = 0; i < st.length; i++) {
-    ranks.push((!st[i].tie || i === 0 || !st[i - 1].tie) ? i + 1 : ranks[i - 1]);
+    ranks.push((!st[i].tie || i === 0 || st[i - 1].tie !== st[i].tie) ? i + 1 : ranks[i - 1]);
   }
   return ranks;
 }
@@ -145,6 +146,7 @@ function mutualKeys(list, ms, ctx) {
 // dead tie (renders TBD). Stable sort keeps equal keys in creation order.
 function poolLadder(list, ms, ctx) {
   const out = [];
+  let tieCluster = 0; // one id per dead-tie cluster — poolRanks shares a rank only within it
   const order = (set) => {
     if (set.length <= 1) { out.push(...set); return; }
     const h = mutualKeys(set, ms, ctx);
@@ -161,7 +163,8 @@ function poolLadder(list, ms, ctx) {
       const cluster = set.slice(i, j);
       if (cluster.length === 1) out.push(cluster[0]);
       else if (cluster.length === set.length) {
-        for (const r of cluster) r.tie = true;
+        tieCluster++;
+        for (const r of cluster) r.tie = tieCluster; // truthy so isDeadTie keeps working
         out.push(...cluster);
       } else order(cluster);
       i = j;
@@ -377,6 +380,9 @@ function winnerDepth(ctx, id, memo = new Map()) {
 // ---------- time ----------
 
 // "+02:00"-style offset for a date, noon-UTC anchor.
+// ponytail: wall times before a same-day clock change (a DST-shift morning) get
+// the post-transition offset, off by one hour — exact per-minute offsets only
+// if a tournament ever opens on a changeover day.
 function tzOffset(tz, date) {
   const p = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'longOffset' })
     .formatToParts(new Date(date + 'T12:00:00Z')).find((x) => x.type === 'timeZoneName');

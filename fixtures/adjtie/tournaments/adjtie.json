@@ -1,0 +1,83 @@
+{
+  "name": "Adjacent Ties",
+  "timezone": "UTC",
+  "venues": [],
+  "categories": [
+    {
+      "id": "t",
+      "name": "T",
+      "bestOf": {
+        "groups": 3,
+        "knockout": 3
+      }
+    }
+  ],
+  "players": [
+    { "id": "p1", "name": "A" },
+    { "id": "p2", "name": "B" },
+    { "id": "p3", "name": "C" },
+    { "id": "p4", "name": "D" }
+  ],
+  "matches": {
+    "t": [
+      {
+        "id": 1,
+        "pool": "A",
+        "sides": [
+          { "kind": "players", "ids": ["p1"] },
+          { "kind": "players", "ids": ["p2"] }
+        ],
+        "result": { "status": "void" }
+      },
+      {
+        "id": 2,
+        "pool": "A",
+        "sides": [
+          { "kind": "players", "ids": ["p3"] },
+          { "kind": "players", "ids": ["p4"] }
+        ],
+        "result": { "status": "void" }
+      },
+      {
+        "id": 3,
+        "pool": "A",
+        "sides": [
+          { "kind": "players", "ids": ["p1"] },
+          { "kind": "players", "ids": ["p3"] }
+        ],
+        "games": [{ "a": 11, "b": 9 }, { "a": 11, "b": 8 }],
+        "result": { "status": "played", "winner": "a" }
+      },
+      {
+        "id": 4,
+        "pool": "A",
+        "sides": [
+          { "kind": "players", "ids": ["p1"] },
+          { "kind": "players", "ids": ["p4"] }
+        ],
+        "games": [{ "a": 11, "b": 9 }, { "a": 11, "b": 8 }],
+        "result": { "status": "played", "winner": "a" }
+      },
+      {
+        "id": 5,
+        "pool": "A",
+        "sides": [
+          { "kind": "players", "ids": ["p2"] },
+          { "kind": "players", "ids": ["p3"] }
+        ],
+        "games": [{ "a": 11, "b": 9 }, { "a": 11, "b": 8 }],
+        "result": { "status": "played", "winner": "a" }
+      },
+      {
+        "id": 6,
+        "pool": "A",
+        "sides": [
+          { "kind": "players", "ids": ["p2"] },
+          { "kind": "players", "ids": ["p4"] }
+        ],
+        "games": [{ "a": 11, "b": 9 }, { "a": 11, "b": 8 }],
+        "result": { "status": "played", "winner": "a" }
+      }
+    ]
+  }
+}
