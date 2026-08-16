@@ -1,10 +1,9 @@
 'use strict';
-// derive.js — the site's domain model, pure.
 
 const ID_RE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/;
 
-// Shared side identity: sorted '|'-joined ids (AGENTS.md).
+// Shared side identity: sorted '|'-joined ids.
 const pairSig = ids => [...ids].sort().join('|');
 
 function makeCat(c, tjson) {
@@ -103,7 +102,7 @@ function poolStandings(ctx, pool, partial) {
     const w = winnerIdx(m, ctx);
     if (w === null) {
       if (m.result !== undefined) continue; // void: settled, counts nothing
-      if (!partial) return null; // pool unfinished
+      if (!partial) return null;
       continue;
     }
     const s0 = m.sides[0], s1 = m.sides[1];
@@ -141,7 +140,7 @@ function mutualKeys(list, ms, ctx) {
   return h;
 }
 
-// Ladder (README): wins, then per wins-block h2h wins/gd/pd, then overall
+// Ladder: wins, then per wins-block h2h wins/gd/pd, then overall
 // gd/pd. A rung that splits a cluster recurses on it; a still-tied block is a
 // dead tie (renders TBD). Stable sort keeps equal keys in creation order.
 function poolLadder(list, ms, ctx) {
@@ -320,8 +319,8 @@ const ordinal = n => n + ({ one: 'st', two: 'nd', few: 'rd' }[ordRules.select(n)
 // Placement label (3rd/5th/7th place, classification semis), null for main-
 // bracket matches. Possible final ranks form a range: loser edges open their
 // feeder round's loser range; winner/loser edges inside take the top/bottom
-// half. Terminal = a place match, else a semi. Memo on the ctx — fresh per
-// render/listing, never across data edits.
+// half. Terminal = a place match, else a semi. Memo rides ctx._plMemo —
+// rebuilt each render, so a polled page picks up new results.
 function placementLabel(m, ctx) {
   if (!ctx._plMemo) ctx._plMemo = new Map();
   const r = plRange(m, ctx, ctx._plMemo);
@@ -377,7 +376,7 @@ function winnerDepth(ctx, id, memo = new Map()) {
 
 // ---------- time ----------
 
-// "+02:00"-style offset for a date, noon-UTC anchor (AGENTS.md).
+// "+02:00"-style offset for a date, noon-UTC anchor.
 function tzOffset(tz, date) {
   const p = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'longOffset' })
     .formatToParts(new Date(date + 'T12:00:00Z')).find((x) => x.type === 'timeZoneName');
@@ -424,8 +423,8 @@ function roundName(depthFromEnd) {
 }
 
 // Column: 0 is the final, one back per winner edge. Depth-from-leaves can't
-// place a bye'd semi; placement winners don't extend the chain. Memo on the
-// ctx — fresh per render/listing, never across data edits.
+// place a bye'd semi; placement winners don't extend the chain. Memo rides
+// ctx._koCol — rebuilt each render, so a polled page picks up new results.
 function koColumn(m, ctx) {
   if (!ctx._koCol) {
     const memo = ctx._koCol = new Map();

@@ -1,5 +1,4 @@
 'use strict';
-// app.js — fetch/render/boot; all domain logic lives in derive.js.
 
 const POLL_MS = 10000;
 
@@ -31,10 +30,10 @@ async function fetchJson(url) {
 function parseRoute(hash) {
   if (hash === undefined) hash = location.hash;
   const segs = String(hash).replace(/^#/, '').split('/');
-  if (segs.length === 1 && segs[0] === '') return { view: 'index' }; // no fragment — the tournament list
+  if (segs.length === 1 && segs[0] === '') return { view: 'index' };
   if (segs.length > 3 || segs.some(s => !s || !ID_RE.test(s))) return null; // #../../ -> reject
   const [slug, view, filter] = segs;
-  if (view === undefined) return { slug, view: 'categories' }; // bare slug — standings, all categories
+  if (view === undefined) return { slug, view: 'categories' };
   if (view === 'categories' || view === 'venues' || view === 'players') return filter === undefined ? { slug, view } : { slug, view, filter };
   return null;
 }
@@ -42,7 +41,6 @@ function parseRoute(hash) {
 async function loadAll(route, indexOnly) {
   if (indexOnly) {
     const index = (await fetchJson('tournaments.json')) || [];
-    // a non-array index stops here (renders an empty list, not a crash)
     if (!Array.isArray(index)) return { index: [], t: null, tjson: null, cats: [] };
     return { index, t: null, tjson: null, cats: [] };
   }
@@ -94,7 +92,7 @@ function renderStandings(route, data) {
     if (route.filter && c.meta.id !== route.filter) continue; // pills keep every category; only the section list narrows
     const ctx = makeCat(c, data.tjson);
     parts.push(`<h2>${esc(c.meta.name)}</h2>`);
-    const byPool = new Map(); // pool -> matches, first-seen order
+    const byPool = new Map();
     for (const m of ctx.matches) {
       if (m && m.pool !== undefined) {
         if (!byPool.has(m.pool)) byPool.set(m.pool, []);
@@ -369,7 +367,7 @@ function boot() {
   // re-render from the cached snapshot; a different slug or the index reloads.
   const navigate = () => {
     const r = parseRoute();
-    if (!r) { // reject → render an error, fetch nothing (a raw segment never reaches a URL)
+    if (!r) {
       route = null;
       setKiosk(false);
       app.innerHTML = '<p>Bad URL.</p>';
