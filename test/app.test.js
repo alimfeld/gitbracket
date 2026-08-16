@@ -107,9 +107,9 @@ test('xd pool order', () => {
 
 test('walkover and partial-match detection', () => {
   const md = catOf('sample', 'md40');
-  assert(winnerIdx(md.byId.get(7), md) === 0, 'walkover side b -> side a wins');
-  assert(winnerIdx(md.byId.get(8), md) === null, 'partial match is not done');
-  assert(isDone(md.byId.get(7), md) && isDone(md.byId.get(1), md), 'done detection');
+  assert(winnerIdx(md.byId.get(7)) === 0, 'walkover side b -> side a wins');
+  assert(winnerIdx(md.byId.get(8)) === null, 'partial match is not done');
+  assert(isDone(md.byId.get(7)) && isDone(md.byId.get(1)), 'done detection');
 });
 
 test('slot resolution: walkover winner vs in-play TBD', () => {
@@ -150,7 +150,7 @@ test('kioskStatus: overdue / now / upcoming status per open card', () => {
   const st = id => kioskStatus(rows.find(r => r.m.id === id), now);
   assert(st('m2') === 'overdue', 'slot fully elapsed without a result: overdue');
   assert(st('m3') === 'live' && st('m6') === 'live', 'started and still inside its slot: Now');
-  assert(isDone(ctx.byId.get('m1'), ctx), 'a done match leaves the board');
+  assert(isDone(ctx.byId.get('m1')), 'a done match leaves the board');
   assert(st('m4') === 'next' && st('m5') === 'next', 'future starts: upcoming');
   assert(st('m6') === 'live', 'the boundary instant (now === t) belongs to Now, not Next');
 });
@@ -196,7 +196,7 @@ test('full bracket: every slot resolves end to end (winner and loser paths)', ()
   const f = full.byId.get(10), b = full.byId.get(9);
   const w0 = resolveSide(f.sides[0], full), w1 = resolveSide(f.sides[1], full);
   assert(w0 && w0.has('p1') && w1 && w1.has('p5'), 'final resolves to p1 vs p5');
-  assert(winnerIdx(f, full) === 0, 'final winner is p1');
+  assert(winnerIdx(f) === 0, 'final winner is p1');
   const l0 = resolveSide(b.sides[0], full), l1 = resolveSide(b.sides[1], full);
   assert(l0 && l0.has('p6') && l1 && l1.has('p2'), 'bronze resolves to p6 vs p2');
 });
@@ -218,7 +218,7 @@ test('result statuses: walkover counts a win, void counts nothing, pool complete
   assert(rec('p3').wins === 1 && rec('p3').gd === 0 && rec('p3').pd === 0, 'walkover win counts, no gd/pd');
   assert(rec('p2').wins === 0 && rec('p2').losses === 2, 'walkover loss counts, void contributes nothing to either side');
   assert(st[0].sig === 'p1' && st[1].sig === 'p3', 'p1 separates on overall gd');
-  assert(winnerIdx(res.byId.get(3), res) === null && isDone(res.byId.get(3), res), 'void: settled, no winner');
+  assert(winnerIdx(res.byId.get(3)) === null && isDone(res.byId.get(3)), 'void: settled, no winner');
   const f = res.byId.get(4);
   assert(resolveSide(f.sides[0], res) && resolveSide(f.sides[1], res), 'pool ranks resolve despite the void');
 });

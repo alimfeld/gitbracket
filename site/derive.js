@@ -23,12 +23,13 @@ function makeCat(c, tjson) {
   };
 }
 
-// Effective slot length, ms: match override > per-stage category config
-// (groups/knockout — a match is groups iff it has a pool).
+// A match lives in the groups stage iff it has a pool.
+const stageOf = m => (m && m.pool !== undefined) ? 'groups' : 'knockout';
+
+// Effective slot length, ms: match override > per-stage category config.
 function matchSlotMs(m, ctx) {
-  const stage = m && m.pool !== undefined ? 'groups' : 'knockout';
   const cfg = (ctx && ctx.slotMinutes) || {};
-  return ((m && m.slotMinutes) ?? cfg[stage]) * 60 * 1000;
+  return ((m && m.slotMinutes) ?? cfg[stageOf(m)]) * 60 * 1000;
 }
 
 
@@ -58,16 +59,15 @@ function gameDiff(games) {
 
 // Effective best-of: match override > per-stage category config.
 function bestOfOf(m, ctx) {
-  const stage = m.pool !== undefined ? 'groups' : 'knockout';
-  return m.bestOf ?? ctx.bestOf[stage];
+  return m.bestOf ?? ctx.bestOf[stageOf(m)];
 }
 
-function winnerIdx(m, ctx) {
+function winnerIdx(m) {
   // The stored winner IS the outcome; in-play matches have no result -> null.
   return m && m.result && m.result.winner !== undefined ? sideIdx(m.result.winner) : null;
 }
 
-function isDone(m, ctx) {
+function isDone(m) {
   // Any result settles the match — void included (settled, never overdue).
   return !!m && m.result !== undefined;
 }
@@ -100,7 +100,7 @@ function poolStandings(ctx, pool, partial) {
     }
   }
   for (const m of ms) {
-    const w = winnerIdx(m, ctx);
+    const w = winnerIdx(m);
     if (w === null) {
       if (m.result !== undefined) continue; // void: settled, counts nothing
       if (!partial) return null;
@@ -129,7 +129,7 @@ function mutualKeys(list, ms, ctx) {
     if (!s0 || !s1 || s0.kind !== 'players' || s1.kind !== 'players') continue;
     const a = pairSig(s0.ids), b = pairSig(s1.ids);
     if (!h.has(a) || !h.has(b)) continue;
-    const w = winnerIdx(m, ctx);
+    const w = winnerIdx(m);
     if (w === null) continue; // void contributes nothing, pending stalls nothing here
     const ka = h.get(a), kb = h.get(b);
     (w === 0 ? ka : kb).hw++;
@@ -188,7 +188,7 @@ function resolveSide(side, ctx, memo = new Map()) {
     if (!m) return null;
     if (memo.has(m.id)) return memo.get(m.id) || null; // in-progress = cycle guard
     memo.set(m.id, undefined);
-    const w = winnerIdx(m, ctx);
+    const w = winnerIdx(m);
     if (w === null) return null;
     const child = m.sides[side.result === 'winner' ? w : 1 - w];
     const v = resolveSide(child, ctx, memo);
@@ -250,7 +250,7 @@ function reachableKo(ctx, pid) {
   const queue = [...sideOf.keys()];
   while (queue.length) {
     const id = queue.shift();
-    const w = winnerIdx(ctx.byId.get(id), ctx); // null until the feeder is decided
+    const w = winnerIdx(ctx.byId.get(id)); // null until the feeder is decided
     for (const m of ctx.matches) {
       if (m.pool !== undefined || !Array.isArray(m.sides) || seen.has(m.id)) continue;
       for (const s of m.sides) {

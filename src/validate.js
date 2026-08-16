@@ -169,7 +169,7 @@ function validateTournamentData(slug, indexName, info, errs, warns) {
     const ctx = makeCat({ meta: cat, matches: ms }, tjson);
     for (const m of ms) {
       if (!m || typeof m !== 'object' || m.venue === undefined || m.scheduled === undefined) continue;
-      if (isDone(m, ctx)) continue;
+      if (isDone(m)) continue;
       const t = schedTime(m, tjson.timezone);
       if (t === null) continue;
       if (Number.isNaN(matchSlotMs(m, ctx))) noSlot.add(cat.id); // NaN slots make the kiosk's live/overdue windows uncomputable

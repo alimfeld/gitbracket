@@ -146,7 +146,7 @@ function formatMatchLine(cid, m, ctx, tz, stage, leftw, rightw, idw, venuew, sta
   // reads green, so a green winner name and its score are one win signal;
   // void has no winner, nothing colored. Padding is plain-text arithmetic
   // pasted after the colored label — ANSI codes never count into widths.
-  const w = winnerIdx(m, ctx);
+  const w = winnerIdx(m);
   const sides = (w === 0 ? C.green(s0) : s0) + ' '.repeat(Math.max(0, leftw - s0.length))
     + C.dim(' vs ') + (w === 1 ? C.green(s1) : s1) + ' '.repeat(Math.max(0, rightw - s1.length));
   const stagePad = stagew !== undefined ? ' '.repeat(Math.max(0, stagew - stage.length)) : '';
@@ -500,7 +500,7 @@ function applyAndCommit(state, kind, cat, matchId, apply) {
   const sha = git(root, ['rev-parse', '--short', 'HEAD']).out.trim();
   // the echo mirrors the commit message — one dispatch (detail), plus the
   // score-only "— done" flag, so a completed score can never read as a walkover
-  const sum = `${cat}/${matchId} → ${detail}${kind === 'score' && isDone(m, ctx) ? ' — done' : ''}`;
+  const sum = `${cat}/${matchId} → ${detail}${kind === 'score' && isDone(m) ? ' — done' : ''}`;
   return `${sum}\ncommitted ${sha}: ${msg}`;
 }
 

@@ -40,8 +40,8 @@ function parseRoute(hash) {
 
 async function loadAll(route, indexOnly) {
   if (indexOnly) {
-    const index = (await fetchJson('tournaments.json')) || [];
-    if (!Array.isArray(index)) return { index: [], t: null, tjson: null, cats: [] };
+    const raw = await fetchJson('tournaments.json');
+    const index = Array.isArray(raw) ? raw : [];
     return { index, t: null, tjson: null, cats: [] };
   }
   // one file per tournament — a poll is a single atomic fetch, no index roundtrip.
@@ -152,7 +152,7 @@ function matchCard(m, ctx, opts = {}) {
 }
 
 function sideRow(m, ctx, i) {
-  const w = winnerIdx(m, ctx);
+  const w = winnerIdx(m);
   const games = m.games || [];
   const r = m.result;
   // one slot per best-of game — placeholders keep the shape, so no label is needed
@@ -200,7 +200,7 @@ function renderVenue(route, data, now = Date.now()) {
   let any = false;
   const cols = [];
   for (const id of venues) {
-    const open = byVenue.get(id).filter(r => !isDone(r.m, r.ctx)); // a result removes the card, everything else stays
+    const open = byVenue.get(id).filter(r => !isDone(r.m)); // a result removes the card, everything else stays
     if (!open.length) continue;
     any = true;
     const col = [];
@@ -278,7 +278,7 @@ function renderPlayer(route, data) {
       while (bi < blocks.length && blocks[bi].min < t) day.push(possibleLine(blocks[bi++]));
       // same sideRow as bracket cards; headline time · court, meta cat · label
       day.push(matchCard(m, ctx, {
-        done: isDone(m, ctx),
+        done: isDone(m),
         meta: ['catName', 'label'],
         head: ['time', 'court'],
       }));
