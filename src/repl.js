@@ -5,14 +5,17 @@
 // instant with nothing lost. Dispatched from gb.js; pure edit functions are
 // exported for tests.
 //
-// The REPL navigates tournaments like a directory tree. Every line is a
-// command — the first word is always a verb, so targets (slugs, categories,
-// matches) only ever appear as cd/score args and can't collide with commands.
-// Every successful edit is validated (the real validateRepo) and committed
-// immediately. publish ships site/ (validate gate, then surge). The prompt
-// shows git facts only: ↑n = commits not on origin/main, ↓n = commits on
-// origin/main not local, * = dirty tree. status also compares the current
-// tournament's file against the live domain. Tab completes at every level.
+// Flat command model, no cursors: `use` picks a tournament, `ls` reads it,
+// and every editor is slash-gated — <verb> <category> <match> <args>. A bare
+// line never mutates data or ships: the mutators (score, wo, void, venue,
+// time, publish) must be typed with a leading /, and a bare spelling is
+// rejected with a hint. Every successful edit is validated (the real
+// validateRepo) and committed immediately. publish ships site/ (validate
+// gate, then surge) but never pushes git — that stays the director's manual
+// pull --rebase && push. The prompt shows git facts only: ↑n = commits not
+// on origin/main, ↓n = commits on origin/main not local, * = dirty tree.
+// status compares the selected tournament's file against the live domain.
+// Tab completes at every position.
 
 const fs = require('fs');
 const path = require('path');
@@ -129,7 +132,7 @@ function listingSide(side, ctx) {
   return seed === null ? name : `${name} (${seed})`;
 }
 
-function formatMatchLine(m, ctx, tz, stage, sidew, idw, venuew, stagew) {
+function formatMatchLine(cid, m, ctx, tz, stage, leftw, rightw, idw, venuew, stagew) {
   const t = schedTime(m, tz);
   const time = t === null ? C.yellow('TBD'.padStart(8)) : C.dim(fmtTime(t, tz).padStart(8));
   const v = m.venue || 'TBD';
@@ -143,14 +146,16 @@ function formatMatchLine(m, ctx, tz, stage, sidew, idw, venuew, stagew) {
   const s0 = listingSide(m.sides[0], ctx);
   const s1 = listingSide(m.sides[1], ctx);
   // decided matches color the winner green — the played score column already
-  // reads green, so a green winner name and its score are one win signal ('vs'
-  // edge stays on the plain labels, so the pad arithmetic measures uncolored
-  // text); void has no winner, nothing colored
+  // reads green, so a green winner name and its score are one win signal;
+  // void has no winner, nothing colored. Padding is plain-text arithmetic
+  // pasted after the colored label — ANSI codes never count into widths.
   const w = winnerIdx(m, ctx);
-  const sides = (w === 0 ? C.green(s0) : s0) + C.dim(' vs ') + (w === 1 ? C.green(s1) : s1);
-  const sidePad = sidew !== undefined ? ' '.repeat(Math.max(0, sidew - (s0.length + 4 + s1.length))) : '';
+  const sides = (w === 0 ? C.green(s0) : s0) + ' '.repeat(Math.max(0, leftw - s0.length))
+    + C.dim(' vs ') + (w === 1 ? C.green(s1) : s1) + ' '.repeat(Math.max(0, rightw - s1.length));
   const stagePad = stagew !== undefined ? ' '.repeat(Math.max(0, stagew - stage.length)) : '';
-  return `${C.bold(idw ? String(m.id).padEnd(idw) : m.id)}  ${C.dim(stage)}${stagePad}  ${sides}${sidePad}  ${time}  ${venue}  ${score}`;
+  // the ref is "<category> <id>" — it copy-pastes straight into a /score line
+  const ref = `${cid} ${m.id}`;
+  return `${C.bold(idw ? ref.padEnd(idw) : ref)}  ${C.dim(stage)}${stagePad}  ${sides}  ${time}  ${venue}  ${score}`;
 }
 
 // KO listing order: earlier round first (higher column), then placement
@@ -167,49 +172,107 @@ function koCompare(a, b, ctx) {
   return a.m.id - b.m.id;
 }
 
-function listText(repo, slug, cat) {
+// The `ls` filter: a case-insensitive substring over a player's id and
+// display name ("ada" finds p1/Ada Lovelace, "lovelace" also does; "win" does
+// not — unresolved slots have no player to match).
+function makePlayerHit(tjson, needle) {
+  const plist = tjson.players || [];
+  const nameOf = id => { const p = plist.find(p => p.id === id); return p ? p.name : id; };
+  const n = needle && needle.toLowerCase();
+  // no filter → falsy, so callers skip filtering entirely
+  return n ? ids => [...ids].some(id => (id + '|' + nameOf(id)).toLowerCase().includes(n)) : null;
+}
+
+// The match-day listing. cats are the categories to show (one for `ls md`,
+// all for bare `ls`); needle is the ls player filter — it narrows standings
+// to the player's own row(s) and matches to the ones a side actually
+// contains. Unfiltered, this is the whole score desk sheet.
+// Two passes: resolve categories first (a player filter drops categories the
+// player never plays in), collecting global column widths, then render, so
+// sides line up across the whole listing — not just within a category.
+function listText(repo, slug, cats, needle) {
   const info = repo.tournaments.get(slug);
   const tjson = info.tjson;
-  const matches = info.matches.get(cat);
-  const meta = tjson.categories.find(c => c.id === cat);
-  const ctx = makeCat({ meta, matches }, tjson);
   const tz = tjson.timezone || 'UTC';
-  const entry = repo.index.find(e => e && e.slug === slug);
-  const lines = [`${C.bold((entry && entry.name) || slug)} / ${C.bold(C.cyan(cat))}`];
-
-  const poolIds = [...new Set(matches.filter(m => m.pool).map(m => m.pool))].sort();
-  // all pools at once, so column widths align across them (matches do the same)
+  const playerHit = makePlayerHit(tjson, needle);
   const head = ['#', 'Team', 'W', 'L', 'GD', 'PD']; // same headers as the site's standings table
-  const tables = [];
-  for (const pid of poolIds) {
-    const st = poolStandings(ctx, pid, true);
-    tables.push({ pid, rows: st && st.map((r, i) => [String(i + 1), teamLabel(r.ids, ctx), String(r.wins), String(r.losses), fmtDiff(r.gd), fmtDiff(r.pd)]) });
-  }
-  const wid = head.map((h, c) => Math.max(h.length, ...tables.flatMap(t => t.rows || []).map(r => r[c].length)));
-  const fmt = cells => '  ' + cells.map((c, i) => (i === 1 ? c.padEnd(wid[i]) : c.padStart(wid[i]))).join('  ');
-  for (const { pid, rows } of tables) {
-    lines.push('', `${C.cyan('Pool ' + pid)}:`);
-    if (rows) lines.push(fmt(head), ...rows.map(fmt));
+
+  // pass 1 — per-category blocks and the widths shared across every match
+  const secs = [];
+  const g = { idw: 0, stagew: 0, leftw: 0, rightw: 0, venuew: 0 };
+  for (const cid of cats) {
+    const meta = tjson.categories.find(c => c.id === cid);
+    const matches = info.matches.get(cid) || [];
+    const ctx = makeCat({ meta, matches }, tjson);
+    const tables = [];
+    const poolIds = [...new Set(matches.filter(m => m.pool).map(m => m.pool))].sort();
+    for (const pid of poolIds) {
+      const st = poolStandings(ctx, pid, true);
+      if (!st) continue;
+      const rows = [];
+      for (let i = 0; i < st.length; i++) {
+        const r = st[i];
+        if (playerHit && !playerHit(r.ids)) continue; // ls <name>: the player's rows only
+        rows.push([String(i + 1), teamLabel(r.ids, ctx), String(r.wins), String(r.losses), fmtDiff(r.gd), fmtDiff(r.pd)]);
+      }
+      if (rows.length) tables.push({ pid, rows });
+    }
+    // matches — a player filter keeps only matches whose sides resolve to it
+    let all = matches.map(m => ({ m, stage: matchLabel(m, ctx) }));
+    if (playerHit) all = all.filter(({ m }) => (m.sides || []).some(s => {
+      const ids = resolveSide(s, ctx);
+      return !!ids && playerHit(ids);
+    }));
+    if (all.length) {
+      all.sort((a, b) => {
+        const pa = a.m.pool !== undefined, pb = b.m.pool !== undefined;
+        if (pa !== pb) return pa ? -1 : 1; // pool matches first
+        if (pa) return a.m.pool.localeCompare(b.m.pool) || a.m.id - b.m.id;
+        return koCompare(a, b, ctx); // earlier round first, placement after the same-column main match
+      });
+      for (const { m, stage } of all) {
+        g.idw = Math.max(g.idw, `${cid} ${m.id}`.length);
+        g.stagew = Math.max(g.stagew, stage.length);
+        g.leftw = Math.max(g.leftw, listingSide(m.sides[0], ctx).length);
+        g.rightw = Math.max(g.rightw, listingSide(m.sides[1], ctx).length);
+        g.venuew = Math.max(g.venuew, (m.venue || 'TBD').length);
+      }
+    }
+    if (tables.length || all.length) secs.push({ cid, meta, ctx, tables, all });
   }
 
-  // Flat match listing with stage labels, no section headers
-  const all = matches.map(m => ({ m, stage: matchLabel(m, ctx) }));
-  all.sort((a, b) => {
-    const pa = a.m.pool !== undefined, pb = b.m.pool !== undefined;
-    if (pa !== pb) return pa ? -1 : 1; // pool matches first
-    if (pa) return a.m.pool.localeCompare(b.m.pool) || a.m.id - b.m.id;
-    return koCompare(a, b, ctx); // earlier round first, placement after the same-column main match
-  });
-  const idw = Math.max(...all.map(r => String(r.m.id).length));
-  const stagew = Math.max(...all.map(r => r.stage.length));
-  const sidew = Math.max(...all.map(r => listingSide(r.m.sides[0], ctx).length + 4 + listingSide(r.m.sides[1], ctx).length));
-  const venuew = Math.max(...all.map(r => (r.m.venue || 'TBD').length));
-  if (all.length) lines.push('');
-  for (const { m, stage } of all) {
-    lines.push('    ' + formatMatchLine(m, ctx, tz, stage, sidew, idw, venuew, stagew));
+  // pass 2 — render, one blank line between sections; every category gets the
+  // same prominent heading whether one is shown (ls md) or all (bare ls)
+  const lines = [];
+  let any = false;
+  for (const sec of secs) {
+    const body = [];
+    lines.push(''); // a heading is never glued to the prompt line above
+    body.push(C.bold(C.under(C.cyan(`${sec.meta ? sec.meta.name : sec.cid} — ${sec.cid}`)))) // name first, id after
+    if (sec.tables.length) {
+      // one continuous box per pool; column widths align across a section's pools;
+      // the pool id lives in the Team header cell — no separate title line
+      const wid = head.map((h, c) => Math.max(h.length,
+        ...sec.tables.map(t => (c === 1 ? `Pool ${t.pid} Teams` : h).length),
+        ...sec.tables.flatMap(t => t.rows).map(r => r[c].length)));
+      const w = n => '─'.repeat(n + 2);
+      const top = '┌' + wid.map(w).join('┬') + '┐';
+      const mid = '├' + wid.map(w).join('┼') + '┤';
+      const bot = '└' + wid.map(w).join('┴') + '┘';
+      const fmt = cells => '│' + cells.map((c, i) => ' ' + (i === 1 ? c.padEnd(wid[i]) : c.padStart(wid[i])) + ' ').join('│') + '│';
+      for (const { pid, rows } of sec.tables) {
+        const hdr = head.map((h, i) => i === 1 ? `Pool ${pid} Teams` : h);
+        body.push('', top, fmt(hdr), mid, ...rows.map(fmt), bot);
+      }
+    }
+    if (sec.all.length) {
+      if (body.length) body.push('');
+      for (const { m, stage } of sec.all) body.push(formatMatchLine(sec.cid, m, sec.ctx, tz, stage, g.leftw, g.rightw, g.idw, g.venuew, g.stagew));
+    }
+    if (body.length) { any = true; lines.push(...body); }
   }
-
-  return lines.join('\n');
+  if (!any) lines.push(needle ? `nothing for ${JSON.stringify(needle)}` : 'no matches');
+  return lines.join('\n') + '\n'; // the listing always ends on a blank line
 }
 
 // Conventional-commit messages per edit kind — grep-able match-day history:
@@ -218,38 +281,23 @@ function commitMessage(kind, slug, cat, matchId, detail) {
   return `${kind}(${slug}): ${cat}/${matchId} ${detail}`;
 }
 
-const VERBS = ['ls', 'cd', 'q', 'help', 'score', 'wo', 'void', 'time', 'venue', 'publish', 'pull', 'status', 'validate'];
+// Bare commands never mutate data or ship: reading + session are bare,
+// editing must be slashed. The slash only permits a mutator — slashing a bare
+// command (ls, use…) is harmless and accepted.
+const BARE = ['use', 'ls', 'status', 'help', 'quit', 'q'];
+const MUT = ['score', 'wo', 'void', 'venue', 'time', 'publish'];
 
 // Any line is <verb> <args> — the first word is always a command.
 function parseCmd(line) {
-  const [head, ...args] = line.trim().split(/\s+/);
-  return { kind: VERBS.includes(head) ? head : 'unknown', args };
-}
-
-// Resolve a cd target against the current position. state = { repo, slug, cat }.
-function navigate(state, token) {
-  if (token === '/') return { slug: null, cat: null };
-  if (token === '..') return state.cat === null ? { slug: null, cat: null } : { slug: state.slug, cat: null };
-  if (state.slug === null) {
-    if (!state.repo.tournaments.has(token)) return { err: `unknown tournament ${token} — tab completes` };
-    return { slug: token, cat: null };
+  const [raw, ...args] = line.trim().split(/\s+/);
+  if (raw === '') return { kind: 'unknown', args: [], needSlash: false };
+  if (raw.startsWith('/')) {
+    const head = raw.slice(1);
+    return { kind: MUT.includes(head) || BARE.includes(head) ? head : 'unknown', args, needSlash: false };
   }
-  if (state.cat === null) {
-    const info = state.repo.tournaments.get(state.slug);
-    if (!(info.tjson.categories || []).some(c => c.id === token)) return { err: `unknown category ${token} — tab completes` };
-    return { slug: state.slug, cat: token };
-  }
-  return { err: `matches are leaves — score ${token} … or cd ..` };
-}
-
-// One tournament's line for the category listing: id, name, match counts.
-function catSummary(info, cat) {
-  const matches = info.matches.get(cat.id) || [];
-  const ctx = makeCat({ meta: cat, matches }, info.tjson);
-  const done = matches.filter(m => isDone(m, ctx)).length;
-  const name = C.cyan(cat.name);
-  const doneTxt = done === 0 ? C.dim('0') : done === matches.length ? C.green(done) : C.yellow(done);
-  return `${C.bold(C.cyan(cat.id))} — ${name} · ${matches.length} match${matches.length === 1 ? '' : 'es'}, ${doneTxt} done`;
+  if (MUT.includes(raw)) return { kind: raw, args, needSlash: true }; // bare mutator → hint, never executed
+  if (BARE.includes(raw)) return { kind: raw, args, needSlash: false };
+  return { kind: 'unknown', args: [], needSlash: false };
 }
 
 // ---------- git + repo I/O (thin shell, not unit-tested) ----------
@@ -280,63 +328,77 @@ function syncSuffix(root) {
 // ---------- REPL ----------
 
 function helpText() {
-  return `${C.bold('navigate:')}
-  ls                     list this level
-  cd <slug|category>     enter — cd .. / cd / go up / root, cd alone shows the path
-  q                      quit (every edit is committed; nothing is lost)
+  return `${C.bold('bare commands — read-only, never touch anything:')}
+  use <slug>            select a tournament (bare: list tournaments; tab completes slugs)
+  ls [category] [name]  matches — bare: the whole matchday sheet; add a category and/or
+                        a player name to narrow (standings keep that player's rows)
+  status                validate errors, git state, and live-domain comparison
+  help                  this text
+  quit (q)              leave — every edit is already committed
 
-${C.bold('score & manage (inside a category):')}
-  score <match> <a:b> [a:b …]   set games — a prefix is a mid-match update, re-score corrects
-  wo <match> <a|b>              walkover: side a or b wins without playing (opponent can't)
-  void <match>                  void: no winner, nothing counts (both sides out)
-  venue <match> <venue>         move a match to another court
-  time <match> <hh:mm>          shift a match to another time today
+${C.bold('slash commands — they edit data or ship:')}
+  /score <cat> <id> <a:b> [a:b …]   set games — a prefix is a mid-match update, re-score corrects
+  /wo <cat> <id> <a|b>              walkover: side a or b wins without playing (opponent can't)
+  /void <cat> <id>                  void: no winner, nothing counts (both sides out)
+  /venue <cat> <id> <venue>         move a match to another court
+  /time <cat> <id> <hh:mm>          shift a match to another time today
+  /publish                          validate, then ship site/ to the domain (git push stays manual)
 
-${C.bold('sync (every edit commits itself):')}
-  publish  pull  status  validate
-
+${C.dim('a bare line never mutates data or ships — a bare mutator is rejected with "did you mean /…?"')}
 ${C.dim('prompt: ↑n = n commits not on origin/main, ↓n = n on origin/main not local, * = dirty tree. Tab completes.')}`;
 }
 
 function makePrompt(state) {
-  const p = state.slug ? `${state.slug}${state.cat ? '/' + state.cat : ''}` : '';
+  const p = state.slug ? C.cyan(state.slug) : '';
   const sync = syncSuffix(state.root).replace('*', C.yellow('*'));
-  return `gitbracket${p ? ':' + C.cyan(p) : ''}${sync ? C.dim(sync) : ''}> `;
+  return `gitbracket${p ? ':' + p : ''}${sync ? C.dim(sync) : ''}> `;
 }
 
 function completer(state) {
   return line => {
     const parts = line.split(/\s+/).filter(Boolean);
     const partial = parts.length ? parts[parts.length - 1] : '';
-    const verb = parts[0];
+    const v = parts[0] || '';
+    const ALL = [...BARE, ...MUT.map(m => '/' + m)];
     let cands = [];
-    if (!verb) cands = VERBS;
-    else if (parts.length === 1) cands = VERBS.filter(v => v.startsWith(verb));
-    else if (verb === 'cd') {
-      cands = state.slug === null ? [...state.repo.tournaments.keys()]
-        : state.cat === null ? (state.repo.tournaments.get(state.slug).tjson.categories || []).map(c => c.id) : [];
-    } else if ((verb === 'score' || verb === 'wo' || verb === 'void' || verb === 'time' || verb === 'venue') && parts.length === 2 && state.cat) {
-      const arr = state.repo.tournaments.get(state.slug).matches.get(state.cat);
-      cands = arr ? arr.map(m => m.id) : [];
-    } else if (verb === 'venue' && parts.length === 3) {
-      cands = (state.repo.tournaments.get(state.slug).tjson.venues || []).map(v => v.id);
+    if (!v) cands = ALL;
+    else if (parts.length === 1) cands = ALL.filter(c => c.startsWith(v));
+    else {
+      const verb = v.startsWith('/') ? v.slice(1) : v;
+      const info = state.slug ? state.repo.tournaments.get(state.slug) : null;
+      const cats = info ? (info.tjson.categories || []).map(c => c.id) : [];
+      if (verb === 'use' && parts.length === 2) cands = [...state.repo.tournaments.keys()];
+      else if (verb === 'ls' && parts.length === 2) cands = cats;
+      else if (verb === 'ls' && parts.length === 3) {
+        const plist = (info && info.tjson.players) || [];
+        cands = plist.flatMap(p => [p.id, p.name]);
+      } else if (MUT.includes(verb) && verb !== 'publish' && parts.length === 2) cands = cats;
+      else if (MUT.includes(verb) && verb !== 'publish' && parts.length === 3) {
+        const arr = cats.includes(parts[1]) ? info.matches.get(parts[1]) : null;
+        cands = arr ? arr.map(m => m.id) : [];
+      } else if (verb === 'venue' && parts.length === 4) {
+        cands = ((info && info.tjson.venues) || []).map(v => v.id);
+      }
     }
     return [cands.filter(c => c.startsWith(partial) && c !== partial).slice(0, 100), partial];
   };
 }
 
-function listing(state) {
-  if (state.slug === null) {
-    if (!state.repo.index.length) return 'no tournaments — add one to tournaments.json';
-    return state.repo.index.map(e => {
-      const info = state.repo.tournaments.get(e.slug);
-      const n = info && info.tjson ? (info.tjson.categories || []).length : 0;
-      return `${C.bold(C.cyan(e.name))}  (${e.slug}) — ${n} categor${n === 1 ? 'y' : 'ies'}`;
-    }).join('\n');
-  }
+function tournamentList(state) {
+  if (!state.repo.index.length) return 'no tournaments — add one to tournaments.json';
+  return state.repo.index.map(e => {
+    const info = state.repo.tournaments.get(e.slug);
+    const n = info && info.tjson ? (info.tjson.categories || []).length : 0;
+    return `${C.bold(C.cyan(e.name))}  (${e.slug}) — ${n} categor${n === 1 ? 'y' : 'ies'}`;
+  }).join('\n');
+}
+
+function listing(state, cat, player) {
+  if (state.slug === null) return tournamentList(state);
   const info = state.repo.tournaments.get(state.slug);
-  if (state.cat === null) return (info.tjson.categories || []).map(c => catSummary(info, c)).join('\n');
-  return listText(state.repo, state.slug, state.cat);
+  const cats = (info.tjson.categories || []).map(c => c.id);
+  if (cat != null && !cats.includes(cat)) return `unknown category ${cat} — have: ${cats.join(', ')}`;
+  return listText(state.repo, state.slug, cat === null ? cats : [cat], player || null);
 }
 
 function validateText(repo) {
@@ -353,21 +415,6 @@ function gitPublish(state) {
   if (errs.length) return errs.join('\n') + '\nnot published — validation error(s)';
   if (ship(state.root) !== 0) return 'not published — see the output above';
   return 'published';
-}
-
-function gitPull(state) {
-  const r = git(state.root, ['pull', '--rebase']);
-  if (r.code !== 0) {
-    const txt = (r.err + r.out).trim();
-    return txt + (/(CONFLICT|conflict)/.test(txt) ? '\nresolve the conflicted file, then push' : '');
-  }
-  state.repo = loadRepo(state.siteRoot); // the in-memory snapshot is stale after a pull
-  if (state.slug && !state.repo.tournaments.has(state.slug)) {
-    state.slug = null;
-    state.cat = null;
-    return 'pulled — repo reloaded; current tournament vanished, back at root';
-  }
-  return 'pulled — repo reloaded';
 }
 
 function gitStatus(root) {
@@ -397,9 +444,10 @@ async function liveStatus(state) {
 }
 
 async function statusCmd(state) {
-  const live = await liveStatus(state);
+  const v = validateText(state.repo);
   const s = gitStatus(state.root);
-  return live ? `${s}\n${live}` : s;
+  const live = await liveStatus(state);
+  return [v, s, live].filter(Boolean).join('\n');
 }
 
 // ---------- shallow ANSI paint (TTY only — piped output stays plain) ----------
@@ -407,7 +455,7 @@ async function statusCmd(state) {
 const C = (() => {
   const tty = process.stdout.isTTY; // colors are no-ops when piped — callers need no guard
   const w = (code, s) => tty ? `\x1b[${code}m${s}\x1b[0m` : s;
-  return { bold: s => w(1, s), dim: s => w(2, s), red: s => w(31, s), yellow: s => w(33, s), green: s => w(32, s), cyan: s => w(36, s), magenta: s => w(35, s) };
+  return { bold: s => w(1, s), dim: s => w(2, s), red: s => w(31, s), yellow: s => w(33, s), green: s => w(32, s), cyan: s => w(36, s), magenta: s => w(35, s), under: s => w(4, s) };
 })();
 
 // Color the final output string — commands and pure functions stay plain.
@@ -417,16 +465,27 @@ function paint(s) {
   return s.split('\n').map(l =>
     /^(error:|unknown |bad |\d+ error\(s\))/.test(l) ? C.red(l)
     : /^(warn:|usage:|\(\d+ warning\(s\)\))/.test(l) ? C.yellow(l)
-    : /committed |— done$|wins$|^validate: ok$|^published$|^pulled/.test(l) ? C.green(l)
+    : /committed |— done$|wins$|^validate: ok$|^published$/.test(l) ? C.green(l)
     : /^→ /.test(l) ? C.cyan(l)
     : l
   ).join('\n');
 }
 
+// One-line summary of what changed — mirror it in the commit message and the
+// echo. Keyed off the edit kind, never the match state, so a venue or time
+// edit on an already-decided match reports the move, not the result.
+function editDetail(kind, m) {
+  const r = m.result;
+  return kind === 'score' ? gamesText(m)
+    : kind === 'time' ? `→ ${m.scheduled}`
+    : kind === 'venue' ? `→ ${m.venue}`
+    : r.status === 'void' ? 'void' : `side ${r.winner} wins by walkover`;
+}
+
 // Apply + write + commit one edit; every successful edit is a commit, so the
 // tree is never dirty for long and Ctrl-C can't lose anything.
-function applyAndCommit(state, kind, matchId, apply) {
-  const { root, siteRoot, repo, slug, cat } = state;
+function applyAndCommit(state, kind, cat, matchId, apply) {
+  const { root, siteRoot, repo, slug } = state;
   const res = writeEdit(siteRoot, repo, slug, cat, apply);
   if (res.err) return res.err;
   if (res.errs) return res.errs.join('\n') + '\nnot written — validation error(s), file rolled back';
@@ -434,11 +493,7 @@ function applyAndCommit(state, kind, matchId, apply) {
   const matches = info.matches.get(cat);
   const ctx = makeCat({ meta: info.tjson.categories.find(c => c.id === cat), matches }, info.tjson);
   const m = ctx.byId.get(Number(matchId));
-  const r = m.result;
-  const detail = kind === 'score' ? gamesText(m)
-    : r ? (r.status === 'void' ? 'void' : `side ${r.winner} wins by walkover`)
-    : kind === 'time' ? `→ ${m.scheduled}`
-    : `→ ${m.venue}`;
+  const detail = editDetail(kind, m);
   const msg = commitMessage(kind, slug, cat, matchId, detail);
   git(root, ['add', path.relative(root, res.file)]);
   const c = git(root, ['commit', '-m', msg]);
@@ -450,90 +505,84 @@ function applyAndCommit(state, kind, matchId, apply) {
   return `${sum}\ncommitted ${sha}: ${msg}`;
 }
 
-function editCmd(state, kind, args) {
+function editCmd(state, kind, cat, matchId, rest) {
   if (kind === 'score') {
-    const [matchId, ...tokens] = args;
-    if (!matchId || tokens.length === 0) return 'usage: score <match> <a:b> [a:b ...]';
-    const games = tokens.map(parseGame);
-    const bad = tokens.findIndex((t, i) => !games[i]);
-    if (bad !== -1) return `bad score ${JSON.stringify(tokens[bad])} — expected a:b, e.g. 11:9`;
-    return applyAndCommit(state, 'score', matchId, (c, ctx) => applyScore(c, matchId, games, ctx));
+    if (!matchId || rest.length === 0) return 'usage: /score <category> <match> <a:b> [a:b ...]';
+    const games = rest.map(parseGame);
+    const bad = rest.findIndex((t, i) => !games[i]);
+    if (bad !== -1) return `bad score ${JSON.stringify(rest[bad])} — expected a:b, e.g. 11:9`;
+    return applyAndCommit(state, 'score', cat, matchId, (c, ctx) => applyScore(c, matchId, games, ctx));
   }
   if (kind === 'wo') {
-    const [matchId, side] = args;
-    if (!matchId || side === undefined) return 'usage: wo <match> <a|b>';
+    const side = rest[0];
+    if (side === undefined) return 'usage: /wo <category> <match> a|b';
     if (side !== 'a' && side !== 'b') return 'side must be a or b';
-    return applyAndCommit(state, 'walkover', matchId, c => applyResult(c, matchId, 'walkover', side));
+    return applyAndCommit(state, 'walkover', cat, matchId, c => applyResult(c, matchId, 'walkover', side));
   }
   if (kind === 'void') {
-    const [matchId] = args;
-    if (!matchId) return 'usage: void <match>';
-    return applyAndCommit(state, 'void', matchId, c => applyResult(c, matchId, 'void'));
+    if (matchId === undefined) return 'usage: /void <category> <match>';
+    return applyAndCommit(state, 'void', cat, matchId, c => applyResult(c, matchId, 'void'));
   }
   if (kind === 'venue') {
-    const [matchId, venueId] = args;
-    if (!matchId || !venueId) return 'usage: venue <match> <venue>';
-    return applyAndCommit(state, 'venue', matchId, c => applyVenue(c, matchId, venueId));
+    const venueId = rest[0];
+    if (!venueId) return 'usage: /venue <category> <match> <venue>';
+    return applyAndCommit(state, 'venue', cat, matchId, c => applyVenue(c, matchId, venueId));
   }
   if (kind === 'time') {
-    const [matchId, hhmm] = args;
-    if (!matchId || !hhmm) return 'usage: time <match> <hh:mm>';
+    const hhmm = rest[0];
+    if (!hhmm) return 'usage: /time <category> <match> <hh:mm>';
     const tz = state.repo.tournaments.get(state.slug).tjson.timezone;
     const iso = buildScheduled(hhmm, tz);
     if (!iso) return `bad time ${JSON.stringify(hhmm)} — expected hh:mm, e.g. 10:30`;
-    return applyAndCommit(state, 'time', matchId, c => applyTime(c, matchId, iso));
+    return applyAndCommit(state, 'time', cat, matchId, c => applyTime(c, matchId, iso));
   }
 }
 
-function dispatch(kind, args, state) {
-  if (kind === 'ls') return listing(state);
-  if (kind === 'cd') {
-    if (!args[0]) return curPath(state);
-    const r = navigate(state, args[0]);
-    if (r.err) return r.err;
-    state.slug = r.slug;
-    state.cat = r.cat;
-    return '→ ' + curPath(state);
+function dispatch(cmd, state) {
+  if (cmd.needSlash) return `did you mean /${cmd.kind}?`;
+  const { kind, args } = cmd;
+  if (kind === 'ls') {
+    // at root there is no selected tournament, so no categories — ls falls through to the
+    // tournament list; a filter token is only a category id when it is one
+    const cats = state.slug ? (state.repo.tournaments.get(state.slug).tjson.categories || []).map(c => c.id) : [];
+    const first = args[0];
+    const cat = first && cats.includes(first) ? first : null;
+    const player = args.slice(cat ? 1 : 0).join(' ') || null;
+    return listing(state, cat, player);
   }
-  if (kind === 'score' || kind === 'wo' || kind === 'void' || kind === 'time' || kind === 'venue') {
-    if (state.cat === null) return 'cd into a category first';
-    return editCmd(state, kind, args);
+  if (kind === 'use') {
+    if (!args[0]) return tournamentList(state);
+    if (!state.repo.tournaments.has(args[0])) return `unknown tournament ${args[0]} — tab completes`;
+    state.slug = args[0];
+    return '→ ' + args[0];
   }
-  if (kind === 'publish') return gitPublish(state);
-  if (kind === 'pull') return gitPull(state);
   if (kind === 'status') return statusCmd(state);
-  if (kind === 'validate') return validateText(state.repo);
   if (kind === 'help') return helpText();
+  if (kind === 'publish') return gitPublish(state);
+  const [cat, matchId, ...rest] = args;
+  if (!cat || matchId === undefined) return `usage: /${kind} <category> <match> … — see help`;
+  return editCmd(state, kind, cat, matchId, rest);
 }
-
-const curPath = state => `${state.slug || '/'}${state.cat ? '/' + state.cat : ''}`;
 
 function replMain(root, siteRoot, repo) {
-  const state = { root, siteRoot, repo, slug: null, cat: null };
+  const state = { root, siteRoot, repo, slug: null };
   if (repo.index.length) {
     const last = repo.index[repo.index.length - 1]; // the REPL default: the latest tournament
     if (last && repo.tournaments.has(last.slug)) state.slug = last.slug;
   }
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout, completer: completer(state), historySize: 500 });
   const show = () => { rl.setPrompt(makePrompt(state)); rl.prompt(); };
-  console.log(C.dim('gitbracket — tab completes, help for commands, q to quit'));
+  console.log(C.dim('gitbracket — tab completes, help for commands, quit to leave'));
   rl.on('line', async line => {
     const t = line.trim();
     if (!t) console.log(paint(listing(state)));
     else {
-      const { kind, args } = parseCmd(t);
-      if (kind === 'q') { state.quit = true; rl.close(); return; }
-      if (kind === 'unknown') {
-        const word = t.split(/\s+/)[0];
-        const info = state.slug ? state.repo.tournaments.get(state.slug) : null;
-        const target = state.slug === null ? state.repo.tournaments.has(word)
-          : state.cat === null && info && (info.tjson.categories || []).some(c => c.id === word);
-        console.log(paint(`unknown command ${word}${target ? ` — did you mean cd ${word}?` : ''} — help`));
-      } else {
-        console.log(paint(await dispatch(kind, args, state)));
-      }
+      const cmd = parseCmd(t);
+      if (cmd.kind === 'q' || cmd.kind === 'quit') { state.quit = true; rl.close(); return; }
+      const out = cmd.kind === 'unknown' ? `unknown command ${t.split(/\s+/)[0]} — help` : await dispatch(cmd, state);
+      console.log(paint(out));
     }
-    if (state.quit) return; // q/EOF landed while this async command was in flight
+    if (state.quit) return; // quit/EOF landed while this async command was in flight
     show();
   });
   rl.on('close', () => { state.quit = true; console.log(C.dim('bye')); });
@@ -548,4 +597,4 @@ function main(root) {
   replMain(root, siteRoot, repo);
 }
 
-module.exports = { parseGame, buildScheduled, applyScore, applyResult, applyVenue, applyTime, writeEdit, commitMessage, parseCmd, navigate, main, koCompare };
+module.exports = { parseGame, buildScheduled, applyScore, applyResult, applyVenue, applyTime, writeEdit, commitMessage, editDetail, parseCmd, listText, main, koCompare };

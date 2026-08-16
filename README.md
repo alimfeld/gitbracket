@@ -93,4 +93,4 @@ One page, fragment-routed. `#<slug>` is a tournament's standings;
 
 ## Tools
 
-**`gb.js`** — the one CLI. `node gb.js` starts the match-day REPL (navigate, record scores, walkovers and voids, move venues; every edit commits itself); `node gb.js validate [slug]` checks data without the REPL; `node gb.js schedule <spec>` generates a tournament file from a spec (`specs/<slug>.json`); `node gb.js publish` ships `site/` to the domain in `site/CNAME`. The commands live as modules under `src/`; `site/` stays the shipping surface.
+**`gb.js`** — the one CLI. `node gb.js` starts the match-day REPL (`help` inside for commands — every edit validates and commits itself); `node gb.js validate [slug]` checks data without the REPL; `node gb.js schedule <spec>` generates a tournament file from a spec (`specs/<slug>.json`); `node gb.js publish` ships `site/` to the domain in `site/CNAME`. The commands live as modules under `src/`; `site/` stays the shipping surface.

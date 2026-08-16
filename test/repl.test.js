@@ -1,6 +1,6 @@
 'use strict';
 
-// repl.js: scoring eligibility, edits, command parsing, navigation, commit messages, disk writes.
+// repl.js: scoring eligibility, edits, command parsing, listing filters, commit messages, disk writes.
 
 const fs = require('fs');
 const os = require('os');
@@ -99,32 +99,61 @@ test('repl parseGame', () => {
   assert(repl.parseGame('11x9') === null, 'bad shape is null');
 });
 
-test('repl parseCmd: every line is a command — the first word is the verb', () => {
-  assert.deepEqual(repl.parseCmd('score 1 11:9 11:7'), { kind: 'score', args: ['1', '11:9', '11:7'] });
-  assert.deepEqual(repl.parseCmd('wo 1 b'), { kind: 'wo', args: ['1', 'b'] });
-  assert.deepEqual(repl.parseCmd('void 1'), { kind: 'void', args: ['1'] });
-  assert.deepEqual(repl.parseCmd('venue 1 court-2'), { kind: 'venue', args: ['1', 'court-2'] });
-  assert.deepEqual(repl.parseCmd('time 1 10:30'), { kind: 'time', args: ['1', '10:30'] });
-  assert.deepEqual(repl.parseCmd('publish'), { kind: 'publish', args: [] });
-  assert.deepEqual(repl.parseCmd('cd md40'), { kind: 'cd', args: ['md40'] });
-  assert.deepEqual(repl.parseCmd('q'), { kind: 'q', args: [] });
-  assert.deepEqual(repl.parseCmd('md40'), { kind: 'unknown', args: [] }, 'bare words are not commands');
-  assert.deepEqual(repl.parseCmd('/score 1'), { kind: 'unknown', args: ['1'] }, 'slashes are not commands');
+test('repl parseCmd: mutators are slash-gated, reading is bare', () => {
+  const mutators = {
+    '/score md 7 11:9 11:7': ['score', ['md', '7', '11:9', '11:7']],
+    '/wo md 1 b': ['wo', ['md', '1', 'b']],
+    '/void md 1': ['void', ['md', '1']],
+    '/venue md 1 court-2': ['venue', ['md', '1', 'court-2']],
+    '/time md 1 10:30': ['time', ['md', '1', '10:30']],
+  };
+  for (const [line, [kind, args]] of Object.entries(mutators)) {
+    assert.deepEqual(repl.parseCmd(line), { kind, args, needSlash: false }, `slashed ${kind} parses`);
+  }
+  assert.deepEqual(repl.parseCmd('/publish'), { kind: 'publish', args: [], needSlash: false });
+  assert.equal(repl.parseCmd('score md 1 11:9').needSlash, true, 'bare mutator is flagged, never executed');
+  assert.equal(repl.parseCmd('publish').needSlash, true, 'bare publish is flagged — publish ships');
+  assert.equal(repl.parseCmd('wo md 1 a').needSlash, true, 'bare wo is flagged');
+  assert.deepEqual(repl.parseCmd('use sample'), { kind: 'use', args: ['sample'], needSlash: false });
+  assert.deepEqual(repl.parseCmd('ls md karin'), { kind: 'ls', args: ['md', 'karin'], needSlash: false });
+  assert.deepEqual(repl.parseCmd('q'), { kind: 'q', args: [], needSlash: false });
+  assert.deepEqual(repl.parseCmd('quit'), { kind: 'quit', args: [], needSlash: false });
+  assert.deepEqual(repl.parseCmd('/ls md'), { kind: 'ls', args: ['md'], needSlash: false }, 'slashing a bare command is harmless');
+  assert.deepEqual(repl.parseCmd('md40'), { kind: 'unknown', args: [], needSlash: false }, 'bare words are not commands');
+  assert.deepEqual(repl.parseCmd('/score md 1'), { kind: 'score', args: ['md', '1'], needSlash: false }, 'a leading slash permits a mutator');
+  assert.deepEqual(repl.parseCmd('cd md40').kind, 'unknown', 'cd is gone — use selects the tournament');
+  assert.deepEqual(repl.parseCmd('pull').kind, 'unknown', 'pull is gone — leave it to the shell');
 });
 
-test('repl navigate: root → tournament → category, up and root shortcuts', () => {
+test('repl listText: player filter narrows standings rows and matches to that player', () => {
   const repo = loadRepo(FIX('sample'));
-  const root = { repo, slug: null, cat: null };
-  assert.deepEqual(repl.navigate(root, 'sample'), { slug: 'sample', cat: null });
-  assert.deepEqual(repl.navigate(root, 'nope').err, 'unknown tournament nope — tab completes', 'unknown slug errors');
-  const tour = { repo, slug: 'sample', cat: null };
-  assert.deepEqual(repl.navigate(tour, 'md40'), { slug: 'sample', cat: 'md40' }, 'category entered');
-  assert.deepEqual(repl.navigate(tour, 'nope').err, 'unknown category nope — tab completes', 'unknown category errors');
-  const cat = { repo, slug: 'sample', cat: 'md40' };
-  assert.deepEqual(repl.navigate(cat, '1').err, 'matches are leaves — score 1 … or cd ..', 'matches are leaves');
-  assert.deepEqual(repl.navigate(cat, '..'), { slug: 'sample', cat: null }, '.. goes up to the tournament');
-  assert.deepEqual(repl.navigate(tour, '..'), { slug: null, cat: null }, '.. from a tournament goes to root');
-  assert.deepEqual(repl.navigate(cat, '/'), { slug: null, cat: null }, '/ goes to root');
+  const all = repl.listText(repo, 'sample', ['md40'], null);
+  assert(all.includes('Pool A Teams'), 'pool id lives in the table header — no title line');
+  assert(all.includes('Ada Lovelace'), 'unfiltered view lists Ada\'s team');
+  const ada = repl.listText(repo, 'sample', ['md40'], 'ada');
+  assert(ada.includes('Ada Lovelace') && ada.includes('Grace Hopper'), 'filtered standings keep Ada\'s team');
+  // standings rows are boxed (| rank | team …); match lines start with four spaces — opponents
+  // staying in match lines is expected, they only drop out of the standings table
+  const standingRows = ada.split('\n').filter(l => /^│\s*\d/.test(l));
+  assert.equal(standingRows.length, 1, 'only the player\'s standings row remains');
+  assert(standingRows[0].includes('Ada Lovelace'), 'the surviving row is Ada\'s team');
+  const matchLines = ada.split('\n').filter(l => l.includes(' vs ') || l.includes('·'));
+  assert(matchLines.length > 0, 'filtered listing still has matches');
+  assert(matchLines[0].startsWith('md40 '), 'match refs carry the category id — copy-paste into /score');
+  for (const l of matchLines) {
+    assert(l.includes('Ada Lovelace') || l.includes('Grace Hopper'), `every listed match holds the player: ${l.trim()}`);
+  }
+  assert(repl.listText(repo, 'sample', ['md40'], 'nobody-here').includes('nothing for'), 'no match → nothing for "…"');
+  // `ls <category>` keeps the full standings + match sheet; bare `ls` sections per category
+  const xd = repl.listText(repo, 'sample', ['xd'], null);
+  assert(xd.includes('Pool A Teams'), 'xd standings render');
+  const everything = repl.listText(repo, 'sample', ['md40', 'xd'], null);
+  assert(everything.includes('Men\'s Doubles 40+ — md40') && everything.includes('Mixed Doubles — xd'), 'bare ls names the category first, id second');
+  // a filter that matches nothing drops every section — no dangling category titles
+  const none = repl.listText(repo, 'sample', ['md40', 'xd'], 'nobody-here');
+  assert(!none.includes('Men\'s Doubles 40+ — md40') && !none.includes('Mixed Doubles — xd'), 'empty sections are suppressed');
+  assert(none.includes('nothing for'), '…replaced by the nothing-for line');
+  assert(everything.includes('\n\nMixed Doubles — xd'), 'sections are separated by a blank line — never glued');
 });
 
 test('repl commitMessage: conventional types with tournament scope', () => {
@@ -133,6 +162,19 @@ test('repl commitMessage: conventional types with tournament scope', () => {
   assert.equal(repl.commitMessage('void', '2026-mammut60', 'xd', '7', 'void'), 'void(2026-mammut60): xd/7 void');
   assert.equal(repl.commitMessage('venue', '2026-mammut60', 'xd', '3', '→ court-2'), 'venue(2026-mammut60): xd/3 → court-2');
   assert.equal(repl.commitMessage('time', '2026-mammut60', 'md40', '1', '→ 2025-07-14T16:00:00-04:00'), 'time(2026-mammut60): md40/1 → 2025-07-14T16:00:00-04:00');
+});
+
+test('repl editDetail: venue/time edits report the move, never the match result', () => {
+  const repo = loadRepo(FIX('sample'));
+  const { matches } = md40Ctx(repo);
+  repl.applyResult(matches, '1', 'walkover', 'a'); // a decided match — the old bug mislabeled moves on these
+  const m1 = matches.find(m => m.id === 1);
+  m1.venue = 'court-2';
+  assert.equal(repl.editDetail('venue', m1), '→ court-2', 'venue edit reports the venue on a decided match');
+  m1.scheduled = '2025-07-14T16:00:00';
+  assert.equal(repl.editDetail('time', m1), '→ 2025-07-14T16:00:00', 'time edit reports the time');
+  assert.equal(repl.editDetail('walkover', m1), 'side a wins by walkover', 'walkover detail from the result');
+  assert.equal(repl.editDetail('void', { result: { status: 'void' } }), 'void', 'void detail');
 });
 
 test('repl writeEdit: rollback on validation failure, write on success (real disk)', () => {
