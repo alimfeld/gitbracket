@@ -374,7 +374,7 @@ function completer(state) {
       } else if (MUT.includes(verb) && verb !== 'publish' && parts.length === 2) cands = cats;
       else if (MUT.includes(verb) && verb !== 'publish' && parts.length === 3) {
         const arr = cats.includes(parts[1]) ? info.matches.get(parts[1]) : null;
-        cands = arr ? arr.map(m => m.id) : [];
+        cands = arr ? arr.map(m => String(m.id)) : []; // ids are numbers; startsWith needs strings
       } else if (verb === 'venue' && parts.length === 4) {
         cands = ((info && info.tjson.venues) || []).map(v => v.id);
       }
@@ -551,7 +551,9 @@ function dispatch(cmd, state) {
   }
   if (kind === 'use') {
     if (!args[0]) return tournamentList(state);
-    if (!state.repo.tournaments.has(args[0])) return `unknown tournament ${args[0]} — tab completes`;
+    const info = state.repo.tournaments.get(args[0]);
+    if (!info) return `unknown tournament ${args[0]} — tab completes`;
+    if (!info.tjson) return `tournament ${args[0]} has no readable data — the validator reports it`;
     state.slug = args[0];
     return '→ ' + args[0];
   }
@@ -563,12 +565,16 @@ function dispatch(cmd, state) {
   return editCmd(state, kind, cat, matchId, rest);
 }
 
+// Default: the latest tournament — a null file would crash every command, so skip it.
+function defaultSlug(repo) {
+  if (!repo.index.length) return null;
+  const last = repo.index[repo.index.length - 1];
+  const info = last && repo.tournaments.get(last.slug);
+  return info && info.tjson ? last.slug : null;
+}
+
 function replMain(root, siteRoot, repo) {
-  const state = { root, siteRoot, repo, slug: null };
-  if (repo.index.length) {
-    const last = repo.index[repo.index.length - 1]; // the REPL default: the latest tournament
-    if (last && repo.tournaments.has(last.slug)) state.slug = last.slug;
-  }
+  const state = { root, siteRoot, repo, slug: defaultSlug(repo) };
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout, completer: completer(state), historySize: 500 });
   const show = () => { rl.setPrompt(makePrompt(state)); rl.prompt(); };
   console.log(C.dim('gitbracket — tab completes, help for commands, quit to leave'));
@@ -596,4 +602,4 @@ function main(root) {
   replMain(root, siteRoot, repo);
 }
 
-module.exports = { parseGame, buildScheduled, applyScore, applyResult, applyVenue, applyTime, writeEdit, commitMessage, editDetail, parseCmd, listText, main, koCompare };
+module.exports = { parseGame, buildScheduled, applyScore, applyResult, applyVenue, applyTime, writeEdit, commitMessage, editDetail, parseCmd, listText, completer, defaultSlug, dispatch, main, koCompare };

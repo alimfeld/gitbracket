@@ -19,6 +19,24 @@ function md40Ctx(repo) {
   return { tjson, matches, ctx: makeCat({ meta: tjson.categories.find(c => c.id === 'md40'), matches }, tjson) };
 }
 
+test('completer: match-id position completes on strings — numeric ids can’t throw', () => {
+  const repo = loadRepo(FIX('sample'));
+  const complete = repl.completer({ repo, slug: 'sample' });
+  const [cands, partial] = complete('/score md40 7');
+  assert.equal(partial, '7');
+  assert.ok(cands.every(c => typeof c === 'string'), 'match-id candidates are strings');
+  assert.doesNotThrow(() => complete('/score md40 1'), 'a partial that matches ids still completes cleanly');
+});
+
+test('repl: a null-tjson tournament is refused (auto-select and /use)', () => {
+  const repo = loadRepo(FIX('bad-null-tjson'));
+  assert.equal(repl.defaultSlug(repo), null, 'auto-select skips a tournament whose file is null');
+  const state = { repo, slug: null };
+  assert.match(repl.dispatch({ kind: 'use', args: ['bad-null-tjson'] }, state), /no readable data/);
+  assert.equal(state.slug, null, '/use refuses the broken tournament');
+  assert.doesNotThrow(() => repl.dispatch({ kind: 'ls', args: [] }, state), 'bare ls at the root stays safe');
+});
+
 test('repl applyScore: games + a played result at the target, repo still validates', () => {
   const repo = loadRepo(FIX('sample'));
   const { matches, ctx } = md40Ctx(repo);
