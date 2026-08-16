@@ -18,7 +18,7 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const { spawnSync } = require('child_process');
-const { makeCat, isDone, sideLabel, teamLabel, schedTime, gamesText, fmtTime, matchLabel, koColumn, placementLabel, poolStandings, fmtDiff, bestOfOf, countWins, sideLetter, winnerIdx, dayKey } = require('../site/derive.js');
+const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, gamesText, fmtTime, matchLabel, koColumn, placementLabel, poolStandings, fmtDiff, bestOfOf, countWins, sideLetter, winnerIdx, dayKey } = require('../site/derive.js');
 const { loadRepo, writeTournament } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 const { ship } = require('./publish.js');
@@ -117,6 +117,18 @@ function writeEdit(siteRoot, repo, slug, catId, apply) {
   return { file };
 }
 
+// A side's listing name: unresolved slots keep the long form — "Winner of
+// 8", "1st in Pool A" — and a resolved slot appends the compact seed in
+// parens, so the team reads first with its origin beside it: Ada / Grace (7W).
+function listingSide(side, ctx) {
+  const ids = resolveSide(side, ctx);
+  if (!ids) return sideLabel(side, ctx); // includes the TBD fallback
+  const seed = side.kind === 'match' ? `${side.match}${side.result === 'winner' ? 'W' : 'L'}`
+    : side.kind === 'pool' ? `${side.pool}${side.rank}` : null;
+  const name = teamLabel(ids, ctx);
+  return seed === null ? name : `${name} (${seed})`;
+}
+
 function formatMatchLine(m, ctx, tz, stage, sidew, idw, venuew, stagew) {
   const t = schedTime(m, tz);
   const time = t === null ? C.yellow('TBD'.padStart(8)) : C.dim(fmtTime(t, tz).padStart(8));
@@ -128,8 +140,8 @@ function formatMatchLine(m, ctx, tz, stage, sidew, idw, venuew, stagew) {
   const r = m.result;
   const score = !r || r.status === 'played' ? C.green(parts.join(' '))
     : C.yellow(r.status === 'void' ? 'void' : `W/O side ${r.winner}`);
-  const s0 = sideLabel(m.sides[0], ctx);
-  const s1 = sideLabel(m.sides[1], ctx);
+  const s0 = listingSide(m.sides[0], ctx);
+  const s1 = listingSide(m.sides[1], ctx);
   // decided matches color the winner green — the played score column already
   // reads green, so a green winner name and its score are one win signal ('vs'
   // edge stays on the plain labels, so the pad arithmetic measures uncolored
@@ -190,7 +202,7 @@ function listText(repo, slug, cat) {
   });
   const idw = Math.max(...all.map(r => String(r.m.id).length));
   const stagew = Math.max(...all.map(r => r.stage.length));
-  const sidew = Math.max(...all.map(r => sideLabel(r.m.sides[0], ctx).length + 4 + sideLabel(r.m.sides[1], ctx).length));
+  const sidew = Math.max(...all.map(r => listingSide(r.m.sides[0], ctx).length + 4 + listingSide(r.m.sides[1], ctx).length));
   const venuew = Math.max(...all.map(r => (r.m.venue || 'TBD').length));
   if (all.length) lines.push('');
   for (const { m, stage } of all) {
