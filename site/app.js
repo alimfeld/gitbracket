@@ -61,6 +61,7 @@ async function loadAll(route, indexOnly) {
 // ---------- renderers ----------
 
 // Breadcrumb trail; the current page lives in the h1 (every crumb is a link).
+// hrefs arrive raw — esc once, at the attribute.
 const crumbs = items => items.map(([href, label]) => `<a href="${esc(href)}">${esc(label)}</a>`).join(' > ');
 
 // The one missing-data message, verbatim in every view and the boot retry.
@@ -73,7 +74,7 @@ const matchGrid = (ms, ctx) => `<section class="grid">${ms.map(m => matchCard(m,
 // Category pills — one toggle pattern for standings and picker.
 const catPills = (cats, slug, base, activeId, dropHref) => cats.map(c => {
   const active = c.id === activeId;
-  const href = active ? dropHref : `#${esc(slug)}/${base}/${esc(c.id)}`;
+  const href = active ? dropHref : `#${slug}/${base}/${c.id}`;
   return `<a href="${esc(href)}"${active ? ' aria-current="true"' : ''}>${esc(c.name)}</a>`;
 }).join('');
 
@@ -87,7 +88,7 @@ function renderIndex(route, data) {
 function renderStandings(route, data) {
   if (!data.tjson) return MISSING;
   const parts = [`<header><nav class="split">${crumbs([['#', 'Home']])}<a href="#${esc(data.t.slug)}/players">Players</a></nav><h1>${esc(data.t.name)}</h1>`];
-  parts.push(`<nav class="pills">${catPills(data.tjson.categories || [], data.t.slug, 'categories', route.filter, `#${esc(data.t.slug)}`)}</nav></header>`);
+  parts.push(`<nav class="pills">${catPills(data.tjson.categories || [], data.t.slug, 'categories', route.filter, `#${data.t.slug}`)}</nav></header>`);
   for (const c of data.cats) {
     if (route.filter && c.meta.id !== route.filter) continue; // pills keep every category; only the section list narrows
     const ctx = makeCat(c, data.tjson);
@@ -234,14 +235,14 @@ function renderPlayer(route, data) {
     if (pid && !(data.tjson.categories || []).some(c => c.id === pid)) return '<p>Player not found.</p>';
 
     const ctxs = catCtxs(data);
-    const pills = catPills(data.tjson.categories || [], data.t.slug, 'players', pid, `#${esc(data.t.slug)}/players`);
+    const pills = catPills(data.tjson.categories || [], data.t.slug, 'players', pid, `#${data.t.slug}/players`);
     const sel = ctxs.find(c => c.id === pid);
     const items = players.filter(pl => !sel || playerMatches(sel, pl.id).length).map(pl => {
       const lbls = ctxs.map(c => playerMatches(c, pl.id).length ? `<span class="cat-label">${esc(c.name)}</span>` : '').join('');
       const cluster = lbls ? `<span>${lbls}</span>` : '';
-      return `<li><a href="#${esc(data.t.slug)}/players/${esc(pl.id)}">${esc(pl.name || pl.id)}</a>${cluster}</li>`;
+      return `<li><a href="${esc(`#${data.t.slug}/players/${pl.id}`)}">${esc(pl.name || pl.id)}</a>${cluster}</li>`;
     }).join('');
-    return `<header><nav>${crumbs([['#', 'Home'], [`#${esc(data.t.slug)}`, data.t.name]])}</nav><h1>Players</h1><nav class="pills">${pills}</nav></header><ul class="players">${items || `<li>${sel ? 'No players in this category.' : 'No players.'}</li>`}</ul>`;
+    return `<header><nav>${crumbs([['#', 'Home'], [`#${data.t.slug}`, data.t.name]])}</nav><h1>Players</h1><nav class="pills">${pills}</nav></header><ul class="players">${items || `<li>${sel ? 'No players in this category.' : 'No players.'}</li>`}</ul>`;
   }
   const rows = [];
   const ctxs = catCtxs(data);
@@ -266,7 +267,7 @@ function renderPlayer(route, data) {
     if (!blocksByDay.has(key)) blocksByDay.set(key, []);
     blocksByDay.get(key).push({ ctx, ...span });
   }
-  const parts = [`<header><nav>${crumbs([['#', 'Home'], [`#${esc(data.t.slug)}`, data.t.name], [`#${esc(data.t.slug)}/players`, 'Players']])}</nav><h1>${esc(p.name)}</h1></header>`];
+  const parts = [`<header><nav>${crumbs([['#', 'Home'], [`#${data.t.slug}`, data.t.name], [`#${data.t.slug}/players`, 'Players']])}</nav><h1>${esc(p.name)}</h1></header>`];
   for (const [key, g] of groups) {
     parts.push(`<h2>${esc(key)}</h2>`);
     const day = [];
@@ -352,6 +353,7 @@ function boot() {
 
   const load = r => {
     loadAll(r, r.view === 'index').then(d => {
+      if (route !== r) return; // superseded by a newer navigation — don't render a stale page
       if (r.view !== 'index' && !d.tjson) { // fetch failed or unknown slug — with a board, keep it and retry silently
         if (!data) app.innerHTML = MISSING;
         if (++fails <= MAX_FAILS) setTimeout(() => load(r), RETRY_MS); // deploy window or blip — retry a few times, then give up
