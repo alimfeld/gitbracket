@@ -32,6 +32,7 @@ const V = [ // [name, fixture dir, ok, expected message regex]
   ['pool slot rank out of range', 'bad-rank-range', r => r.errs.length > 0, /out of range/],
   ['dead-tie pool slot warns only', 'tie', r => r.errs.length === 0 && r.warns.length > 0, /dead tie/],
   ['3-way dead tie warns at rank 1', 'tie3', r => r.errs.length === 0 && r.warns.length > 0, /dead tie/],
+  ['adjacent dead-tie clusters validate clean', 'adjtie', r => r.errs.length === 0 && r.warns.length === 0, null],
   ['tiebreak fixture validates', 'tiebreak', r => r.errs.length === 0 && r.warns.length === 0, null],
   ['cross-category venue overlap', 'bad-cross-overlap', r => r.errs.length > 0, /also schedules/],
   ['undeclared category matches file', 'bad-undeclared-cat', r => r.errs.length > 0, /undeclared category/],
@@ -72,6 +73,12 @@ for (const [name, dir, ok, re] of V) {
     assert(!r.errs.some(e => e.endsWith(': undefined')), 'no error message may end in ": undefined" (err(f, m) called with one arg?)');
   });
 }
+
+test('two malformed index entries: real shape errors, no bogus undefined-slug duplicate', () => {
+  const r = validateFixture('bad-duplicate-slug');
+  assert(r.errs.some(e => /must match/.test(e)), 'the shape errors are still reported');
+  assert(!r.errs.some(e => e.includes('duplicate slug undefined')), 'two missing slugs are not a duplicate-slug pair');
+});
 
 test('filterErrs: validate <slug> narrows to that tournament', () => {
   const errs = [

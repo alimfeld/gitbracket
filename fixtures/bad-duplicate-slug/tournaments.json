@@ -1,4 +1,6 @@
 [
   { "slug": "dup", "name": "First" },
-  { "slug": "dup", "name": "Second" }
+  { "slug": "dup", "name": "Second" },
+  { "name": "No slug A" },
+  { "name": "No slug B" }
 ]

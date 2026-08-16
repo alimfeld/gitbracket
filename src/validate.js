@@ -57,13 +57,14 @@ function validateRepo(repo) {
     const where = `tournaments.json [${i}]`;
     if (!t || typeof t !== 'object') { err(where, 'entry must be an object'); continue; }
     if (typeof t.name !== 'string' || !t.name.trim()) err(where, 'name must be a non-empty string');
-    if (typeof t.slug !== 'string' || !ID_RE.test(t.slug)) err(where, `slug ${JSON.stringify(t.slug)} must match ${ID_RE}`);
+    if (typeof t.slug !== 'string' || !ID_RE.test(t.slug)) {
+      err(where, `slug ${JSON.stringify(t.slug)} must match ${ID_RE}`);
+      continue; // never track or look up a malformed slug
+    }
     if (seenSlugs.has(t.slug)) err(where, `duplicate slug ${t.slug}`);
     seenSlugs.add(t.slug);
-    if (typeof t.slug === 'string' && ID_RE.test(t.slug)) {
-      const info = tournaments.get(t.slug);
-      if (info) validateTournamentData(t.slug, t.name, info, errs, warns);
-    }
+    const info = tournaments.get(t.slug);
+    if (info) validateTournamentData(t.slug, t.name, info, errs, warns);
   }
 
   return { errs, warns };
