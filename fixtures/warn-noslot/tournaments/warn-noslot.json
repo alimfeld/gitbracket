@@ -1,0 +1,8 @@
+{
+  "name": "Warn No Slot",
+  "timezone": "UTC",
+  "venues": [{ "id": "court-1", "name": "Court 1" }],
+  "categories": [{ "id": "t", "name": "T", "bestOf": { "groups": 1, "knockout": 1 } }],
+  "players": [{ "id": "p1", "name": "P1" }, { "id": "p2", "name": "P2" }],
+  "matches": { "t": [ { "id": 1, "pool": "A", "venue": "court-1", "scheduled": "2025-07-14T09:00:00", "sides": [ { "kind": "players", "ids": ["p1"] }, { "kind": "players", "ids": ["p2"] } ] } ] }
+}

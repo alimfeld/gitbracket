@@ -5,17 +5,14 @@
 // instant with nothing lost. Dispatched from gb.js; pure edit functions are
 // exported for tests.
 //
-// Flat command model, no cursors: `use` picks a tournament, `ls` reads it,
-// and every editor is slash-gated — <verb> <category> <match> <args>. A bare
-// line never mutates data or ships: the mutators (score, wo, void, venue,
-// time, publish) must be typed with a leading /, and a bare spelling is
-// rejected with a hint. Every successful edit is validated (the real
-// validateRepo) and committed immediately. publish ships site/ (validate
+// Flat command model, no cursors: `use` picks a tournament, `ls` reads it.
+// Mutators (score, wo, void, venue, time, publish) are slash-gated — a bare
+// spelling is rejected with a hint; every successful edit validates (the
+// real validateRepo) and commits immediately. publish ships site/ (validate
 // gate, then surge) but never pushes git — that stays the director's manual
-// pull --rebase && push. The prompt shows git facts only: ↑n = commits not
-// on origin/main, ↓n = commits on origin/main not local, * = dirty tree.
-// status compares the selected tournament's file against the live domain.
-// Tab completes at every position.
+// pull --rebase && push. The prompt shows git facts only (↑n ahead, ↓n
+// behind, * dirty); status compares the selected tournament's file against
+// the live domain. Tab completes at every position.
 
 const fs = require('fs');
 const path = require('path');

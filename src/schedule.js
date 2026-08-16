@@ -1,29 +1,16 @@
 // GitBracket tournament generator — run via `node gb.js schedule specs/<slug>.json`.
 //
-// Reads a spec (specs/<slug>.json) and writes the full site/tournaments/<slug>.json
-// file from scratch: the skeleton (venues, categories, players) plus every
-// match. The spec is the single source for the schedule — the file is
+// Reads a spec (specs/<slug>.json), writes the full site/tournaments/<slug>.json
+// from scratch (skeleton + every scheduled match), and keeps the index in
+// sync. The spec is the single source for the schedule — the file is
 // regenerated wholesale, so structure is never hand-edited; scores and venue
-// moves go through the REPL. The index (site/tournaments.json) is kept in sync
-// too.
-//
-// Format: each category's teams run a round-robin of pools up to poolSize,
-// then a single-elimination knockout everyone advances into. Every match gets
-// a venue and start time: each category starts at its blocks time, in
-// category slotMinutes steps. The strongest seeds (pool winners first) take
-// the byes that round the field up to a power of two; the rest pair best vs
-// worst across pools in round 1 — for two pools of three: A2 vs B3, A3 vs B2,
-// with A1 and B1 byed. Winners advance, semifinal losers play for 3rd place.
-// A category's "final" override (bestOf / slotMinutes) lands on the final and
-// the 3rd-place match; without it they use the stage defaults.
+// moves go through the REPL. Seed/format semantics: README.
 //
 // Run:  node gb.js schedule specs/<slug>.json   # then the pre-commit hook (or `node gb.js validate`) gates it
 //
-// Rerun after the registration deadline with the final spec.teams. Pools are
-// drawn in list order; shuffle spec.teams before the final run for a fair
-// draw. Incomplete registrations (partner open) stay out until the pair is
-// complete. Regeneration replaces the whole matches map (scores included) —
-// run it before results go in, not after.
+// Rerun after the registration deadline with the final spec.teams; shuffle
+// spec.teams before the final run for a fair draw. Regeneration replaces the
+// whole matches map (scores included) — run it before results go in, not after.
 'use strict';
 
 const fs = require('fs');

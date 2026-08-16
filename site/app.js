@@ -210,8 +210,9 @@ function renderVenue(route, data, now = Date.now()) {
     }
   }
   rows.sort((a, b) => a.t - b.t);
-  // venues with matches — a declared-but-unused court is simply absent
-  const venueNames = new Map((data.tjson.venues || []).map(x => [x.id, x.name]));
+  // venues with matches — a declared-but-unused court is simply absent;
+  // names come from makeCat's map (any ctx carries it), not a fresh derivation
+  const venueNames = ctxs[0] ? ctxs[0].venues : new Map();
   const venues = (data.tjson.venues || []).map(x => x.id).filter(id => rows.some(r => r.m.venue === id));
   const shown = v ? rows.filter(r => r.m.venue === v) : rows;
   const parts = [`<header><h1>${esc(data.t.name)}</h1><span id="k-clock"></span></header>`];

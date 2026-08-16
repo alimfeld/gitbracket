@@ -44,7 +44,7 @@ function makeCat(c, tjson) {
 function matchSlotMs(m, ctx) {
   const stage = m && m.pool !== undefined ? 'groups' : 'knockout';
   const cfg = (ctx && ctx.slotMinutes) || {};
-  return ((m && m.slotMinutes) || cfg[stage]) * 60 * 1000;
+  return ((m && m.slotMinutes) ?? cfg[stage]) * 60 * 1000; // ?? like bestOfOf — 0/NaN are rejected by the validator anyway
 }
 
 
@@ -169,14 +169,11 @@ function mutualKeys(list, ms, ctx) {
   return h;
 }
 
-// Classification ladder (FIBA / Six Invitational / Esports Wales): wins decide
-// first, against the whole pool; within each wins-block the ladder runs head
-// to head — wins, game differential, point differential over the block's
-// mutual matches only — then overall game/point differential. After a rung
-// separates some teams, the rest repeat the ladder restricted to themselves
-// (mutual keys recompute over the smaller set — a pair always splits via their
-// mutual match); a block still tied on the whole ladder is a dead tie
-// (flagged, renders TBD — the organizer arbitrates). Stable sort keeps
+// Ladder: wins first (whole pool), then within each wins-block head-to-head —
+// wins, game, point differential over the block's mutual matches only — then
+// overall differentials. A rung that separates some teams recurses on the rest
+// (mutual keys recompute over the smaller set); a block still tied is a dead
+// tie (flagged, renders TBD — the organizer arbitrates). Stable sort keeps
 // equal-key teams in creation order.
 function poolLadder(list, ms, ctx) {
   const out = [];
@@ -306,8 +303,9 @@ function reachableKo(ctx, pid) {
 
 // Longest chain of knockout matches starting at id (the match itself counts):
 // winner and loser branches are exclusive, so this is the max a team can still
-// play from that point. ponytail: O(N²) per id, memoized — fine while brackets
-// are tiny; a reverse-edge index is the upgrade if they ever grow.
+// play from that point. ponytail: O(N²) worst case with a shared memo (see
+// possibleSpan) — fine while brackets are tiny; a reverse-edge index is the
+// upgrade if they ever grow.
 function chainLen(ctx, id, memo = new Map()) {
   if (memo.has(id)) return memo.get(id);
   memo.set(id, 0); // cycle guard — validate rejects cycles anyway
@@ -334,9 +332,10 @@ function possibleSpan(ctx, pid) {
   if (!open.length && rows.some(r => r.m.pool !== undefined) && !ko.length) {
     open = ctx.matches.filter(m => m.pool === undefined).map(m => m.id);
   }
+  const memo = new Map(); // one memo across open ids — sibling paths share it, not just one chain
   const ts = open.map(id => schedTime(ctx.byId.get(id), ctx.tz)).filter(t => t !== null);
   if (!ts.length) return null;
-  return { min: Math.min(...ts), max: Math.max(...ts), count: Math.max(...open.map(id => chainLen(ctx, id))) };
+  return { min: Math.min(...ts), max: Math.max(...ts), count: Math.max(...open.map(id => chainLen(ctx, id, memo))) };
 }
 
 function matchRound(m, ctx, memo = new Map()) {
@@ -356,13 +355,13 @@ function matchRound(m, ctx, memo = new Map()) {
 const ordRules = new Intl.PluralRules('en', { type: 'ordinal' });
 const ordinal = n => n + ({ one: 'st', two: 'nd', few: 'rd' }[ordRules.select(n)] || 'th');
 
-// Classification label for a placement match (3rd/5th/7th place, classification
-// semis), null for main-bracket matches. Model: every placement match has a
-// rank range — the possible final ranks of its two teams. A loser edge from a
-// main-bracket round opens the round's loser range; inside the placement
+// Placement label (3rd/5th/7th place, classification semis), null for
+// main-bracket matches. A placement match's possible final ranks form a range:
+// loser edges open their feeder round's loser range; inside the placement
 // bracket a winner edge takes the top half of its feeder's range, a loser edge
 // the bottom half. A match whose loser edge feeds nothing decides a rank (the
-// top of its range); otherwise it's a classification semi over the range.
+// top of its range); otherwise it's a semi over the range. Memo lives on the
+// ctx — built fresh per render/listing, never reused across data edits.
 function placementLabel(m, ctx) {
   if (!ctx._plMemo) ctx._plMemo = new Map();
   const r = plRange(m, ctx, ctx._plMemo);
@@ -423,13 +422,10 @@ function winnerDepth(ctx, id, memo = new Map()) {
 
 // ---------- time ----------
 
-// IANA tz -> "+02:00"-style offset on a calendar date (Europe/Zurich in Sep is
-// CEST), noon-UTC so one date lands one stable offset — a DST-switch day picks
-// the post-switch offset throughout. Wall-clock scheduled strings resolve via
-// this, so the data stays readable local time and stays right if clock rules
-// change — no stamped offsets that can go stale. The generator stores local
-// time and the tz (already in the file) does the work — shared by tools and
-// site from this one place.
+// IANA tz -> "+02:00"-style offset on a calendar date, noon-UTC so one date
+// lands one stable offset — a DST-switch day picks the post-switch offset
+// throughout. Wall-clock scheduled strings resolve via this, so the data stays
+// readable local time and stays right if clock rules change.
 function tzOffset(tz, date) {
   const p = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'longOffset' })
     .formatToParts(new Date(date + 'T12:00:00Z')).find((x) => x.type === 'timeZoneName');
@@ -482,12 +478,11 @@ function roundName(depthFromEnd) {
 }
 
 // Bracket column: 0 is the final column, each winner edge one column back.
-// Depth-from-leaves (matchRound) can't place a bye'd semi — two pool slots give
-// it depth 0, yet its winner feeds the final. Winner edges
-// into a placement sub-bracket (5th place fed by the 5th–8th semis) do not
-// extend the chain, so it always terminates at the final. Placement matches
-// sit one column after the round their feeders branched from (bronze with the
-// final, 5th–8th semis with the semis).
+// Depth-from-leaves can't place a bye'd semi (two pool slots give it depth 0
+// yet it feeds the final); winner edges into a placement sub-bracket do not
+// extend the chain, so it terminates at the final. Placement matches sit with
+// the round their feeders branched from (bronze with the final). Memo on the
+// ctx — fresh per render/listing, never reused across data edits.
 function koColumn(m, ctx) {
   if (!ctx._koCol) {
     const memo = ctx._koCol = new Map();

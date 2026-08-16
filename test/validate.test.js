@@ -55,7 +55,10 @@ const V = [ // [name, fixture dir, ok, expected message regex]
   ['played result mismatches its games', 'bad-result-mismatch', r => r.errs.length > 0, /does not match the games/],
   ['unknown result status', 'bad-result-status', r => r.errs.length > 0, /one of/],
   ['games reaching the target without a result', 'bad-no-result', r => r.errs.length > 0, /record a result/],
-  ['void result with a winner', 'bad-void-winner', r => r.errs.length > 0, /no winner/]
+  ['void result with a winner', 'bad-void-winner', r => r.errs.length > 0, /no winner/],
+  ['void result carries games', 'bad-void-games', r => r.errs.length > 0, /mutually exclusive/],
+  ['malformed match sides reported, not a crash', 'bad-sides', r => r.errs.length > 0, /exactly two sides required/],
+  ['scheduled match with no slot length warns', 'warn-noslot', r => r.errs.length === 0 && r.warns.length > 0, /no slot length/]
 ];
 for (const [name, dir, ok, re] of V) {
   test(name, () => {
@@ -79,4 +82,16 @@ test('filterErrs: validate <slug> narrows to that tournament', () => {
   const got = filterErrs(errs, '2026-mammut60');
   assert.equal(got.length, 2, 'keeps the tournament file and its index entry');
   assert(!got.some(e => e.includes('other.json')), 'other tournaments stay out');
+});
+
+test('filterErrs: a substring-prefixed slug stays out (tie vs tie3)', () => {
+  const errs = [
+    'site/tournaments/tie.json: name does not match the index entry',
+    'site/tournaments/tie3.json: name does not match the index entry',
+    'tournaments.json [0]: duplicate slug tie3',
+    'tournaments.json [1]: slug "tie3" must match /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/, got "tie3"',
+  ];
+  const got = filterErrs(errs, 'tie');
+  assert.deepEqual(got, ['site/tournaments/tie.json: name does not match the index entry'],
+    'tie3 errors (file, duplicate slug, slug-format) must not leak into validate tie');
 });

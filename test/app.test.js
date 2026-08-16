@@ -1,6 +1,7 @@
 'use strict';
 
-// Derive engine (site/app.js): standings, slot resolution, scheduling, labels.
+// Derive engine (site/derive.js) + renderers (site/app.js): standings, slot
+// resolution, scheduling, labels.
 // Run from the repo root: `node --test`, or one suite:
 // `node --test --test-name-pattern 'slot' test/app.test.js`
 

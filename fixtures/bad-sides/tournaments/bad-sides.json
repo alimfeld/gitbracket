@@ -1,0 +1,7 @@
+{
+  "name": "Bad Sides",
+  "timezone": "UTC",
+  "categories": [{ "id": "t", "name": "T", "bestOf": { "groups": 1, "knockout": 1 } }],
+  "players": [{ "id": "p1", "name": "P1" }, { "id": "p2", "name": "P2" }],
+  "matches": { "t": [ { "id": 1, "pool": "A", "sides": 5 } ] }
+}

@@ -19,6 +19,7 @@ function validateResultShape(r, hasGames, target, m, where, err) {
     err(where, `result.status must be one of ${RESULT_STATUSES.join(', ')}, got ${JSON.stringify(r.status)}`);
   } else if (r.status === 'void') {
     if (r.winner !== undefined) err(where, 'a void result has no winner');
+    else if (hasGames) err(where, 'games and a void result are mutually exclusive');
   } else {
     if (r.winner !== 'a' && r.winner !== 'b') err(where, `result.winner must be 'a' or 'b', got ${JSON.stringify(r.winner)}`);
     if (r.status === 'played') {
@@ -160,6 +161,7 @@ function validateTournamentData(slug, indexName, info, errs, warns) {
   // category slotMinutes > default), so a long final can collide with the next match
   // even when starts are more than the default apart.
   const sched = [];
+  const noSlot = new Set(); // categories whose scheduled matches resolve to no slot length
   for (const cat of categories.values()) {
     const ms = info.matches.get(cat.id);
     if (!Array.isArray(ms)) continue;
@@ -169,8 +171,12 @@ function validateTournamentData(slug, indexName, info, errs, warns) {
       if (isDone(m, ctx)) continue;
       const t = schedTime(m, tjson.timezone);
       if (t === null) continue;
+      if (Number.isNaN(matchSlotMs(m, ctx))) noSlot.add(cat.id); // NaN slots make the kiosk's live/overdue windows uncomputable
       sched.push({ f: `${tFile} matches.${cat.id}`, m, t, ctx });
     }
+  }
+  for (const cid of noSlot) {
+    warns.push(`${tFile} matches.${cid}: scheduled matches resolve to no slot length — set slotMinutes (per stage or per match) or the kiosk can't mark matches overdue`);
   }
   for (let i = 0; i < sched.length; i++) {
     for (let j = i + 1; j < sched.length; j++) {
@@ -280,6 +286,7 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
     if (s === 2) return;
     if (s === 1) { cycle = m.id; return; }
     state.set(m.id, 1);
+    if (!Array.isArray(m.sides)) { state.set(m.id, 2); return; } // malformed sides: pass A reports it — never throw here
     for (const side of m.sides) {
       if (side && side.kind === 'match') {
         const ref = byId.get(side.match);
@@ -407,8 +414,11 @@ function validateGames(games, target, where, err) {
 }
 
 // validate <slug>: errors touching that tournament's file or index entry.
+// Exact matches only — a bare substring would leak tie3 errors into `validate tie`.
 function filterErrs(errs, slug) {
-  return errs.filter(e => e.includes(`tournaments/${slug}.json`) || e.includes(slug));
+  return errs.filter(e => e.includes(`tournaments/${slug}.json`)
+    || e.includes(`"${slug}"`)                        // slug "x" must match …
+    || new RegExp(`slug ${slug}(\\s|$)`).test(e));     // duplicate slug x
 }
 
 // CLI entry (dispatched from gb.js): root is the repo root, slug narrows the report.
