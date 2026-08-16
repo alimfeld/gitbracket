@@ -18,7 +18,7 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const { spawnSync } = require('child_process');
-const { makeCat, isDone, sideLabel, teamLabel, schedTime, gamesText, fmtTime, matchLabel, koColumn, placementLabel, poolStandings, fmtDiff, bestOfOf, countWins, sideLetter, dayKey } = require('../site/derive.js');
+const { makeCat, isDone, sideLabel, teamLabel, schedTime, gamesText, fmtTime, matchLabel, koColumn, placementLabel, poolStandings, fmtDiff, bestOfOf, countWins, sideLetter, winnerIdx, dayKey } = require('../site/derive.js');
 const { loadRepo, writeTournament } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 const { ship } = require('./publish.js');
@@ -130,7 +130,10 @@ function formatMatchLine(m, ctx, tz, stage, sidew, idw, venuew, stagew) {
     : C.yellow(r.status === 'void' ? 'void' : `W/O side ${r.winner}`);
   const s0 = sideLabel(m.sides[0], ctx);
   const s1 = sideLabel(m.sides[1], ctx);
-  const sides = s0 + C.dim(' vs ') + s1;
+  // decided matches bold the winner ('vs' edge stays on the plain labels, so
+  // the pad arithmetic measures uncolored text); void has no winner, nothing bolded
+  const w = winnerIdx(m, ctx);
+  const sides = (w === 0 ? C.bold(s0) : s0) + C.dim(' vs ') + (w === 1 ? C.bold(s1) : s1);
   const sidePad = sidew !== undefined ? ' '.repeat(Math.max(0, sidew - (s0.length + 4 + s1.length))) : '';
   const stagePad = stagew !== undefined ? ' '.repeat(Math.max(0, stagew - stage.length)) : '';
   return `${C.bold(idw ? String(m.id).padEnd(idw) : m.id)}  ${C.dim(stage)}${stagePad}  ${sides}${sidePad}  ${time}  ${venue}  ${score}`;
