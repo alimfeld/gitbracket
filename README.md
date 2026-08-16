@@ -27,15 +27,16 @@ matches keyed by category:
   "timezone": "America/New_York",
   "venues": [{ "id": "court-3", "name": "Court 3" }],
   "categories": [{ "id": "md40", "name": "Men's Doubles 40+",
-    "bestOf": { "groups": 3, "knockout": 5 } }],
+    "bestOf": { "groups": 3, "knockout": 5 },
+    "slotMinutes": { "groups": 30, "knockout": 45 } }],
   "players": [{ "id": "p1", "name": "Ada Lovelace" }],
   "matches": { "md40": [ /* below */ ] }
 }
 ```
 
 A match has two stages: `groups` (has a `pool`) and `knockout` (no pool).
-`bestOf` sets match length per stage; a match can override it with a plain
-number. A side is one of three kinds:
+`bestOf` sets match length per stage, `slotMinutes` the court slot per stage;
+a match can override either with a plain number. A side is one of three kinds:
 
 ```jsonc
 // players — the actual people; singles: one id, doubles: two.
@@ -89,7 +90,36 @@ One page, fragment-routed. `#<slug>` is a tournament's standings;
 - `#` — lists tournaments, past and current.
 - `#<slug>` — standings, all categories (`#<slug>/categories/<category-id>` narrows to one).
 - `#<slug>/venues` — the kiosk, the fullscreen board for the hall showing the day live on every court (`#<slug>/venues/<venue-id>` narrows to one court).
-- `#<slug>/players` — the player picker (`#<slug>/players/<player-id>` shows one player's schedule).
+- `#<slug>/players` — the player picker (`#<slug>/players/<player-id>` shows one player's schedule; `#<slug>/players/<category-id>` narrows the list to that category).
+
+## Specs
+
+`node gb.js schedule specs/<slug>.json` generates a tournament file from a
+spec — the single source for the schedule. `specs/2026-mammut60.json` is the
+worked example:
+
+```jsonc
+{ "slug": "2026-mammut60", "name": "Mammut Open 60+",
+  "timezone": "Europe/Zurich", "date": "2026-10-03", "poolSize": 5,
+  "blocks": { "md": "09:00", "xd": "13:00" },
+  "venues": { "court-1": "Court 1" },
+  "players": { "ada": "Ada", "ben": "Ben" },
+  "categories": [
+    { "id": "md", "name": "Men's Doubles", "bestOf": 1, "slotMinutes": 30,
+      "knockout": true, "placements": 2,
+      "final": { "bestOf": 3, "slotMinutes": 60 } }
+  ],
+  "teams": { "md": [["ada", "ben"]] } }
+```
+
+- `date` is the tournament day, `blocks` the first match of each category;
+  `poolSize` splits the category's `teams` into round-robin pools.
+- `bestOf`/`slotMinutes` are plain numbers applied to both stages;
+  `knockout: false` skips the knockout phase; `placements` (a power of 2)
+  sizes the classification bracket; `final` overrides the final and bronze
+  matches.
+- Regeneration rewrites the whole matches map, scores included — run it
+  before results go in, never after.
 
 ## Tools
 
