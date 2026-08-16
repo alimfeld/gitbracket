@@ -130,10 +130,12 @@ function formatMatchLine(m, ctx, tz, stage, sidew, idw, venuew, stagew) {
     : C.yellow(r.status === 'void' ? 'void' : `W/O side ${r.winner}`);
   const s0 = sideLabel(m.sides[0], ctx);
   const s1 = sideLabel(m.sides[1], ctx);
-  // decided matches bold the winner ('vs' edge stays on the plain labels, so
-  // the pad arithmetic measures uncolored text); void has no winner, nothing bolded
+  // decided matches color the winner green — the played score column already
+  // reads green, so a green winner name and its score are one win signal ('vs'
+  // edge stays on the plain labels, so the pad arithmetic measures uncolored
+  // text); void has no winner, nothing colored
   const w = winnerIdx(m, ctx);
-  const sides = (w === 0 ? C.bold(s0) : s0) + C.dim(' vs ') + (w === 1 ? C.bold(s1) : s1);
+  const sides = (w === 0 ? C.green(s0) : s0) + C.dim(' vs ') + (w === 1 ? C.green(s1) : s1);
   const sidePad = sidew !== undefined ? ' '.repeat(Math.max(0, sidew - (s0.length + 4 + s1.length))) : '';
   const stagePad = stagew !== undefined ? ' '.repeat(Math.max(0, stagew - stage.length)) : '';
   return `${C.bold(idw ? String(m.id).padEnd(idw) : m.id)}  ${C.dim(stage)}${stagePad}  ${sides}${sidePad}  ${time}  ${venue}  ${score}`;
