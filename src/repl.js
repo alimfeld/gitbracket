@@ -10,9 +10,8 @@
 // spelling is rejected with a hint; every successful edit validates (the
 // real validateRepo) and commits immediately. publish ships site/ (validate
 // gate, then surge) but never pushes git — that stays the director's manual
-// pull --rebase && push. The prompt shows git facts only (↑n ahead, ↓n
-// behind, * dirty); status compares the selected tournament's file against
-// the live domain. Tab completes at every position.
+// pull --rebase && push. status compares the selected tournament's file
+// against the live domain. Tab completes at every position.
 
 const fs = require('fs');
 const path = require('path');
@@ -308,22 +307,6 @@ function git(root, args) {
   return { code: r.status === 0 ? 0 : 1, out: r.stdout || '', err: r.stderr || '' };
 }
 
-function syncSuffix(root) {
-  // Git facts only — the prompt must not depend on how publishing happened
-  // (gb.js publish, plain surge, CI) or on a remote being reachable. ↑ = commits
-  // not on origin/main (unshared, the thing you'd ship), ↓ = commits on
-  // origin/main you don't have. Each indicator grades independently: a missing
-  // remote silences only the one that needs it, never the others.
-  const ahead = git(root, ['rev-list', '--count', 'origin/main..HEAD']);
-  const behind = git(root, ['rev-list', '--count', 'HEAD..origin/main']);
-  const dirty = git(root, ['status', '--porcelain']);
-  let s = '';
-  if (ahead.code === 0 && ahead.out.trim() !== '0') s += ` ↑${ahead.out.trim()}`;
-  if (behind.code === 0 && behind.out.trim() !== '0') s += ` ↓${behind.out.trim()}`;
-  if (dirty.code === 0 && dirty.out.length) s += ' *';
-  return s;
-}
-
 // ---------- REPL ----------
 
 function helpText() {
@@ -343,14 +326,12 @@ ${C.bold('slash commands — they edit data or ship:')}
   /time <cat> <id> <hh:mm>          shift a match to another time today
   /publish                          validate, then ship site/ to the domain (git push stays manual)
 
-${C.dim('a bare line never mutates data or ships — a bare mutator is rejected with "did you mean /…?"')}
-${C.dim('prompt: ↑n = n commits not on origin/main, ↓n = n on origin/main not local, * = dirty tree. Tab completes.')}`;
+${C.dim('a bare line never mutates data or ships — a bare mutator is rejected with "did you mean /…?"')}`;
 }
 
 function makePrompt(state) {
   const p = state.slug ? C.cyan(state.slug) : '';
-  const sync = syncSuffix(state.root).replace('*', C.yellow('*'));
-  return `gitbracket${p ? ':' + p : ''}${sync ? C.dim(sync) : ''}> `;
+  return `gitbracket${p ? ':' + p : ''}> `;
 }
 
 function completer(state) {
