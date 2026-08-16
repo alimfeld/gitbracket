@@ -7,7 +7,7 @@
 
 const path = require('path');
 const { loadRepo, isRealDate, slotsOverlap } = require('./tools.js');
-const { ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, isDone, poolStandings, resolveSide, isDeadTie, bestOfOf, countWins, schedTime, tzOffset } = require('../site/derive.js');
+const { ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, isDone, poolStandings, resolveSide, isDeadTie, bestOfOf, countWins, schedTime } = require('../site/derive.js');
 
 const RESULTS = ['winner', 'loser'];
 const RESULT_STATUSES = ['played', 'walkover', 'void'];
@@ -167,9 +167,8 @@ function validateTournamentData(slug, indexName, info, errs, warns) {
     for (const m of ms) {
       if (!m || typeof m !== 'object' || m.venue === undefined || m.scheduled === undefined) continue;
       if (isDone(m, ctx)) continue;
-      const w = m.scheduled;
-      const t = Date.parse(w + tzOffset(tjson.timezone, w.slice(0, 10)));
-      if (Number.isNaN(t)) continue;
+      const t = schedTime(m, tjson.timezone);
+      if (t === null) continue;
       sched.push({ f: `${tFile} matches.${cat.id}`, m, t, ctx });
     }
   }

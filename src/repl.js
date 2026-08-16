@@ -21,7 +21,7 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const { spawnSync } = require('child_process');
-const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, gamesText, fmtTime, matchLabel, koColumn, placementLabel, poolStandings, fmtDiff, bestOfOf, countWins, sideLetter, winnerIdx, dayKey } = require('../site/derive.js');
+const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, gamesText, fmtTime, matchLabel, koColumn, placementLabel, poolStandings, poolRanks, fmtDiff, bestOfOf, countWins, sideLetter, winnerIdx, dayKey } = require('../site/derive.js');
 const { loadRepo, writeTournament } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 const { ship } = require('./publish.js');
@@ -209,11 +209,13 @@ function listText(repo, slug, cats, needle) {
     for (const pid of poolIds) {
       const st = poolStandings(ctx, pid, true);
       if (!st) continue;
+      // ranks come from the full ladder (dead-tie members share it), before the player filter drops rows
+      const ranks = poolRanks(st);
       const rows = [];
       for (let i = 0; i < st.length; i++) {
         const r = st[i];
         if (playerHit && !playerHit(r.ids)) continue; // ls <name>: the player's rows only
-        rows.push([String(i + 1), teamLabel(r.ids, ctx), String(r.wins), String(r.losses), fmtDiff(r.gd), fmtDiff(r.pd)]);
+        rows.push([String(ranks[i]), teamLabel(r.ids, ctx), String(r.wins), String(r.losses), fmtDiff(r.gd), fmtDiff(r.pd)]);
       }
       if (rows.length) tables.push({ pid, rows });
     }

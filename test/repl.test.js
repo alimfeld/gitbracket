@@ -156,6 +156,15 @@ test('repl listText: player filter narrows standings rows and matches to that pl
   assert(everything.includes('\n\nMixed Doubles — xd'), 'sections are separated by a blank line — never glued');
 });
 
+test('repl listText: dead-tied standings rows share the group rank', () => {
+  const repo = loadRepo(FIX('tie'));
+  const txt = repl.listText(repo, 'tie', ['t'], null);
+  const rows = txt.split('\n').filter(l => /^│\s*\d/.test(l));
+  assert.equal(rows.length, 2, 'two tied sides render');
+  const ranks = rows.map(l => l.match(/^│\s+(\d+)/)[1]);
+  assert(ranks[0] === '1' && ranks[1] === '1', `dead tie shares rank 1 in the REPL table, got ${ranks}`);
+});
+
 test('repl commitMessage: conventional types with tournament scope', () => {
   assert.equal(repl.commitMessage('score', '2026-mammut60', 'md40', '1', '11:9 · 11:7'), 'score(2026-mammut60): md40/1 11:9 · 11:7');
   assert.equal(repl.commitMessage('walkover', '2026-mammut60', 'xd', '7', 'side a wins by walkover'), 'walkover(2026-mammut60): xd/7 side a wins by walkover');

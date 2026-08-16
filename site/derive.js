@@ -63,7 +63,6 @@ function countWins(games) {
 // the letter is translated here, once — the only letter<->index boundary.
 const sideIdx = w => w === 'a' ? 0 : 1;
 const sideLetter = i => i === 0 ? 'a' : 'b';
-const otherSide = s => s === 'a' ? 'b' : 'a';
 
 // Net game differential of a played match from side 0's viewpoint:
 // gd = won minus lost games, pd = points for minus points against. Side 1's
@@ -100,6 +99,17 @@ function isDone(m, ctx) {
 function isDeadTie(st, rank) {
   const rec = st[rank - 1];
   return !!rec && !!rec.tie; // tie flag: the ladder exhausted without separating it
+}
+
+// Standard competition ranks across a pool ladder, one rule for every surface:
+// a dead-tie group shares its first rank (1 1 1 4); every resolved row —
+// head-to-head separations included — is its own rank. Index-aligned with st.
+function poolRanks(st) {
+  const ranks = [];
+  for (let i = 0; i < st.length; i++) {
+    ranks.push((!st[i].tie || i === 0 || !st[i - 1].tie) ? i + 1 : ranks[i - 1]);
+  }
+  return ranks;
 }
 
 function poolStandings(ctx, pool, partial) {
@@ -517,5 +527,5 @@ function matchLabel(m, ctx) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { ID_RE, ISO_RE, pairSig, makeCat, matchSlotMs, bestOfOf, countWins, sideIdx, sideLetter, otherSide, winnerIdx, isDone, isDeadTie, poolStandings, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, dayKey, tzOffset, schedTime, gamesText, fmtDiff, kioskStatus, roundName, koColumn, matchLabel };
+  module.exports = { ID_RE, ISO_RE, pairSig, makeCat, matchSlotMs, bestOfOf, countWins, sideIdx, sideLetter, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, dayKey, tzOffset, schedTime, gamesText, fmtDiff, kioskStatus, roundName, koColumn, matchLabel };
 }

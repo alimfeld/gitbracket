@@ -6,7 +6,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { makeCat, winnerIdx, isDone, poolStandings, resolveSide, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, kioskStatus, matchLabel, schedTime } = require('../site/derive.js');
+const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, kioskStatus, matchLabel, schedTime } = require('../site/derive.js');
 const { parseRoute, loadAll, renderIndex, renderStandings, renderVenue, renderPlayer } = require('../site/app.js');
 const { generate } = require('../src/schedule.js');
 const { FIX, catOf } = require('./helpers.js');
@@ -274,6 +274,14 @@ test('3-way dead tie: standings tie + pool slot TBD', () => {
   const st = poolStandings(tie3, 'A');
   assert(st && st.length === 3 && sameRecord(st[0], st[1]) && sameRecord(st[1], st[2]), '3-way tie detected');
   assert(resolveSide(tie3.byId.get(4).sides[0], tie3) === null, '3-way dead-tied pool slot -> TBD');
+});
+
+test('poolRanks: dead-tie members share their group rank, resolved rows have their own', () => {
+  assert.deepEqual(poolRanks(poolStandings(catOf('tie', 't'), 'A')), [1, 1], '2-way dead tie shares rank 1');
+  assert.deepEqual(poolRanks(poolStandings(catOf('tie3', 't'), 'A')), [1, 1, 1], '3-way dead tie: all rank 1');
+  assert.deepEqual(poolRanks(poolStandings(catOf('sample', 'md40'), 'A')), [1, 2, 3, 4], 'resolved ladder: sequential ranks');
+  const h2h = poolStandings(catOf('h2h', 't'), 'B'); // p6/p7 resolve via the mutual match, no tie flag
+  assert.deepEqual(poolRanks(h2h), [1, 2, 3, 4], 'head-to-head separations are resolved rows, each its own rank');
 });
 
 test('slotLabel: unresolved slots describe the slot, not bare TBD', () => {

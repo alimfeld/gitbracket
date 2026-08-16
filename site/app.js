@@ -117,14 +117,11 @@ function renderStandings(route, data) {
       // pools come from matches, so partial standings always resolve
       const st = poolStandings(ctx, pool, true);
       parts.push('<table><thead><tr><th>#</th><th>Team</th><th>W</th><th>L</th><th>GD</th><th>PD</th></tr></thead><tbody>');
-      let rank = 0;
+      const ranks = poolRanks(st);
       st.forEach((r, i) => {
         const tied = isDeadTie(st, i + 1);
-        // a dead-tie group shares its first rank (1 1 1 4); every resolved row —
-        // head-to-head separations included — is its own rank
-        if (!tied || i === 0 || !st[i - 1].tie) rank = i + 1;
         const team = teamLabel(r.ids, ctx);
-        parts.push(`<tr${tied ? ' data-tie' : ''}><td>${rank}</td><td>${esc(team)}</td><td>${r.wins}</td><td>${r.losses}</td><td>${fmtDiff(r.gd)}</td><td>${fmtDiff(r.pd)}</td></tr>`);
+        parts.push(`<tr${tied ? ' data-tie' : ''}><td>${ranks[i]}</td><td>${esc(team)}</td><td>${r.wins}</td><td>${r.losses}</td><td>${fmtDiff(r.gd)}</td><td>${fmtDiff(r.pd)}</td></tr>`);
       });
       parts.push('</tbody></table>');
       parts.push(matchGrid(poolMs, ctx));
