@@ -1,47 +1,51 @@
 # AGENTS.md
 
-The README describes the model and the tools; the code comments carry the
-details. When docs and code disagree, code wins.
+README describes the model and the tools; tests pin behavior; comments carry
+only what is not apparent. Shipping-surface comments cost transfer bytes on
+every page load, so keep rationale out of `site/` unless it warns against a
+real trap — `ponytail:` markers stay (they are the shortcut ledger). When
+docs and code disagree, code wins.
 
 ## Architectural principles
 
-- **Write is edit, ship is publish.** No server, no accounts — git is the
-  record, not the transport: only `gb.js publish` ships, from `main`, uploading
-  `site/` to the domain in `site/CNAME`. One director publishes; git stays the
-  audit trail and the rollback. TESTING.md's probe recipes are push-proof by
-  construction — no remote, scratch domain committed, and the main-only
-  publish guard in `src/publish.js`.
-- **derive.js is the single source of the site's domain model.** Validator, REPL,
-  generator, and renderers all consume it — extend it, never reimplement the
-  model elsewhere. The integrity gate must not depend on renderer code.
-  Tool-only logic lives in `src/`, never in the shipping surface.
+- **Git is the record, not the transport.** No server, no accounts — the repo
+  is data, history, and frontend. Only `gb.js publish` ships, and only from
+  `main`, uploading `site/` to the domain in `site/CNAME`; one director
+  publishes, everyone else pulls and reviews. Publishing is outside git
+  (last-write-wins on the CDN) — safe because one director ships.
 - **A corrected score reseeds the bracket at render.** Nothing about results is
   stored; a match is done when it has a result. Schedules are the exception —
-  generated from a spec and stored, so regenerate before results go in.
+  generated from a spec and stored, never hand-edited; regenerate before
+  results go in.
+- **derive.js is the single source of the site's domain model.** Validator,
+  REPL, generator, and renderers all consume it — extend it, never reimplement
+  the model elsewhere. The integrity gate must not depend on renderer code.
+  derive.js is dual-loaded (browser global script + CommonJS), so it stays
+  free of node-only modules.
 - **Slots are category-local, consumed at most once, acyclic.**
-- **One file per tournament** — atomic reads, cross-category edits in one
-  place.
-- **Dev tooling stays at the root and never ships.** `site/` is the shipping
-  surface.
+- **Every REPL edit validates, writes, and commits itself** — the process can
+  die at any instant with nothing lost. One scorer owns one tournament.
+- **One file per tournament, minimal diffs.** Atomic reads, cross-category
+  edits in one place; data edits stay byte-identical apart from the change, so
+  a commit diff shows only the edit.
+- **Concurrent edits are rebase conflicts, not lost writes.** A rejected push
+  means someone pushed first: `git pull --rebase && git push`. No retry loops,
+  no CAS.
 - **Never weaken a check to make data pass — fix the data.** Pre-commit runs
-  validate + tests; `gb.js publish` (the only shipper) re-runs validate as
-  its first step — tests are the dev gate, validate is the data gate, and
-  only the director ships — so a bypassed hook can't ship.
+  validate + tests (the dev gate); `gb.js publish` re-runs validate (the data
+  gate) — so a bypassed hook can't ship.
+- **Renderers never throw, and neither does the gate.** Missing data renders
+  empty, unresolvable slots render a descriptive label, malformed data reports
+  an error — never a crash. Cycles and reference errors are the validator's
+  job. Repo-sourced strings render as text, never HTML.
 - **A behavior change is a fixture + a test.** New validator rules and derive
   behavior need a committed scenario under `fixtures/` (a self-contained mini
   site root) and an assertion in `test/`, loaded through the same `loadRepo` as
-  real checkouts. Tests load and assert only — never mutate data, never
+  real checkouts. Tests assert domain behavior — ladder order, slot
+  resolution, validation outcomes, escaping, no-throw — not markup shape;
+  renderer decisions (class names, DOM structure, meta layout) may change
+  without touching tests. Tests load and assert only: never mutate data, never
   depend on live `site/tournaments/`.
-- **Git is the concurrency design.** A rejected push means someone pushed
-  first: `git pull --rebase && git push`. No retry loops, no CAS. One scorer
-  owns one tournament. Publishing is outside git — last-write-wins on the
-  CDN, safe because one director ships.
-- **Renderers never throw** — missing data renders empty, unresolvable slots
-  render a descriptive label. Cycles and reference errors are the validator's
-  job.
-- **Repo-sourced strings render as text, never HTML.**
-- **Minimal diffs.** Data edits stay byte-identical apart from the change, so
-  a commit diff shows only the edit.
 - **Mark deliberate shortcuts** with a `ponytail:` comment naming the ceiling
   and the upgrade path.
 
@@ -50,9 +54,9 @@ details. When docs and code disagree, code wins.
 One question decides placement for any new function: does the browser run it?
 
 - **Yes → `site/`** (the shipping surface). Shared computations go in
-  `derive.js` — the gate and the renderer must not drift apart. Pure
-  fetch/render/boot goes in `app.js`; markup and styling in `index.html` /
-  `style.css`.
+  `derive.js` — the gate and the renderer
+  must not drift apart. Pure fetch/render/boot goes in `app.js`; markup and
+  styling in `index.html` / `style.css`.
 - **No → `src/`** (the tool layer, never ships). Keep it in the tool that
   uses it (`validate.js`, `schedule.js`, `repl.js`); put it in `src/tools.js`
   when two or more tools share it — repo I/O and tool-only predicates already
