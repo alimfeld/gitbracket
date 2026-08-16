@@ -18,7 +18,7 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const { spawnSync } = require('child_process');
-const { makeCat, isDone, sideLabel, teamLabel, schedTime, gamesText, fmtTime, matchLabel, koColumn, placementLabel, poolStandings, fmtDiff, bestOfOf, countWins, sideLetter, otherSide, dayKey } = require('../site/derive.js');
+const { makeCat, isDone, sideLabel, teamLabel, schedTime, gamesText, fmtTime, matchLabel, koColumn, placementLabel, poolStandings, fmtDiff, bestOfOf, countWins, sideLetter, dayKey } = require('../site/derive.js');
 const { loadRepo, writeTournament } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 const { ship } = require('./publish.js');
@@ -56,14 +56,14 @@ function applyScore(matches, matchId, games, ctx) {
   });
 }
 
-// Record a result that isn't a played score: walkover names the side that
-// gives the match away (winner = the other side); void settles a match
-// nobody plays (both sides out) — no winner, nothing counts. Any games are
-// cleared, keeping games/result exclusivity a round-trip property.
-function applyResult(matches, matchId, status, loser) {
+// Record a result that isn't a played score: walkover names the winning
+// side (the opponent couldn't play — win only, no games); void settles a
+// match nobody plays (both sides out) — no winner, nothing counts. Any
+// games are cleared, keeping games/result exclusivity a round-trip property.
+function applyResult(matches, matchId, status, winner) {
   return findMatch(matches, matchId, m => {
     delete m.games;
-    m.result = loser === undefined ? { status } : { status, winner: otherSide(loser) };
+    m.result = winner === undefined ? { status } : { status, winner };
     return null;
   });
 }
@@ -127,7 +127,7 @@ function formatMatchLine(m, ctx, tz, stage, sidew, idw, venuew, stagew) {
   while (parts.length < (bestOfOf(m, ctx) || 1)) parts.push('·');
   const r = m.result;
   const score = !r || r.status === 'played' ? C.green(parts.join(' '))
-    : C.yellow(r.status === 'void' ? 'void' : `W/O side ${otherSide(r.winner)}`);
+    : C.yellow(r.status === 'void' ? 'void' : `W/O side ${r.winner}`);
   const s0 = sideLabel(m.sides[0], ctx);
   const s1 = sideLabel(m.sides[1], ctx);
   const sides = s0 + C.dim(' vs ') + s1;
@@ -270,8 +270,7 @@ function helpText() {
 
 ${C.bold('score & manage (inside a category):')}
   score <match> <a:b> [a:b …]   set games — a prefix is a mid-match update, re-score corrects
-  wo <match> <a|b>              walkover: side a or b walks over — a player out: wo every
-                                remaining match of their team, the bracket self-heals
+  wo <match> <a|b>              walkover: side a or b wins without playing (opponent can't)
   void <match>                  void: no winner, nothing counts (both sides out)
   venue <match> <venue>         move a match to another court
   time <match> <hh:mm>          shift a match to another time today
@@ -420,7 +419,7 @@ function applyAndCommit(state, kind, matchId, apply) {
   const m = ctx.byId.get(Number(matchId));
   const r = m.result;
   const detail = kind === 'score' ? gamesText(m)
-    : r ? (r.status === 'void' ? 'void' : `side ${otherSide(r.winner)} walks over`)
+    : r ? (r.status === 'void' ? 'void' : `side ${r.winner} wins by walkover`)
     : kind === 'time' ? `→ ${m.scheduled}`
     : `→ ${m.venue}`;
   const msg = commitMessage(kind, slug, cat, matchId, detail);
@@ -430,7 +429,7 @@ function applyAndCommit(state, kind, matchId, apply) {
   const sha = git(root, ['rev-parse', '--short', 'HEAD']).out.trim();
   const sum = r
     ? r.status === 'void' ? `${cat}/${matchId} → void`
-      : `${cat}/${matchId} → side ${otherSide(r.winner)} walks over — side ${r.winner} wins`
+      : `${cat}/${matchId} → side ${r.winner} wins by walkover`
     : kind === 'time' ? `${cat}/${matchId} → ${m.scheduled}`
     : `${cat}/${matchId} → ${gamesText(m)}${isDone(m, ctx) ? ' — done' : ''}`;
   return `${sum}\ncommitted ${sha}: ${msg}`;

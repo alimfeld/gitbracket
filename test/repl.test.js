@@ -42,9 +42,9 @@ test('repl applyResult: walkover records a winner, void settles, games cleared',
   const { matches } = md40Ctx(repo);
   assert(repl.applyResult(matches, '2', 'walkover', 'b') === null, 'walkover reports no error');
   const m2 = matches.find(m => m.id === 2);
-  assert(m2.result.status === 'walkover' && m2.result.winner === 'a' && m2.games === undefined, 'side b walks over — side a wins; games cleared');
+  assert(m2.result.status === 'walkover' && m2.result.winner === 'b' && m2.games === undefined, 'walkover names the winning side; games cleared');
   assert(repl.applyResult(matches, '3', 'walkover', 'a') === null, 'walkover reports no error');
-  assert(matches.find(m => m.id === 3).result.status === 'walkover', 'walkover recorded');
+  assert(matches.find(m => m.id === 3).result.status === 'walkover' && matches.find(m => m.id === 3).result.winner === 'a', 'walkover winner recorded');
   assert(repl.applyResult(matches, '4', 'void') === null, 'void reports no error');
   const m4 = matches.find(m => m.id === 4);
   assert(m4.result.status === 'void' && m4.result.winner === undefined && m4.games === undefined, 'void: settled, no winner');
@@ -129,7 +129,7 @@ test('repl navigate: root → tournament → category, up and root shortcuts', (
 
 test('repl commitMessage: conventional types with tournament scope', () => {
   assert.equal(repl.commitMessage('score', '2026-mammut60', 'md40', '1', '11:9 · 11:7'), 'score(2026-mammut60): md40/1 11:9 · 11:7');
-  assert.equal(repl.commitMessage('walkover', '2026-mammut60', 'xd', '7', 'side a walks over'), 'walkover(2026-mammut60): xd/7 side a walks over');
+  assert.equal(repl.commitMessage('walkover', '2026-mammut60', 'xd', '7', 'side a wins by walkover'), 'walkover(2026-mammut60): xd/7 side a wins by walkover');
   assert.equal(repl.commitMessage('void', '2026-mammut60', 'xd', '7', 'void'), 'void(2026-mammut60): xd/7 void');
   assert.equal(repl.commitMessage('venue', '2026-mammut60', 'xd', '3', '→ court-2'), 'venue(2026-mammut60): xd/3 → court-2');
   assert.equal(repl.commitMessage('time', '2026-mammut60', 'md40', '1', '→ 2025-07-14T16:00:00-04:00'), 'time(2026-mammut60): md40/1 → 2025-07-14T16:00:00-04:00');

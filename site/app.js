@@ -183,12 +183,13 @@ function sideRow(m, ctx, i) {
     const game = games[g];
     return `<span${game ? '' : ' class="ph"'}>${game ? (i === 0 ? game.a : game.b) : '·'}</span>`;
   }).join('');
-  // the walked-over side gets the label; the winner side and voided matches
-  // keep the slot shape (matches the played look — the loser edge is where
-  // the story is). Void has no winner, so no data-win mark anywhere.
+  // the winning side carries the W/O label — the advancing side is where
+  // a walkover is marked (tennis draws: "w/o" beside the advancing name);
+  // the walked-over side and voided matches keep the slot shape. Void has
+  // no winner, so no data-win mark anywhere.
   const score = !r || r.status === 'played' ? slot()
     : r.status === 'void' ? '<span>void</span>'
-    : sideIdx(r.winner) !== i ? '<span>W/O</span>'
+    : sideIdx(r.winner) === i ? '<span>W/O</span>'
     : slot();
   return `<div class="side"${w === i ? ' data-win' : ''}><span>${esc(sideLabel(m.sides[i], ctx))}</span><span class="score">${score}</span></div>`;
 }

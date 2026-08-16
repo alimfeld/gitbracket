@@ -227,7 +227,9 @@ test('result statuses render: W/O and void on cards, settled matches off the kio
   const info = repo.tournaments.get('result');
   const data = { index: repo.index, t: repo.index[0], tjson: info.tjson, cats: info.tjson.categories.map(c => ({ meta: c, matches: info.matches.get(c.id) || [] })) };
   const st = renderStandings({ slug: 'result', view: 'categories' }, data);
-  assert(st.includes('<span>void</span>') && st.includes('W/O'), 'void and walkover render on the cards');
+  assert(st.includes('<span>void</span>'), 'void renders on its card');
+  // m2 is pool A, walkover winner b (p3): the W/O mark rides the winner's row
+  assert(st.includes('<span>P3</span><span class="score"><span>W/O</span></span>'), 'W/O renders on the winning side');
   const venue = renderVenue({ slug: 'result', view: 'venues' }, data, Date.parse('2026-05-02T09:30:00Z'));
   assert(venue.includes('P1') && venue.includes('P3'), 'the open final is on the board');
   assert(!venue.includes('<span>void</span>') && !venue.includes('W/O'), 'settled (incl. void) matches leave the kiosk');
