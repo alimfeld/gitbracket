@@ -398,7 +398,14 @@ function gitPublish(state) {
 }
 
 function gitStatus(root) {
-  return git(root, ['status', '-sb']).out.trim() || '(clean)';
+  const lines = [];
+  const s = git(root, ['status', '-sb']);
+  if (s.code === 0 && s.out.trim()) lines.push(s.out.trim());
+  // Unpushed commits, one per line; a missing origin/main (clone, offline)
+  // silences the section the same way the prompt indicators used to.
+  const unpushed = git(root, ['log', '--oneline', 'origin/main..HEAD']);
+  if (unpushed.code === 0) for (const l of unpushed.out.trim().split('\n')) if (l) lines.push(`  ${l}`);
+  return lines.join('\n') || '(clean)';
 }
 
 // Compare the one file this session edits — tournaments/<slug>.json — with
