@@ -1,26 +1,14 @@
 'use strict';
-// derive.js — pure derive + time logic for GitBracket.
-// The one source of the site's domain model: the validator (validate.js), the
-// score REPL (repl.js), the match generator (schedule.js), and the renderers
-// (app.js) all share these functions, so the integrity gate doesn't depend on
-// renderer code and the renderer doesn't reimplement the model. Tool-only
-// predicates live in src/tools.js, not here — this file ships to the browser.
-// Loaded as a plain script before app.js in the browser (functions land on
-// globalThis); in node it's a CommonJS module.
+// derive.js — the site's domain model, pure.
 
 const ID_RE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
-// Local wall time, no offset/Z — the tournament's IANA timezone interprets it.
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/;
 
-// Canonical side identity: an unordered player set as a sorted '|'-joined string.
-// The one convention shared by standings (app), pair checks (validate), and the
-// generator's coverage assert (schedule).
+// Shared side identity: sorted '|'-joined ids (AGENTS.md).
 const pairSig = ids => [...ids].sort().join('|');
 
 function makeCat(c, tjson) {
-  // null/non-object entries: validate.js reports them, renders skip them.
-  // Non-array players/venues too — the validator calls this while reporting
-  // the broken shape, so it must not throw on it.
+  // Never throws on broken shape — the validator calls this while reporting it.
   const matches = (c.matches || []).filter(m => m && typeof m === 'object');
   const arr = x => Array.isArray(x) ? x : [];
   return {
@@ -36,20 +24,16 @@ function makeCat(c, tjson) {
   };
 }
 
-// Effective slot length for a match, ms: match override > per-stage category
-// config (groups/knockout — a match is groups iff it has a pool).
-// The single resolution point for the kiosk "now" window, the validator's venue
-// overlap window, and the generator's slot grid. Every generated tournament and
-// fixture with scheduled matches has slotMinutes set, so there's no default.
+// Effective slot length, ms: match override > per-stage category config
+// (groups/knockout — a match is groups iff it has a pool).
 function matchSlotMs(m, ctx) {
   const stage = m && m.pool !== undefined ? 'groups' : 'knockout';
   const cfg = (ctx && ctx.slotMinutes) || {};
-  return ((m && m.slotMinutes) ?? cfg[stage]) * 60 * 1000; // ?? like bestOfOf — 0/NaN are rejected by the validator anyway
+  return ((m && m.slotMinutes) ?? cfg[stage]) * 60 * 1000;
 }
 
 
-// Raw game wins per side, target not applied — base for the validator's
-// played-consistency check (winner must agree with the games).
+// Raw game wins per side, target not applied — the played-consistency base.
 function countWins(games) {
   const w = [0, 0];
   for (const g of games) {
@@ -59,14 +43,11 @@ function countWins(games) {
   return w;
 }
 
-// Results name sides 'a'/'b' like game scores; consumers index m.sides, so
-// the letter is translated here, once — the only letter<->index boundary.
+// Sides are 'a'/'b' like game scores — the one letter<->index translation.
 const sideIdx = w => w === 'a' ? 0 : 1;
 const sideLetter = i => i === 0 ? 'a' : 'b';
 
-// Net game differential of a played match from side 0's viewpoint:
-// gd = won minus lost games, pd = points for minus points against. Side 1's
-// numbers are the negations — standings and head-to-head tally both use it.
+// Net game/point differential from side 0's viewpoint; side 1's are the negations.
 function gameDiff(games) {
   let gd = 0, pd = 0;
   for (const g of games) {
@@ -76,23 +57,19 @@ function gameDiff(games) {
   return { gd, pd };
 }
 
-// Effective best-of for a match: match override > per-stage category config.
-// Single resolution point, same shape as matchSlotMs.
+// Effective best-of: match override > per-stage category config.
 function bestOfOf(m, ctx) {
   const stage = m.pool !== undefined ? 'groups' : 'knockout';
   return m.bestOf ?? ctx.bestOf[stage];
 }
 
 function winnerIdx(m, ctx) {
-  // The stored winner IS the outcome — no per-status derivation. The games
-  // agree with it by validator rule; in-play matches have no result and are
-  // null here.
+  // The stored winner IS the outcome; in-play matches have no result -> null.
   return m && m.result && m.result.winner !== undefined ? sideIdx(m.result.winner) : null;
 }
 
 function isDone(m, ctx) {
-  // Any result settles the match — void included (a voided match is settled,
-  // never played, never overdue).
+  // Any result settles the match — void included (settled, never overdue).
   return !!m && m.result !== undefined;
 }
 
@@ -101,9 +78,7 @@ function isDeadTie(st, rank) {
   return !!rec && !!rec.tie; // tie flag: the ladder exhausted without separating it
 }
 
-// Standard competition ranks across a pool ladder, one rule for every surface:
-// a dead-tie group shares its first rank (1 1 1 4); every resolved row —
-// head-to-head separations included — is its own rank. Index-aligned with st.
+// Competition ranks: a dead-tie group shares its first rank (1 1 1 4).
 function poolRanks(st) {
   const ranks = [];
   for (let i = 0; i < st.length; i++) {
@@ -113,8 +88,7 @@ function poolRanks(st) {
 }
 
 function poolStandings(ctx, pool, partial) {
-  // partial=true: skip unfinished matches instead of bailing — live standings table.
-  // resolveSide keeps the strict form: a pool slot is TBD until every match counts.
+  // partial=true: skip unfinished matches — live standings; strict form TBDs.
   const ms = ctx.matches.filter(m => m && m.pool === pool);
   if (ms.length === 0) return null;
   const recs = new Map();
@@ -147,9 +121,7 @@ function poolStandings(ctx, pool, partial) {
   return poolLadder([...recs.values()], ms, ctx);
 }
 
-// Head-to-head keys within a set of teams: wins, game diff, point diff over
-// exactly the matches where both sides are in the set. Walkovers count as
-// wins but carry no differential, matching the overall tally.
+// Head-to-head over the set's mutual matches only (walkovers carry no differential).
 function mutualKeys(list, ms, ctx) {
   const h = new Map(list.map(r => [r.sig, { hw: 0, hg: 0, hp: 0 }]));
   for (const m of ms) {
@@ -169,12 +141,9 @@ function mutualKeys(list, ms, ctx) {
   return h;
 }
 
-// Ladder: wins first (whole pool), then within each wins-block head-to-head —
-// wins, game, point differential over the block's mutual matches only — then
-// overall differentials. A rung that separates some teams recurses on the rest
-// (mutual keys recompute over the smaller set); a block still tied is a dead
-// tie (flagged, renders TBD — the organizer arbitrates). Stable sort keeps
-// equal-key teams in creation order.
+// Ladder (README): wins, then per wins-block h2h wins/gd/pd, then overall
+// gd/pd. A rung that splits a cluster recurses on it; a still-tied block is a
+// dead tie (renders TBD). Stable sort keeps equal keys in creation order.
 function poolLadder(list, ms, ctx) {
   const out = [];
   const order = (set) => {
@@ -215,7 +184,7 @@ function resolveSide(side, ctx, memo = new Map()) {
   if (side.kind === 'match') {
     const m = ctx.byId.get(side.match);
     if (!m) return null;
-    if (memo.has(m.id)) return memo.get(m.id) || null; // in-progress (undefined) = cycle — validate rejects these; only stops a hang if one slips past the gate
+    if (memo.has(m.id)) return memo.get(m.id) || null; // in-progress = cycle guard
     memo.set(m.id, undefined);
     const w = winnerIdx(m, ctx);
     if (w === null) return null;
@@ -234,9 +203,7 @@ function resolveSide(side, ctx, memo = new Map()) {
   return null;
 }
 
-// Unresolved slot -> what the slot IS, so a bracket stays readable while
-// waiting: "Winner of 7", "Loser of 9", "2nd in Pool A" (dead ties stay
-// descriptive — the slot itself is still what the side says it is).
+// Unresolved slot keeps what the slot IS: "Winner of 7", "2nd in Pool A".
 function slotLabel(side, ctx) {
   if (side && side.kind === 'match') {
     const ref = ctx.byId.get(side.match);
@@ -255,9 +222,7 @@ function sideLabel(side, ctx) {
   return teamLabel(ids, ctx);
 }
 
-// The player's confirmed matches: only matches where their side actually
-// resolves to them. "Winner of 9" slots stay off the schedule until m9 is
-// decided — a possibility is not a booking.
+// Confirmed only: a side must resolve to the player — undecided slots stay off.
 function playerMatches(ctx, pid) {
   const rows = [];
   for (const m of ctx.matches) {
@@ -273,10 +238,8 @@ function playerMatches(ctx, pid) {
   return rows;
 }
 
-// Knockout matches still open for this player: from their confirmed matches
-// through undecided "Winner/Loser of X" slots. A decided feeder only forwards
-// the result the player got, so the closed branch drops out; confirmed
-// consumers are excluded (they render as cards). Returns match ids.
+// Open knockout seats from confirmed matches through undecided slots; a decided
+// feeder only forwards the branch the player got (confirmed ones render as cards).
 function reachableKo(ctx, pid) {
   const starts = playerMatches(ctx, pid).filter(r => r.m.pool === undefined);
   const sideOf = new Map(starts.map(r => [r.m.id, r.i]));
@@ -308,7 +271,7 @@ function reachableKo(ctx, pid) {
 // upgrade if they ever grow.
 function chainLen(ctx, id, memo = new Map()) {
   if (memo.has(id)) return memo.get(id);
-  memo.set(id, 0); // cycle guard — validate rejects cycles anyway
+  memo.set(id, 0); // in-progress = cycle guard
   const cs = [];
   for (const m of ctx.matches) {
     if (!m || !Array.isArray(m.sides)) continue;
@@ -320,11 +283,10 @@ function chainLen(ctx, id, memo = new Map()) {
   return memo.get(id);
 }
 
-// Day-span of knockout slots still open for this player; null when none.
-// Pre-knockout (pool team with no knockout seat yet) every bracket path is
-// possible — times are pre-scheduled. count = the longest single path (win XOR
-// lose, one rank). ponytail: fallback assumes everyone advances; gate it on
-// pool completion if a format with a knockout cutoff ever appears.
+// Day-span of this player's open knockout slots (null when none). Pre-knockout
+// every path is possible — times are pre-scheduled. count = the longest single
+// path. ponytail: fallback assumes everyone advances; gate it on pool
+// completion if a format with a knockout cutoff ever appears.
 function possibleSpan(ctx, pid) {
   const rows = playerMatches(ctx, pid);
   const ko = rows.filter(r => r.m.pool === undefined);
@@ -340,7 +302,7 @@ function possibleSpan(ctx, pid) {
 
 function matchRound(m, ctx, memo = new Map()) {
   if (memo.has(m.id)) return memo.get(m.id);
-  memo.set(m.id, 0); // in-progress guard — validate rejects cycles; this only stops a hang if one slips past the gate
+  memo.set(m.id, 0); // in-progress = cycle guard
   let d = 0;
   for (const s of m.sides) {
     if (s && s.kind === 'match') {
@@ -355,13 +317,11 @@ function matchRound(m, ctx, memo = new Map()) {
 const ordRules = new Intl.PluralRules('en', { type: 'ordinal' });
 const ordinal = n => n + ({ one: 'st', two: 'nd', few: 'rd' }[ordRules.select(n)] || 'th');
 
-// Placement label (3rd/5th/7th place, classification semis), null for
-// main-bracket matches. A placement match's possible final ranks form a range:
-// loser edges open their feeder round's loser range; inside the placement
-// bracket a winner edge takes the top half of its feeder's range, a loser edge
-// the bottom half. A match whose loser edge feeds nothing decides a rank (the
-// top of its range); otherwise it's a semi over the range. Memo lives on the
-// ctx — built fresh per render/listing, never reused across data edits.
+// Placement label (3rd/5th/7th place, classification semis), null for main-
+// bracket matches. Possible final ranks form a range: loser edges open their
+// feeder round's loser range; winner/loser edges inside take the top/bottom
+// half. Terminal = a place match, else a semi. Memo on the ctx — fresh per
+// render/listing, never across data edits.
 function placementLabel(m, ctx) {
   if (!ctx._plMemo) ctx._plMemo = new Map();
   const r = plRange(m, ctx, ctx._plMemo);
@@ -370,19 +330,16 @@ function placementLabel(m, ctx) {
   return terminal ? `${ordinal(r.lo)} place` : `${ordinal(r.lo)}–${ordinal(r.hi)} semi`;
 }
 
-// Half of a placement feeder's range: winner edges take the top, loser edges
-// the bottom — the rank semantics the bracket assigns, whatever the pairing.
+// Half of a feeder's range: winner edges take the top, loser edges the bottom.
 const half = (r, top) => { const w = (r.hi - r.lo + 1) / 2; return top ? { lo: r.lo, hi: r.lo + w - 1 } : { lo: r.lo + w, hi: r.hi }; };
 
-// Loser range of a main-bracket round at winnerDepth d: it can lose ranks
-// [2^d + 1, 2^(d+1)] — d=1 (semis) loses 3rd–4th, d=2 (quarters) 5th–8th.
+// Loser range of a main-bracket round at winnerDepth d: [2^d + 1, 2^(d+1)].
 const loserRange = (X, ctx) => { const d = winnerDepth(ctx, X.id); return { lo: 2 ** d + 1, hi: 2 ** (d + 1) }; };
 
-// Possible final ranks of the two teams in a placement match, null for
-// main-bracket matches. Memoized per category like koColumn's columns.
+// Possible rank range; null for main-bracket matches. Memoized per category.
 function plRange(m, ctx, memo) {
   if (memo.has(m.id)) return memo.get(m.id);
-  memo.set(m.id, null); // in-progress guard — validate rejects cycles; this only stops a hang if one slips past the gate
+  memo.set(m.id, null); // in-progress = cycle guard
   let lo = Infinity, hi = -Infinity;
   for (const s of m.sides) {
     if (!s || s.kind !== 'match') continue;
@@ -399,15 +356,13 @@ function plRange(m, ctx, memo) {
 }
 
 // Winner-edge distance to the final (0 = the final itself): the round a loser
-// edge branches from, for placement labels. matchRound can't do this — a bye'd
-// semi fed by pool slots has leaf-depth 0 yet sits one round below the final,
-// and a wrong d mislabels the bronze match as a classification round.
-// koColumn walks the same winner chain but must NOT be reused here: plRange
-// calls this during koColumn's final-detection, while its memo is mid-build —
-// koColumn would answer with its in-progress -1 guard and corrupt rank ranges.
+// edge branches from. matchRound can't do it — a bye'd semi has leaf-depth 0
+// yet sits one round below the final. koColumn can't be reused here either:
+// plRange is called during koColumn's final-detection while its memo is
+// mid-build — its in-progress -1 guard would corrupt the ranges.
 function winnerDepth(ctx, id, memo = new Map()) {
   if (memo.has(id)) return memo.get(id);
-  memo.set(id, -1); // in-progress guard, same as matchRound
+  memo.set(id, -1); // in-progress = cycle guard
   for (const m of ctx.matches) {
     for (const s of m.sides) {
       if (s && s.kind === 'match' && s.result === 'winner' && s.match === id) {
@@ -422,10 +377,7 @@ function winnerDepth(ctx, id, memo = new Map()) {
 
 // ---------- time ----------
 
-// IANA tz -> "+02:00"-style offset on a calendar date, noon-UTC so one date
-// lands one stable offset — a DST-switch day picks the post-switch offset
-// throughout. Wall-clock scheduled strings resolve via this, so the data stays
-// readable local time and stays right if clock rules change.
+// "+02:00"-style offset for a date, noon-UTC anchor (AGENTS.md).
 function tzOffset(tz, date) {
   const p = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'longOffset' })
     .formatToParts(new Date(date + 'T12:00:00Z')).find((x) => x.type === 'timeZoneName');
@@ -440,9 +392,7 @@ function dayKey(t, tz) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(t);
 }
 
-// A scheduled field is local wall time in the tournament's tz (no offset in
-// the data — the tz at the top of the file interprets it). Anchor it to an
-// instant here, the single derivation point.
+// Anchor local wall time to an instant — the single derivation point.
 function schedTime(m, tz) {
   const s = m.scheduled || '';
   if (!ISO_RE.test(s)) return null;
@@ -458,8 +408,7 @@ function fmtDiff(n) {
   return (n > 0 ? '+' : '') + n;
 }
 
-// Card status: overdue = full slot elapsed without a result, live = started
-// but inside its slot, else next (> not >=: the boundary instant belongs to live).
+// overdue = slot fully elapsed, live = inside it, else next (now === t is live).
 function kioskStatus(r, now) {
   const t = r.t;
   if (now >= t + matchSlotMs(r.m, r.ctx)) return 'overdue';
@@ -467,22 +416,16 @@ function kioskStatus(r, now) {
   return 'next';
 }
 
-// Knockout round names by distance from the final: each round back doubles
-// participants (2 -> Final, 4 -> Semifinals, 8 -> Quarterfinals, ...). With
-// byes a first round of 2 matches is still structurally Quarterfinals; names
-// key off koColumn, so a bye'd semi (two pool slots) reads as a semifinal, not
-// a first-round match.
+// Round names by distance from the final (2 -> Final, 4 -> Semifinals, ...);
+// keyed off koColumn, so a bye'd semi still reads as a semifinal.
 function roundName(depthFromEnd) {
   const n = 2 << depthFromEnd;
   return { 2: 'Final', 4: 'Semifinals', 8: 'Quarterfinals' }[n] || `Round of ${n}`;
 }
 
-// Bracket column: 0 is the final column, each winner edge one column back.
-// Depth-from-leaves can't place a bye'd semi (two pool slots give it depth 0
-// yet it feeds the final); winner edges into a placement sub-bracket do not
-// extend the chain, so it terminates at the final. Placement matches sit with
-// the round their feeders branched from (bronze with the final). Memo on the
-// ctx — fresh per render/listing, never reused across data edits.
+// Column: 0 is the final, one back per winner edge. Depth-from-leaves can't
+// place a bye'd semi; placement winners don't extend the chain. Memo on the
+// ctx — fresh per render/listing, never across data edits.
 function koColumn(m, ctx) {
   if (!ctx._koCol) {
     const memo = ctx._koCol = new Map();
@@ -496,7 +439,7 @@ function koColumn(m, ctx) {
     const col = (X) => {
       const got = memo.get(X.id);
       if (got !== undefined) return got;
-      memo.set(X.id, -1); // in-progress guard; validate rejects cycles before render
+      memo.set(X.id, -1); // in-progress = cycle guard
       const p = winnerParent.get(X.id);
       let r;
       if (p && placementLabel(p, ctx) === null) r = 1 + col(p);

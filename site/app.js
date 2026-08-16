@@ -1,14 +1,9 @@
 'use strict';
-// app.js — fetch/render/boot for the GitBracket pages.
-// The derive engine (standings, slot resolution, scheduling, labels, time)
-// lives in derive.js, loaded before this file in the browser and required here
-// in node; this file is only the data loading, the HTML renderers, and the
-// boot.
+// app.js — fetch/render/boot; all domain logic lives in derive.js.
 
 const POLL_MS = 10000;
 
-// derive.js is a plain script in the browser (functions on globalThis); in
-// node, pull it in so this file's bodies can call the same names.
+
 if (typeof module !== 'undefined') {
   Object.assign(globalThis, require('./derive.js'));
 }
@@ -22,9 +17,7 @@ function esc(s) {
 
 async function fetchJson(url) {
   try {
-    // Revalidate with the CDN every poll: where the host honors If-None-Match,
-    // unchanged data returns a 0-byte 304 instead of a full re-download, and
-    // changed data still arrives fresh on the next poll.
+    // cache: 'no-cache' revalidates — 304s return 0 bytes, changes arrive fresh
     const res = await fetch(url, { cache: 'no-cache' });
     if (!res.ok) return null; // 404 -> null -> renders empty, never throws
     return await res.json();
@@ -34,8 +27,7 @@ async function fetchJson(url) {
 }
 
 // One page, fragment routing: #<slug>[/categories|venues|players[/<id>]].
-// Every segment is checked against the id regex before use — reject → render
-// an error, fetch nothing (a raw segment never reaches a URL).
+// Segments are id-regex-checked first — a raw segment never reaches a URL.
 function parseRoute(hash) {
   if (hash === undefined) hash = location.hash;
   const segs = String(hash).replace(/^#/, '').split('/');
@@ -70,20 +62,17 @@ async function loadAll(route, indexOnly) {
 
 // ---------- renderers ----------
 
-// Breadcrumb trail: every crumb is a link — the current page lives in the h1.
-// Home > Tournament > Players; the tournament page adds a right-aligned Players link.
+// Breadcrumb trail; the current page lives in the h1 (every crumb is a link).
 const crumbs = items => items.map(([href, label]) => `<a href="${esc(href)}">${esc(label)}</a>`).join(' > ');
 
 // The one missing-data message, verbatim in every view and the boot retry.
 const MISSING = '<p>Missing tournament data — has the tournament been pushed?</p>';
 
-// The one card grid — standings pools and bracket rounds are the same
-// component (the CSS .grid comment says so); same meta list, same builder.
+
 const FULL_META = ['matchId', 'label', 'court', 'time'];
 const matchGrid = (ms, ctx) => `<section class="grid">${ms.map(m => matchCard(m, ctx, { meta: FULL_META })).join('')}</section>`;
 
-// Category pills: one toggle pattern for the standings and picker views.
-// base is 'categories' or 'players'; clicking the active pill drops back to dropHref.
+// Category pills — one toggle pattern for standings and picker.
 const catPills = (cats, slug, base, activeId, dropHref) => cats.map(c => {
   const active = c.id === activeId;
   const href = active ? dropHref : `#${esc(slug)}/${base}/${esc(c.id)}`;
@@ -147,13 +136,8 @@ function bracketHtml(ctx, ko) {
   return parts.join('');
 }
 
-// The one match card for every view — tournament, kiosk, player. opts.meta is
-// the items to show, from the fixed vocabulary (catName · matchId · label ·
-// court · time), in order: tournament shows matchId · label · court · time;
-// kiosk and player just catName · label. opts.head is an optional
-// [left, right] headline row (kiosk: time, player: time | court); each cell is
-// an item key or pre-rendered HTML. opts.done dims a finished card;
-// opts.status rides on the article as data-status (kiosk time coloring).
+// opts.meta picks the meta items (fixed vocabulary); opts.head is an optional
+// [left, right] headline row — cells are item keys or pre-rendered HTML.
 function matchCard(m, ctx, opts = {}) {
   const t = schedTime(m, ctx.tz);
   const item = {
@@ -168,22 +152,18 @@ function matchCard(m, ctx, opts = {}) {
   return `<article${opts.done ? ' data-done' : ''}${opts.status ? ` data-status="${opts.status}"` : ''}>${head}${sideRow(m, ctx, 0)}${sideRow(m, ctx, 1)}<div class="meta">${meta}</div></article>`;
 }
 
-// Shared by bracket cards (standings) and the kiosk.
 function sideRow(m, ctx, i) {
   const w = winnerIdx(m, ctx);
   const games = m.games || [];
   const r = m.result;
-  // one slot per best-of game: played games render their points, the rest stay
-  // as faint placeholders — the slot shape IS the best-of, so no label needed
+  // one slot per best-of game — placeholders keep the shape, so no label is needed
   const bo = bestOfOf(m, ctx) || 1; // unset stage config -> one unmarked slot
   const slot = () => Array.from({ length: bo }, (_, g) => {
     const game = games[g];
     return `<span${game ? '' : ' class="ph"'}>${game ? (i === 0 ? game.a : game.b) : '·'}</span>`;
   }).join('');
-  // the winning side carries the W/O label — the advancing side is where
-  // a walkover is marked (tennis draws: "w/o" beside the advancing name);
-  // the walked-over side and voided matches keep the slot shape. Void has
-  // no winner, so no data-win mark anywhere.
+  // the winning side carries the W/O mark (tennis draws put "w/o" beside the
+  // advancing name); void has no winner, so no data-win mark anywhere.
   const score = !r || r.status === 'played' ? slot()
     : r.status === 'void' ? '<span>void</span>'
     : sideIdx(r.winner) === i ? '<span>W/O</span>'
@@ -191,14 +171,13 @@ function sideRow(m, ctx, i) {
   return `<div class="side"${w === i ? ' data-win' : ''}><span>${esc(sideLabel(m.sides[i], ctx))}</span><span class="score">${score}</span></div>`;
 }
 
-// Every category as a context — shared by the venue and player renderers.
 function catCtxs(data) {
   return data.cats.map(c => makeCat(c, data.tjson));
 }
 
 function renderVenue(route, data, now = Date.now()) {
   if (!data.tjson) return MISSING;
-  const v = route.filter; // #slug/venues/<id> narrows to one court; no id → all courts
+  const v = route.filter;
   const rows = [];
   const ctxs = catCtxs(data);
   for (const ctx of ctxs) {
@@ -210,8 +189,7 @@ function renderVenue(route, data, now = Date.now()) {
     }
   }
   rows.sort((a, b) => a.t - b.t);
-  // venues with matches — a declared-but-unused court is simply absent;
-  // names come from makeCat's map (any ctx carries it), not a fresh derivation
+  // courts with no matches are simply absent; names come from makeCat's map
   const venueNames = ctxs[0] ? ctxs[0].venues : new Map();
   const venues = (data.tjson.venues || []).map(x => x.id).filter(id => rows.some(r => r.m.venue === id));
   const shown = v ? rows.filter(r => r.m.venue === v) : rows;
@@ -228,11 +206,10 @@ function renderVenue(route, data, now = Date.now()) {
     any = true;
     const col = [];
     col.push(`<h2>${esc(venueNames.get(id) || id)}</h2>`);
-    col.push('<div class="stack">'); // same card stack as the player schedule
+    col.push('<div class="stack">');
     for (const r of open) {
       const st = kioskStatus(r, now);
-      // status colors the headline time; a late start gets a remark beside it in the
-      // same cell (raw HTML cell — the documented pre-rendered head cell)
+      // status colors the headline time; a late start gets the remark cell beside it
       col.push(matchCard(r.m, r.ctx, { meta: ['catName', 'label'],
         head: [st === 'overdue' ? `${esc(fmtTime(r.t, r.ctx.tz))} <span class="delayed">delayed</span>` : 'time'], status: st }));
     }
@@ -244,7 +221,6 @@ function renderVenue(route, data, now = Date.now()) {
   return parts.join('');
 }
 
-// The "N more matches possible" line, placed where that span starts.
 function possibleLine(b) {
   const range = b.min === b.max ? `at ${fmtTime(b.min, b.ctx.tz)}` : `between ${fmtTime(b.min, b.ctx.tz)} and ${fmtTime(b.max, b.ctx.tz)}`;
   const noun = b.count === 1 ? 'match' : 'matches';
@@ -253,12 +229,12 @@ function possibleLine(b) {
 
 function renderPlayer(route, data) {
   if (!data.tjson) return MISSING;
-  const pid = route.filter; // no id → the picker; a category pill also lands here
+  const pid = route.filter;
   const players = (data.tjson.players || []).filter(p => p && typeof p === 'object' && typeof p.id === 'string');
   const p = pid ? players.find(x => x.id === pid) : null;
   if (!p) {
     if (pid && !(data.tjson.categories || []).some(c => c.id === pid)) return '<p>Player not found.</p>';
-    // picker: name followed by the category labels, filterable by the pills
+
     const ctxs = catCtxs(data);
     const pills = catPills(data.tjson.categories || [], data.t.slug, 'players', pid, `#${esc(data.t.slug)}/players`);
     const sel = ctxs.find(c => c.id === pid);
@@ -284,7 +260,7 @@ function renderPlayer(route, data) {
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(r);
   }
-  const blocksByDay = new Map(); // dayKey -> [{ ctx, min, max, count }]
+  const blocksByDay = new Map();
   for (const ctx of ctxs) {
     const span = possibleSpan(ctx, pid);
     if (!span) continue;
@@ -301,9 +277,7 @@ function renderPlayer(route, data) {
     for (const r of g) {
       const t = schedTime(r.m, r.ctx.tz), m = r.m, ctx = r.ctx;
       while (bi < blocks.length && blocks[bi].min < t) day.push(possibleLine(blocks[bi++]));
-      // one side row per team — per-game points beside their own name, winner
-      // bolded; the same sideRow as the bracket cards. Headline: time left,
-      // court right — meta keeps only cat · label.
+      // same sideRow as bracket cards; headline time · court, meta cat · label
       day.push(matchCard(m, ctx, {
         done: isDone(m, ctx),
         meta: ['catName', 'label'],
@@ -319,14 +293,10 @@ function renderPlayer(route, data) {
 
 // ---------- boot ----------
 
-// Read-once views (index/categories/players) don't poll — but a load that lands
-// in a deploy window or a network blip must not leave a permanent
-// "missing" page. Two cheap recoveries, neither of which fires on the happy
-// path: re-fetch when the tab returns to the foreground, and a bounded retry
-// when the snapshot is detectably failed (no index entry, or no tournament data
-// on a view that needs one). A genuinely empty repo or category still renders
-// empty — a 404 is indistinguishable from absence, so empty states are never
-// retried.
+// Read-once views don't poll, but a load in a deploy window must not leave a
+// permanent "missing" page: refetch on tab-return, and retry a few times only
+// when the load detectably failed (a 404 is indistinguishable from absence,
+// so empty states are never retried).
 function boot() {
   const app = document.querySelector('main');
   const renderers = { index: renderIndex, categories: renderStandings, venues: renderVenue, players: renderPlayer };
@@ -339,7 +309,7 @@ function boot() {
       }
       return `${d.t.name} — Players`;
     }
-    return d.t.name; // categories (standings) and venues (kiosk)
+    return d.t.name;
   };
   let route = null;    // current fragment route — the kiosk poll reads it each tick
   let data = null;     // last good snapshot — a failed poll keeps the board up
@@ -355,9 +325,8 @@ function boot() {
     if (on && !pollTimer) {
       // jitter so a hall of kiosk screens doesn't fetch in lockstep
       pollTimer = setInterval(tick, POLL_MS + Math.random() * 5000);
-      // Wall clock, tournament-local time. Kept out of the render HTML (empty
-      // span) so the lastHtml change-guard isn't tripped every second; the poll
-      // re-render replaces the span, so look it up fresh each tick.
+      // Clock lives in an empty span so the lastHtml change-guard isn't
+      // tripped every second; look it up fresh each tick (the poll re-renders).
       clockTimer = setInterval(() => {
         const el = document.getElementById('k-clock');
         if (el) el.textContent = fmtTime(Date.now(), (data && data.tjson && data.tjson.timezone) || 'UTC');
@@ -429,8 +398,7 @@ function boot() {
 
 if (typeof document !== 'undefined') boot();
 
-// CommonJS exports for node tests; browser <script> ignores these. Derive
-// functions come from derive.js directly (required above, on globalThis).
+// CommonJS exports for node tests; the browser <script> ignores these.
 if (typeof module !== 'undefined') {
   module.exports = { parseRoute, loadAll, renderIndex, renderStandings, renderVenue, renderPlayer };
 }

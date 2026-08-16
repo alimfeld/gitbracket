@@ -1,10 +1,11 @@
 # AGENTS.md
 
-README describes the model and the tools; tests pin behavior; comments carry
-only what is not apparent. Shipping-surface comments cost transfer bytes on
-every page load, so keep rationale out of `site/` unless it warns against a
-real trap — `ponytail:` markers stay (they are the shortcut ledger). When
-docs and code disagree, code wins.
+README describes the model and the tools; tests pin behavior. Comments state
+why, never what — code and tests carry the what (unless it's apparent).
+Shipping-surface comments cost transfer bytes on every page load, so keep
+rationale out of `site/` unless it warns against a real trap — `ponytail:`
+markers stay (they are the shortcut ledger). When docs and code disagree,
+code wins.
 
 ## Architectural principles
 
@@ -17,11 +18,18 @@ docs and code disagree, code wins.
   stored; a match is done when it has a result. Schedules are the exception —
   generated from a spec and stored, never hand-edited; regenerate before
   results go in.
+- **Times are wall-clock, never offsets.** `scheduled` is local wall time in the
+  tournament's IANA `timezone` — no offset or Z in the data; the instant is
+  derived (tzOffset's noon-UTC anchor) so the data stays readable local time
+  and stays right if clock rules change.
 - **derive.js is the single source of the site's domain model.** Validator,
   REPL, generator, and renderers all consume it — extend it, never reimplement
   the model elsewhere. The integrity gate must not depend on renderer code.
   derive.js is dual-loaded (browser global script + CommonJS), so it stays
-  free of node-only modules.
+  free of node-only modules. Its conventions are law: `pairSig` (sorted,
+  '|'-joined side ids) is the one side identity; recursive resolvers guard
+  cycles with in-progress memo entries — the validator rejects cycles first,
+  so a guard only ever stops a hang.
 - **Slots are category-local, consumed at most once, acyclic.**
 - **Every REPL edit validates, writes, and commits itself** — the process can
   die at any instant with nothing lost. One scorer owns one tournament.
