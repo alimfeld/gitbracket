@@ -25,6 +25,7 @@
     "eveline": "Eveline",
     "gerry": "Gerry",
     "hanspeter": "Hanspeter",
+    "hako": "Hako",
     "hase": "Häse",
     "karin": "Karin",
     "koni": "Koni",
@@ -98,6 +99,10 @@
       [
         "kurt",
         "tom"
+      ],
+      [
+        "marc",
+        "stephen"
       ]
     ],
     "wd": [
@@ -130,6 +135,10 @@
       [
         "otto",
         "elke"
+      ],
+      [
+        "eveline",
+        "hako"
       ]
     ]
   }
