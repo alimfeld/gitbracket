@@ -87,6 +87,10 @@
       "name": "Eveline"
     },
     {
+      "id": "gabi",
+      "name": "Gabi"
+    },
+    {
       "id": "gerry",
       "name": "Gerry"
     },
@@ -570,6 +574,50 @@
           {
             "kind": "players",
             "ids": [
+              "karin",
+              "eveline"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "elke",
+              "gabi"
+            ]
+          }
+        ],
+        "venue": "court-5",
+        "scheduled": "2026-10-03T09:00:00"
+      },
+      {
+        "id": 2,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "doris",
+              "nicole"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "elke",
+              "gabi"
+            ]
+          }
+        ],
+        "venue": "court-5",
+        "scheduled": "2026-10-03T09:30:00"
+      },
+      {
+        "id": 3,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
               "doris",
               "nicole"
             ]
@@ -583,7 +631,7 @@
           }
         ],
         "venue": "court-5",
-        "scheduled": "2026-10-03T09:00:00"
+        "scheduled": "2026-10-03T10:00:00"
       }
     ],
     "xd": [

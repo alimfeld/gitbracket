@@ -23,6 +23,7 @@
     "doris": "Doris",
     "elke": "Elke",
     "eveline": "Eveline",
+    "gabi": "Gabi",
     "gerry": "Gerry",
     "hanspeter": "Hanspeter",
     "hako": "Hako",
@@ -117,6 +118,10 @@
       [
         "karin",
         "eveline"
+      ],
+      [
+        "elke",
+        "gabi"
       ]
     ],
     "xd": [
