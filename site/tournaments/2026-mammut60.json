@@ -632,6 +632,42 @@
         ],
         "venue": "court-5",
         "scheduled": "2026-10-03T10:00:00"
+      },
+      {
+        "id": 4,
+        "sides": [
+          {
+            "kind": "pool",
+            "pool": "A",
+            "rank": 2
+          },
+          {
+            "kind": "pool",
+            "pool": "A",
+            "rank": 3
+          }
+        ],
+        "venue": "court-5",
+        "scheduled": "2026-10-03T10:30:00"
+      },
+      {
+        "id": 5,
+        "sides": [
+          {
+            "kind": "pool",
+            "pool": "A",
+            "rank": 1
+          },
+          {
+            "kind": "match",
+            "match": 4,
+            "result": "winner"
+          }
+        ],
+        "bestOf": 3,
+        "slotMinutes": 60,
+        "venue": "court-3",
+        "scheduled": "2026-10-03T11:00:00"
       }
     ],
     "xd": [
