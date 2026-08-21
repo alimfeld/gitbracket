@@ -132,3 +132,13 @@ worked example:
 ## Tools
 
 **`gb.js`** — the one CLI. `node gb.js` starts the match-day REPL (`help` inside for commands — every edit validates and commits itself); `node gb.js validate [slug]` checks data without the REPL; `node gb.js schedule <spec>` generates a tournament file from a spec (`specs/<slug>.json`); `node gb.js publish` ships `site/` to the domain in `site/CNAME`. The commands live as modules under `src/`; `site/` stays the shipping surface.
+
+## Development
+
+The pre-commit hook (validator + tests) is the dev gate. A fresh clone needs it wired once:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Publish re-runs the validator from disk, so a bypassed hook can't ship bad data — the hook is the fast local gate, not the last one.
