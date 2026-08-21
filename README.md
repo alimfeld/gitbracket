@@ -7,6 +7,35 @@ server, no app: a publish deploys, and anyone with the link can follow along.
 Works for any win/lose tournament — pickleball, tennis, darts, quiz. Draws
 are not supported.
 
+## Glossary
+
+- **Tournament** — a whole event, from its first group match to its final.
+- **Category** — one competition within a tournament (e.g. Men's Doubles
+  40+), with its own pools and knockout.
+- **Player** — a person taking part in a tournament.
+- **Team** — one player (singles) or two (doubles) competing together in a
+  category.
+- **Venue** — a court, the physical place a match happens.
+- **Pool** — a round-robin group; every team plays every other team in it.
+  Rankings decide which teams advance.
+- **Group stage** — the first phase: every team plays the others in its pool.
+- **Knockout stage** — the second phase: single-elimination matches; lose and
+  you're out. Teams enter as pool ranks or as the winner/loser of an earlier
+  match.
+- **Round** — one step of the knockout: Final, Semifinals, Quarterfinals,
+  Round of 16, and so on.
+- **Bracket** — the knockout tree: matches arranged in rounds, from the first
+  round to the Final.
+- **Seed** — a team's bracket position from its pool ranking; top seeds are
+  kept apart so the strongest teams meet as late as possible.
+- **Placement match** — a knockout match that settles a lower rank (3rd, 5th,
+  …) rather than the title; the bronze match is 3rd place.
+- **Match** — one meeting of two sides, the smallest unit of play.
+- **Side** — one of the two opponents in a match: players, a previous match's
+  winner/loser, or a pool rank.
+- **Game** — a single race within a match; games are the score evidence a
+  result is judged by.
+
 ## Model
 
 One file per tournament. `tournaments.json` is the index; each entry's slug
@@ -117,7 +146,7 @@ worked example:
   each round in the same time window, so every team carries the same
   back-to-back burden — the schedule stays packed tight, no idle slots.
 - `bestOf`/`slotMinutes` are plain numbers applied to both stages;
-  `knockout: false` skips the knockout phase; `placements` (a power of 2)
+  `knockout: false` skips the knockout stage; `placements` (a power of 2)
   sizes the classification bracket; `final` overrides the final and bronze
   matches.
 - Knockout draws use the standard S-curve bracket: round 1 pairs best vs
