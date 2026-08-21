@@ -147,8 +147,13 @@ function bracketHtml(ctx, ko) {
 // opts.meta picks the meta items (fixed vocabulary); opts.head is an optional
 // [left, right] headline row — cells are item keys or pre-rendered HTML.
 // Node ids are namespaced by category: match ids repeat across categories, so
-// an unqualified id makes getElementById hit the wrong (first) card.
-const nodeId = (cat, id) => { id = String(id); return id.startsWith('t-') ? `t-${cat}-${id.slice(2)}` : `m-${cat}-${id}`; };
+// an unqualified id makes getElementById hit the wrong (first) card. Pool
+// strings are the one free-form id — esc here so the attribute and the
+// highlight lookup (both through nodeId) use the same ciphertext.
+const nodeId = (cat, id) => {
+  id = esc(String(id));
+  return id.startsWith('t-') ? `t-${esc(cat)}-${id.slice(2)}` : `m-${esc(cat)}-${id}`;
+};
 
 function matchCard(m, ctx, opts = {}) {
   const t = schedTime(m, ctx.tz);

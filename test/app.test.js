@@ -451,6 +451,15 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   evil.players[0].name = '<b>Ada</b> & "Co"';
   const out = renderPlayer({ slug: 'sample', view: 'players', filter: 'p1' }, { ...data, tjson: evil });
   assert(out.includes('&lt;b&gt;Ada&lt;/b&gt; &amp; &quot;Co&quot;') && !out.includes('<b>Ada</b>'), 'player name is escaped');
+  // hostile pool strings are free-form and land in the table's id attribute —
+  // esc-in-nodeId must keep the attribute a single quoted value.
+  const evilPool = JSON.parse(JSON.stringify(require(FIX('sample', 'tournaments', 'sample.json'))));
+  evilPool.matches.md40[0].pool = 'A" onclick="alert(1)';
+  const pdata = { index: [], t: { slug: 'sample', name: evilPool.name }, tjson: evilPool,
+    cats: evilPool.categories.map(c => ({ meta: c, matches: evilPool.matches[c.id] || [] })) };
+  const ph = renderStandings({ slug: 'sample', view: 'categories', filter: 'md40' }, pdata);
+  assert(!ph.includes('id="t-md40-A" onclick='), 'the injected handler never lands in the DOM');
+  assert(ph.includes('id="t-md40-A&quot; onclick=&quot;alert(1)"'), 'the pool id renders entity-encoded');
   // tied teams share the first rank of their group (standard competition ranking: 1 1 1 4)
   const { data: tdata } = dataOf('tie');
   const tieHtml = renderStandings({ slug: 'tie', view: 'categories' }, tdata);
