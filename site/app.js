@@ -423,6 +423,8 @@ function boot() {
     dataSlug = r.slug;
     // the kiosk dark theme keys off body.venue — present only on the venue view
     document.body.classList.toggle('venue', r.view === 'venues');
+    document.body.classList.toggle('categories', r.view === 'categories');
+    if (r.view !== 'categories') selected = null; // the chain highlight is a bracket-page feature
     document.title = pageTitle(r, d);
     try {
       const html = renderers[r.view](r, d);
@@ -434,6 +436,7 @@ function boot() {
   };
 
   document.addEventListener('click', e => {
+    if (route.view !== 'categories') return; // cards are inert on kiosk/player — no bracket graph to trace
     const node = e.target.closest('[id^="m-"], [id^="t-"]');
     if (!node) { if (selected !== null) { selected = null; applySelection(); } return; }
     selected = selected === node.id ? null : node.id;
