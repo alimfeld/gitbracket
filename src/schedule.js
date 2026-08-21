@@ -139,17 +139,8 @@ function buildKnockout(pools, names, mid, fin, placements) {
   }
   rounds.push(ms1);
   // When byes exceed round-1 matches (5/9/10/11-team fields) two byed seeds
-  // must meet in round 2 — structurally forced, nothing crashes.
-  // Round-2 pairing order: feeder-free pairings first, feeder pairings last. A
-  // match with a round-1 winner can't start until round 1 ends, so it always
-  // schedules later; building it last keeps id order in sync with time order.
-  // Pair contents are unchanged — only their creation (and schedule) order.
-  const feedless = [], fed = [];
-  for (let i = 0; i < round.length; i += 2) {
-    ((round[i].kind === 'match' || round[i + 1].kind === 'match') ? fed : feedless).push(round[i], round[i + 1]);
-  }
-  round = feedless.concat(fed);
-
+  // must meet in round 2 — structurally forced, nothing crashes. Ids come out
+  // in chronological order regardless of build order — renumberByTime sorts them.
   while (round.length > 1) {
     const next = [];
     const ms = [];
@@ -213,8 +204,7 @@ function buildCategory(teams, cat, poolSize) {
     });
   }
 
-  const doKo = (pools.length > 1 || cat.knockout === true);
-  if (doKo && cat.knockout !== false) {
+  if (cat.knockout !== false && (pools.length > 1 || cat.knockout === true)) {
     matches.push(...buildKnockout(pools, names, mid, cat.final || {}, cat.placements));
   }
   return matches;
@@ -231,7 +221,8 @@ function buildCategory(teams, cat, poolSize) {
 // resolve only after results, so dependency order is the only handle there).
 // Occupancy is a start/end window over the match's effective slot length
 // (matchSlotMs), matching the validator's overlap rule, so the off-set
-// morning/afternoon grids can't collide.
+// morning/afternoon grids can't collide. Tuples are [cat, teamList, matches] —
+// the cat and matches positions only.
 function scheduleMatches(categories, venues, tz, slotCfgOf, eventDate, blockStart) {
   if (venues.length === 0) throw new Error('spec: venues must be a non-empty id -> name map');
   const offset = tzOffset(tz, eventDate);
@@ -242,7 +233,7 @@ function scheduleMatches(categories, venues, tz, slotCfgOf, eventDate, blockStar
   const endOf = new Map(); // match id -> end ms (feeder floor)
   const poolDone = new Map(); // pool -> end ms (pool-slot floor)
 
-  for (const [cat, matches] of categories) {
+  for (const [cat, , matches] of categories) {
     const start = startOf(cat);
     if (Number.isNaN(start)) throw new Error(`spec: no blocks entry for category ${cat}`);
     const catSlots = slotCfgOf.get(cat);
@@ -282,9 +273,10 @@ function scheduleMatches(categories, venues, tz, slotCfgOf, eventDate, blockStar
 // and no pool match double-books a player. (Knockout sides are unknown until
 // results; same-wave knockout matches are structurally disjoint — each feeds
 // a different bracket path.)
+// results/assertSchedule tuples: [cat, teamList, matches] — only cat and matches used.
 function assertSchedule(categories, slotCfgOf) {
   const sched = []; // { m, t, players }
-  for (const [cat, matches] of categories) {
+  for (const [cat, , matches] of categories) {
     const catSlots = slotCfgOf.get(cat);
     for (const m of matches) {
       if (!m.scheduled || !m.venue) throw new Error(`match ${m.id} never got a slot`);
@@ -424,10 +416,9 @@ function generate(spec) {
     }
     results.push([cat, teamList, buildCategory(teamList, catById.get(cat), poolSize)]);
   }
-  const catsWithMatches = results.map(([cat, , ms]) => [cat, ms]);
   const slotCfgOf = new Map(CATS.map((c) => [c.id, c.slotMinutes]));
-  scheduleMatches(catsWithMatches, VENUES.map((v) => v.id), timezone, slotCfgOf, eventDate, blockStart);
-  assertSchedule(catsWithMatches, slotCfgOf);
+  scheduleMatches(results, VENUES.map((v) => v.id), timezone, slotCfgOf, eventDate, blockStart);
+  assertSchedule(results, slotCfgOf);
 
   const out = {};
   for (const [cat, teamList, ms] of results) {
