@@ -1,0 +1,20 @@
+{
+  "name": "Bad Null Game",
+  "timezone": "UTC",
+  "categories": [{ "id": "t", "name": "T", "bestOf": { "groups": 1, "knockout": 3 } }],
+  "players": [{ "id": "p1", "name": "P1" }, { "id": "p2", "name": "P2" }],
+  "matches": {
+    "t": [
+      {
+        "id": 1,
+        "pool": "A",
+        "sides": [
+          { "kind": "players", "ids": ["p1"] },
+          { "kind": "players", "ids": ["p2"] }
+        ],
+        "games": [null],
+        "result": { "status": "played", "winner": "a" }
+      }
+    ]
+  }
+}

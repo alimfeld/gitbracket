@@ -32,9 +32,12 @@ function matchSlotMs(m, ctx) {
 
 
 // Raw game wins per side, target not applied — the played-consistency base.
+// Malformed entries are skipped: the gate calls this while reporting them, a
+// throw here would replace the named error with a crash.
 function countWins(games) {
   const w = [0, 0];
   for (const g of games) {
+    if (!g || typeof g !== 'object') continue;
     if (g.a > g.b) w[0]++;
     else if (g.b > g.a) w[1]++;
   }
@@ -46,7 +49,8 @@ const sideLetter = i => i === 0 ? 'a' : 'b';
 
 function gameDiff(games) {
   let gd = 0, pd = 0;
-  for (const g of games) {
+  if (Array.isArray(games)) for (const g of games) {
+    if (!g || typeof g !== 'object') continue; // as countWins: report, never throw
     gd += g.a > g.b ? 1 : -1;
     pd += g.a - g.b;
   }
@@ -95,6 +99,7 @@ function poolStandings(ctx, pool, partial) {
     return r;
   };
   for (const m of ms) {
+    if (!Array.isArray(m.sides)) continue; // malformed match: the validator reports it, never a crash
     // rec() creates both side records on first sight (creation order kept), so
     // a single pass builds the roster and the ladder at once.
     const s0 = m.sides[0], s1 = m.sides[1];
@@ -121,6 +126,7 @@ function poolStandings(ctx, pool, partial) {
 function mutualKeys(list, ms, ctx) {
   const h = new Map(list.map(r => [r.sig, { hw: 0, hg: 0, hp: 0 }]));
   for (const m of ms) {
+    if (!Array.isArray(m.sides)) continue; // as poolStandings: report, never throw
     const [s0, s1] = m.sides;
     if (!s0 || !s1 || s0.kind !== 'players' || s1.kind !== 'players') continue;
     const a = pairSig(s0.ids), b = pairSig(s1.ids);
