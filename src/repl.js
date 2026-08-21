@@ -285,7 +285,6 @@ function commitMessage(kind, slug, cat, matchId, detail) {
 const BARE = ['use', 'ls', 'status', 'help', 'quit', 'q'];
 const MUT = ['score', 'wo', 'void', 'venue', 'time', 'publish'];
 
-// Any line is <verb> <args> — the first word is always a command.
 function parseCmd(line) {
   const [raw, ...args] = line.trim().split(/\s+/);
   if (raw === '') return { kind: 'unknown', args: [], needSlash: false };
@@ -529,8 +528,7 @@ function dispatch(cmd, state) {
   if (cmd.needSlash) return `did you mean /${cmd.kind}?`;
   const { kind, args } = cmd;
   if (kind === 'ls') {
-    // at root there is no selected tournament, so no categories — ls falls through to the
-    // tournament list; a filter token is only a category id when it is one
+    // a filter token is only a category id when it is one
     const cats = state.slug ? (state.repo.tournaments.get(state.slug).tjson.categories || []).map(c => c.id) : [];
     const first = args[0];
     const cat = first && cats.includes(first) ? first : null;
@@ -553,7 +551,7 @@ function dispatch(cmd, state) {
   return editCmd(state, kind, cat, matchId, rest);
 }
 
-// Default: the latest tournament — a null file would crash every command, so skip it.
+// a null file would crash every command, so skip it.
 function defaultSlug(repo) {
   if (!repo.index.length) return null;
   const last = repo.index[repo.index.length - 1];

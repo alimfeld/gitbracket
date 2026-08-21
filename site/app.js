@@ -171,7 +171,6 @@ function sideRow(m, ctx, i) {
   return `<div class="side"${w === i ? ' data-win' : ''}><span>${esc(sideLabel(m.sides[i], ctx))}</span><span class="score">${score}</span></div>`;
 }
 
-// Downstream matches of m — anyone whose sides reference m.
 function feedsRefs(m, ctx) {
   const refs = [];
   for (const X of ctx.matches) {
@@ -189,7 +188,6 @@ function feedsText(m, ctx) {
   return `<div class="feeds">→ ${refs.map(X => esc(matchLabel(X, ctx))).join(', ')}</div>`;
 }
 
-// CSV of chain match ids for the click handler; empty strings at the ends.
 function chainIds(m, ctx) {
   const feeders = [];
   for (const s of (m.sides || [])) {
@@ -410,7 +408,6 @@ function boot() {
     }
   };
 
-  // Tap a card to toggle selection; tap elsewhere to clear.
   document.addEventListener('click', e => {
     const card = e.target.closest('article[id^="m-"]');
     if (!card) { if (selectedId !== null) { selectedId = null; applySelection(); } return; }

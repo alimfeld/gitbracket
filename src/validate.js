@@ -422,7 +422,6 @@ function filterErrs(errs, slug) {
     || new RegExp(`slug ${slug}(\\s|$)`).test(e));     // duplicate slug x
 }
 
-// CLI entry (dispatched from gb.js): root is the repo root, slug narrows the report.
 function main(root, slug) {
   const repo = loadRepo(path.join(root, 'site'));
   if (slug !== undefined && !repo.tournaments.has(slug)) {

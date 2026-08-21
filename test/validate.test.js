@@ -8,7 +8,7 @@ const assert = require('node:assert/strict');
 const { filterErrs } = require('../src/validate.js');
 const { validateFixture, hasErr, hasWarn } = require('./helpers.js');
 
-const V = [ // [name, fixture dir, ok, expected message regex]
+const V = [
   ['clean fixture validates', 'sample', r => r.errs.length === 0 && r.warns.length === 0, null],
   ['placement bracket validates', 'place', r => r.errs.length === 0 && r.warns.length === 0, null],
   ['fully played bracket validates', 'full', r => r.errs.length === 0 && r.warns.length === 0, null],

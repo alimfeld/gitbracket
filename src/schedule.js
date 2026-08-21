@@ -21,7 +21,7 @@ const { writeTournament, slotsOverlap, isRealDate } = require('./tools.js');
 
 // Round-robin pairings, circle method: array of rounds, each a list of pairs.
 function roundRobin(teams) {
-  const list = teams.length % 2 ? teams.concat([null]) : teams.slice(); // null = bye
+  const list = teams.length % 2 ? teams.concat([null]) : teams.slice();
   const half = list.length / 2;
   const rounds = [];
   for (let r = 0; r < list.length - 1; r++) {
@@ -192,8 +192,6 @@ function buildCategory(teams, cat, poolSize) {
     }
   });
 
-  // knockout flag: undefined/true = build when multi-pool; false = never; true on
-  // single-pool = everyone advances to knockout
   const doKo = (pools.length > 1 || cat.knockout === true);
   if (doKo && cat.knockout !== false) {
     matches.push(...buildKnockout(pools, names, mid, cat.final || {}, cat.placements));

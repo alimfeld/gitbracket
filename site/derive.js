@@ -23,10 +23,8 @@ function makeCat(c, tjson) {
   };
 }
 
-// A match lives in the groups stage iff it has a pool.
 const stageOf = m => (m && m.pool !== undefined) ? 'groups' : 'knockout';
 
-// Effective slot length, ms: match override > per-stage category config.
 function matchSlotMs(m, ctx) {
   const cfg = (ctx && ctx.slotMinutes) || {};
   return ((m && m.slotMinutes) ?? cfg[stageOf(m)]) * 60 * 1000;
@@ -43,11 +41,9 @@ function countWins(games) {
   return w;
 }
 
-// Sides are 'a'/'b' like game scores — the one letter<->index translation.
 const sideIdx = w => w === 'a' ? 0 : 1;
 const sideLetter = i => i === 0 ? 'a' : 'b';
 
-// Net game/point differential from side 0's viewpoint; side 1's are the negations.
 function gameDiff(games) {
   let gd = 0, pd = 0;
   for (const g of games) {
@@ -57,7 +53,6 @@ function gameDiff(games) {
   return { gd, pd };
 }
 
-// Effective best-of: match override > per-stage category config.
 function bestOfOf(m, ctx) {
   return m.bestOf ?? ctx.bestOf[stageOf(m)];
 }
@@ -414,7 +409,6 @@ function fmtDiff(n) {
   return (n > 0 ? '+' : '') + n;
 }
 
-// overdue = slot fully elapsed, live = inside it, else next (now === t is live).
 function kioskStatus(r, now) {
   const t = r.t;
   if (now >= t + matchSlotMs(r.m, r.ctx)) return 'overdue';
