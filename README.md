@@ -113,7 +113,9 @@ worked example:
 ```
 
 - `date` is the tournament day, `blocks` the first match of each category;
-  `poolSize` splits the category's `teams` into round-robin pools.
+  `poolSize` splits the category's `teams` into round-robin pools. Pools play
+  each round in the same time window, so every team carries the same
+  back-to-back burden — the schedule stays packed tight, no idle slots.
 - `bestOf`/`slotMinutes` are plain numbers applied to both stages;
   `knockout: false` skips the knockout phase; `placements` (a power of 2)
   sizes the classification bracket; `final` overrides the final and bronze

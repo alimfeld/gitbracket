@@ -7,6 +7,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { generate } = require('../src/schedule.js');
 const { validateRepo } = require('../src/validate.js');
+const { matchSlotMs } = require('../site/derive.js');
 
 const MINI = {
   slug: 'mini',
@@ -37,6 +38,28 @@ function repoOf(tourney) {
       matches: new Map(Object.entries(tourney.matches)),
     }]]),
   };
+}
+
+// Consecutive group matches with no rest slot between them, per team — the
+// back-to-back burden the group stage must spread evenly.
+function backToBacks(tourney, catId) {
+  const cat = tourney.categories.find((c) => c.id === catId);
+  const groups = tourney.matches[catId].filter((x) => x.pool !== undefined);
+  const slotMs = matchSlotMs(groups[0], { slotMinutes: cat.slotMinutes });
+  const tt = {};
+  for (const m of groups) {
+    for (const s of m.sides) for (const id of s.ids) {
+      (tt[id] = tt[id] || []).push(Date.parse(m.scheduled));
+    }
+  }
+  const counts = [];
+  for (const list of Object.values(tt)) {
+    list.sort((a, b) => a - b);
+    let b2b = 0;
+    for (let i = 1; i < list.length; i++) if (list[i] - list[i - 1] === slotMs) b2b++;
+    counts.push(b2b);
+  }
+  return counts;
 }
 
 test('a minimal spec generates a valid tournament', () => {
@@ -221,6 +244,51 @@ test('knockout cross-pairs pool winners: they can only meet deep in the bracket'
       }
     }
   }
+});
+
+test('group stage: an even pool packs tight and hands every team the same back-to-back burden', () => {
+  // a 4-team pool on 2 courts: 6 matches, 2 per round — every team plays at
+  // the same consecutive waves; no team can get more or less rest than another
+  const players = {}; const teams = [];
+  for (let i = 0; i < 4; i++) { players['t' + (i + 1)] = 'T' + (i + 1); teams.push(['t' + (i + 1)]); }
+  const tourney = generate({ ...MINI, poolSize: 4, players, teams: { md: teams } });
+  const { errs } = validateRepo(repoOf(tourney));
+  assert.deepEqual(errs, []);
+  const groups = tourney.matches.md.filter((m) => m.pool !== undefined);
+  assert.equal(groups.length, 6);
+  const slot = matchSlotMs(groups[0], { slotMinutes: MINI.categories[0].slotMinutes });
+  // 6 matches on 2 courts pack into exactly 3 tight waves — no idle slot
+  assert.equal(Date.parse(groups.at(-1).scheduled) + slot - Date.parse(groups[0].scheduled), 3 * slot);
+  const counts = backToBacks(tourney, 'md');
+  assert.equal(Math.min(...counts), Math.max(...counts),
+    'every team carries the same back-to-back count (no one penalized more)');
+  assert.ok(counts[0] > 0, 'tight but every team actually plays back-to-back');
+});
+
+test('group stage: multi-pool rounds pack tight and spread back-to-backs evenly', () => {
+  // two pools of 7 on 5 courts — the case pool-by-pool feeding got wrong:
+  // pool A hogged the early waves, so the pack lost tightness and rest
+  // differed per pool. Round-major feeding must stay tight and keep every
+  // team's back-to-back count within one of any other's.
+  const players = {}; const teams = [];
+  for (let i = 0; i < 14; i++) { players['t' + (i + 1)] = 'T' + (i + 1); teams.push(['t' + (i + 1)]); }
+  const tourney = generate({
+    ...MINI,
+    poolSize: 7,
+    venues: { 'court-1': 'C1', 'court-2': 'C2', 'court-3': 'C3', 'court-4': 'C4', 'court-5': 'C5' },
+    players,
+    teams: { md: teams },
+  });
+  const { errs } = validateRepo(repoOf(tourney));
+  assert.deepEqual(errs, []);
+  const groups = tourney.matches.md.filter((m) => m.pool !== undefined);
+  assert.equal(groups.length, 42);
+  const slot = matchSlotMs(groups[0], { slotMinutes: MINI.categories[0].slotMinutes });
+  // 42 matches on 5 courts pack into exactly 9 tight waves — no idle wave
+  assert.equal(Date.parse(groups.at(-1).scheduled) + slot - Date.parse(groups[0].scheduled), 9 * slot);
+  const counts = backToBacks(tourney, 'md');
+  assert.ok(Math.max(...counts) - Math.min(...counts) <= 1,
+    `back-to-back counts spread by more than one: ${[...new Set(counts)].sort((a, b) => a - b).join(', ')}`);
 });
 
 test('match ids follow chronological order; slot refs stay valid after renumbering', () => {

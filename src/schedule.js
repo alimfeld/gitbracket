@@ -192,18 +192,26 @@ function buildCategory(teams, cat, poolSize) {
   let next = 1;
   const mid = () => next++;
 
-  pools.forEach((pool, p) => {
-    for (const [a, b] of roundRobin(pool).flat()) {
-      matches.push({
-        id: mid(),
-        pool: names[p],
-        sides: [
-          { kind: 'players', ids: a },
-          { kind: 'players', ids: b },
-        ],
-      });
-    }
-  });
+  // Round-major feed: all pools play round r together. Feeding pool-by-pool
+  // let early pools hog the courts — idle waves and uneven rest per pool;
+  // round-major keeps every team across pools on the same wave grid.
+  const rr = pools.map((pool) => roundRobin(pool));
+  const maxRounds = Math.max(...rr.map((rs) => rs.length));
+  for (let r = 0; r < maxRounds; r++) {
+    rr.forEach((rounds, p) => {
+      if (!rounds[r]) return; // pool finished earlier (sizes differ by at most one)
+      for (const [a, b] of rounds[r]) {
+        matches.push({
+          id: mid(),
+          pool: names[p],
+          sides: [
+            { kind: 'players', ids: a },
+            { kind: 'players', ids: b },
+          ],
+        });
+      }
+    });
+  }
 
   const doKo = (pools.length > 1 || cat.knockout === true);
   if (doKo && cat.knockout !== false) {
