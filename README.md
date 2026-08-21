@@ -120,6 +120,9 @@ worked example:
   matches.
 - Regeneration rewrites the whole matches map, scores included — run it
   before results go in, never after.
+- Match ids follow chronological order in the generated file (per-category,
+  sequential by `scheduled`; build order breaks simultaneous ties). A
+  category's match 5 is a different match from any other category's match 5.
 
 ## Tools
 

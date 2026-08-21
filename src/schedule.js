@@ -290,6 +290,22 @@ function assertSchedule(categories, slotCfgOf) {
   }
 }
 
+// Renumber matches so the file is in chronological order with sequential ids —
+// diffs and slot refs stay readable. Build order is the tie-break for
+// simultaneous slots (the same wall time on different courts), free via the
+// stable sort.
+function renumberByTime(ms) {
+  const ordered = [...ms].sort((a, b) => Date.parse(a.scheduled) - Date.parse(b.scheduled));
+  const remap = new Map();
+  ordered.forEach((m, i) => remap.set(m.id, i + 1));
+  for (const m of ordered) {
+    m.id = remap.get(m.id);
+    for (const s of m.sides) if (s && s.kind === 'match') s.match = remap.get(s.match);
+  }
+  ms.length = 0;
+  ms.push(...ordered);
+}
+
 // Round robin must cover every pair exactly once — validate.js can't see this.
 function assertPoolCoverage(teams, matches, poolSize) {
   splitPools(teams, poolSize).forEach((pool, p) => {
@@ -395,6 +411,7 @@ function generate(spec) {
   const out = {};
   for (const [cat, teamList, ms] of results) {
     assertPoolCoverage(teamList, ms, poolSize);
+    renumberByTime(ms);
     out[cat] = ms;
     console.log(`${cat}: ${ms.length} matches`);
   }

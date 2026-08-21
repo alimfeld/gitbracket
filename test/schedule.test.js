@@ -175,3 +175,22 @@ test('knockout false + placements silently ignores placements', () => {
   // No knockout — placements is irrelevant
   assert.equal(tourney.matches.md.length, 4);
 });
+
+test('match ids follow chronological order; slot refs stay valid after renumbering', () => {
+  const tourney = generate(MINI);
+  for (const ms of Object.values(tourney.matches)) {
+    for (let i = 1; i < ms.length; i++) {
+      assert(Date.parse(ms[i - 1].scheduled) <= Date.parse(ms[i].scheduled),
+        `match ${ms[i].id} (${ms[i].scheduled}) scheduled before ${ms[i - 1].id} (${ms[i - 1].scheduled})`);
+    }
+    assert.equal(ms[0].id, 1);
+    assert.equal(new Set(ms.map((m) => m.id)).size, ms.length, 'ids remain unique');
+    for (const m of ms) {
+      for (const s of m.sides) {
+        if (s && s.kind === 'match') {
+          assert(ms.some((x) => x.id === s.match), `slot ref ${s.match} resolves to a match in the category`);
+        }
+      }
+    }
+  }
+});
