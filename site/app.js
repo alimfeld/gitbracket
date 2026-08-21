@@ -110,7 +110,7 @@ function renderStandings(route, data) {
     }
     // All pools, chronological by wall-clock (stable sort keeps file order on ties).
     const grp = [...byPool.values()].flat().sort((a, b) => (schedTime(a, ctx.tz) ?? 0) - (schedTime(b, ctx.tz) ?? 0));
-    parts.push('<h3>Group matches</h3>');
+    parts.push('<h3>Group stage</h3>');
     parts.push(matchGrid(grp, ctx));
     // Each table is a bridge node (id t-<pool>): feeders = its group matches, downstream = the knockout it seeds.
     parts.push('<h3>Pool standings</h3>');
@@ -142,7 +142,7 @@ function bracketHtml(ctx, ko) {
     const r = maxR - koColumn(m, ctx); // koColumn is distance from the final; render that column rightmost
     (cols[r] = cols[r] || []).push(m);
   }
-  const parts = ['<h3>Knockout</h3>'];
+  const parts = ['<h3>Knockout stage</h3>'];
   cols.forEach((ms, r) => {
     parts.push(`<h4>${roundName(cols.length - 1 - r)}</h4>`);
     parts.push(matchGrid(ms, ctx));
