@@ -87,24 +87,25 @@ function poolStandings(ctx, pool, partial) {
   const ms = ctx.matches.filter(m => m && m.pool === pool);
   if (ms.length === 0) return null;
   const recs = new Map();
+  const rec = s => {
+    if (!(s && s.kind === 'players' && Array.isArray(s.ids))) return null;
+    const sig = pairSig(s.ids);
+    let r = recs.get(sig);
+    if (!r) { r = { sig, ids: new Set(s.ids), wins: 0, losses: 0, gd: 0, pd: 0 }; recs.set(sig, r); }
+    return r;
+  };
   for (const m of ms) {
-    for (const s of m.sides) {
-      if (s && s.kind === 'players' && Array.isArray(s.ids) && !recs.has(pairSig(s.ids))) {
-        recs.set(pairSig(s.ids), { sig: pairSig(s.ids), ids: new Set(s.ids), wins: 0, losses: 0, gd: 0, pd: 0 });
-      }
-    }
-  }
-  for (const m of ms) {
+    // rec() creates both side records on first sight (creation order kept), so
+    // a single pass builds the roster and the ladder at once.
+    const s0 = m.sides[0], s1 = m.sides[1];
+    const r0 = rec(s0), r1 = rec(s1);
+    if (!r0 || !r1) continue;
     const w = winnerIdx(m);
     if (w === null) {
       if (m.result !== undefined) continue; // void: settled, counts nothing
       if (!partial) return null;
       continue;
     }
-    const s0 = m.sides[0], s1 = m.sides[1];
-    if (!s0 || !s1 || s0.kind !== 'players' || s1.kind !== 'players') continue;
-    const r0 = recs.get(pairSig(s0.ids)), r1 = recs.get(pairSig(s1.ids));
-    if (!r0 || !r1) continue;
     (w === 0 ? r0 : r1).wins++;
     (w === 0 ? r1 : r0).losses++;
     if (m.result && m.result.status === 'played') {
