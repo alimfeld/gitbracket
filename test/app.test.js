@@ -291,12 +291,31 @@ test('poolRanks: dead-tie members share their group rank, resolved rows have the
 test('slotLabel: unresolved slots describe the slot, not bare TBD', () => {
   const md = catOf('sample', 'md40');
   const m9 = md.byId.get(9);
-  assert(slotLabel(m9.sides[0], md) === 'Winner of 7', 'winner slot labels the feeder match');
-  assert(slotLabel(m9.sides[1], md) === 'Winner of 8', 'unresolved match slot still labels the feeder');
-  assert(slotLabel(md.byId.get(10).sides[0], md) === 'Loser of 7', 'loser slot labels the feeder');
+  assert(slotLabel(m9.sides[0], md) === 'Winner of SF (match 7)', 'winner slot names the feeder round and id');
+  assert(slotLabel(m9.sides[1], md) === 'Winner of SF (match 8)', 'unresolved match slot still names the feeder');
+  assert(slotLabel(md.byId.get(10).sides[0], md) === 'Loser of SF (match 7)', 'loser slot names the feeder');
   const st = md.byId.get(7).sides[0];
   assert(slotLabel(st, md) === '1st in Pool A', 'pool slot labels rank');
   assert(slotLabel(md.byId.get(8).sides[1], md) === '3rd in Pool A', 'rank 3 ordinal');
+});
+
+test('bracket: every card carries chain ids so the selection handler can highlight feeders and downstream', () => {
+  const data = (() => {
+    const repo = loadRepo(FIX('sample'));
+    const info = repo.tournaments.get('sample');
+    return { repo, data: { index: repo.index, t: repo.index[0], tjson: info.tjson, cats: info.tjson.categories.map(c => ({ meta: c, matches: info.matches.get(c.id) || [] })) } };
+  })().data;
+  const html = renderStandings({ slug: 'sample', view: 'categories', filter: 'md40' }, data);
+  // every match card carries the chain data the click handler reads
+  assert(/id="m-7"[^>]*data-feeders=""/.test(html), 'm7 has no feeders (its slots are pool-rank, not match refs)');
+  assert(/id="m-7"[^>]*data-downstream="9,10"/.test(html), 'm7 feeds the Final (m9, winner) and 3rd place (m10, loser)');
+  assert(/id="m-9"[^>]*data-feeders="7,8"/.test(html), 'm9 takes its two sides from m7 and m8');
+  assert(/id="m-9"[^>]*data-downstream=""/.test(html), 'm9 is terminal — no downstream');
+  // unresolved match slot labels are plain text — no link wrapping
+  assert(html.includes('<span>Winner of SF (match 8)</span>') && !html.includes('<a href="#m-'), 'slot labels are plain text, not anchors');
+  // the feeds line is informational text, not links
+  assert((html.match(/class="feeds"/g) || []).length === 2, 'm7 and m8 each have a feeds line; m9 and m10 do not');
+  assert(html.includes('→ Final, 3rd place'), 'feeds text names downstream rounds, no anchor tags');
 });
 
 test('poolStandings partial: unfinished pool still yields a live table', () => {
@@ -385,7 +404,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   const { data } = dataOf('sample');
   const no = () => ({ slug: 'sample', view: 'categories' });
   const standings = renderStandings(no(), data);
-  assert(standings.includes('Pool A') && standings.includes('Final') && standings.includes('Winner of 8'), 'standings renders pools, bracket, and slot labels');
+  assert(standings.includes('Pool A') && standings.includes('Final') && standings.includes('Winner of SF (match 8)'), 'standings renders pools, bracket, and slot labels');
   assert(!standings.includes('BO3'), 'no best-of label — the score slots carry it');
   assert(standings.includes('class="ph"'), 'unplayed best-of slots render as placeholders');
   assert(standings.includes('Ada Lovelace'), 'standings renders player names');
@@ -397,12 +416,12 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(standings.includes('>Men&#39;s Doubles 40+</a>') && !standings.includes('>md40</a>'), 'standings pills show the category name');
   const venue = renderVenue({ slug: 'sample', view: 'venues' }, data);
   assert(venue.includes('Court 1') && venue.includes('Ada Lovelace'), 'venue page renders venue boards with match rows');
-  assert(venue.includes('<article data-status=') && !venue.includes('badge'), 'kiosk card: status rides the article (headline time colored); meta keeps cat · label only');
+  assert(venue.includes('data-status=') && !venue.includes('badge'), 'kiosk card: status rides the article (headline time colored); meta keeps cat · label only');
   const early = renderVenue({ slug: 'sample', view: 'venues' }, data, Date.parse('2025-07-14T08:00:00-04:00'));
   const late = renderVenue({ slug: 'sample', view: 'venues' }, data, Date.parse('2025-07-14T16:00:00-04:00'));
   assert(!early.includes('delayed</span>'), 'before the first start: no delayed remark');
   assert(late.includes('12:15 <span class="delayed">delayed</span>'), 'slot fully elapsed: the headline time carries the remark beside it');
-  assert(late.match(/<span class="delayed">delayed<\/span>/g).length === late.match(/<article data-status="overdue"/g).length, 'every overdue card has the remark, and only overdue cards do');
+  assert(late.match(/<span class="delayed">delayed<\/span>/g).length === late.match(/data-status="overdue"/g).length, 'every overdue card has the remark, and only overdue cards do');
   assert(venue.includes("Men&#39;s Doubles 40+ · Final") && !venue.includes("Men&#39;s Doubles 40+ · 9 ·"), 'kiosk meta shows the long category name and label, no match id');
   assert(!venue.includes('<nav>'), 'kiosk has no breadcrumb');
   assert(standings.includes('>Men&#39;s Doubles 40+</h2>') && !standings.includes('md40)</h2>'), 'category headings show the category name only');

@@ -36,6 +36,16 @@ article[data-done] { opacity: .55; }
 [data-win] { font-weight: 700; }
 .meta { font-size: .8em; color: var(--muted); }
 .head { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; font-weight: 600; }
+.feeds { font-size: .75em; color: var(--muted); }
+
+/* selection: outlines read on both light and dark themes; thicker = closer. */
+article[id^="m-"] { cursor: pointer; }
+article[data-hl="sel"] { outline: 3px solid var(--accent); outline-offset: 2px; }
+article[data-hl="feed"] { outline: 2px dashed var(--accent); outline-offset: 1px; }
+article[data-hl="down"] { outline: 2px dotted var(--accent); outline-offset: 1px; }
+body.venue article[data-hl="sel"] { outline-color: #ffd166; outline-width: .25em; outline-offset: .15em; }
+body.venue article[data-hl="feed"],
+body.venue article[data-hl="down"] { outline-color: #ffd166; outline-width: .2em; }
 
 nav { color: var(--muted); margin: 0 0 .5rem; }
 nav.split { display: flex; justify-content: space-between; align-items: baseline; }

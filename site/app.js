@@ -148,7 +148,8 @@ function matchCard(m, ctx, opts = {}) {
   };
   const meta = opts.meta.map(k => item[k]).join(' · ');
   const head = opts.head ? `<div class="head">${opts.head.map(c => `<span>${item[c] ?? c}</span>`).join('')}</div>` : '';
-  return `<article${opts.done ? ' data-done' : ''}${opts.status ? ` data-status="${opts.status}"` : ''}>${head}${sideRow(m, ctx, 0)}${sideRow(m, ctx, 1)}<div class="meta">${meta}</div></article>`;
+  const chain = chainIds(m, ctx);
+  return `<article id="m-${esc(m.id)}"${opts.done ? ' data-done' : ''}${opts.status ? ` data-status="${opts.status}"` : ''} data-feeders="${esc(chain.feeders)}" data-downstream="${esc(chain.downstream)}">${head}${sideRow(m, ctx, 0)}${sideRow(m, ctx, 1)}<div class="meta">${meta}</div>${feedsText(m, ctx)}</article>`;
 }
 
 function sideRow(m, ctx, i) {
@@ -168,6 +169,36 @@ function sideRow(m, ctx, i) {
     : sideIdx(r.winner) === i ? '<span>W/O</span>'
     : slot();
   return `<div class="side"${w === i ? ' data-win' : ''}><span>${esc(sideLabel(m.sides[i], ctx))}</span><span class="score">${score}</span></div>`;
+}
+
+// Downstream matches of m — anyone whose sides reference m.
+function feedsRefs(m, ctx) {
+  const refs = [];
+  for (const X of ctx.matches) {
+    if (!X || !Array.isArray(X.sides)) continue;
+    for (const s of X.sides) {
+      if (s && s.kind === 'match' && s.match === m.id) refs.push(X);
+    }
+  }
+  return refs;
+}
+
+function feedsText(m, ctx) {
+  const refs = feedsRefs(m, ctx);
+  if (!refs.length) return '';
+  return `<div class="feeds">→ ${refs.map(X => esc(matchLabel(X, ctx))).join(', ')}</div>`;
+}
+
+// CSV of chain match ids for the click handler; empty strings at the ends.
+function chainIds(m, ctx) {
+  const feeders = [];
+  for (const s of (m.sides || [])) {
+    if (s && s.kind === 'match') {
+      const ref = ctx.byId.get(s.match);
+      feeders.push(ref ? ref.id : s.match);
+    }
+  }
+  return { feeders: feeders.join(','), downstream: feedsRefs(m, ctx).map(X => X.id).join(',') };
 }
 
 function catCtxs(data) {
@@ -336,21 +367,6 @@ function boot() {
     }
   };
 
-  const render = (r, d) => {
-    data = d;
-    dataSlug = r.slug;
-    // the kiosk dark theme keys off body.venue — present only on the venue view
-    document.body.classList.toggle('venue', r.view === 'venues');
-    document.title = pageTitle(r, d);
-    try {
-      const html = renderers[r.view](r, d);
-      if (html !== lastHtml) { app.innerHTML = html; lastHtml = html; }
-    } catch (e) {
-      app.innerHTML = '<p>Render error.</p>';
-      console.error(e);
-    }
-  };
-
   const load = r => {
     loadAll(r, r.view === 'index').then(d => {
       if (route !== r) return; // superseded by a newer navigation — don't render a stale page
@@ -364,6 +380,44 @@ function boot() {
     });
   };
   const tick = () => load(route);
+
+  // DOM-toggled highlight: no re-render, so scroll survives the kiosk poll.
+  // data-hl is the highlight state; data-feeders / data-downstream on the
+  // article are the chain metadata the renderer emits.
+  let selectedId = null;
+  const applySelection = () => {
+    document.querySelectorAll('article[data-hl]').forEach(el => { delete el.dataset.hl; });
+    if (!selectedId) return;
+    const sel = document.getElementById(`m-${selectedId}`);
+    if (!sel) return; // selected card no longer in the rendered set (done match on kiosk, etc.)
+    sel.dataset.hl = 'sel';
+    for (const id of (sel.dataset.feeders || '').split(',').filter(Boolean)) document.getElementById(`m-${id}`)?.setAttribute('data-hl', 'feed');
+    for (const id of (sel.dataset.downstream || '').split(',').filter(Boolean)) document.getElementById(`m-${id}`)?.setAttribute('data-hl', 'down');
+  };
+
+  const render = (r, d) => {
+    data = d;
+    dataSlug = r.slug;
+    // the kiosk dark theme keys off body.venue — present only on the venue view
+    document.body.classList.toggle('venue', r.view === 'venues');
+    document.title = pageTitle(r, d);
+    try {
+      const html = renderers[r.view](r, d);
+      if (html !== lastHtml) { app.innerHTML = html; lastHtml = html; applySelection(); }
+    } catch (e) {
+      app.innerHTML = '<p>Render error.</p>';
+      console.error(e);
+    }
+  };
+
+  // Tap a card to toggle selection; tap elsewhere to clear.
+  document.addEventListener('click', e => {
+    const card = e.target.closest('article[id^="m-"]');
+    if (!card) { if (selectedId !== null) { selectedId = null; applySelection(); } return; }
+    const id = card.id.slice(2);
+    selectedId = selectedId === id ? null : id;
+    applySelection();
+  });
 
   // Fragment navigation: same-slug view hops (categories → venues → players)
   // re-render from the cached snapshot; a different slug or the index reloads.

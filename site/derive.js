@@ -205,11 +205,12 @@ function resolveSide(side, ctx, memo = new Map()) {
   return null;
 }
 
-// Unresolved slot keeps what the slot IS: "Winner of 7", "2nd in Pool A".
+// Unresolved slot keeps what the slot IS: "Winner of SF (match 7)", "2nd in Pool A".
 function slotLabel(side, ctx) {
   if (side && side.kind === 'match') {
     const ref = ctx.byId.get(side.match);
-    return `${side.result === 'winner' ? 'Winner' : 'Loser'} of ${ref ? ref.id : side.match}`;
+    const what = ref ? matchLabel(ref, ctx) : side.match;
+    return `${side.result === 'winner' ? 'Winner' : 'Loser'} of ${what}${ref ? ` (match ${ref.id})` : ''}`;
   }
   if (side && side.kind === 'pool') return `${ordinal(side.rank)} in Pool ${side.pool}`;
   return 'TBD';
