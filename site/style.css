@@ -26,6 +26,8 @@ a { color: var(--accent); }
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr)); gap: 1rem; margin-top: 1rem; }
 
+.pools { display: grid; grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr)); gap: 1.5rem; margin-top: 1rem; align-items: start; }
+
 article { display: flex; flex-direction: column; gap: .3rem; border: 1px solid var(--line); border-radius: .5rem; padding: .6rem .8rem; background: var(--paper); }
 article[data-done] { opacity: .55; }
 .stack { display: flex; flex-direction: column; gap: .6rem; }
@@ -36,7 +38,6 @@ article[data-done] { opacity: .55; }
 [data-win] { font-weight: 700; }
 .meta { font-size: .8em; color: var(--muted); }
 .head { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; font-weight: 600; }
-.feeds { font-size: .75em; color: var(--muted); }
 
 /* selection: outlines read on both light and dark themes; thicker = closer. */
 article[id^="m-"] { cursor: pointer; }
@@ -46,6 +47,13 @@ article[data-hl="down"] { outline: 2px dotted var(--accent); outline-offset: 1px
 body.venue article[data-hl="sel"] { outline-color: #ffd166; outline-width: .25em; outline-offset: .15em; }
 body.venue article[data-hl="feed"],
 body.venue article[data-hl="down"] { outline-color: #ffd166; outline-width: .2em; }
+
+/* pool tables are graph nodes too — the group↔knockout bridge; same states as cards */
+.pool { cursor: pointer; }
+.pool[data-hl="sel"] { outline: 3px solid var(--accent); outline-offset: 2px; }
+.pool[data-hl="feed"] { outline: 2px dashed var(--accent); outline-offset: 1px; }
+.pool[data-hl="down"] { outline: 2px dotted var(--accent); outline-offset: 1px; }
+body.venue .pool[data-hl] { outline-color: #ffd166; }
 
 nav { color: var(--muted); margin: 0 0 .5rem; }
 nav.split { display: flex; justify-content: space-between; align-items: baseline; }

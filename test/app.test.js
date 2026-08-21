@@ -307,15 +307,15 @@ test('bracket: every card carries chain ids so the selection handler can highlig
   })().data;
   const html = renderStandings({ slug: 'sample', view: 'categories', filter: 'md40' }, data);
   // every match card carries the chain data the click handler reads
-  assert(/id="m-7"[^>]*data-feeders=""/.test(html), 'm7 has no feeders (its slots are pool-rank, not match refs)');
+  // pool-seeded slots point at the table node, and the table bridges group -> knockout
+  assert(/id="m-7"[^>]*data-feeders="t-A,t-A"/.test(html), 'm7 seeds from the Pool A table node (both slots)');
   assert(/id="m-7"[^>]*data-downstream="9,10"/.test(html), 'm7 feeds the Final (m9, winner) and 3rd place (m10, loser)');
+  assert(/id="t-A"[^>]*data-feeders="1,2,3,4,5,6"/.test(html), 'Pool A table is fed by its group matches');
+  assert(/id="t-A"[^>]*data-downstream="7,8"/.test(html), 'Pool A table feeds the knockout matches it seeds');
   assert(/id="m-9"[^>]*data-feeders="7,8"/.test(html), 'm9 takes its two sides from m7 and m8');
   assert(/id="m-9"[^>]*data-downstream=""/.test(html), 'm9 is terminal — no downstream');
   // unresolved match slot labels are plain text — no link wrapping
   assert(html.includes('<span>Winner of SF (match 8)</span>') && !html.includes('<a href="#m-'), 'slot labels are plain text, not anchors');
-  // the feeds line is informational text, not links
-  assert((html.match(/class="feeds"/g) || []).length === 2, 'm7 and m8 each have a feeds line; m9 and m10 do not');
-  assert(html.includes('→ Final, 3rd place'), 'feeds text names downstream rounds, no anchor tags');
 });
 
 test('poolStandings partial: unfinished pool still yields a live table', () => {

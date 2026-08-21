@@ -93,28 +93,37 @@ function renderStandings(route, data) {
     if (route.filter && c.meta.id !== route.filter) continue; // pills keep every category; only the section list narrows
     const ctx = makeCat(c, data.tjson);
     parts.push(`<h2>${esc(c.meta.name)}</h2>`);
-    const byPool = new Map();
+    const byPool = new Map(); // pool -> its group matches (creation order = pool order)
+    const ko = [];
     for (const m of ctx.matches) {
-      if (m && m.pool !== undefined) {
+      if (!m) continue;
+      if (m.pool !== undefined) {
         if (!byPool.has(m.pool)) byPool.set(m.pool, []);
         byPool.get(m.pool).push(m);
-      }
+      } else ko.push(m);
     }
+    // All pools, chronological by wall-clock (stable sort keeps file order on ties).
+    const grp = [...byPool.values()].flat().sort((a, b) => (schedTime(a, ctx.tz) ?? 0) - (schedTime(b, ctx.tz) ?? 0));
+    parts.push('<h3>Group matches</h3>');
+    parts.push(matchGrid(grp, ctx));
+    // Each table is a bridge node (id t-<pool>): feeders = its group matches, downstream = the knockout it seeds.
+    parts.push('<h3>Pool standings</h3>');
+    parts.push('<div class="pools">');
     for (const [pool, poolMs] of byPool) {
-      parts.push(`<h3>Pool ${esc(String(pool))}</h3>`);
-      // pools come from matches, so partial standings always resolve
-      const st = poolStandings(ctx, pool, true);
+      const feed = poolMs.map(m => m.id).join(',');
+      const down = ko.filter(m => (m.sides || []).some(s => s && s.kind === 'pool' && s.pool === pool)).map(m => m.id).join(',');
+      parts.push(`<section class="pool" id="t-${esc(String(pool))}" data-feeders="${esc(feed)}" data-downstream="${esc(down)}"><h4>Pool ${esc(String(pool))}</h4>`);
       parts.push('<table><thead><tr><th>#</th><th>Team</th><th>W</th><th>L</th><th>GD</th><th>PD</th></tr></thead><tbody>');
+      const st = poolStandings(ctx, pool, true); // pools come from matches, so partial standings always resolve
       const ranks = poolRanks(st);
       st.forEach((r, i) => {
         const tied = isDeadTie(st, i + 1);
         const team = teamLabel(r.ids, ctx);
         parts.push(`<tr${tied ? ' data-tie' : ''}><td>${ranks[i]}</td><td>${esc(team)}</td><td>${r.wins}</td><td>${r.losses}</td><td>${fmtDiff(r.gd)}</td><td>${fmtDiff(r.pd)}</td></tr>`);
       });
-      parts.push('</tbody></table>');
-      parts.push(matchGrid(poolMs, ctx));
+      parts.push('</tbody></table></section>');
     }
-    const ko = ctx.matches.filter(m => m && m.pool === undefined);
+    parts.push('</div>');
     if (ko.length) parts.push(bracketHtml(ctx, ko));
   }
   return parts.join('');
@@ -149,7 +158,7 @@ function matchCard(m, ctx, opts = {}) {
   const meta = opts.meta.map(k => item[k]).join(' · ');
   const head = opts.head ? `<div class="head">${opts.head.map(c => `<span>${item[c] ?? c}</span>`).join('')}</div>` : '';
   const chain = chainIds(m, ctx);
-  return `<article id="m-${esc(m.id)}"${opts.done ? ' data-done' : ''}${opts.status ? ` data-status="${opts.status}"` : ''} data-feeders="${esc(chain.feeders)}" data-downstream="${esc(chain.downstream)}">${head}${sideRow(m, ctx, 0)}${sideRow(m, ctx, 1)}<div class="meta">${meta}</div>${feedsText(m, ctx)}</article>`;
+  return `<article id="m-${esc(m.id)}"${opts.done ? ' data-done' : ''}${opts.status ? ` data-status="${opts.status}"` : ''} data-feeders="${esc(chain.feeders)}" data-downstream="${esc(chain.downstream)}">${head}${sideRow(m, ctx, 0)}${sideRow(m, ctx, 1)}<div class="meta">${meta}</div></article>`;
 }
 
 function sideRow(m, ctx, i) {
@@ -182,11 +191,6 @@ function feedsRefs(m, ctx) {
   return refs;
 }
 
-function feedsText(m, ctx) {
-  const refs = feedsRefs(m, ctx);
-  if (!refs.length) return '';
-  return `<div class="feeds">→ ${refs.map(X => esc(matchLabel(X, ctx))).join(', ')}</div>`;
-}
 
 function chainIds(m, ctx) {
   const feeders = [];
@@ -194,9 +198,13 @@ function chainIds(m, ctx) {
     if (s && s.kind === 'match') {
       const ref = ctx.byId.get(s.match);
       feeders.push(ref ? ref.id : s.match);
+    } else if (s && s.kind === 'pool') {
+      feeders.push(`t-${s.pool}`); // a pool seed draws from the whole table node
     }
   }
-  return { feeders: feeders.join(','), downstream: feedsRefs(m, ctx).map(X => X.id).join(',') };
+  const downstream = feedsRefs(m, ctx).map(X => X.id);
+  if (m.pool !== undefined) downstream.push(`t-${m.pool}`); // a group match feeds its pool's standings
+  return { feeders: feeders.join(','), downstream: downstream.join(',') };
 }
 
 function catCtxs(data) {
@@ -380,17 +388,20 @@ function boot() {
   const tick = () => load(route);
 
   // DOM-toggled highlight: no re-render, so scroll survives the kiosk poll.
-  // data-hl is the highlight state; data-feeders / data-downstream on the
-  // article are the chain metadata the renderer emits.
-  let selectedId = null;
+  // data-hl is the highlight state; data-feeders / data-downstream on the node
+  // are the graph metadata the renderer emits. Nodes are matches (m-<id>) and
+  // pool tables (t-<pool>), so a table bridges the group stage to the knockout.
+  let selected = null; // full node id: "m-7" or "t-A"
   const applySelection = () => {
-    document.querySelectorAll('article[data-hl]').forEach(el => { delete el.dataset.hl; });
-    if (!selectedId) return;
-    const sel = document.getElementById(`m-${selectedId}`);
-    if (!sel) return; // selected card no longer in the rendered set (done match on kiosk, etc.)
+    document.querySelectorAll('[data-hl]').forEach(el => { delete el.dataset.hl; });
+    if (!selected) return;
+    const sel = document.getElementById(selected);
+    if (!sel) return; // selected node no longer in the rendered set (done match on kiosk, etc.)
     sel.dataset.hl = 'sel';
-    for (const id of (sel.dataset.feeders || '').split(',').filter(Boolean)) document.getElementById(`m-${id}`)?.setAttribute('data-hl', 'feed');
-    for (const id of (sel.dataset.downstream || '').split(',').filter(Boolean)) document.getElementById(`m-${id}`)?.setAttribute('data-hl', 'down');
+    // data attrs hold bare match ids ("7") and full table ids ("t-A") — resolve both to DOM ids.
+    const nodeId = id => id.startsWith('t-') ? id : `m-${id}`;
+    for (const id of (sel.dataset.feeders || '').split(',').filter(Boolean)) document.getElementById(nodeId(id))?.setAttribute('data-hl', 'feed');
+    for (const id of (sel.dataset.downstream || '').split(',').filter(Boolean)) document.getElementById(nodeId(id))?.setAttribute('data-hl', 'down');
   };
 
   const render = (r, d) => {
@@ -409,10 +420,9 @@ function boot() {
   };
 
   document.addEventListener('click', e => {
-    const card = e.target.closest('article[id^="m-"]');
-    if (!card) { if (selectedId !== null) { selectedId = null; applySelection(); } return; }
-    const id = card.id.slice(2);
-    selectedId = selectedId === id ? null : id;
+    const node = e.target.closest('[id^="m-"], [id^="t-"]');
+    if (!node) { if (selected !== null) { selected = null; applySelection(); } return; }
+    selected = selected === node.id ? null : node.id;
     applySelection();
   });
 
