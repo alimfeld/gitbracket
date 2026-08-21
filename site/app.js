@@ -112,7 +112,7 @@ function renderStandings(route, data) {
     for (const [pool, poolMs] of byPool) {
       const feed = poolMs.map(m => m.id).join(',');
       const down = ko.filter(m => (m.sides || []).some(s => s && s.kind === 'pool' && s.pool === pool)).map(m => m.id).join(',');
-      parts.push(`<section class="pool" id="t-${esc(String(pool))}" data-feeders="${esc(feed)}" data-downstream="${esc(down)}"><h4>Pool ${esc(String(pool))}</h4>`);
+      parts.push(`<section class="pool" id="${nodeId(ctx.id, 't-' + String(pool))}" data-cat="${esc(ctx.id)}" data-feeders="${esc(feed)}" data-downstream="${esc(down)}"><h4>Pool ${esc(String(pool))}</h4>`);
       parts.push('<table><thead><tr><th>#</th><th>Team</th><th>W</th><th>L</th><th>GD</th><th>PD</th></tr></thead><tbody>');
       const st = poolStandings(ctx, pool, true); // pools come from matches, so partial standings always resolve
       const ranks = poolRanks(st);
@@ -146,6 +146,10 @@ function bracketHtml(ctx, ko) {
 
 // opts.meta picks the meta items (fixed vocabulary); opts.head is an optional
 // [left, right] headline row — cells are item keys or pre-rendered HTML.
+// Node ids are namespaced by category: match ids repeat across categories, so
+// an unqualified id makes getElementById hit the wrong (first) card.
+const nodeId = (cat, id) => { id = String(id); return id.startsWith('t-') ? `t-${cat}-${id.slice(2)}` : `m-${cat}-${id}`; };
+
 function matchCard(m, ctx, opts = {}) {
   const t = schedTime(m, ctx.tz);
   const item = {
@@ -158,7 +162,7 @@ function matchCard(m, ctx, opts = {}) {
   const meta = opts.meta.map(k => item[k]).join(' · ');
   const head = opts.head ? `<div class="head">${opts.head.map(c => `<span>${item[c] ?? c}</span>`).join('')}</div>` : '';
   const chain = chainIds(m, ctx);
-  return `<article id="m-${esc(m.id)}"${opts.done ? ' data-done' : ''}${opts.status ? ` data-status="${opts.status}"` : ''} data-feeders="${esc(chain.feeders)}" data-downstream="${esc(chain.downstream)}">${head}${sideRow(m, ctx, 0)}${sideRow(m, ctx, 1)}<div class="meta">${meta}</div></article>`;
+  return `<article id="${nodeId(ctx.id, m.id)}" data-cat="${esc(ctx.id)}"${opts.done ? ' data-done' : ''}${opts.status ? ` data-status="${opts.status}"` : ''} data-feeders="${esc(chain.feeders)}" data-downstream="${esc(chain.downstream)}">${head}${sideRow(m, ctx, 0)}${sideRow(m, ctx, 1)}<div class="meta">${meta}</div></article>`;
 }
 
 function sideRow(m, ctx, i) {
@@ -398,10 +402,9 @@ function boot() {
     const sel = document.getElementById(selected);
     if (!sel) return; // selected node no longer in the rendered set (done match on kiosk, etc.)
     sel.dataset.hl = 'sel';
-    // data attrs hold bare match ids ("7") and full table ids ("t-A") — resolve both to DOM ids.
-    const nodeId = id => id.startsWith('t-') ? id : `m-${id}`;
-    for (const id of (sel.dataset.feeders || '').split(',').filter(Boolean)) document.getElementById(nodeId(id))?.setAttribute('data-hl', 'feed');
-    for (const id of (sel.dataset.downstream || '').split(',').filter(Boolean)) document.getElementById(nodeId(id))?.setAttribute('data-hl', 'down');
+    // data attrs hold bare ids ("7", "t-A") in the selected node's category — resolve to DOM ids.
+    for (const id of (sel.dataset.feeders || '').split(',').filter(Boolean)) document.getElementById(nodeId(sel.dataset.cat, id))?.setAttribute('data-hl', 'feed');
+    for (const id of (sel.dataset.downstream || '').split(',').filter(Boolean)) document.getElementById(nodeId(sel.dataset.cat, id))?.setAttribute('data-hl', 'down');
   };
 
   const render = (r, d) => {

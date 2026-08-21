@@ -308,12 +308,14 @@ test('bracket: every card carries chain ids so the selection handler can highlig
   const html = renderStandings({ slug: 'sample', view: 'categories', filter: 'md40' }, data);
   // every match card carries the chain data the click handler reads
   // pool-seeded slots point at the table node, and the table bridges group -> knockout
-  assert(/id="m-7"[^>]*data-feeders="t-A,t-A"/.test(html), 'm7 seeds from the Pool A table node (both slots)');
-  assert(/id="m-7"[^>]*data-downstream="9,10"/.test(html), 'm7 feeds the Final (m9, winner) and 3rd place (m10, loser)');
-  assert(/id="t-A"[^>]*data-feeders="1,2,3,4,5,6"/.test(html), 'Pool A table is fed by its group matches');
-  assert(/id="t-A"[^>]*data-downstream="7,8"/.test(html), 'Pool A table feeds the knockout matches it seeds');
-  assert(/id="m-9"[^>]*data-feeders="7,8"/.test(html), 'm9 takes its two sides from m7 and m8');
-  assert(/id="m-9"[^>]*data-downstream=""/.test(html), 'm9 is terminal — no downstream');
+  // ids are namespaced by category (m-<cat>-<id>, t-<cat>-<pool>): match ids
+  // repeat across categories, so a bare id would highlight the wrong match
+  assert(/id="m-md40-7"[^>]*data-cat="md40"[^>]*data-feeders="t-A,t-A"/.test(html), 'm7 seeds from the Pool A table node (both slots)');
+  assert(/id="m-md40-7"[^>]*data-downstream="9,10"/.test(html), 'm7 feeds the Final (m9, winner) and 3rd place (m10, loser)');
+  assert(/id="t-md40-A"[^>]*data-feeders="1,2,3,4,5,6"/.test(html), 'Pool A table is fed by its group matches');
+  assert(/id="t-md40-A"[^>]*data-downstream="7,8"/.test(html), 'Pool A table feeds the knockout matches it seeds');
+  assert(/id="m-md40-9"[^>]*data-feeders="7,8"/.test(html), 'm9 takes its two sides from m7 and m8');
+  assert(/id="m-md40-9"[^>]*data-downstream=""/.test(html), 'm9 is terminal — no downstream');
   // unresolved match slot labels are plain text — no link wrapping
   assert(html.includes('<span>Winner of SF (match 8)</span>') && !html.includes('<a href="#m-'), 'slot labels are plain text, not anchors');
 });
@@ -404,6 +406,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   const { data } = dataOf('sample');
   const no = () => ({ slug: 'sample', view: 'categories' });
   const standings = renderStandings(no(), data);
+  assert(standings.includes('id="m-md40-2"') && standings.includes('id="m-xd-2"'), 'unfiltered page: equal match ids in different categories stay distinct DOM ids');
   assert(standings.includes('Pool A') && standings.includes('Final') && standings.includes('Winner of SF (match 8)'), 'standings renders pools, bracket, and slot labels');
   assert(!standings.includes('BO3'), 'no best-of label — the score slots carry it');
   assert(standings.includes('class="ph"'), 'unplayed best-of slots render as placeholders');
