@@ -1,7 +1,7 @@
 'use strict';
 
-// Derive engine (site/derive.js) + renderers (site/app.js): standings, slot
-// resolution, scheduling, labels.
+// Derive engine (site/derive.js) + renderers (site/app.js): tournament page,
+// slot resolution, scheduling, labels.
 // Run from the repo root: `node --test`, or one suite:
 // `node --test --test-name-pattern 'slot' test/app.test.js`
 
@@ -18,7 +18,7 @@ const sameRecord = (a, b) => a.wins === b.wins && a.gd === b.gd && a.pd === b.pd
 test('parseRoute: fragment routing — bare slug defaults to categories, every segment id-gated', () => {
   assert.deepEqual(parseRoute(''), { view: 'index' }, 'no fragment: tournament list');
   assert.deepEqual(parseRoute('#'), { view: 'index' });
-  assert.deepEqual(parseRoute('#2026-mammut60'), { slug: '2026-mammut60', view: 'categories' }, 'bare slug: standings, all categories');
+  assert.deepEqual(parseRoute('#2026-mammut60'), { slug: '2026-mammut60', view: 'categories' }, 'bare slug: the tournament page, all categories');
   assert.deepEqual(parseRoute('#2026-mammut60/categories'), { slug: '2026-mammut60', view: 'categories' });
   assert.deepEqual(parseRoute('#2026-mammut60/categories/md'), { slug: '2026-mammut60', view: 'categories', filter: 'md' });
   assert.deepEqual(parseRoute('#2026-mammut60/venues'), { slug: '2026-mammut60', view: 'venues' });
@@ -412,7 +412,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(standings.includes('class="ph"'), 'unplayed best-of slots render as placeholders');
   assert(standings.includes('Ada Lovelace'), 'standings renders player names');
   assert(standings.includes('1 · Pool A · Court 1 · 09:00') && !standings.includes('md40 · 1 · Pool A'), 'standings card meta: match · label · venue · time, no category id');
-  assert(standings.includes('<nav class="split"><a href="#">Home</a><a href="#sample/players">Players</a></nav>'), 'standings: crumb is Home only, Players links on the right');
+  assert(standings.includes('<nav><span aria-current="true">Tournament</span> · <a href="#sample/players">Players</a></nav>'), 'standings nav: current marked, Players links, no Home');
   const filtered = renderStandings({ slug: 'sample', view: 'categories', filter: 'md40' }, data);
   assert((filtered.match(/<h2>/g) || []).length === 1 && filtered.includes('Pool A'), 'category filter narrows to one section');
   assert(filtered.includes('#sample/categories/xd'), 'pills still list every category on a filtered page');
@@ -434,13 +434,13 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(ppage.includes("Men&#39;s Doubles 40+ · Pool A") && !ppage.includes('Men&#39;s Doubles 40+ · Pool A · '), 'player card meta: long cat name · label, no match id, no court/time');
   assert(ppage.includes('class="ph"'), 'player match cards render unplayed score slots too');
   assert(ppage.includes('Ada Lovelace'), 'player page finds the player');
-  assert(ppage.includes('<nav><a href="#">Home</a> > <a href="#sample">Sample</a> > <a href="#sample/players">Players</a></nav>'), 'player page breadcrumb: Home > Tournament > Players');
-  assert(ppage.includes('#sample'), 'player page links the tournament name to standings');
+  assert(ppage.includes('<nav><a href="#sample">Tournament</a> · <a href="#sample/players">Players</a></nav>'), 'player page nav: both views link, the player lives in the h1');
+  assert(ppage.includes('#sample'), 'player page links the tournament name to the tournament page');
   const picker = renderPlayer({ slug: 'sample', view: 'players' }, data);
-  assert(picker.includes('<nav><a href="#">Home</a> > <a href="#sample">Sample</a></nav>'), 'picker breadcrumb: Home > Tournament (Players lives in the h1)');
+  assert(picker.includes('<nav><a href="#sample">Tournament</a> · <span aria-current="true">Players</span></nav>'), 'picker nav: current Players marked, no Home');
   assert(picker.includes('<li><a href="#sample/players/p1">Ada Lovelace</a><span><span class="cat-label">Men&#39;s Doubles 40+</span><span class="cat-label">Mixed Doubles</span></span></li>'), 'picker rows: name link followed by a label cluster');
   assert(picker.includes('<ul class="players">'), 'picker list carries the aligning grid class');
-  assert(picker.includes('#sample/players/md40') && picker.includes('#sample/players/xd'), 'picker has the same category pills as standings');
+  assert(picker.includes('#sample/players/md40') && picker.includes('#sample/players/xd'), 'picker has the same category pills as the tournament page');
   assert(picker.includes('>Mixed Doubles</a>') && !picker.includes('>xd</a>'), 'picker pills show the category name too');
   const pfiltered = renderPlayer({ slug: 'sample', view: 'players', filter: 'md40' }, data);
   assert(pfiltered.includes('<a href="#sample/players" aria-current="true">') && !pfiltered.includes('#sample/players/md40" aria-current'), 'active md40 pill toggles off to the full picker');

@@ -60,9 +60,15 @@ async function loadAll(route, indexOnly) {
 
 // ---------- renderers ----------
 
-// Breadcrumb trail; the current page lives in the h1 (every crumb is a link).
+// The one tournament nav — the tournament is the app, so there is no Home (the
+// index is the browser's back button). The current view is marked, not linked;
+// active null links both (the player page, where the player lives in the h1).
 // hrefs arrive raw — esc once, at the attribute.
-const crumbs = items => items.map(([href, label]) => `<a href="${esc(href)}">${esc(label)}</a>`).join(' > ');
+const tourNav = (slug, active) => '<nav>' + ['categories', 'players'].map(v => {
+  const label = v === 'categories' ? 'Tournament' : 'Players';
+  const href = v === 'categories' ? `#${slug}` : `#${slug}/${v}`;
+  return v === active ? `<span aria-current="true">${label}</span>` : `<a href="${esc(href)}">${label}</a>`;
+}).join(' · ') + '</nav>';
 
 // The one missing-data message, verbatim in every view and the boot retry.
 const MISSING = '<p>Missing tournament data — has the tournament been pushed?</p>';
@@ -71,7 +77,7 @@ const MISSING = '<p>Missing tournament data — has the tournament been pushed?<
 const FULL_META = ['matchId', 'label', 'court', 'time'];
 const matchGrid = (ms, ctx) => `<section class="grid">${ms.map(m => matchCard(m, ctx, { meta: FULL_META })).join('')}</section>`;
 
-// Category pills — one toggle pattern for standings and picker.
+// Category pills — one toggle pattern for the tournament page and picker.
 const catPills = (cats, slug, base, activeId, dropHref) => cats.map(c => {
   const active = c.id === activeId;
   const href = active ? dropHref : `#${slug}/${base}/${c.id}`;
@@ -87,7 +93,7 @@ function renderIndex(route, data) {
 
 function renderStandings(route, data) {
   if (!data.tjson) return MISSING;
-  const parts = [`<header><nav class="split">${crumbs([['#', 'Home']])}<a href="#${esc(data.t.slug)}/players">Players</a></nav><h1>${esc(data.t.name)}</h1>`];
+  const parts = [`<header>${tourNav(data.t.slug, 'categories')}<h1>${esc(data.t.name)}</h1>`];
   parts.push(`<nav class="pills">${catPills(data.tjson.categories || [], data.t.slug, 'categories', route.filter, `#${data.t.slug}`)}</nav></header>`);
   for (const c of data.cats) {
     if (route.filter && c.meta.id !== route.filter) continue; // pills keep every category; only the section list narrows
@@ -288,7 +294,7 @@ function renderPlayer(route, data) {
       const cluster = lbls ? `<span>${lbls}</span>` : '';
       return `<li><a href="${esc(`#${data.t.slug}/players/${pl.id}`)}">${esc(pl.name || pl.id)}</a>${cluster}</li>`;
     }).join('');
-    return `<header><nav>${crumbs([['#', 'Home'], [`#${data.t.slug}`, data.t.name]])}</nav><h1>Players</h1><nav class="pills">${pills}</nav></header><ul class="players">${items || `<li>${sel ? 'No players in this category.' : 'No players.'}</li>`}</ul>`;
+    return `<header>${tourNav(data.t.slug, 'players')}<h1>Players</h1><nav class="pills">${pills}</nav></header><ul class="players">${items || `<li>${sel ? 'No players in this category.' : 'No players.'}</li>`}</ul>`;
   }
   const rows = [];
   const ctxs = catCtxs(data);
@@ -313,7 +319,7 @@ function renderPlayer(route, data) {
     if (!blocksByDay.has(key)) blocksByDay.set(key, []);
     blocksByDay.get(key).push({ ctx, ...span });
   }
-  const parts = [`<header><nav>${crumbs([['#', 'Home'], [`#${data.t.slug}`, data.t.name], [`#${data.t.slug}/players`, 'Players']])}</nav><h1>${esc(p.name)}</h1></header>`];
+  const parts = [`<header>${tourNav(data.t.slug, null)}<h1>${esc(p.name)}</h1></header>`];
   for (const [key, g] of groups) {
     parts.push(`<h2>${esc(key)}</h2>`);
     const day = [];
@@ -345,7 +351,7 @@ function renderPlayer(route, data) {
 function boot() {
   const app = document.querySelector('main');
   const renderers = { index: renderIndex, categories: renderStandings, venues: renderVenue, players: renderPlayer };
-  const pageTitle = (r, d) => { // index: Bracket; standings/kiosk: bare tournament; players: "name — Players" or "name — player"
+  const pageTitle = (r, d) => { // index: Bracket; tournament/kiosk: bare tournament; players: "name — Players" or "name — player"
     if (r.view === 'index' || !d.t) return 'Bracket';
     if (r.view === 'players') {
       if (r.filter) {

@@ -84,11 +84,11 @@ organizer to settle.
 
 ## Views
 
-One page, fragment-routed. `#<slug>` is a tournament's standings;
+One page, fragment-routed. `#<slug>` is the tournament page;
 `/categories`, `/venues`, `/players` switch the view, and an id narrows it:
 
 - `#` — lists tournaments, past and current.
-- `#<slug>` — standings, all categories (`#<slug>/categories/<category-id>` narrows to one).
+- `#<slug>` — the tournament, all categories (`#<slug>/categories/<category-id>` narrows to one).
 - `#<slug>/venues` — the kiosk, the fullscreen board for the hall showing the day live on every court (`#<slug>/venues/<venue-id>` narrows to one court).
 - `#<slug>/players` — the player picker (`#<slug>/players/<player-id>` shows one player's schedule; `#<slug>/players/<category-id>` narrows the list to that category).
 

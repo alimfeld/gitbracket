@@ -56,7 +56,7 @@ body.venue article[data-hl="down"] { outline-color: #ffd166; outline-width: .2em
 body.venue .pool[data-hl] { outline-color: #ffd166; }
 
 nav { color: var(--muted); margin: 0 0 .5rem; }
-nav.split { display: flex; justify-content: space-between; align-items: baseline; }
+nav span[aria-current="true"] { color: var(--accent); font-weight: 600; } /* the current view — marked, not linked */
 .pills { display: flex; gap: .5rem; flex-wrap: wrap; margin: 0 0 1.5rem; }
 .pills a { padding: .35rem .8rem; border: 1px solid var(--line); border-radius: 999px; text-decoration: none; }
 .pills a[aria-current] { background: var(--accent); border-color: var(--accent); color: #fff; }
