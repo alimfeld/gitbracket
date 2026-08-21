@@ -118,6 +118,9 @@ worked example:
   `knockout: false` skips the knockout phase; `placements` (a power of 2)
   sizes the classification bracket; `final` overrides the final and bronze
   matches.
+- Knockout draws use the standard S-curve bracket: round 1 pairs best vs
+  worst and splits the top seeds across halves, so two pool winners only
+  meet late (2 pools: the final; k pools: no earlier than the semis).
 - Regeneration rewrites the whole matches map, scores included — run it
   before results go in, never after.
 - Match ids follow chronological order in the generated file (per-category,

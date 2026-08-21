@@ -78,10 +78,26 @@ function buildPlacement(losers, mid, fin) {
   return [...r1, ...buildPlacement(winners, mid, fin), ...buildPlacement(losers2, mid, fin)];
 }
 
+// Standard S-curve bracket order for seed indices lo..hi (hi-lo+1 a power of
+// two): recurse over the top half, pairing each of its seeds against the
+// mirror seed (best vs worst) and interleaving the halves. This is the generic
+// cross-pairing — it puts seed 1 and seed 2 in opposite halves, 1-4 in
+// opposite quarters, and so on, so with k pools the pool winners can only meet
+// from round R - ceil(log2 k) + 1 (R = rounds to the final; 2 pools: final
+// only, 4 pools: no earlier than the semis).
+function sCurve(lo, hi) {
+  if (lo === hi) return [lo];
+  const half = sCurve(lo, lo + ((hi - lo) >> 1));
+  const out = [];
+  for (const i of half) out.push(i, lo + hi - i);
+  return out;
+}
+
 // Single elimination, everyone advances. Strength order = pool winners first,
-// then interleaved by rank (snake). The top seeds (byes = next power of two
-// minus field size) skip round 1; the rest pair best vs worst so the strongest
-// meet only late. Winners advance, the final takes fin (the spec's per-category
+// then interleaved by rank. The bracket is the standard S-curve draw (see
+// sCurve), which pairs best vs worst in round 1 and keeps the top seeds apart
+// until late. The top seeds (byes = next power of two minus field size) skip
+// round 1. Winners advance, the final takes fin (the spec's per-category
 // "final" override: bestOf / slotMinutes) where present. Placement depth is
 // controlled by placements (power of 2, default 4 = 3rd/4th play-off;
 // 8 adds 5th-8th classification, etc).
@@ -90,7 +106,6 @@ function buildKnockout(pools, names, mid, fin, placements) {
   const total = pools.reduce((s, p) => s + p.length, 0);
   let M = 1;
   while (M < total) M *= 2;
-  const byes = M - total;
 
   const seed = [];
   const maxRank = Math.max(...pools.map((p) => p.length));
@@ -99,12 +114,7 @@ function buildKnockout(pools, names, mid, fin, placements) {
       if (pools[i].length >= r) seed.push({ kind: 'pool', pool: names[i], rank: r });
     }
   }
-  const byeSides = seed.slice(0, byes);
-  const rest = seed.slice(byes);
-  const r1Sides = [];
-  for (let i = 0; i < rest.length / 2; i++) {
-    r1Sides.push(rest[i], rest[rest.length - 1 - i]); // best vs worst
-  }
+  const order = sCurve(0, M - 1); // seed indices in bracket position order
   // ponytail: with 3+ pools the rank-major interleave can pair two same-pool
   // sides in round 1 (4/3/3 -> A3 vs A4). Fine for v1 events; offset the seed
   // interleave per pool if a seeding-quality pass is ever needed.
@@ -112,21 +122,24 @@ function buildKnockout(pools, names, mid, fin, placements) {
   const matches = [];
   const rounds = []; // track every round for placement construction
   const ms1 = [];
-  for (let i = 0; i < r1Sides.length; i += 2) {
-    const m = { id: mid(), sides: [r1Sides[i], r1Sides[i + 1]] };
-    ms1.push(m);
-    matches.push(m);
+  let round = [];
+  // Pairs emit in position order, so round 2's adjacent pairing keeps top
+  // seeds in opposite halves; the low seed of every pair is real (a low-half
+  // index is always < total), so each pair is a match or a top-seed bye.
+  for (let j = 0; j < order.length; j += 2) {
+    const a = order[j], b = order[j + 1];
+    if (b < total) {
+      const m = { id: mid(), sides: [seed[a], seed[b]] };
+      ms1.push(m);
+      matches.push(m);
+      round.push({ kind: 'match', match: m.id, result: 'winner' });
+    } else {
+      round.push(seed[a]); // bye
+    }
   }
   rounds.push(ms1);
-  const winners = ms1.map((m) => ({ kind: 'match', match: m.id, result: 'winner' }));
-  // Round 2 interleaves byes with round-1 winners, spreading byes out. When byes
-  // exceed round-1 matches (5/9/10/11-team fields) two byed seeds must meet —
-  // structurally forced, nothing crashes.
-  let round = [];
-  for (let i = 0; i < Math.max(byeSides.length, winners.length); i++) {
-    if (i < byeSides.length) round.push(byeSides[i]);
-    if (i < winners.length) round.push(winners[i]);
-  }
+  // When byes exceed round-1 matches (5/9/10/11-team fields) two byed seeds
+  // must meet in round 2 — structurally forced, nothing crashes.
   // Round-2 pairing order: feeder-free pairings first, feeder pairings last. A
   // match with a round-1 winner can't start until round 1 ends, so it always
   // schedules later; building it last keeps id order in sync with time order.

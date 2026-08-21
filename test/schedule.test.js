@@ -176,6 +176,53 @@ test('knockout false + placements silently ignores placements', () => {
   assert.equal(tourney.matches.md.length, 4);
 });
 
+test('knockout cross-pairs pool winners: they can only meet deep in the bracket', () => {
+  // The S-curve draw: with k pools, two pool winners can meet no earlier than
+  // round R - ceil(log2 k) + 1 (R = rounds to the final; 2 pools of 4: the
+  // final only; 3 pools: no earlier than the semis).
+  for (const [pools, size] of [[2, 4], [3, 4], [4, 4]]) {
+    const players = {};
+    const mdTeams = [];
+    for (let p = 0; p < pools; p++) {
+      for (let i = 1; i <= size; i++) {
+        const id = `${String.fromCharCode(65 + p)}${i}`.toLowerCase();
+        players[id] = id.toUpperCase();
+        mdTeams.push([id]);
+      }
+    }
+    const tourney = generate({ ...MINI, players, teams: { md: mdTeams } });
+    const { errs } = validateRepo(repoOf(tourney));
+    assert.deepEqual(errs, []);
+    const earliest = Math.ceil(Math.log2(pools * size)) - Math.ceil(Math.log2(pools)) + 1;
+    // Walk the bracket from the leaves, tracking which pool winners (rank-1
+    // sides) can reach each match and the match's round (1 = first knockout
+    // round); assert none meet before `earliest`. Children precede parents in
+    // the matches array.
+    const reach = new Map();
+    const roundOf = new Map();
+    for (const m of tourney.matches.md) {
+      let round = 1;
+      const winners = new Set();
+      for (const s of m.sides) {
+        if (s.kind === 'pool' && s.rank === 1) winners.add(s.pool);
+        else if (s.kind === 'match') {
+          for (const p of reach.get(s.match)) winners.add(p);
+          round = Math.max(round, roundOf.get(s.match) + 1);
+        }
+      }
+      reach.set(m.id, winners);
+      roundOf.set(m.id, round);
+      const ws = [...winners].sort();
+      for (let i = 0; i < ws.length; i++) {
+        for (let j = i + 1; j < ws.length; j++) {
+          assert.ok(round >= earliest,
+            `${pools}x${size}: pool winners ${ws[i]}1 and ${ws[j]}1 can meet in round ${round}, earliest allowed ${earliest}`);
+        }
+      }
+    }
+  }
+});
+
 test('match ids follow chronological order; slot refs stay valid after renumbering', () => {
   const tourney = generate(MINI);
   for (const ms of Object.values(tourney.matches)) {
