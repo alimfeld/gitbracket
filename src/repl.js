@@ -17,7 +17,7 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const { spawnSync } = require('child_process');
-const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, gamesText, fmtTime, matchLabel, koColumn, placementLabel, poolStandings, poolRanks, fmtDiff, bestOfOf, countWins, sideLetter, winnerIdx, dayKey } = require('../site/derive.js');
+const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, gamesText, fmtTime, matchLabel, poolStandings, poolRanks, fmtDiff, bestOfOf, countWins, sideLetter, winnerIdx, dayKey } = require('../site/derive.js');
 const { loadRepo, writeTournament } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 const { ship } = require('./publish.js');
@@ -154,20 +154,6 @@ function formatMatchLine(cid, m, ctx, tz, stage, leftw, rightw, idw, venuew, sta
   return `${C.bold(idw ? ref.padEnd(idw) : ref)}  ${C.dim(stage)}${stagePad}  ${sides}  ${time}  ${venue}  ${score}`;
 }
 
-// KO listing order: earlier round first (higher column), then placement
-// matches after the main-bracket match of the same column, then id. Keys off
-// the placement model itself (placementLabel), not label prefixes — a
-// '9th–16th semi' is placement too, and the old startsWith('3rd'|'5th'|'7th')
-// check silently interleaved any deeper classification with the main bracket.
-function koCompare(a, b, ctx) {
-  const ca = koColumn(a.m, ctx), cb = koColumn(b.m, ctx);
-  if (ca !== cb) return cb - ca;
-  const pa = placementLabel(a.m, ctx) !== null ? 1 : 0;
-  const pb = placementLabel(b.m, ctx) !== null ? 1 : 0;
-  if (pa !== pb) return pa - pb;
-  return a.m.id - b.m.id;
-}
-
 // The `ls` filter: a case-insensitive substring over a player's id and
 // display name ("ada" finds p1/Ada Lovelace, "lovelace" also does; "win" does
 // not — unresolved slots have no player to match).
@@ -222,12 +208,9 @@ function listText(repo, slug, cats, needle) {
       return !!ids && playerHit(ids);
     }));
     if (all.length) {
-      all.sort((a, b) => {
-        const pa = a.m.pool !== undefined, pb = b.m.pool !== undefined;
-        if (pa !== pb) return pa ? -1 : 1; // pool matches first
-        if (pa) return a.m.pool.localeCompare(b.m.pool) || a.m.id - b.m.id;
-        return koCompare(a, b, ctx); // earlier round first, placement after the same-column main match
-      });
+      // ids are chronological — listing by id is the day's running order, no
+      // separate round/placement sort needed
+      all.sort((a, b) => a.m.id - b.m.id);
       for (const { m, stage } of all) {
         g.idw = Math.max(g.idw, `${cid} ${m.id}`.length);
         g.stagew = Math.max(g.stagew, stage.length);
@@ -588,4 +571,4 @@ function main(root) {
   replMain(root, siteRoot, repo);
 }
 
-module.exports = { parseGame, buildScheduled, applyScore, applyResult, applyVenue, applyTime, writeEdit, commitMessage, editDetail, parseCmd, listText, completer, defaultSlug, dispatch, main, koCompare };
+module.exports = { parseGame, buildScheduled, applyScore, applyResult, applyVenue, applyTime, writeEdit, commitMessage, editDetail, parseCmd, listText, completer, defaultSlug, dispatch, main };
