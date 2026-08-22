@@ -59,10 +59,11 @@ article[data-next] { border-color: var(--accent); } /* the player's next match �
 .pills { display: flex; gap: .5rem; flex-wrap: wrap; margin: 0 0 1.5rem; }
 .pills a { padding: .35rem .8rem; border: 1px solid var(--line); border-radius: 999px; text-decoration: none; }
 .pills a[aria-current] { background: var(--accent); border-color: var(--accent); color: #fff; }
-.cat-label { display: inline-block; font-size: .7em; font-weight: 600; letter-spacing: .04em; padding: .15rem .5rem; border: 1px solid var(--line); border-radius: 999px; margin-left: .35rem; vertical-align: .2em; }
-/* picker: shared ul columns, each li a subgrid row — label clusters align */
-.players { display: grid; grid-template-columns: auto 1fr; column-gap: .8rem; }
-.players li { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: baseline; }
+/* the destination switch floats above the page — content scrolls under it */
+.segments { position: sticky; top: 0; z-index: 10; display: flex; gap: .25rem; padding: .5rem 0; margin: 0 0 1rem; background: color-mix(in srgb, var(--paper) 90%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--hairline); }
+.segments a { flex: 1; text-align: center; padding: .5rem; border-radius: .5rem; color: var(--ink); font-weight: 600; font-size: .95em; text-decoration: none; }
+.segments a:hover { background: #00000012; }
+.segments a[aria-current] { background: var(--accent); color: #fff; }
 
 ul { list-style: none; padding: 0; }
 ul li { padding: .6rem 0; border-bottom: 1px solid var(--hairline); font-size: 1.1em; }

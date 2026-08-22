@@ -113,13 +113,14 @@ organizer to settle.
 
 ## Views
 
-One page, fragment-routed. `#<slug>` is the tournament page;
-`/categories`, `/venues`, `/players` switch the view, and an id narrows it:
+One page, fragment-routed. `#<slug>` is the tournament page; a floating
+`Tournament | My Schedule` switch sits above the two tournament views. The
+kiosk is a separate mode, the index the front door:
 
-- `#` — lists tournaments, past and current.
+- `#` — lists tournaments, past and current; the only page with kiosk links.
 - `#<slug>` — the tournament, all categories (`#<slug>/categories/<category-id>` narrows to one).
+- `#<slug>/me` — My Schedule: the schedule of the player picked on this device for this tournament (kept in `localStorage`, keyed per tournament), or a minimal picker of participating players until one is picked. `#<slug>/me/<player-id>` picks that player; `#<slug>/me/pick` returns to the picker.
 - `#<slug>/venues` — the kiosk, the fullscreen board for the hall showing the day live on every court (`#<slug>/venues/<venue-id>` narrows to one court).
-- `#<slug>/players` — the player picker (`#<slug>/players/<player-id>` shows one player's schedule; `#<slug>/players/<category-id>` narrows the list to that category).
 
 ## Specs
 

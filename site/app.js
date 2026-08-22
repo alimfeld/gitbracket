@@ -25,7 +25,7 @@ async function fetchJson(url) {
   }
 }
 
-// One page, fragment routing: #<slug>[/categories|venues|players[/<id>]].
+// One page, fragment routing: #<slug>[/categories|venues|me[/pick|<player-id>]].
 // Segments are id-regex-checked first — a raw segment never reaches a URL.
 function parseRoute(hash) {
   if (hash === undefined) hash = location.hash;
@@ -34,7 +34,8 @@ function parseRoute(hash) {
   if (segs.length > 3 || segs.some(s => !s || !ID_RE.test(s))) return null; // #../../ -> reject
   const [slug, view, filter] = segs;
   if (view === undefined) return { slug, view: 'categories' };
-  if (view === 'categories' || view === 'venues' || view === 'players') return filter === undefined ? { slug, view } : { slug, view, filter };
+  if (view === 'me') return filter === undefined ? { slug, view } : { slug, view, filter }; // me/<id> picks a player; me/pick forces the picker
+  if (view === 'categories' || view === 'venues') return filter === undefined ? { slug, view } : { slug, view, filter };
   return null;
 }
 
@@ -60,11 +61,9 @@ async function loadAll(route, indexOnly) {
 
 // ---------- renderers ----------
 
-// One back link, right of the h1: Tournament ⇄ Players — the other view is
-// the only hop worth linking; the index is the browser's back button.
-const topLink = (slug, view) => {
-  const dest = view === 'tournament' ? ['Players', `#${slug}/players`] : ['Tournament', `#${slug}`];
-  return `<a class="top" href="${esc(dest[1])}">→ ${esc(dest[0])}</a>`;
+const segmentBar = (slug, view) => {
+  const t = view === 'categories', m = view === 'me';
+  return `<nav class="segments"><a href="#${esc(slug)}"${t ? ' aria-current="true"' : ''}>Tournament</a><a href="#${esc(slug)}/me"${m ? ' aria-current="true"' : ''}>My Schedule</a></nav>`;
 };
 
 // The one missing-data message, verbatim in every view and the boot retry.
@@ -74,10 +73,10 @@ const MISSING = '<p>Missing tournament data — has the tournament been pushed?<
 const FULL_META = ['matchId', 'label', 'court', 'time'];
 const matchGrid = (ms, ctx) => `<section class="grid">${ms.map(m => matchCard(m, ctx, { meta: FULL_META })).join('')}</section>`;
 
-// Category pills — one toggle pattern for the tournament page and picker.
-const catPills = (cats, slug, base, activeId, dropHref) => cats.map(c => {
+// Category pills — the tournament page's category filter.
+const catPills = (cats, slug, activeId, dropHref) => cats.map(c => {
   const active = c.id === activeId;
-  const href = active ? dropHref : `#${slug}/${base}/${c.id}`;
+  const href = active ? dropHref : `#${slug}/categories/${c.id}`;
   return `<a href="${esc(href)}"${active ? ' aria-current="true"' : ''}>${esc(c.name)}</a>`;
 }).join('');
 
@@ -91,14 +90,14 @@ function renderIndex(route, data) {
 function renderStandings(route, data) {
   if (!data.tjson) return MISSING;
   const tz = data.tjson.timezone || 'UTC';
-  const parts = [`<header><div class="title-row"><h1>${esc(data.t.name)}</h1>${topLink(data.t.slug, 'tournament')}</div>`];
+  const parts = [segmentBar(data.t.slug, 'categories'), `<header><h1>${esc(data.t.name)}</h1>`];
   // the day and timezone are facts from the schedule — this page never trusts a clock
   const ts = (data.cats || []).flatMap(c => (c.matches || []).map(m => schedTime(m, tz))).filter(Number.isFinite);
   if (ts.length) {
     const day = new Intl.DateTimeFormat(undefined, { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric' }).format(Math.min(...ts));
     parts.push(`<p class="dayline">${esc(day)} · times are local${tz !== 'UTC' ? ` (${esc(tz)})` : ''}</p>`);
   }
-  parts.push(`<nav class="pills">${catPills(data.tjson.categories || [], data.t.slug, 'categories', route.filter, `#${data.t.slug}`)}</nav></header>`);
+  parts.push(`<nav class="pills">${catPills(data.tjson.categories || [], data.t.slug, route.filter, `#${data.t.slug}`)}</nav></header>`);
   for (const c of data.cats) {
     if (route.filter && c.meta.id !== route.filter) continue; // pills keep every category; only the section list narrows
     parts.push(catSection(makeCat(c, data.tjson)));
@@ -284,19 +283,13 @@ function renderPlayer(route, data) {
   const players = (data.tjson.players || []).filter(p => p && typeof p === 'object' && typeof p.id === 'string');
   const p = pid ? players.find(x => x.id === pid) : null;
   if (!p) {
-    if (pid && !(data.tjson.categories || []).some(c => c.id === pid)) return '<p>Player not found.</p>';
-
+    // only participants are pickable — a pick must always render a schedule
     const ctxs = catCtxs(data);
-    const pills = catPills(data.tjson.categories || [], data.t.slug, 'players', pid, `#${data.t.slug}/players`);
-    const sel = ctxs.find(c => c.id === pid);
-    const items = players.filter(pl => !sel || playerMatches(sel, pl.id).length)
+    const items = players.filter(pl => ctxs.some(c => playerMatches(c, pl.id).length))
       .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id))
-      .map(pl => {
-      const lbls = ctxs.map(c => playerMatches(c, pl.id).length ? `<span class="cat-label">${esc(c.name)}</span>` : '').join('');
-      const cluster = lbls ? `<span>${lbls}</span>` : '';
-      return `<li><a href="${esc(`#${data.t.slug}/players/${pl.id}`)}">${esc(pl.name || pl.id)}</a>${cluster}</li>`;
-    }).join('');
-    return `<header><div class="title-row"><h1>Players</h1>${topLink(data.t.slug, 'players')}</div><nav class="pills">${pills}</nav></header><ul class="players">${items || `<li>${sel ? 'No players in this category.' : 'No players.'}</li>`}</ul>`;
+      .map(pl => `<li><a href="#${esc(data.t.slug)}/me/${esc(pl.id)}">${esc(pl.name || pl.id)}</a></li>`)
+      .join('');
+    return `${segmentBar(data.t.slug, 'me')}<header><h1>Pick your player</h1></header><ul>${items || '<li>No players yet.</li>'}</ul>`;
   }
   const rows = [];
   const ctxs = catCtxs(data);
@@ -324,7 +317,8 @@ function renderPlayer(route, data) {
     if (!blocksByDay.has(key)) blocksByDay.set(key, []);
     blocksByDay.get(key).push({ ctx, ...span });
   }
-  const parts = [`<header><div class="title-row"><h1>${esc(p.name)}</h1>${topLink(data.t.slug, 'players')}</div></header>`];
+  // the schedule is "me" on this device; Not you? returns to the picker
+  const parts = [segmentBar(data.t.slug, 'me'), `<header><div class="title-row"><h1>${esc(p.name)}</h1><a class="top" href="#${esc(data.t.slug)}/me/pick">Not you?</a></div></header>`];
   if (rows.length) parts.push(`<p class="dayline">${wins} ${wins === 1 ? 'win' : 'wins'} · ${losses} ${losses === 1 ? 'loss' : 'losses'}${nextT ? ` · next ${fmtTime(nextT, next.ctx.tz)} · ${esc(next.ctx.venues.get(next.m.venue) || 'TBD')}` : ''}</p>`);
   for (const [key, g] of groups) {
     parts.push(`<h2>${esc(key)}</h2>`);
@@ -355,15 +349,20 @@ function renderPlayer(route, data) {
 // so empty states are never retried).
 function boot() {
   const app = document.querySelector('main');
-  const renderers = { index: renderIndex, categories: renderStandings, venues: renderVenue, players: renderPlayer };
-  const pageTitle = (r, d) => { // index: Bracket; tournament/kiosk: bare tournament; players: "name — Players" or "name — player"
+  const renderers = { index: renderIndex, categories: renderStandings, venues: renderVenue, me: renderPlayer };
+  // whose schedule "me" is — a per-tournament preference; the picker is the fallback when storage is blocked or stale
+  const localPlayer = {
+    get: slug => { try { return localStorage.getItem(`gb.player.${slug}`); } catch { return null; } },
+    set: (slug, id) => { try { localStorage.setItem(`gb.player.${slug}`, id); } catch {} },
+  };
+  const pageTitle = (r, d) => { // index: Bracket; tournament/kiosk: bare tournament; me: "name — <player>" or "name — My Schedule"
     if (r.view === 'index' || !d.t) return 'Bracket';
-    if (r.view === 'players') {
+    if (r.view === 'me') {
       if (r.filter) {
         const p = ((d.tjson && d.tjson.players) || []).find(x => x && x.id === r.filter);
         if (p) return `${d.t.name} — ${p.name || p.id}`;
       }
-      return `${d.t.name} — Players`;
+      return `${d.t.name} — My Schedule`;
     }
     return d.t.name;
   };
@@ -410,6 +409,14 @@ function boot() {
   const render = (r, d) => {
     data = d;
     dataSlug = r.slug;
+    // "me" is who this device last watched; me/<id> is an explicit pick, me/pick forces the picker
+    if (r.view === 'me') {
+      const roster = (d.tjson && d.tjson.players) || [];
+      const wanted = r.filter === 'pick' ? null : (r.filter || localPlayer.get(r.slug));
+      const p = roster.find(x => x && x.id === wanted);
+      r = { ...r, filter: p ? p.id : undefined }; // a stale or unknown pick falls back to the picker
+      if (p) localPlayer.set(r.slug, p.id); // a pick is "me" on this device
+    }
     // the kiosk dark theme keys off body.venue — present only on the venue view
     document.body.classList.toggle('venue', r.view === 'venues');
     document.body.classList.toggle('categories', r.view === 'categories');
@@ -423,7 +430,7 @@ function boot() {
     }
   };
 
-  // Fragment navigation: same-slug view hops (categories → venues → players)
+  // Fragment navigation: same-slug view hops (categories → venues → me)
   // re-render from the cached snapshot; a different slug or the index reloads.
   const navigate = () => {
     const r = parseRoute();
