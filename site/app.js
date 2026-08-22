@@ -343,10 +343,9 @@ function renderPlayer(route, data) {
 
 // ---------- boot ----------
 
-// Read-once views don't poll, but a load in a deploy window must not leave a
-// permanent "missing" page: refetch on tab-return, and retry a few times only
-// when the load detectably failed (a 404 is indistinguishable from absence,
-// so empty states are never retried).
+// Read-once views load once; a failed load keeps the board or shows the
+// missing message, and recovery is a manual reload. The kiosk polls, so a
+// transient failure there self-heals on the next tick.
 function boot() {
   const app = document.querySelector('main');
   const renderers = { index: renderIndex, categories: renderTournament, venues: renderVenue, me: renderPlayer };
@@ -370,10 +369,7 @@ function boot() {
   let data = null;     // last good snapshot — a failed poll keeps the board up
   let dataSlug = null; // slug the snapshot belongs to — a route change to another tournament reloads
   let lastHtml = '';   // skip re-render when nothing changed — keeps selection/focus on the player page
-  let fails = 0;       // consecutive detectably-failed loads (read-once views only)
   let pollTimer = null, clockTimer = null;
-  const MAX_FAILS = 3;
-  const RETRY_MS = 5000;
 
   // Auto-refresh only on the kiosk; the other views are read-on-load.
   const setKiosk = on => {
@@ -398,12 +394,10 @@ function boot() {
   const load = r => {
     loadAll(r, r.view === 'index').then(d => {
       if (route !== r) return; // superseded by a newer navigation — don't render a stale page
-      if (r.view !== 'index' && !d.tjson) { // fetch failed or unknown slug — with a board, keep it and retry silently
+      if (r.view !== 'index' && !d.tjson) { // fetch failed or unknown slug — keep a board; the kiosk retries next tick
         if (!data) app.innerHTML = MISSING;
-        if (++fails <= MAX_FAILS) setTimeout(() => load(r), RETRY_MS); // deploy window or blip — retry a few times, then give up
         return;
       }
-      fails = 0;
       render(r, d);
     });
   };
@@ -448,7 +442,6 @@ function boot() {
     if (r.view === 'index' || r.slug !== dataSlug) {
       data = null;
       lastHtml = '';
-      fails = 0;
       load(r);
     } else {
       render(r, data);
@@ -457,11 +450,6 @@ function boot() {
 
   navigate();
   window.addEventListener('hashchange', navigate);
-  // read-once views: a load that failed gets another chance when the tab comes
-  // back to the foreground (fresh attempt, fresh retry budget)
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && route && route.view !== 'venues') { fails = 0; load(route); }
-  });
 }
 
 if (typeof document !== 'undefined') boot();
