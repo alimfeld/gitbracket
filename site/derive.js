@@ -23,6 +23,14 @@ function makeCat(c, tjson) {
   };
 }
 
+// Category contexts: [{ meta, matches }], file order — the shape loadAll builds
+// and the renderers consume. A category without a matches array renders empty.
+function toCats(tjson) {
+  const byCat = (tjson && tjson.matches && typeof tjson.matches === 'object') ? tjson.matches : {};
+  const cats = (tjson && Array.isArray(tjson.categories)) ? tjson.categories : [];
+  return cats.map(c => ({ meta: c, matches: Array.isArray(byCat[c.id]) ? byCat[c.id] : [] }));
+}
+
 const stageOf = m => (m && m.pool !== undefined) ? 'groups' : 'knockout';
 
 function matchSlotMs(m, ctx) {
@@ -484,5 +492,5 @@ function matchLabel(m, ctx) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { ID_RE, ISO_RE, pairSig, makeCat, matchSlotMs, bestOfOf, countWins, sideIdx, sideLetter, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolAdvance, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, dayKey, tzOffset, schedTime, fmtDiff, kioskStatus, roundName, koColumn, matchLabel };
+  module.exports = { ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, countWins, sideIdx, sideLetter, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolAdvance, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, dayKey, tzOffset, schedTime, fmtDiff, kioskStatus, roundName, koColumn, matchLabel };
 }

@@ -55,10 +55,7 @@ function applyScore(matches, matchId, games, ctx) {
   });
 }
 
-// Record a result that isn't a played score: walkover names the winning
-// side (the opponent couldn't play — win only, no games); void settles a
-// match nobody plays (both sides out) — no winner, nothing counts. Any
-// games are cleared, keeping games/result exclusivity a round-trip property.
+// Games are cleared so games/result exclusivity stays a round-trip property.
 function applyResult(matches, matchId, status, winner) {
   return findMatch(matches, matchId, m => {
     delete m.games;

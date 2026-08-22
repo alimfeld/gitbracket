@@ -47,16 +47,8 @@ async function loadAll(route, indexOnly) {
   }
   // one file per tournament — a poll is a single atomic fetch, no index roundtrip.
   const tjson = await fetchJson(`tournaments/${route.slug}.json`);
-  const cats = [];
-  if (tjson && Array.isArray(tjson.categories)) {
-    const byCat = (tjson.matches && typeof tjson.matches === 'object') ? tjson.matches : {};
-    for (const meta of tjson.categories) {
-      const arr = byCat[meta.id];
-      cats.push({ meta, matches: Array.isArray(arr) ? arr : [] });
-    }
-  }
   const t = tjson ? { slug: route.slug, name: tjson.name } : null;
-  return { t, tjson, cats };
+  return { t, tjson, cats: toCats(tjson) };
 }
 
 // ---------- renderers ----------
@@ -188,7 +180,7 @@ function bracketHtml(ctx, ko) {
 }
 
 // opts.meta picks the meta items (fixed vocabulary); opts.head is an optional
-// [left, right] headline row — cells are item keys or pre-rendered HTML.
+// [left, right] headline row — a cell is { key: item field } or { html: pre-rendered }.
 function matchCard(m, ctx, opts = {}) {
   const t = schedTime(m, ctx.tz);
   const item = {
@@ -199,7 +191,7 @@ function matchCard(m, ctx, opts = {}) {
     time: t !== null ? esc(fmtTime(t, ctx.tz)) : 'TBD',
   };
   const meta = opts.meta.map(k => item[k]).join(' · ');
-  const head = opts.head ? `<div class="head">${opts.head.map(c => `<span>${item[c] ?? c}</span>`).join('')}</div>` : '';
+  const head = opts.head ? `<div class="head">${opts.head.map(c => `<span>${c.html !== undefined ? c.html : item[c.key]}</span>`).join('')}</div>` : '';
   return `<article${opts.next ? ' data-next' : ''}${opts.status ? ` data-status="${opts.status}"` : ''}>${head}${sideRow(m, ctx, 0)}${sideRow(m, ctx, 1)}<div class="meta">${meta}</div></article>`;
 }
 
@@ -262,7 +254,7 @@ function renderVenue(route, data, now = Date.now()) {
       const st = kioskStatus(r, now);
       // status colors the headline time; a late start gets the remark cell beside it
       col.push(matchCard(r.m, r.ctx, { meta: ['catName', 'label'],
-        head: [st === 'overdue' ? `${esc(fmtTime(r.t, r.ctx.tz))} <span class="delayed">delayed</span>` : 'time'], status: st }));
+        head: [st === 'overdue' ? { html: `${esc(fmtTime(r.t, r.ctx.tz))} <span class="delayed">delayed</span>` } : { key: 'time' }], status: st }));
     }
     col.push('</div>');
     cols.push(`<section>${col.join('')}</section>`);
@@ -334,9 +326,9 @@ function renderPlayer(route, data) {
       const t = schedTime(r.m, r.ctx.tz), m = r.m, ctx = r.ctx;
       while (bi < blocks.length && blocks[bi].min < t) day.push(possibleLine(blocks[bi++]));
       day.push(matchCard(m, ctx, {
-        next: m.id === (next && next.m.id),
+        next: r === next, // the row, not its id — ids are per-category, two categories can share one
         meta: ['catName', 'label'],
-        head: ['time', 'court'],
+        head: [{ key: 'time' }, { key: 'court' }],
       }));
     }
     while (bi < blocks.length) day.push(possibleLine(blocks[bi++]));

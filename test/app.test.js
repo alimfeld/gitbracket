@@ -7,7 +7,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, poolAdvance, resolveSide, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, kioskStatus, matchLabel, schedTime } = require('../site/derive.js');
+const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, poolAdvance, resolveSide, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, kioskStatus, matchLabel, schedTime, toCats } = require('../site/derive.js');
 const { parseRoute, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer } = require('../site/app.js');
 const { generate } = require('../src/schedule.js');
 const { FIX, catOf } = require('./helpers.js');
@@ -243,7 +243,7 @@ test('result statuses: walkover counts a win, void counts nothing, pool complete
 test('result statuses render: W/O and void on cards, settled matches off the kiosk', () => {
   const repo = loadRepo(FIX('result'));
   const info = repo.tournaments.get('result');
-  const data = { index: repo.index, t: repo.index[0], tjson: info.tjson, cats: info.tjson.categories.map(c => ({ meta: c, matches: info.matches.get(c.id) || [] })) };
+  const data = { index: repo.index, t: repo.index[0], tjson: info.tjson, cats: toCats(info.tjson) };
   const st = renderTournament({ slug: 'result', view: 'categories' }, data);
   assert(st.includes('<span>void</span>'), 'void renders on its card');
   // m2 is pool A, walkover winner b (p3): the W/O mark rides the winner's row
@@ -320,7 +320,7 @@ test('bracket: slot labels are plain text — no link wrapping, no trace machine
   const data = (() => {
     const repo = loadRepo(FIX('sample'));
     const info = repo.tournaments.get('sample');
-    return { repo, data: { index: repo.index, t: repo.index[0], tjson: info.tjson, cats: info.tjson.categories.map(c => ({ meta: c, matches: info.matches.get(c.id) || [] })) } };
+    return { repo, data: { index: repo.index, t: repo.index[0], tjson: info.tjson, cats: toCats(info.tjson) } };
   })().data;
   const html = renderTournament({ slug: 'sample', view: 'categories', filter: 'md40' }, data);
   assert(html.includes('<span>Winner of SF (match 8)</span>') && !html.includes('<a href="#m-'), 'slot labels are plain text, not anchors');
@@ -406,7 +406,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
         index: repo.index,
         t: repo.index[0],
         tjson: info.tjson,
-        cats: info.tjson.categories.map(c => ({ meta: c, matches: info.matches.get(c.id) || [] })),
+        cats: toCats(info.tjson),
       },
     };
   };
@@ -446,7 +446,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   midJson.matches.md40[0].result = undefined;
   const mid = renderTournament({ slug: 'sample', view: 'categories', filter: 'md40' },
     { index: [], t: { slug: 'sample', name: midJson.name }, tjson: midJson,
-      cats: midJson.categories.map(c => ({ meta: c, matches: midJson.matches[c.id] || [] })) });
+      cats: toCats(midJson) });
   assert(mid.includes('<span class="chip">groups · 5 of 6 · next 09:00</span>'), 'running groups: phase chip counts and names the next slot');
   assert(mid.includes('<details open><summary>Group matches · 5 of 6 played</summary>'), 'running groups: schedule stays open');
   const { data: rdata } = dataOf('result');
@@ -457,7 +457,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   for (const ms of Object.values(preJson.matches)) for (const m of ms) { delete m.result; delete m.games; }
   const pre = renderTournament({ slug: 'sample', view: 'categories' },
     { index: [], t: { slug: 'sample', name: preJson.name }, tjson: preJson,
-      cats: preJson.categories.map(c => ({ meta: c, matches: preJson.matches[c.id] || [] })) });
+      cats: toCats(preJson) });
   assert(pre.includes('<h3>Pools</h3>') && pre.includes('>Ada Lovelace / Grace Hopper</td>'), 'pools roster (teams) is visible before the first result');
   assert(pre.includes('<span class="chip">starts '), 'pre-start chip');
   const ppage = renderPlayer({ slug: 'sample', view: 'me', filter: 'p1' }, data);
@@ -496,7 +496,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   const evilPool = JSON.parse(JSON.stringify(require(FIX('sample', 'tournaments', 'sample.json'))));
   evilPool.matches.md40[0].pool = 'A" onclick="alert(1)';
   const pdata = { index: [], t: { slug: 'sample', name: evilPool.name }, tjson: evilPool,
-    cats: evilPool.categories.map(c => ({ meta: c, matches: evilPool.matches[c.id] || [] })) };
+    cats: toCats(evilPool) };
   const ph = renderTournament({ slug: 'sample', view: 'categories', filter: 'md40' }, pdata);
   assert(!ph.includes('<h4>Pool A" onclick='), 'the injected handler never lands in the DOM');
   assert(ph.includes('A&quot; onclick=&quot;alert(1)'), 'the pool string renders entity-encoded');
@@ -504,4 +504,20 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   const { data: tdata } = dataOf('tie');
   const tieHtml = renderTournament({ slug: 'tie', view: 'categories' }, tdata);
   assert(!tieHtml.includes('†') && (tieHtml.match(/data-tie><td>1<\/td>/g) || []).length === 2, 'tied teams share rank 1, no dagger');
+});
+
+test('renderPlayer: the next-match marker follows the row, not the id — same id in another category stays unmarked', () => {
+  // Match ids are per-category (md40 3 and xd 3 are different matches). Both
+  // unresolved at different times: only the earliest may carry data-next.
+  const repo = loadRepo(FIX('sample'));
+  const info = repo.tournaments.get('sample');
+  const tjson = JSON.parse(JSON.stringify(info.tjson));
+  tjson.matches.md40[2].result = undefined; tjson.matches.md40[2].games = undefined; // md40 m3, 09:45 — earliest unresolved
+  tjson.matches.xd[2].result = undefined;   tjson.matches.xd[2].games = undefined;   // xd m3, 13:45 — same id, later
+  const data = { index: [], t: repo.index[0], tjson, cats: toCats(tjson) };
+  const html = renderPlayer({ slug: 'sample', view: 'me', filter: 'p1' }, data);
+  const marked = html.match(/<article[^>]*data-next[\s\S]*?<\/article>/);
+  assert.notEqual(marked, null, 'some card is marked next');
+  assert.equal((html.match(/data-next/g) || []).length, 1, 'exactly one card — the xd m3 card must not inherit the mark');
+  assert(marked[0].includes('09:45') && marked[0].includes("Men&#39;s Doubles 40+ · Pool A"), 'the marked card is md40 m3, the earliest unresolved');
 });

@@ -1,22 +1,17 @@
-// GitBracket tournament generator — run via `node gb.js schedule specs/<slug>.json`.
+// GitBracket tournament generator — `node gb.js schedule specs/<slug>.json`.
+// Reads a spec and writes the full tournament file wholesale (skeleton + every
+// scheduled match), keeping the index in sync; the file is never hand-edited —
+// scores and venue moves go through the REPL. Spec semantics: README (Specs);
+// the worked example is specs/2026-mammut60.json.
 //
-// Reads a spec (specs/<slug>.json), writes the full site/tournaments/<slug>.json
-// from scratch (skeleton + every scheduled match), and keeps the index in
-// sync. The spec is the single source for the schedule — the file is
-// regenerated wholesale, so structure is never hand-edited; scores and venue
-// moves go through the REPL. Seed/format semantics: README (Specs); the
-// worked example is specs/2026-mammut60.json.
-//
-// Run:  node gb.js schedule specs/<slug>.json   # then the pre-commit hook (or `node gb.js validate`) gates it
-//
-// Rerun after the registration deadline with the final spec.teams; shuffle
-// spec.teams before the final run for a fair draw. Regeneration replaces the
-// whole matches map (scores included) — run it before results go in, not after.
+// Re-run after the registration deadline with the final spec.teams (shuffle
+// team order beforehand for a fair draw) — regeneration replaces the whole
+// matches map, scores included, so it runs before results go in, never after.
 'use strict';
 
 const fs = require('fs');
 const path = require('path');
-const { matchSlotMs, pairSig, dayKey, tzOffset, ID_RE } = require('../site/derive.js');
+const { matchSlotMs, pairSig, dayKey, tzOffset, schedTime, ID_RE } = require('../site/derive.js');
 const { writeTournament, slotsOverlap, isRealDate } = require('./tools.js');
 
 // Round-robin pairings, circle method: array of rounds, each a list of pairs.
@@ -274,7 +269,7 @@ function scheduleMatches(categories, venues, tz, slotCfgOf, eventDate, blockStar
 // results; same-wave knockout matches are structurally disjoint — each feeds
 // a different bracket path.)
 // results/assertSchedule tuples: [cat, teamList, matches] — only cat and matches used.
-function assertSchedule(categories, slotCfgOf) {
+function assertSchedule(categories, slotCfgOf, tz) {
   const sched = []; // { m, t, players }
   for (const [cat, , matches] of categories) {
     const catSlots = slotCfgOf.get(cat);
@@ -282,7 +277,7 @@ function assertSchedule(categories, slotCfgOf) {
       if (!m.scheduled || !m.venue) throw new Error(`match ${m.id} never got a slot`);
       sched.push({
         m,
-        t: Date.parse(m.scheduled),
+        t: schedTime(m, tz),
         slotMs: matchSlotMs(m, { slotMinutes: catSlots }),
         players: m.sides.every((s) => s.kind === 'players') ? new Set(m.sides.flatMap((s) => s.ids)) : null,
       });
@@ -304,11 +299,12 @@ function assertSchedule(categories, slotCfgOf) {
 }
 
 // Renumber matches so the file is in chronological order with sequential ids —
-// diffs and slot refs stay readable. Build order is the tie-break for
-// simultaneous slots (the same wall time on different courts), free via the
-// stable sort.
-function renumberByTime(ms) {
-  const ordered = [...ms].sort((a, b) => Date.parse(a.scheduled) - Date.parse(b.scheduled));
+// diffs and slot refs stay readable. Instants come from schedTime (the shared
+// derivation), never a bare Date.parse — scheduled is wall time, only the
+// tournament tz anchors it. Build order is the tie-break for simultaneous
+// slots (the same wall time on different courts), free via the stable sort.
+function renumberByTime(ms, tz) {
+  const ordered = [...ms].sort((a, b) => schedTime(a, tz) - schedTime(b, tz));
   const remap = new Map();
   ordered.forEach((m, i) => remap.set(m.id, i + 1));
   for (const m of ordered) {
@@ -418,12 +414,12 @@ function generate(spec) {
   }
   const slotCfgOf = new Map(CATS.map((c) => [c.id, c.slotMinutes]));
   scheduleMatches(results, VENUES.map((v) => v.id), timezone, slotCfgOf, eventDate, blockStart);
-  assertSchedule(results, slotCfgOf);
+  assertSchedule(results, slotCfgOf, timezone);
 
   const out = {};
   for (const [cat, teamList, ms] of results) {
     assertPoolCoverage(teamList, ms, poolSize);
-    renumberByTime(ms);
+    renumberByTime(ms, timezone);
     out[cat] = ms;
     console.log(`${cat}: ${ms.length} matches`);
   }
