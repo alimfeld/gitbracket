@@ -8,7 +8,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, poolAdvance, resolveSide, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, kioskStatus, matchLabel, schedTime } = require('../site/derive.js');
-const { parseRoute, loadAll, renderIndex, renderStandings, renderVenue, renderPlayer } = require('../site/app.js');
+const { parseRoute, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer } = require('../site/app.js');
 const { generate } = require('../src/schedule.js');
 const { FIX, catOf } = require('./helpers.js');
 const { loadRepo } = require('../src/tools.js');
@@ -244,7 +244,7 @@ test('result statuses render: W/O and void on cards, settled matches off the kio
   const repo = loadRepo(FIX('result'));
   const info = repo.tournaments.get('result');
   const data = { index: repo.index, t: repo.index[0], tjson: info.tjson, cats: info.tjson.categories.map(c => ({ meta: c, matches: info.matches.get(c.id) || [] })) };
-  const st = renderStandings({ slug: 'result', view: 'categories' }, data);
+  const st = renderTournament({ slug: 'result', view: 'categories' }, data);
   assert(st.includes('<span>void</span>'), 'void renders on its card');
   // m2 is pool A, walkover winner b (p3): the W/O mark rides the winner's row
   assert(st.includes('<span>P3</span><span class="score"><span>W/O</span></span>'), 'W/O renders on the winning side');
@@ -322,7 +322,7 @@ test('bracket: slot labels are plain text — no link wrapping, no trace machine
     const info = repo.tournaments.get('sample');
     return { repo, data: { index: repo.index, t: repo.index[0], tjson: info.tjson, cats: info.tjson.categories.map(c => ({ meta: c, matches: info.matches.get(c.id) || [] })) } };
   })().data;
-  const html = renderStandings({ slug: 'sample', view: 'categories', filter: 'md40' }, data);
+  const html = renderTournament({ slug: 'sample', view: 'categories', filter: 'md40' }, data);
   assert(html.includes('<span>Winner of SF (match 8)</span>') && !html.includes('<a href="#m-'), 'slot labels are plain text, not anchors');
   assert(!html.includes('data-feeders') && !html.includes('id="m-'), 'cards are static nodes — the trace graph shipped nothing');
 });
@@ -412,7 +412,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   };
   const { data } = dataOf('sample');
   const no = () => ({ slug: 'sample', view: 'categories' });
-  const standings = renderStandings(no(), data);
+  const standings = renderTournament(no(), data);
   assert(!standings.includes('data-feeders') && !standings.includes('data-hl') && !standings.includes('data-cat'), 'nothing of the old trace machinery ships — cards are static');
   assert(standings.includes('Pool A') && standings.includes('Final') && standings.includes('Winner of SF (match 8)'), 'standings renders pools, bracket, and slot labels');
   assert(!standings.includes('BO3'), 'no best-of label — the score slots carry it');
@@ -420,7 +420,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(standings.includes('Ada Lovelace'), 'standings renders player names');
   assert(standings.includes('1 · Pool A · Court 1 · 09:00') && !standings.includes('md40 · 1 · Pool A'), 'standings card meta: match · label · venue · time, no category id');
   assert(standings.includes('<nav class="segments" aria-label="Views"><a href="#sample" aria-current="true">Tournament</a><a href="#sample/me">My Schedule</a></nav>'), 'tournament page: segment switch, Tournament current');
-  const filtered = renderStandings({ slug: 'sample', view: 'categories', filter: 'md40' }, data);
+  const filtered = renderTournament({ slug: 'sample', view: 'categories', filter: 'md40' }, data);
   assert((filtered.match(/<h2>/g) || []).length === 1 && filtered.includes('Pool A'), 'category filter narrows to one section');
   assert(filtered.includes('#sample/categories/xd'), 'pills still list every category on a filtered page');
   assert(standings.includes('>Men&#39;s Doubles 40+</a>') && !standings.includes('>md40</a>'), 'standings pills show the category name');
@@ -444,18 +444,18 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   // mid-groups state: an unresolved group match opens the schedule and re-counts the chip
   const midJson = JSON.parse(JSON.stringify(require(FIX('sample', 'tournaments', 'sample.json'))));
   midJson.matches.md40[0].result = undefined;
-  const mid = renderStandings({ slug: 'sample', view: 'categories', filter: 'md40' },
+  const mid = renderTournament({ slug: 'sample', view: 'categories', filter: 'md40' },
     { index: [], t: { slug: 'sample', name: midJson.name }, tjson: midJson,
       cats: midJson.categories.map(c => ({ meta: c, matches: midJson.matches[c.id] || [] })) });
   assert(mid.includes('<span class="chip">groups · 5 of 6</span>'), 'running groups: phase chip counts');
   assert(mid.includes('<details open><summary>Group matches · 5 of 6 played</summary>'), 'running groups: schedule stays open');
   const { data: rdata } = dataOf('result');
-  const res = renderStandings({ slug: 'result', view: 'categories' }, rdata);
+  const res = renderTournament({ slug: 'result', view: 'categories' }, rdata);
   assert(res.includes('<span class="adv">Top 2 advance</span>'), 'partial draw: top-k note');
   // the pool roster is the "who is in my pool" answer — it must render before the first result
   const preJson = JSON.parse(JSON.stringify(require(FIX('sample', 'tournaments', 'sample.json'))));
   for (const ms of Object.values(preJson.matches)) for (const m of ms) { delete m.result; delete m.games; }
-  const pre = renderStandings({ slug: 'sample', view: 'categories' },
+  const pre = renderTournament({ slug: 'sample', view: 'categories' },
     { index: [], t: { slug: 'sample', name: preJson.name }, tjson: preJson,
       cats: preJson.categories.map(c => ({ meta: c, matches: preJson.matches[c.id] || [] })) });
   assert(pre.includes('<h3>Pools</h3>') && pre.includes('>Ada Lovelace / Grace Hopper</td>'), 'pools roster (teams) is visible before the first result');
@@ -497,11 +497,11 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   evilPool.matches.md40[0].pool = 'A" onclick="alert(1)';
   const pdata = { index: [], t: { slug: 'sample', name: evilPool.name }, tjson: evilPool,
     cats: evilPool.categories.map(c => ({ meta: c, matches: evilPool.matches[c.id] || [] })) };
-  const ph = renderStandings({ slug: 'sample', view: 'categories', filter: 'md40' }, pdata);
+  const ph = renderTournament({ slug: 'sample', view: 'categories', filter: 'md40' }, pdata);
   assert(!ph.includes('<h4>Pool A" onclick='), 'the injected handler never lands in the DOM');
   assert(ph.includes('A&quot; onclick=&quot;alert(1)'), 'the pool string renders entity-encoded');
   // tied teams share the first rank of their group (standard competition ranking: 1 1 1 4)
   const { data: tdata } = dataOf('tie');
-  const tieHtml = renderStandings({ slug: 'tie', view: 'categories' }, tdata);
+  const tieHtml = renderTournament({ slug: 'tie', view: 'categories' }, tdata);
   assert(!tieHtml.includes('†') && (tieHtml.match(/data-tie><td>1<\/td>/g) || []).length === 2, 'tied teams share rank 1, no dagger');
 });

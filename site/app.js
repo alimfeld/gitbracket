@@ -87,7 +87,7 @@ function renderIndex(route, data) {
   return `<h1>Tournaments</h1><ul>${items.join('') || '<li>No tournaments yet.</li>'}</ul>`;
 }
 
-function renderStandings(route, data) {
+function renderTournament(route, data) {
   if (!data.tjson) return MISSING;
   const tz = data.tjson.timezone || 'UTC';
   const parts = [segmentBar(data.t.slug, 'categories'), `<header><h1>${esc(data.t.name)}</h1>`];
@@ -349,7 +349,7 @@ function renderPlayer(route, data) {
 // so empty states are never retried).
 function boot() {
   const app = document.querySelector('main');
-  const renderers = { index: renderIndex, categories: renderStandings, venues: renderVenue, me: renderPlayer };
+  const renderers = { index: renderIndex, categories: renderTournament, venues: renderVenue, me: renderPlayer };
   // whose schedule "me" is — a per-tournament preference; the picker is the fallback when storage is blocked or stale
   const localPlayer = {
     get: slug => { try { return localStorage.getItem(`gb.player.${slug}`); } catch { return null; } },
@@ -468,5 +468,5 @@ if (typeof document !== 'undefined') boot();
 
 // CommonJS exports for node tests; the browser <script> ignores these.
 if (typeof module !== 'undefined') {
-  module.exports = { parseRoute, loadAll, renderIndex, renderStandings, renderVenue, renderPlayer };
+  module.exports = { parseRoute, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer };
 }
