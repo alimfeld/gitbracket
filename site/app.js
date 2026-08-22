@@ -63,7 +63,7 @@ async function loadAll(route, indexOnly) {
 
 const segmentBar = (slug, view) => {
   const t = view === 'categories', m = view === 'me';
-  return `<nav class="segments"><a href="#${esc(slug)}"${t ? ' aria-current="true"' : ''}>Tournament</a><a href="#${esc(slug)}/me"${m ? ' aria-current="true"' : ''}>My Schedule</a></nav>`;
+  return `<nav class="segments" aria-label="Views"><a href="#${esc(slug)}"${t ? ' aria-current="true"' : ''}>Tournament</a><a href="#${esc(slug)}/me"${m ? ' aria-current="true"' : ''}>My Schedule</a></nav>`;
 };
 
 // The one missing-data message, verbatim in every view and the boot retry.
@@ -97,7 +97,7 @@ function renderStandings(route, data) {
     const day = new Intl.DateTimeFormat(undefined, { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric' }).format(Math.min(...ts));
     parts.push(`<p class="dayline">${esc(day)} · times are local${tz !== 'UTC' ? ` (${esc(tz)})` : ''}</p>`);
   }
-  parts.push(`<nav class="pills">${catPills(data.tjson.categories || [], data.t.slug, route.filter, `#${data.t.slug}`)}</nav></header>`);
+  parts.push(`<nav class="pills" aria-label="Categories">${catPills(data.tjson.categories || [], data.t.slug, route.filter, `#${data.t.slug}`)}</nav></header>`);
   for (const c of data.cats) {
     if (route.filter && c.meta.id !== route.filter) continue; // pills keep every category; only the section list narrows
     parts.push(catSection(makeCat(c, data.tjson)));
@@ -239,7 +239,7 @@ function renderVenue(route, data, now = Date.now()) {
   const venueNames = ctxs[0] ? ctxs[0].venues : new Map();
   const venues = (data.tjson.venues || []).map(x => x.id).filter(id => rows.some(r => r.m.venue === id));
   const shown = v ? rows.filter(r => r.m.venue === v) : rows;
-  const parts = [`<header><h1>${esc(data.t.name)}</h1><span id="k-clock"></span></header>`];
+  const parts = [`<header><h1>${esc(data.t.name)}</h1><time id="k-clock"></time></header>`];
   const byVenue = new Map(venues.map(id => [id, []]));
   for (const r of shown) {
     if (byVenue.has(r.m.venue)) byVenue.get(r.m.venue).push(r); // rows pre-sorted, buckets stay sorted
@@ -380,11 +380,14 @@ function boot() {
     if (on && !pollTimer) {
       // jitter so a hall of kiosk screens doesn't fetch in lockstep
       pollTimer = setInterval(tick, POLL_MS + Math.random() * 5000);
-      // Clock lives in an empty span so the lastHtml change-guard isn't
-      // tripped every second; look it up fresh each tick (the poll re-renders).
+      // Clock lives in an element the change-guard never re-renders; look it up
+      // fresh each tick (the poll re-renders).
       clockTimer = setInterval(() => {
         const el = document.getElementById('k-clock');
-        if (el) el.textContent = fmtTime(Date.now(), (data && data.tjson && data.tjson.timezone) || 'UTC');
+        if (el) {
+          el.textContent = fmtTime(Date.now(), (data && data.tjson && data.tjson.timezone) || 'UTC');
+          el.dateTime = new Date().toISOString(); // the instant, derived — the label stays wall clock
+        }
       }, 1000);
     } else if (!on && pollTimer) {
       clearInterval(pollTimer); pollTimer = null;

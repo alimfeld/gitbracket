@@ -419,7 +419,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(standings.includes('class="ph"'), 'unplayed best-of slots render as placeholders');
   assert(standings.includes('Ada Lovelace'), 'standings renders player names');
   assert(standings.includes('1 · Pool A · Court 1 · 09:00') && !standings.includes('md40 · 1 · Pool A'), 'standings card meta: match · label · venue · time, no category id');
-  assert(standings.includes('<nav class="segments"><a href="#sample" aria-current="true">Tournament</a><a href="#sample/me">My Schedule</a></nav>'), 'tournament page: segment switch, Tournament current');
+  assert(standings.includes('<nav class="segments" aria-label="Views"><a href="#sample" aria-current="true">Tournament</a><a href="#sample/me">My Schedule</a></nav>'), 'tournament page: segment switch, Tournament current');
   const filtered = renderStandings({ slug: 'sample', view: 'categories', filter: 'md40' }, data);
   assert((filtered.match(/<h2>/g) || []).length === 1 && filtered.includes('Pool A'), 'category filter narrows to one section');
   assert(filtered.includes('#sample/categories/xd'), 'pills still list every category on a filtered page');
@@ -471,11 +471,11 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(ppage.includes("Men&#39;s Doubles 40+ · Pool A") && !ppage.includes('Men&#39;s Doubles 40+ · Pool A · '), 'player card meta: long cat name · label, no match id, no court/time');
   assert(ppage.includes('class="ph"'), 'player match cards render unplayed score slots too');
   assert(ppage.includes('Ada Lovelace'), 'player page finds the player');
-  assert(ppage.includes('<nav class="segments"><a href="#sample">Tournament</a><a href="#sample/me" aria-current="true">My Schedule</a></nav>'), 'player page: segment switch, My Schedule current');
+  assert(ppage.includes('<nav class="segments" aria-label="Views"><a href="#sample">Tournament</a><a href="#sample/me" aria-current="true">My Schedule</a></nav>'), 'player page: segment switch, My Schedule current');
   assert(ppage.includes('<div class="title-row"><h1>Ada Lovelace</h1><a class="top" href="#sample/me/pick">Not you?</a></div>'), 'player page: Not you? leads back to the picker');
   assert(ppage.includes('#sample'), 'player page links the tournament name to the tournament page');
   const picker = renderPlayer({ slug: 'sample', view: 'me' }, data);
-  assert(picker.includes('<nav class="segments"><a href="#sample">Tournament</a><a href="#sample/me" aria-current="true">My Schedule</a></nav>'), 'picker: segment switch, My Schedule current');
+  assert(picker.includes('<nav class="segments" aria-label="Views"><a href="#sample">Tournament</a><a href="#sample/me" aria-current="true">My Schedule</a></nav>'), 'picker: segment switch, My Schedule current');
   assert(picker.includes('<header><h1>Pick your player</h1></header>'), 'picker: heading invites the pick');
   assert(!picker.includes('pills') && !picker.includes('cat-label'), 'picker is minimal: no category pills, no category labels');
   assert(picker.includes('<li><a href="#sample/me/p1">Ada Lovelace</a></li>'), 'picker rows: plain name link to the explicit pick route');
