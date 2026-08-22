@@ -55,7 +55,7 @@ test('loadAll: a slug route fetches only the tournament file; the index view onl
     const list = await loadAll({ view: 'index' }, true);
     assert.deepEqual(calls, ['tournaments/sample.json', 'tournaments.json'], 'index view: fetches only the index');
     assert.equal(list.index[0].slug, 'sample');
-    assert.equal(list.tjson, null, 'index view carries no tournament data');
+    assert.equal(list.tjson, undefined, 'index view carries no tournament data');
     const missing = await loadAll({ slug: 'nope', view: 'categories' }, false);
     assert.equal(missing.t, null, 'unknown slug: tjson 404s to null');
     assert.equal(missing.tjson, null, 'no crash on a 404');

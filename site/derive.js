@@ -424,10 +424,6 @@ function schedTime(m, tz) {
   return Number.isNaN(t) ? null : t;
 }
 
-function gamesText(m) {
-  return (m.games || []).map(g => `${g.a}:${g.b}`).join(' · ');
-}
-
 function fmtDiff(n) {
   return (n > 0 ? '+' : '') + n;
 }
@@ -488,5 +484,5 @@ function matchLabel(m, ctx) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { ID_RE, ISO_RE, pairSig, makeCat, matchSlotMs, bestOfOf, countWins, sideIdx, sideLetter, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolAdvance, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, dayKey, tzOffset, schedTime, gamesText, fmtDiff, kioskStatus, roundName, koColumn, matchLabel };
+  module.exports = { ID_RE, ISO_RE, pairSig, makeCat, matchSlotMs, bestOfOf, countWins, sideIdx, sideLetter, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolAdvance, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, dayKey, tzOffset, schedTime, fmtDiff, kioskStatus, roundName, koColumn, matchLabel };
 }

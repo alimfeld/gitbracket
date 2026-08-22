@@ -17,7 +17,7 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const { spawnSync } = require('child_process');
-const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, gamesText, fmtTime, matchLabel, poolStandings, poolRanks, fmtDiff, bestOfOf, countWins, sideLetter, winnerIdx, dayKey } = require('../site/derive.js');
+const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, fmtTime, matchLabel, poolStandings, poolRanks, fmtDiff, bestOfOf, countWins, sideLetter, winnerIdx, dayKey } = require('../site/derive.js');
 const { loadRepo, writeTournament } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 const { ship } = require('./publish.js');
@@ -128,11 +128,11 @@ function listingSide(side, ctx) {
   return seed === null ? name : `${name} (${seed})`;
 }
 
-function formatMatchLine(cid, m, ctx, tz, stage, leftw, rightw, idw, venuew, stagew) {
+function formatMatchLine(cid, m, ctx, tz, stage, g) {
   const t = schedTime(m, tz);
   const time = t === null ? C.yellow('TBD'.padStart(8)) : C.dim(fmtTime(t, tz).padStart(8));
   const v = m.venue || 'TBD';
-  const venue = (m.venue ? C.magenta : C.yellow)(v.padEnd(venuew || v.length));
+  const venue = (m.venue ? C.magenta : C.yellow)(v.padEnd(g.venuew || v.length));
   // slot shape = best-of, same as the cards: real games render, the rest are ·
   const parts = (m.games || []).map(g => `${g.a}-${g.b}`);
   while (parts.length < (bestOfOf(m, ctx) || 1)) parts.push('·');
@@ -146,12 +146,12 @@ function formatMatchLine(cid, m, ctx, tz, stage, leftw, rightw, idw, venuew, sta
   // void has no winner, nothing colored. Padding is plain-text arithmetic
   // pasted after the colored label — ANSI codes never count into widths.
   const w = winnerIdx(m);
-  const sides = (w === 0 ? C.green(s0) : s0) + ' '.repeat(Math.max(0, leftw - s0.length))
-    + C.dim(' vs ') + (w === 1 ? C.green(s1) : s1) + ' '.repeat(Math.max(0, rightw - s1.length));
-  const stagePad = stagew !== undefined ? ' '.repeat(Math.max(0, stagew - stage.length)) : '';
+  const sides = (w === 0 ? C.green(s0) : s0) + ' '.repeat(Math.max(0, g.leftw - s0.length))
+    + C.dim(' vs ') + (w === 1 ? C.green(s1) : s1) + ' '.repeat(Math.max(0, g.rightw - s1.length));
+  const stagePad = ' '.repeat(Math.max(0, g.stagew - stage.length));
   // the ref is "<category> <id>" — it copy-pastes straight into a /score line
   const ref = `${cid} ${m.id}`;
-  return `${C.bold(idw ? ref.padEnd(idw) : ref)}  ${C.dim(stage)}${stagePad}  ${sides}  ${time}  ${venue}  ${score}`;
+  return `${C.bold(ref.padEnd(g.idw))}  ${C.dim(stage)}${stagePad}  ${sides}  ${time}  ${venue}  ${score}`;
 }
 
 // The `ls` filter: a case-insensitive substring over a player's id and
@@ -248,7 +248,7 @@ function listText(repo, slug, cats, needle) {
     }
     if (sec.all.length) {
       if (body.length) body.push('');
-      for (const { m, stage } of sec.all) body.push(formatMatchLine(sec.cid, m, sec.ctx, tz, stage, g.leftw, g.rightw, g.idw, g.venuew, g.stagew));
+      for (const { m, stage } of sec.all) body.push(formatMatchLine(sec.cid, m, sec.ctx, tz, stage, g));
     }
     if (body.length) { any = true; lines.push(...body); }
   }
@@ -445,7 +445,7 @@ function paint(s) {
 // edit on an already-decided match reports the move, not the result.
 function editDetail(kind, m) {
   const r = m.result;
-  return kind === 'score' ? gamesText(m)
+  return kind === 'score' ? (m.games || []).map(gg => `${gg.a}:${gg.b}`).join(' · ')
     : kind === 'time' ? `→ ${m.scheduled}`
     : kind === 'venue' ? `→ ${m.venue}`
     : r.status === 'void' ? 'void' : `side ${r.winner} wins by walkover`;

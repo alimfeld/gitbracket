@@ -43,7 +43,7 @@ async function loadAll(route, indexOnly) {
   if (indexOnly) {
     const raw = await fetchJson('tournaments.json');
     const index = Array.isArray(raw) ? raw : [];
-    return { index, t: null, tjson: null, cats: [] };
+    return { index };
   }
   // one file per tournament — a poll is a single atomic fetch, no index roundtrip.
   const tjson = await fetchJson(`tournaments/${route.slug}.json`);
@@ -56,7 +56,7 @@ async function loadAll(route, indexOnly) {
     }
   }
   const t = tjson ? { slug: route.slug, name: tjson.name } : null;
-  return { index: [], t, tjson, cats };
+  return { t, tjson, cats };
 }
 
 // ---------- renderers ----------
