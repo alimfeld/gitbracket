@@ -66,7 +66,8 @@ const segmentBar = (slug, view) => {
   return `<nav class="segments" aria-label="Views"><a href="#${esc(slug)}"${t ? ' aria-current="true"' : ''}>Tournament</a><a href="#${esc(slug)}/me"${m ? ' aria-current="true"' : ''}>My Schedule</a></nav>`;
 };
 
-// The one missing-data message, verbatim in every view and the boot retry.
+// The one missing-data message, verbatim in every view; the boot fetch-failure
+// path appends a reload hint, since a dropped fetch may be transient.
 const MISSING = '<p>Missing tournament data — has the tournament been pushed?</p>';
 
 
@@ -395,7 +396,7 @@ function boot() {
     loadAll(r, r.view === 'index').then(d => {
       if (route !== r) return; // superseded by a newer navigation — don't render a stale page
       if (r.view !== 'index' && !d.tjson) { // fetch failed or unknown slug — keep a board; the kiosk retries next tick
-        if (!data) app.innerHTML = MISSING;
+        if (!data) app.innerHTML = MISSING + '<p>Reload the page to try again.</p>';
         return;
       }
       render(r, d);
