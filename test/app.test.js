@@ -438,7 +438,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(standings.includes('<span class="chip">finished</span>'), 'a fully decided category reads finished');
   assert(standings.includes('times are local (America/New_York)'), 'dayline: day and the local-time note, derived from the schedule');
   assert(standings.includes('<details><summary>Group matches · 6 of 6 played</summary>'), 'decided groups: schedule collapses to its summary');
-  assert(standings.includes('Pool A <span class="adv">All teams advance</span>'), 'every team reaches the bracket — the note says so');
+  assert(standings.includes('Pool A <span class="adv">(All teams advance)</span>'), 'every team reaches the bracket — the note says so');
   assert(standings.indexOf('<h3>Pools</h3>') < standings.indexOf('<details'), 'scoreboard leads the section');
   assert(standings.indexOf('<details') < standings.indexOf('<h3>Knockout stage</h3>'), 'schedule before the bracket — chronological flow');
   // mid-groups state: an unresolved group match opens the schedule and re-counts the chip
@@ -451,7 +451,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(mid.includes('<details open><summary>Group matches · 5 of 6 played</summary>'), 'running groups: schedule stays open');
   const { data: rdata } = dataOf('result');
   const res = renderTournament({ slug: 'result', view: 'categories' }, rdata);
-  assert(res.includes('<span class="adv">Top 2 advance</span>'), 'partial draw: top-k note');
+  assert(res.includes('<span class="adv">(Top 2 advance)</span>'), 'partial draw: top-k note');
   // the pool roster is the "who is in my pool" answer — it must render before the first result
   const preJson = JSON.parse(JSON.stringify(require(FIX('sample', 'tournaments', 'sample.json'))));
   for (const ms of Object.values(preJson.matches)) for (const m of ms) { delete m.result; delete m.games; }

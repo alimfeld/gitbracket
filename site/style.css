@@ -31,7 +31,7 @@ a { color: var(--accent); }
 
 /* data-state only — never the device clock */
 .chip { display: inline-block; font-size: .55em; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: .12rem .6rem; margin-left: .4rem; vertical-align: .3em; white-space: nowrap; }
-.adv { color: var(--muted); font-weight: 600; letter-spacing: .04em; } /* how many teams leave the pool for the bracket */
+.adv { margin-left: .4em; font-size: .85em; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--muted); } /* how many teams leave the pool for the bracket — a parenthetical note, not title text */
 .dayline { font-size: .9em; color: var(--muted); margin: 0 0 1rem; }
 
 /* native disclosure triangle is the affordance; cursor + hover the cue */
