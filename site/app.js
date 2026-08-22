@@ -116,7 +116,11 @@ function phaseChip(ctx) {
     return `<span class="chip">starts ${ts.length ? fmtTime(Math.min(...ts), ctx.tz) : 'soon'}</span>`;
   }
   const grp = ms.filter(m => m.pool !== undefined);
-  if (grp.some(m => !isDone(m))) return `<span class="chip">groups · ${grp.filter(isDone).length} of ${grp.length}</span>`;
+  if (grp.some(m => !isDone(m))) {
+    const nextTs = grp.filter(m => !isDone(m)).map(m => schedTime(m, ctx.tz)).filter(Number.isFinite);
+    const next = nextTs.length ? ` · next ${fmtTime(Math.min(...nextTs), ctx.tz)}` : '';
+    return `<span class="chip">groups · ${grp.filter(isDone).length} of ${grp.length}${next}</span>`;
+  }
   const next = ms.find(m => m.pool === undefined && !isDone(m));
   return `<span class="chip">knockout · ${next ? roundName(koColumn(next, ctx)) : 'awaiting'}</span>`;
 }

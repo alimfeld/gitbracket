@@ -447,7 +447,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   const mid = renderTournament({ slug: 'sample', view: 'categories', filter: 'md40' },
     { index: [], t: { slug: 'sample', name: midJson.name }, tjson: midJson,
       cats: midJson.categories.map(c => ({ meta: c, matches: midJson.matches[c.id] || [] })) });
-  assert(mid.includes('<span class="chip">groups · 5 of 6</span>'), 'running groups: phase chip counts');
+  assert(mid.includes('<span class="chip">groups · 5 of 6 · next 09:00</span>'), 'running groups: phase chip counts and names the next slot');
   assert(mid.includes('<details open><summary>Group matches · 5 of 6 played</summary>'), 'running groups: schedule stays open');
   const { data: rdata } = dataOf('result');
   const res = renderTournament({ slug: 'result', view: 'categories' }, rdata);
