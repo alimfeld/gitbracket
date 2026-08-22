@@ -96,7 +96,7 @@ function renderTournament(route, data) {
   const ts = (data.cats || []).flatMap(c => (c.matches || []).map(m => schedTime(m, tz))).filter(Number.isFinite);
   if (ts.length) {
     const day = new Intl.DateTimeFormat(undefined, { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric' }).format(Math.min(...ts));
-    parts.push(`<p class="dayline">${esc(day)} · times are local${tz !== 'UTC' ? ` (${esc(tz)})` : ''}</p>`);
+    parts.push(`<p class="dayline">${esc(day)} · times are local${tz !== 'UTC' ? ` (${esc(tz)})` : ''} · reload for the latest</p>`);
   }
   parts.push(`<nav class="pills" aria-label="Categories">${catPills(data.tjson.categories || [], data.t.slug, route.filter, `#${data.t.slug}`)}</nav></header>`);
   for (const c of data.cats) {
@@ -320,7 +320,7 @@ function renderPlayer(route, data) {
   }
   // the schedule is "me" on this device; Not you? returns to the picker
   const parts = [segmentBar(data.t.slug, 'me'), `<header><div class="title-row"><h1>${esc(p.name)}</h1><a class="top" href="#${esc(data.t.slug)}/me/pick">Not you?</a></div></header>`];
-  if (rows.length) parts.push(`<p class="dayline">${wins} ${wins === 1 ? 'win' : 'wins'} · ${losses} ${losses === 1 ? 'loss' : 'losses'}${nextT ? ` · next ${fmtTime(nextT, next.ctx.tz)} · ${esc(next.ctx.venues.get(next.m.venue) || 'TBD')}` : ''}</p>`);
+  if (rows.length) parts.push(`<p class="dayline">${wins} ${wins === 1 ? 'win' : 'wins'} · ${losses} ${losses === 1 ? 'loss' : 'losses'}${nextT ? ` · next ${fmtTime(nextT, next.ctx.tz)} · ${esc(next.ctx.venues.get(next.m.venue) || 'TBD')}` : ''} · reload for the latest</p>`);
   for (const [key, g] of groups) {
     parts.push(`<h2>${esc(key)}</h2>`);
     const day = [];
