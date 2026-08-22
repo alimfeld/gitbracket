@@ -7,7 +7,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, kioskStatus, matchLabel, schedTime } = require('../site/derive.js');
+const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, poolAdvance, resolveSide, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, kioskStatus, matchLabel, schedTime } = require('../site/derive.js');
 const { parseRoute, loadAll, renderIndex, renderStandings, renderVenue, renderPlayer } = require('../site/app.js');
 const { generate } = require('../src/schedule.js');
 const { FIX, catOf } = require('./helpers.js');
@@ -66,6 +66,19 @@ test('pool A standings: 4 sides, order, leader record', () => {
   assert(st && st.length === 4, 'pool A has 4 sides');
   assert(st[0].sig === 'p1|p2' && st[1].sig === 'p3|p4' && st[3].sig === 'p7|p8', 'pool A order by wins/gd/pd');
   assert(st[0].wins === 3 && st[0].gd === 6 && st[0].pd === 31, 'leader record');
+});
+
+test('poolAdvance: seats drawn from a pool — all, top-k, sparse, none', () => {
+  assert.deepEqual(poolAdvance(catOf('sample', 'md40'), 'A'), { count: 4, total: 4, top: true }, 'every team reaches the bracket');
+  assert.deepEqual(poolAdvance(catOf('result', 't'), 'A'), { count: 2, total: 3, top: true }, 'half the pool advances, one result still out');
+  assert.equal(poolAdvance(catOf('sample', 'xd'), 'A'), null, 'no knockout seat from this pool: no advance note');
+  const sparse = makeCat({ meta: {}, matches: [
+    { id: 1, pool: 'A', sides: [{ kind: 'players', ids: ['p1', 'p2'] }, { kind: 'players', ids: ['p3', 'p4'] }] },
+    { id: 2, pool: 'A', sides: [{ kind: 'players', ids: ['p1', 'p2'] }, { kind: 'players', ids: ['p5', 'p6'] }] },
+    { id: 3, pool: 'A', sides: [{ kind: 'players', ids: ['p3', 'p4'] }, { kind: 'players', ids: ['p5', 'p6'] }] },
+    { id: 4, sides: [{ kind: 'pool', pool: 'A', rank: 1 }, { kind: 'pool', pool: 'A', rank: 4 }] },
+  ] }, {});
+  assert.deepEqual(poolAdvance(sparse, 'A'), { count: 2, total: 3, top: false }, 'sparse ranks (1 and 4): count 2, not a top run');
 });
 
 test('standings tiebreak: wins, then head-to-head, then differentials', () => {
@@ -299,25 +312,15 @@ test('slotLabel: unresolved slots describe the slot, not bare TBD', () => {
   assert(slotLabel(md.byId.get(8).sides[1], md) === '3rd in Pool A', 'rank 3 ordinal');
 });
 
-test('bracket: every card carries chain ids so the selection handler can highlight feeders and downstream', () => {
+test('bracket: slot labels are plain text — no link wrapping, no trace machinery', () => {
   const data = (() => {
     const repo = loadRepo(FIX('sample'));
     const info = repo.tournaments.get('sample');
     return { repo, data: { index: repo.index, t: repo.index[0], tjson: info.tjson, cats: info.tjson.categories.map(c => ({ meta: c, matches: info.matches.get(c.id) || [] })) } };
   })().data;
   const html = renderStandings({ slug: 'sample', view: 'categories', filter: 'md40' }, data);
-  // every match card carries the chain data the click handler reads
-  // pool-seeded slots point at the table node, and the table bridges group -> knockout
-  // ids are namespaced by category (m-<cat>-<id>, t-<cat>-<pool>): match ids
-  // repeat across categories, so a bare id would highlight the wrong match
-  assert(/id="m-md40-7"[^>]*data-cat="md40"[^>]*data-feeders="t-A,t-A"/.test(html), 'm7 seeds from the Pool A table node (both slots)');
-  assert(/id="m-md40-7"[^>]*data-downstream="9,10"/.test(html), 'm7 feeds the Final (m9, winner) and 3rd place (m10, loser)');
-  assert(/id="t-md40-A"[^>]*data-feeders="1,2,3,4,5,6"/.test(html), 'Pool A table is fed by its group matches');
-  assert(/id="t-md40-A"[^>]*data-downstream="7,8"/.test(html), 'Pool A table feeds the knockout matches it seeds');
-  assert(/id="m-md40-9"[^>]*data-feeders="7,8"/.test(html), 'm9 takes its two sides from m7 and m8');
-  assert(/id="m-md40-9"[^>]*data-downstream=""/.test(html), 'm9 is terminal — no downstream');
-  // unresolved match slot labels are plain text — no link wrapping
   assert(html.includes('<span>Winner of SF (match 8)</span>') && !html.includes('<a href="#m-'), 'slot labels are plain text, not anchors');
+  assert(!html.includes('data-feeders') && !html.includes('id="m-'), 'cards are static nodes — the trace graph shipped nothing');
 });
 
 test('poolStandings partial: unfinished pool still yields a live table', () => {
@@ -406,13 +409,13 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   const { data } = dataOf('sample');
   const no = () => ({ slug: 'sample', view: 'categories' });
   const standings = renderStandings(no(), data);
-  assert(standings.includes('id="m-md40-2"') && standings.includes('id="m-xd-2"'), 'unfiltered page: equal match ids in different categories stay distinct DOM ids');
+  assert(!standings.includes('data-feeders') && !standings.includes('data-hl') && !standings.includes('data-cat'), 'nothing of the old trace machinery ships — cards are static');
   assert(standings.includes('Pool A') && standings.includes('Final') && standings.includes('Winner of SF (match 8)'), 'standings renders pools, bracket, and slot labels');
   assert(!standings.includes('BO3'), 'no best-of label — the score slots carry it');
   assert(standings.includes('class="ph"'), 'unplayed best-of slots render as placeholders');
   assert(standings.includes('Ada Lovelace'), 'standings renders player names');
   assert(standings.includes('1 · Pool A · Court 1 · 09:00') && !standings.includes('md40 · 1 · Pool A'), 'standings card meta: match · label · venue · time, no category id');
-  assert(standings.includes('<nav><span aria-current="true">Tournament</span> · <a href="#sample/players">Players</a></nav>'), 'standings nav: current marked, Players links, no Home');
+  assert(standings.includes('<div class="title-row"><h1>Sample</h1><a class="top" href="#sample/players">→ Players</a></div>') && !standings.includes('aria-current'), 'tournament page: single Players link on the h1 line, no current-state marking');
   const filtered = renderStandings({ slug: 'sample', view: 'categories', filter: 'md40' }, data);
   assert((filtered.match(/<h2>/g) || []).length === 1 && filtered.includes('Pool A'), 'category filter narrows to one section');
   assert(filtered.includes('#sample/categories/xd'), 'pills still list every category on a filtered page');
@@ -427,19 +430,51 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(late.match(/<span class="delayed">delayed<\/span>/g).length === late.match(/data-status="overdue"/g).length, 'every overdue card has the remark, and only overdue cards do');
   assert(venue.includes("Men&#39;s Doubles 40+ · Final") && !venue.includes("Men&#39;s Doubles 40+ · 9 ·"), 'kiosk meta shows the long category name and label, no match id');
   assert(!venue.includes('<nav>'), 'kiosk has no breadcrumb');
-  assert(standings.includes('>Men&#39;s Doubles 40+</h2>') && !standings.includes('md40)</h2>'), 'category headings show the category name only');
+  assert(standings.includes('>Men&#39;s Doubles 40+ <span class="chip">knockout · Semifinals</span></h2>') && !standings.includes('md40)</h2>'), 'category h2: name, then the data-state phase chip');
+  assert(standings.includes('<span class="chip">finished</span>'), 'a fully decided category reads finished');
+  assert(standings.includes('times are local (America/New_York)'), 'dayline: day and the local-time note, derived from the schedule');
+  assert(standings.includes('<details><summary>Group matches · 6 of 6 played</summary>'), 'decided groups: schedule collapses to its summary');
+  assert(standings.includes('Pool A <span class="adv">All teams advance</span>'), 'every team reaches the bracket — the note says so');
+  assert(standings.indexOf('<h3>Pools</h3>') < standings.indexOf('<details'), 'scoreboard leads the section');
+  assert(standings.indexOf('<details') < standings.indexOf('<h3>Knockout stage</h3>'), 'schedule before the bracket — chronological flow');
+  // mid-groups state: an unresolved group match opens the schedule and re-counts the chip
+  const midJson = JSON.parse(JSON.stringify(require(FIX('sample', 'tournaments', 'sample.json'))));
+  midJson.matches.md40[0].result = undefined;
+  const mid = renderStandings({ slug: 'sample', view: 'categories', filter: 'md40' },
+    { index: [], t: { slug: 'sample', name: midJson.name }, tjson: midJson,
+      cats: midJson.categories.map(c => ({ meta: c, matches: midJson.matches[c.id] || [] })) });
+  assert(mid.includes('<span class="chip">groups · 5 of 6</span>'), 'running groups: phase chip counts');
+  assert(mid.includes('<details open><summary>Group matches · 5 of 6 played</summary>'), 'running groups: schedule stays open');
+  const { data: rdata } = dataOf('result');
+  const res = renderStandings({ slug: 'result', view: 'categories' }, rdata);
+  assert(res.includes('<span class="adv">Top 2 advance</span>'), 'partial draw: top-k note');
+  // the pool roster is the "who is in my pool" answer — it must render before the first result
+  const preJson = JSON.parse(JSON.stringify(require(FIX('sample', 'tournaments', 'sample.json'))));
+  for (const ms of Object.values(preJson.matches)) for (const m of ms) { delete m.result; delete m.games; }
+  const pre = renderStandings({ slug: 'sample', view: 'categories' },
+    { index: [], t: { slug: 'sample', name: preJson.name }, tjson: preJson,
+      cats: preJson.categories.map(c => ({ meta: c, matches: preJson.matches[c.id] || [] })) });
+  assert(pre.includes('<h3>Pools</h3>') && pre.includes('>Ada Lovelace / Grace Hopper</td>'), 'pools roster (teams) is visible before the first result');
+  assert(pre.includes('<span class="chip">starts '), 'pre-start chip');
   const ppage = renderPlayer({ slug: 'sample', view: 'players', filter: 'p1' }, data);
   assert(ppage.includes('<h1>Ada Lovelace</h1>') && !ppage.includes('cat-label'), 'player page: plain name, no category labels');
+  assert(ppage.includes('<p class="dayline">7 wins · 0 losses · next '), 'scoreboard line: record, then the next match by schedule');
+  assert((ppage.match(/data-next/g) || []).length === 1, 'exactly the first unresolved card is marked next');
+  assert(ppage.includes('<h2>Mon, Jul 14</h2>') && !ppage.includes('2025-07-14'), 'day headings are friendly dates, not ISO keys');
+  const p3 = renderPlayer({ slug: 'sample', view: 'players', filter: 'p3' }, data);
+  assert(/note">\d+ more match(?:es)? possible in Men&#39;s Doubles 40\+ (— earliest \d\d:\d\d, latest \d\d:\d\d|at \d\d:\d\d)/.test(p3), 'possible note: count + window in plain words');
   assert(ppage.includes('<div class="head"><span>09:00</span><span>Court 1</span></div>'), 'player card headline: time left, court right');
   assert(ppage.includes("Men&#39;s Doubles 40+ · Pool A") && !ppage.includes('Men&#39;s Doubles 40+ · Pool A · '), 'player card meta: long cat name · label, no match id, no court/time');
   assert(ppage.includes('class="ph"'), 'player match cards render unplayed score slots too');
   assert(ppage.includes('Ada Lovelace'), 'player page finds the player');
-  assert(ppage.includes('<nav><a href="#sample">Tournament</a> · <a href="#sample/players">Players</a></nav>'), 'player page nav: both views link, the player lives in the h1');
+  assert(ppage.includes('<div class="title-row"><h1>Ada Lovelace</h1><a class="top" href="#sample">→ Tournament</a></div>'), 'player page: single Tournament link on the h1 line');
   assert(ppage.includes('#sample'), 'player page links the tournament name to the tournament page');
   const picker = renderPlayer({ slug: 'sample', view: 'players' }, data);
-  assert(picker.includes('<nav><a href="#sample">Tournament</a> · <span aria-current="true">Players</span></nav>'), 'picker nav: current Players marked, no Home');
+  assert(picker.includes('<div class="title-row"><h1>Players</h1><a class="top" href="#sample">→ Tournament</a></div>'), 'picker: single Tournament link on the h1 line');
   assert(picker.includes('<li><a href="#sample/players/p1">Ada Lovelace</a><span><span class="cat-label">Men&#39;s Doubles 40+</span><span class="cat-label">Mixed Doubles</span></span></li>'), 'picker rows: name link followed by a label cluster');
   assert(picker.includes('<ul class="players">'), 'picker list carries the aligning grid class');
+  const listed = [...picker.matchAll(/<li><a href="#sample\/players\/p\d+">([^<]*)<\/a>/g)].map(m => m[1]);
+  assert.deepEqual(listed, [...listed].sort((a, b) => a.localeCompare(b)), 'picker lists players alphabetically');
   assert(picker.includes('#sample/players/md40') && picker.includes('#sample/players/xd'), 'picker has the same category pills as the tournament page');
   assert(picker.includes('>Mixed Doubles</a>') && !picker.includes('>xd</a>'), 'picker pills show the category name too');
   const pfiltered = renderPlayer({ slug: 'sample', view: 'players', filter: 'md40' }, data);
@@ -451,15 +486,14 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   evil.players[0].name = '<b>Ada</b> & "Co"';
   const out = renderPlayer({ slug: 'sample', view: 'players', filter: 'p1' }, { ...data, tjson: evil });
   assert(out.includes('&lt;b&gt;Ada&lt;/b&gt; &amp; &quot;Co&quot;') && !out.includes('<b>Ada</b>'), 'player name is escaped');
-  // hostile pool strings are free-form and land in the table's id attribute —
-  // esc-in-nodeId must keep the attribute a single quoted value.
+  // hostile pool strings are free-form and land in the h4 heading — esc keeps them inert
   const evilPool = JSON.parse(JSON.stringify(require(FIX('sample', 'tournaments', 'sample.json'))));
   evilPool.matches.md40[0].pool = 'A" onclick="alert(1)';
   const pdata = { index: [], t: { slug: 'sample', name: evilPool.name }, tjson: evilPool,
     cats: evilPool.categories.map(c => ({ meta: c, matches: evilPool.matches[c.id] || [] })) };
   const ph = renderStandings({ slug: 'sample', view: 'categories', filter: 'md40' }, pdata);
-  assert(!ph.includes('id="t-md40-A" onclick='), 'the injected handler never lands in the DOM');
-  assert(ph.includes('id="t-md40-A&quot; onclick=&quot;alert(1)"'), 'the pool id renders entity-encoded');
+  assert(!ph.includes('<h4>Pool A" onclick='), 'the injected handler never lands in the DOM');
+  assert(ph.includes('A&quot; onclick=&quot;alert(1)'), 'the pool string renders entity-encoded');
   // tied teams share the first rank of their group (standard competition ranking: 1 1 1 4)
   const { data: tdata } = dataOf('tie');
   const tieHtml = renderStandings({ slug: 'tie', view: 'categories' }, tdata);
