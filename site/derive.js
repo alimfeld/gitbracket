@@ -23,8 +23,7 @@ function makeCat(c, tjson) {
   };
 }
 
-// Category contexts: [{ meta, matches }], file order — the shape loadAll builds
-// and the renderers consume. A category without a matches array renders empty.
+// Category contexts: [{ meta, matches }]. A category without a matches array renders empty.
 function toCats(tjson) {
   const byCat = (tjson && tjson.matches && typeof tjson.matches === 'object') ? tjson.matches : {};
   const cats = (tjson && Array.isArray(tjson.categories)) ? tjson.categories : [];
@@ -40,8 +39,7 @@ function matchSlotMs(m, ctx) {
 
 
 // Raw game wins per side, target not applied — the played-consistency base.
-// Malformed entries are skipped: the gate calls this while reporting them, a
-// throw here would replace the named error with a crash.
+// Malformed entries are skipped: the gate calls this while reporting them.
 function countWins(games) {
   const w = [0, 0];
   for (const g of games) {
@@ -151,9 +149,8 @@ function mutualKeys(list, ms, ctx) {
   return h;
 }
 
-// Ladder: wins, then per wins-block h2h wins/gd/pd, then overall
-// gd/pd. A rung that splits a cluster recurses on it; a still-tied block is a
-// dead tie (renders TBD). Stable sort keeps equal keys in creation order.
+// Ladder: wins, then per wins-block h2h wins/gd/pd, then overall gd/pd. A rung
+// that splits a cluster recurses on it; a still-tied block is a dead tie (renders TBD).
 function poolLadder(list, ms, ctx) {
   const out = [];
   let tieCluster = 0; // one id per dead-tie cluster — poolRanks shares a rank only within it
@@ -312,10 +309,9 @@ function chainLen(ctx, id, memo = new Map()) {
   return memo.get(id);
 }
 
-// Day-span of this player's open knockout slots (null when none). Pre-knockout
-// every path is possible — times are pre-scheduled. count = the longest single
-// path. ponytail: fallback assumes everyone advances; gate it on pool
-// completion if a format with a knockout cutoff ever appears.
+// Day-span of this player's open knockout slots (null when none); count = the
+// longest single path. ponytail: fallback assumes everyone advances; gate it on
+// pool completion if a format with a knockout cutoff ever appears.
 function possibleSpan(ctx, pid) {
   const rows = playerMatches(ctx, pid);
   const ko = rows.filter(r => r.m.pool === undefined);
@@ -347,10 +343,8 @@ const ordRules = new Intl.PluralRules('en', { type: 'ordinal' });
 const ordinal = n => n + ({ one: 'st', two: 'nd', few: 'rd' }[ordRules.select(n)] || 'th');
 
 // Placement label (3rd/5th/7th place, classification semis), null for main-
-// bracket matches. Possible final ranks form a range: loser edges open their
-// feeder round's loser range; winner/loser edges inside take the top/bottom
-// half. Terminal = a place match, else a semi. Memo rides ctx._plMemo —
-// rebuilt each render, so a polled page picks up new results.
+// bracket matches. Memo rides ctx._plMemo — rebuilt each render, so a polled
+// page picks up new results.
 function placementLabel(m, ctx) {
   if (!ctx._plMemo) ctx._plMemo = new Map();
   const r = plRange(m, ctx, ctx._plMemo);
@@ -389,6 +383,8 @@ function plRange(m, ctx, memo) {
 // yet sits one round below the final. koColumn can't be reused here either:
 // plRange is called during koColumn's final-detection while its memo is
 // mid-build — its in-progress -1 guard would corrupt the ranges.
+// ponytail: fresh memo per call, O(N²) over plRange's recursion like chainLen —
+// fine while brackets are tiny; share one memo if they ever grow.
 function winnerDepth(ctx, id, memo = new Map()) {
   if (memo.has(id)) return memo.get(id);
   memo.set(id, -1); // in-progress = cycle guard
@@ -451,8 +447,7 @@ function roundName(depthFromEnd) {
 }
 
 // Column: 0 is the final, one back per winner edge. Depth-from-leaves can't
-// place a bye'd semi; placement winners don't extend the chain. Memo rides
-// ctx._koCol — rebuilt each render, so a polled page picks up new results.
+// place a bye'd semi. Memo rides ctx._koCol — rebuilt each render.
 function koColumn(m, ctx) {
   if (!ctx._koCol) {
     const memo = ctx._koCol = new Map();
@@ -487,8 +482,8 @@ function matchLabel(m, ctx) {
   if (m.pool !== undefined) return `Pool ${m.pool}`;
   const pl = placementLabel(m, ctx);
   if (pl) return pl;
-  const d = koColumn(m, ctx);
-  return { 0: 'Final', 1: 'SF', 2: 'QF', 3: 'R16' }[d] || roundName(d);
+  // cards abbreviate roundName's names — one vocabulary, two lengths
+  return roundName(koColumn(m, ctx)).replace('Semifinals', 'SF').replace('Quarterfinals', 'QF');
 }
 
 if (typeof module !== 'undefined') {

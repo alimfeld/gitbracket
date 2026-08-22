@@ -47,16 +47,16 @@ test('loadAll: a slug route fetches only the tournament file; the index view onl
     return body === null ? Promise.resolve({ ok: false }) : Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
   };
   try {
-    const slug = await loadAll({ slug: 'sample', view: 'categories' }, false);
+    const slug = await loadAll({ slug: 'sample', view: 'categories' });
     assert.deepEqual(calls, ['tournaments/sample.json'], 'slug route: one fetch, no index roundtrip');
     assert.equal(slug.t.name, 'Sample', 'name comes from the tournament file');
     assert.equal(slug.t.slug, 'sample', 'slug comes from the route');
     assert(slug.tjson && slug.cats.length > 0, 'tournament data and categories load');
-    const list = await loadAll({ view: 'index' }, true);
+    const list = await loadAll({ view: 'index' });
     assert.deepEqual(calls, ['tournaments/sample.json', 'tournaments.json'], 'index view: fetches only the index');
     assert.equal(list.index[0].slug, 'sample');
     assert.equal(list.tjson, undefined, 'index view carries no tournament data');
-    const missing = await loadAll({ slug: 'nope', view: 'categories' }, false);
+    const missing = await loadAll({ slug: 'nope', view: 'categories' });
     assert.equal(missing.t, null, 'unknown slug: tjson 404s to null');
     assert.equal(missing.tjson, null, 'no crash on a 404');
   } finally {
@@ -368,7 +368,7 @@ test('placementLabel: depth-3 classification (16 teams, placements 16) labels ev
   assert.equal(count('Final'), 1);
   assert.equal(count('SF'), 2);
   assert.equal(count('QF'), 4);
-  assert.equal(count('R16'), 8);
+  assert.equal(count('Round of 16'), 8);
   assert.equal(count('3rd place'), 1, 'bronze');
   assert.equal(count('5th–8th semi'), 2, 'QF losers');
   assert.equal(count('5th place'), 1, '5th/6th');

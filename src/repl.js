@@ -228,19 +228,15 @@ function listText(repo, slug, cats, needle) {
     lines.push(''); // a heading is never glued to the prompt line above
     body.push(C.bold(C.under(C.cyan(`${sec.meta ? sec.meta.name : sec.cid} — ${sec.cid}`)))) // name first, id after
     if (sec.tables.length) {
-      // one continuous box per pool; column widths align across a section's pools;
+      // one padded table per pool; column widths align across a section's pools;
       // the pool id lives in the Team header cell — no separate title line
       const wid = head.map((h, c) => Math.max(h.length,
         ...sec.tables.map(t => (c === 1 ? `Pool ${t.pid} Teams` : h).length),
         ...sec.tables.flatMap(t => t.rows).map(r => r[c].length)));
-      const w = n => '─'.repeat(n + 2);
-      const top = '┌' + wid.map(w).join('┬') + '┐';
-      const mid = '├' + wid.map(w).join('┼') + '┤';
-      const bot = '└' + wid.map(w).join('┴') + '┘';
-      const fmt = cells => '│' + cells.map((c, i) => ' ' + (i === 1 ? c.padEnd(wid[i]) : c.padStart(wid[i])) + ' ').join('│') + '│';
+      const fmt = cells => cells.map((c, i) => i === 1 ? c.padEnd(wid[i]) : c.padStart(wid[i])).join('  ');
       for (const { pid, rows } of sec.tables) {
         const hdr = head.map((h, i) => i === 1 ? `Pool ${pid} Teams` : h);
-        body.push('', top, fmt(hdr), mid, ...rows.map(fmt), bot);
+        body.push('', fmt(hdr), ...rows.map(fmt));
       }
     }
     if (sec.all.length) {
@@ -362,18 +358,18 @@ function listing(state, cat, player) {
 
 function validateText(repo) {
   const { errs, warns } = validateRepo(repo);
-  const lines = [...warns.map(w => `warn: ${w}`), ...errs.map(e => `error: ${e}`)];
-  if (!lines.length) return 'validate: ok';
-  return lines.join('\n') + (errs.length ? `\n${errs.length} error(s)` : ` (${warns.length} warning(s))`);
+  const lines = [...warns.map(w => C.yellow(`warn: ${w}`)), ...errs.map(e => C.red(`error: ${e}`))];
+  if (!lines.length) return C.green('validate: ok');
+  return lines.join('\n') + (errs.length ? C.red(`\n${errs.length} error(s)`) : C.yellow(` (${warns.length} warning(s))`));
 }
 
 function gitPublish(state) {
   // Gate on disk, not memory — surge uploads site/ from disk, so validate
   // exactly what ships. (publish.main's gate exits the process — unusable here.)
   const { errs } = validateRepo(loadRepo(state.siteRoot));
-  if (errs.length) return errs.join('\n') + '\nnot published — validation error(s)';
-  if (ship(state.root) !== 0) return 'not published — see the output above';
-  return 'published';
+  if (errs.length) return C.red(errs.join('\n') + '\nnot published — validation error(s)');
+  if (ship(state.root) !== 0) return C.red('not published — see the output above');
+  return C.green('published');
 }
 
 function gitStatus(root) {
@@ -426,19 +422,6 @@ const C = (() => {
   return { bold: s => w(1, s), dim: s => w(2, s), red: s => w(31, s), yellow: s => w(33, s), green: s => w(32, s), cyan: s => w(36, s), magenta: s => w(35, s), under: s => w(4, s) };
 })();
 
-// Color the final output string — commands and pure functions stay plain.
-function paint(s) {
-  if (!s) return s;
-  if (s.includes('not written') || s.includes('but the commit failed') || s.startsWith('not published')) return C.red(s);
-  return s.split('\n').map(l =>
-    /^(error:|unknown |bad |\d+ error\(s\))/.test(l) ? C.red(l)
-    : /^(warn:|usage:|\(\d+ warning\(s\)\))/.test(l) ? C.yellow(l)
-    : /committed |— done$|wins$|^validate: ok$|^published$/.test(l) ? C.green(l)
-    : /^→ /.test(l) ? C.cyan(l)
-    : l
-  ).join('\n');
-}
-
 // One-line summary of what changed — mirror it in the commit message and the
 // echo. Keyed off the edit kind, never the match state, so a venue or time
 // edit on an already-decided match reports the move, not the result.
@@ -455,8 +438,8 @@ function editDetail(kind, m) {
 function applyAndCommit(state, kind, cat, matchId, apply) {
   const { root, siteRoot, repo, slug } = state;
   const res = writeEdit(siteRoot, repo, slug, cat, apply);
-  if (res.err) return res.err;
-  if (res.errs) return res.errs.join('\n') + '\nnot written — validation error(s), file rolled back';
+  if (res.err) return C.red(res.err);
+  if (res.errs) return C.red(res.errs.join('\n') + '\nnot written — validation error(s), file rolled back');
   const info = repo.tournaments.get(slug);
   const matches = info.matches.get(cat);
   const ctx = makeCat({ meta: info.tjson.categories.find(c => c.id === cat), matches }, info.tjson);
@@ -465,43 +448,43 @@ function applyAndCommit(state, kind, cat, matchId, apply) {
   const msg = commitMessage(kind, slug, cat, matchId, detail);
   git(root, ['add', path.relative(root, res.file)]);
   const c = git(root, ['commit', '-m', msg]);
-  if (c.code !== 0) return `wrote ${path.relative(root, res.file)} but the commit failed:\n${c.err}\n(file staged — commit it manually)`;
+  if (c.code !== 0) return C.red(`wrote ${path.relative(root, res.file)} but the commit failed:\n${c.err}\n(file staged — commit it manually)`);
   const sha = git(root, ['rev-parse', '--short', 'HEAD']).out.trim();
   // the echo mirrors the commit message — one dispatch (detail), plus the
   // score-only "— done" flag, so a completed score can never read as a walkover
   const sum = `${cat}/${matchId} → ${detail}${kind === 'score' && isDone(m) ? ' — done' : ''}`;
-  return `${sum}\ncommitted ${sha}: ${msg}`;
+  return `${C.cyan(sum)}\n${C.green(`committed ${sha}: ${msg}`)}`;
 }
 
 function editCmd(state, kind, cat, matchId, rest) {
   if (kind === 'score') {
-    if (!matchId || rest.length === 0) return 'usage: /score <category> <match> <a:b> [a:b ...]';
+    if (!matchId || rest.length === 0) return C.yellow('usage: /score <category> <match> <a:b> [a:b ...]');
     const games = rest.map(parseGame);
     const bad = rest.findIndex((t, i) => !games[i]);
-    if (bad !== -1) return `bad score ${JSON.stringify(rest[bad])} — expected a:b, e.g. 11:9`;
+    if (bad !== -1) return C.red(`bad score ${JSON.stringify(rest[bad])} — expected a:b, e.g. 11:9`);
     return applyAndCommit(state, 'score', cat, matchId, (c, ctx) => applyScore(c, matchId, games, ctx));
   }
   if (kind === 'wo') {
     const side = rest[0];
-    if (side === undefined) return 'usage: /wo <category> <match> a|b';
-    if (side !== 'a' && side !== 'b') return 'side must be a or b';
+    if (side === undefined) return C.yellow('usage: /wo <category> <match> a|b');
+    if (side !== 'a' && side !== 'b') return C.red('side must be a or b');
     return applyAndCommit(state, 'walkover', cat, matchId, c => applyResult(c, matchId, 'walkover', side));
   }
   if (kind === 'void') {
-    if (matchId === undefined) return 'usage: /void <category> <match>';
+    if (matchId === undefined) return C.yellow('usage: /void <category> <match>');
     return applyAndCommit(state, 'void', cat, matchId, c => applyResult(c, matchId, 'void'));
   }
   if (kind === 'venue') {
     const venueId = rest[0];
-    if (!venueId) return 'usage: /venue <category> <match> <venue>';
+    if (!venueId) return C.yellow('usage: /venue <category> <match> <venue>');
     return applyAndCommit(state, 'venue', cat, matchId, c => applyVenue(c, matchId, venueId));
   }
   if (kind === 'time') {
     const hhmm = rest[0];
-    if (!hhmm) return 'usage: /time <category> <match> <hh:mm>';
+    if (!hhmm) return C.yellow('usage: /time <category> <match> <hh:mm>');
     const tz = state.repo.tournaments.get(state.slug).tjson.timezone;
     const iso = buildScheduled(hhmm, tz);
-    if (!iso) return `bad time ${JSON.stringify(hhmm)} — expected hh:mm, e.g. 10:30`;
+    if (!iso) return C.red(`bad time ${JSON.stringify(hhmm)} — expected hh:mm, e.g. 10:30`);
     return applyAndCommit(state, 'time', cat, matchId, c => applyTime(c, matchId, iso));
   }
 }
@@ -520,16 +503,16 @@ function dispatch(cmd, state) {
   if (kind === 'use') {
     if (!args[0]) return tournamentList(state);
     const info = state.repo.tournaments.get(args[0]);
-    if (!info) return `unknown tournament ${args[0]} — tab completes`;
-    if (!info.tjson) return `tournament ${args[0]} has no readable data — the validator reports it`;
+    if (!info) return C.red(`unknown tournament ${args[0]} — tab completes`);
+    if (!info.tjson) return C.red(`tournament ${args[0]} has no readable data — the validator reports it`);
     state.slug = args[0];
-    return '→ ' + args[0];
+    return C.cyan('→ ' + args[0]);
   }
   if (kind === 'status') return statusCmd(state);
   if (kind === 'help') return helpText();
   if (kind === 'publish') return gitPublish(state);
   const [cat, matchId, ...rest] = args;
-  if (!cat || matchId === undefined) return `usage: /${kind} <category> <match> … — see help`;
+  if (!cat || matchId === undefined) return C.yellow(`usage: /${kind} <category> <match> … — see help`);
   return editCmd(state, kind, cat, matchId, rest);
 }
 
@@ -548,12 +531,12 @@ function replMain(root, siteRoot, repo) {
   console.log(C.dim('gitbracket — tab completes, help for commands, quit to leave'));
   rl.on('line', async line => {
     const t = line.trim();
-    if (!t) console.log(paint(listing(state)));
+    if (!t) console.log(listing(state));
     else {
       const cmd = parseCmd(t);
       if (cmd.kind === 'q' || cmd.kind === 'quit') { state.quit = true; rl.close(); return; }
-      const out = cmd.kind === 'unknown' ? `unknown command ${t.split(/\s+/)[0]} — help` : await dispatch(cmd, state);
-      console.log(paint(out));
+      const out = cmd.kind === 'unknown' ? C.red(`unknown command ${t.split(/\s+/)[0]} — help`) : await dispatch(cmd, state);
+      console.log(out);
     }
     if (state.quit) return; // quit/EOF landed while this async command was in flight
     show();

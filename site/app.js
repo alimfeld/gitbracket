@@ -39,8 +39,8 @@ function parseRoute(hash) {
   return null;
 }
 
-async function loadAll(route, indexOnly) {
-  if (indexOnly) {
+async function loadAll(route) {
+  if (route.view === 'index') {
     const raw = await fetchJson('tournaments.json');
     const index = Array.isArray(raw) ? raw : [];
     return { index };
@@ -58,8 +58,7 @@ const segmentBar = (slug, view) => {
   return `<nav class="segments" aria-label="Views"><a href="#${esc(slug)}"${t ? ' aria-current="true"' : ''}>Tournament</a><a href="#${esc(slug)}/me"${m ? ' aria-current="true"' : ''}>My Schedule</a></nav>`;
 };
 
-// The one missing-data message, verbatim in every view; the boot fetch-failure
-// path appends a reload hint, since a dropped fetch may be transient.
+// The one missing-data message, verbatim in every view.
 const MISSING = '<p>Missing tournament data — has the tournament been pushed?</p>';
 
 
@@ -135,7 +134,6 @@ function catSection(ctx) {
   if (byPool.size) {
     parts.push('<h3>Pools</h3><div class="pools">');
     for (const [pool, poolMs] of byPool) {
-      // Each table is a bridge node (id t-<pool>): feeders = its group matches, downstream = the knockout it seeds.
       const adv = poolAdvance(ctx, pool);
       const note = !adv || adv.total === 0 ? ''
         : adv.count >= adv.total ? 'All teams advance'
@@ -207,8 +205,7 @@ function sideRow(m, ctx, i) {
     const game = games[g];
     return `<span${game ? '' : ' class="ph"'}>${game ? (i === 0 ? game.a : game.b) : '·'}</span>`;
   }).join('');
-  // the winning side carries the W/O mark (tennis draws put "w/o" beside the
-  // advancing name); void has no winner, so no data-win mark anywhere.
+  // the winning side carries the W/O mark (tennis draws put "w/o" beside the advancing name)
   const score = !r || r.status === 'played' ? slot()
     : r.status === 'void' ? '<span>void</span>'
     : sideIdx(r.winner) === i ? '<span>W/O</span>'
@@ -254,7 +251,6 @@ function renderVenue(route, data, now = Date.now()) {
     col.push('<div class="stack">');
     for (const r of open) {
       const st = kioskStatus(r, now);
-      // status colors the headline time; a late start gets the remark cell beside it
       col.push(matchCard(r.m, r.ctx, { meta: ['catName', 'label'],
         head: [st === 'overdue' ? { html: `${esc(fmtTime(r.t, r.ctx.tz))} <span class="delayed">delayed</span>` } : { key: 'time' }], status: st }));
     }
@@ -316,7 +312,7 @@ function renderPlayer(route, data) {
     if (!blocksByDay.has(key)) blocksByDay.set(key, []);
     blocksByDay.get(key).push({ ctx, ...span });
   }
-  // the schedule is "me" on this device; Not you? returns to the picker
+  // the schedule is "me" on this device
   const parts = [segmentBar(data.t.slug, 'me'), `<header><div class="title-row"><h1>${esc(p.name)}</h1><a class="top" href="#${esc(data.t.slug)}/me/pick">Not you?</a></div></header>`];
   if (rows.length) parts.push(`<p class="dayline">${wins} ${wins === 1 ? 'win' : 'wins'} · ${losses} ${losses === 1 ? 'loss' : 'losses'}${nextT ? ` · next ${fmtTime(nextT, next.ctx.tz)} · ${esc(next.ctx.venues.get(next.m.venue) || 'TBD')}` : ''} · reload for the latest</p>`);
   for (const [key, g] of groups) {
@@ -342,18 +338,16 @@ function renderPlayer(route, data) {
 
 // ---------- boot ----------
 
-// Read-once views load once; a failed load keeps the board or shows the
-// missing message, and recovery is a manual reload. The kiosk polls, so a
-// transient failure there self-heals on the next tick.
+// Read-once views load once and recover via manual reload; the kiosk polls.
 function boot() {
   const app = document.querySelector('main');
   const renderers = { index: renderIndex, categories: renderTournament, venues: renderVenue, me: renderPlayer };
-  // whose schedule "me" is — a per-tournament preference; the picker is the fallback when storage is blocked or stale
+  // whose schedule "me" is — per-tournament, picker as fallback
   const localPlayer = {
     get: slug => { try { return localStorage.getItem(`gb.player.${slug}`); } catch { return null; } },
     set: (slug, id) => { try { localStorage.setItem(`gb.player.${slug}`, id); } catch {} },
   };
-  const pageTitle = (r, d) => { // index: Bracket; tournament/kiosk: bare tournament; me: "name — <player>" or "name — My Schedule"
+  const pageTitle = (r, d) => {
     if (r.view === 'index' || !d.t) return 'Bracket';
     if (r.view === 'me') {
       if (r.filter) {
@@ -373,8 +367,7 @@ function boot() {
   // Auto-refresh only on the kiosk; the other views are read-on-load.
   const setKiosk = on => {
     if (on && !pollTimer) {
-      // jitter so a hall of kiosk screens doesn't fetch in lockstep
-      pollTimer = setInterval(tick, POLL_MS + Math.random() * 5000);
+      pollTimer = setInterval(tick, POLL_MS + Math.random() * 5000); // jitter: no lockstep across a hall of screens
       // Clock lives in an element the change-guard never re-renders; look it up
       // fresh each tick (the poll re-renders).
       clockTimer = setInterval(() => {
@@ -391,9 +384,9 @@ function boot() {
   };
 
   const load = r => {
-    loadAll(r, r.view === 'index').then(d => {
-      if (route !== r) return; // superseded by a newer navigation — don't render a stale page
-      if (r.view !== 'index' && !d.tjson) { // fetch failed or unknown slug — keep a board; the kiosk retries next tick
+    loadAll(r).then(d => {
+      if (route !== r) return; // superseded by a newer navigation
+      if (r.view !== 'index' && !d.tjson) { // fetch failed or unknown slug — the kiosk retries next tick
         if (!data) app.innerHTML = MISSING + '<p>Reload the page to try again.</p>';
         return;
       }
@@ -405,7 +398,7 @@ function boot() {
   const render = (r, d) => {
     data = d;
     dataSlug = r.slug;
-    // "me" is who this device last watched; me/<id> is an explicit pick, me/pick forces the picker
+    // "me" is who this device last watched; me/<id> is an explicit pick
     if (r.view === 'me') {
       const roster = (d.tjson && d.tjson.players) || [];
       const wanted = r.filter === 'pick' ? null : (r.filter || localPlayer.get(r.slug));
@@ -426,8 +419,7 @@ function boot() {
     }
   };
 
-  // Fragment navigation: same-slug view hops (categories → venues → me)
-  // re-render from the cached snapshot; a different slug or the index reloads.
+  // Fragment navigation: same-slug hops re-render from the cached snapshot.
   const navigate = () => {
     const r = parseRoute();
     if (!r) {

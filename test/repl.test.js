@@ -150,9 +150,9 @@ test('repl listText: player filter narrows standings rows and matches to that pl
   assert(all.includes('Ada Lovelace'), 'unfiltered view lists Ada\'s team');
   const ada = repl.listText(repo, 'sample', ['md40'], 'ada');
   assert(ada.includes('Ada Lovelace') && ada.includes('Grace Hopper'), 'filtered standings keep Ada\'s team');
-  // standings rows are boxed (| rank | team …); match lines start with four spaces — opponents
-  // staying in match lines is expected, they only drop out of the standings table
-  const standingRows = ada.split('\n').filter(l => /^│\s*\d/.test(l));
+  // standings rows start with the rank digits; match lines start with the category id —
+  // opponents staying in match lines is expected, they only drop out of the standings table
+  const standingRows = ada.split('\n').filter(l => /^\d+\s/.test(l));
   assert.equal(standingRows.length, 1, 'only the player\'s standings row remains');
   assert(standingRows[0].includes('Ada Lovelace'), 'the surviving row is Ada\'s team');
   const matchLines = ada.split('\n').filter(l => l.includes(' vs ') || l.includes('·'));
@@ -188,9 +188,9 @@ test('repl listText: matches are listed in chronological id order', () => {
 test('repl listText: dead-tied standings rows share the group rank', () => {
   const repo = loadRepo(FIX('tie'));
   const txt = repl.listText(repo, 'tie', ['t'], null);
-  const rows = txt.split('\n').filter(l => /^│\s*\d/.test(l));
+  const rows = txt.split('\n').filter(l => /^\d+\s/.test(l));
   assert.equal(rows.length, 2, 'two tied sides render');
-  const ranks = rows.map(l => l.match(/^│\s+(\d+)/)[1]);
+  const ranks = rows.map(l => l.match(/^(\d+)/)[1]);
   assert(ranks[0] === '1' && ranks[1] === '1', `dead tie shares rank 1 in the REPL table, got ${ranks}`);
 });
 

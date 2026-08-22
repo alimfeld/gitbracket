@@ -451,4 +451,4 @@ function main(root, specPath) {
   console.log(`Wrote site/tournaments/${spec.slug}.json — run \`node gb.js validate\` before committing.`);
 }
 
-module.exports = { generate, main, buildKnockout };
+module.exports = { generate, main };
