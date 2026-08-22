@@ -395,7 +395,9 @@ function gitStatus(root) {
 // never "stale" or "current". Thin shell, not unit-tested (network).
 async function liveStatus(state) {
   if (state.slug === null) return ''; // no single tournament file at root
-  const domain = fs.readFileSync(path.join(state.siteRoot, 'CNAME'), 'utf8').trim();
+  let domain;
+  try { domain = fs.readFileSync(path.join(state.siteRoot, 'CNAME'), 'utf8').trim(); }
+  catch { return 'live: no site/CNAME — unknown'; }
   const rel = `tournaments/${state.slug}.json`;
   let body;
   try {

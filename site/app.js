@@ -165,17 +165,19 @@ function catSection(ctx) {
 }
 
 function bracketHtml(ctx, ko) {
-  const cols = [];
   const maxR = ko.reduce((mx, m) => Math.max(mx, koColumn(m, ctx)), 0);
+  const cols = [];
   for (const m of ko) {
     const r = maxR - koColumn(m, ctx); // koColumn is distance from the final; render that column rightmost
     (cols[r] = cols[r] || []).push(m);
   }
   const parts = ['<h3>Knockout stage</h3>'];
-  cols.forEach((ms, r) => {
-    parts.push(`<h4>${roundName(cols.length - 1 - r)}</h4>`);
+  for (let r = 0; r <= maxR; r++) { // index by depth, skip holes — labels stay aligned if a column is empty
+    const ms = cols[r];
+    if (!ms || !ms.length) continue;
+    parts.push(`<h4>${roundName(maxR - r)}</h4>`);
     parts.push(matchGrid(ms, ctx));
-  });
+  }
   return parts.join('');
 }
 
