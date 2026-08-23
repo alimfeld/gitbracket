@@ -158,9 +158,10 @@ function catSection(ctx, opts) {
   }
   // All pools, chronological by wall-clock (stable sort keeps file order on ties).
   const grp = [...byPool.values()].flat().sort((a, b) => (schedTime(a, ctx.tz) ?? 0) - (schedTime(b, ctx.tz) ?? 0));
-  // one category subline: the span of its scheduled days, then the status sentence
+  // one category subline: the status sentence; the day span joins on multi-day
+  // pages only — a single-day heading already states the date once
   const phase = phaseLine(ctx);
-  const sub = [dateRange(ctx.matches, ctx.tz), phase].filter(Boolean).join(' · ');
+  const sub = [opts.multi ? dateRange(ctx.matches, ctx.tz) : null, phase].filter(Boolean).join(' · ');
   parts.push(`<section class="cat"><h2>${esc(ctx.name)}</h2>${sub ? `<p class="subline">${sub}</p>` : ''}`);
   if (grp.length) {
     parts.push(`<section class="stage"><h3>Group stage</h3>`);

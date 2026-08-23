@@ -23,7 +23,7 @@ h4 { font-size: .8em; text-transform: uppercase; letter-spacing: .06em; color: v
 a, a:visited { color: var(--accent); }
 
 .adv { margin-left: .4em; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--muted); } /* how many teams leave the pool for the bracket — a parenthetical note, not title text */
-.subline { color: var(--muted); margin: 0 0 .8rem; } /* category subline under its heading (date span + status); stage sublines carry the count left and the disclosure right */
+.subline { color: var(--muted); margin: 0 0 .8rem; } /* text tier under a heading — category subline: status, plus the date span on multi-day pages; stage sublines carry the count left and the disclosure right */
 /* only a subline that carries an action becomes a row — a plain status sentence must stay inline, flex would tear "Starts" from its time */
 .subline:has(button, a) { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
 
