@@ -21,6 +21,9 @@ h1:focus { outline: none; } /* focus target for view switches, not a keyboard st
 h2 { font-size: 1.2em; margin: 2rem 0 .6rem; }
 h3 { font-size: 1em; margin: 1.2rem 0 .4rem; color: var(--muted); }
 h4, h5 { font-size: .75em; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 1rem 0 0; }
+/* a day divider is a timeline marker: hairline rule, label centered on it — dates never ride headings */
+.day { display: flex; align-items: center; gap: .8em; margin: 1.3rem 0 .8rem; color: var(--muted); font-size: .8em; letter-spacing: .06em; }
+.day::before, .day::after { content: ''; flex: 1; height: 1px; background: var(--line); }
 a { color: var(--accent); }
 
 /* the link rides the h1 line; the row owns the bottom spacing — the title's own margin would inflate it */

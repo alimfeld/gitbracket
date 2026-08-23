@@ -451,8 +451,8 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(late.match(/<span class="flag">delayed<\/span>/g).length === late.match(/data-status="overdue"/g).length, 'every overdue card has the remark, and only overdue cards do');
   assert(venue.includes("Men&#39;s Doubles 40+ · Final") && !venue.includes("Men&#39;s Doubles 40+ · 9 ·"), 'kiosk meta shows the long category name and label, no match id');
   assert(!venue.includes('<nav>'), 'kiosk has no breadcrumb');
-  assert(standings.includes('<h2>Men&#39;s Doubles 40+</h2><p class="subline">Knockout stage · Semifinals</p>') && !standings.includes('md40)</h2>'), 'category h2: plain name, status sentence on its own line below — the date hoisted to the h1');
-  assert(standings.includes('<h1>Sample · Mon, Jul 14</h1>'), 'one-day tournament: the h1 carries the date');
+  assert(standings.includes('<h2>Men&#39;s Doubles 40+</h2><p class="subline">Knockout stage · Semifinals</p>') && !standings.includes('md40)</h2>'), 'category h2: plain name, status sentence on its own line below — the hoist suppresses inner dividers');
+  assert(standings.includes('<h1>Sample</h1>') && standings.includes('</header><div class="day"><time datetime="2025-07-14">Mon, Jul 14</time></div>'), 'one-day tournament: the date hoists to a divider under the header, never into the title');
   assert(standings.includes('<p class="subline">Finished</p>'), 'a fully decided category reads finished');
   assert(standings.includes('<h3>Group stage</h3><p class="subline"><progress value="6" max="6"></progress>6 of 6 played</p><details><summary>Group matches</summary>'), 'decided groups: heading with progress, schedule collapsed');
   assert(standings.includes('Pool A <span class="adv">(All teams advance)</span>'), 'every team reaches the bracket — the note says so');
@@ -481,7 +481,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   const ppage = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p1' }, data);
   assert(ppage.includes('<h1>Ada Lovelace</h1>'), 'player page: plain name');
   assert(!ppage.includes('data-next'), 'no next-match highlight — the unscored card is its own marker');
-  assert(ppage.includes('<h2>Mon, Jul 14</h2>') && !ppage.includes('>2025-07-14'), 'day headings are friendly dates, not ISO keys (the <time datetime> attribute may carry ISO)');
+  assert(ppage.includes('<div class="day"><time datetime="2025-07-14">Mon, Jul 14</time></div>') && !ppage.includes('>2025-07-14'), 'day dividers show friendly dates, not ISO keys (the <time datetime> attribute may carry ISO)');
   const p3 = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p3' }, data);
   assert(/note">\d+ more match(?:es)? possible in Men&#39;s Doubles 40\+ (— earliest \d\d:\d\d, latest \d\d:\d\d|at \d\d:\d\d)/.test(p3), 'possible note: count + window in plain words');
   assert(ppage.includes('<div class="head"><span><time datetime=') && ppage.includes('</time></span><span>Court 1</span></div>'), 'player card headline: time left (semantic <time>), court right');
@@ -533,25 +533,25 @@ test('multi-day: day headings own the date on the tournament page; the kiosk sho
   const data = { index: repo.index, t: { slug: 'multiday', name: info.tjson.name }, tjson: info.tjson, cats: toCats(info.tjson) };
   const page = renderTournament({ slug: 'multiday', view: 'tournament' }, data);
   assert(!/<p class="subline">[A-Z][a-z]{2},/.test(page), 'a subline carries a status sentence, never a bare date');
-  assert(page.includes('<h3>Group stage · Sat, Jul 11</h3>'), 'a one-day group stage of a multi-day category carries its day on its heading');
-  assert(page.includes('<h3>Knockout stage · Sun, Jul 12</h3><p class="subline"><progress value="0" max="3"></progress>0 of 3 played</p>') && page.includes('<h4>Semifinals</h4>') && page.includes('<h4>Final</h4>'), 'one-day knockout of a multi-day category dates the section heading, not the rounds');
-  // groups straddling days: the summary drops its suffix, inner h3 headings take over
+  assert(page.includes('<h3>Group stage</h3><div class="day"><time datetime="2026-07-11">Sat, Jul 11</time></div>'), 'a one-day group stage of a multi-day category carries its divider under the heading');
+  assert(page.includes('<h3>Knockout stage</h3><div class="day"><time datetime="2026-07-12">Sun, Jul 12</time></div><p class="subline"><progress value="0" max="3"></progress>0 of 3 played</p>') && page.includes('<h4>Semifinals</h4>') && page.includes('<h4>Final</h4>'), 'one-day knockout of a multi-day category dates its section divider, not the rounds');
+  // groups straddling days: the summary drops its divider, inner day dividers take over
   const split = JSON.parse(JSON.stringify(info.tjson));
   split.matches.md40[5].scheduled = '2026-07-12T15:00:00'; // m6 (pool) -> Sunday: group matches span days
   const spage = renderTournament({ slug: 'multiday', view: 'tournament' },
     { index: repo.index, t: data.t, tjson: split, cats: toCats(split) });
-  assert(spage.includes('<h3>Sat, Jul 11</h3>') && spage.includes('<h3>Sun, Jul 12</h3>'), 'group matches spanning days split under day headings');
+  assert(spage.includes('<div class="day"><time datetime="2026-07-11">Sat, Jul 11</time></div>') && spage.includes('<div class="day"><time datetime="2026-07-12">Sun, Jul 12</time></div>'), 'group matches spanning days split under day dividers');
   assert(!spage.includes('played · Sat'), 'no date suffix on a summary that does not unify its matches');
-  // a round straddling days: rounds carry dates, the straddling one splits under h5
+  // a round straddling days: rounds carry dividers, the straddling one splits under its own
   split.matches.md40[7].scheduled = '2026-07-11T20:00:00'; // m8 (semi) -> Saturday evening
   const rpage = renderTournament({ slug: 'multiday', view: 'tournament' },
     { index: repo.index, t: data.t, tjson: split, cats: toCats(split) });
-  assert(rpage.includes('<h4>Final · Sun, Jul 12</h4>'), 'single-day round carries its date when rounds differ');
-  assert(rpage.includes('<h4>Semifinals</h4>') && rpage.includes('<h5>Sat, Jul 11</h5>') && rpage.includes('<h5>Sun, Jul 12</h5>'), 'a round spanning days splits under its own headings');
+  assert(rpage.includes('<h4>Final</h4><div class="day"><time datetime="2026-07-12">Sun, Jul 12</time></div>'), 'single-day round carries its divider when rounds differ');
+  assert(rpage.includes('<h4>Semifinals</h4>') && rpage.includes('<div class="day"><time datetime="2026-07-11">Sat, Jul 11</time></div>') && rpage.includes('<div class="day"><time datetime="2026-07-12">Sun, Jul 12</time></div>'), 'a round spanning days splits under its own dividers');
   const sInfo = loadRepo(FIX('sample')).tournaments.get('sample');
   const single = renderTournament({ slug: 'sample', view: 'tournament' },
     { index: repo.index, t: { slug: 'sample', name: sInfo.tjson.name }, tjson: sInfo.tjson, cats: toCats(sInfo.tjson) });
-  assert(single.includes('<h1>Sample · Mon, Jul 14</h1>') && single.includes('<h2>Mixed Doubles</h2>') && single.includes('<p class="subline">Finished</p>') && (single.match(/Mon, Jul 14/g) || []).length === 1, 'single-day tournament: the date rides the h1 exactly once, no per-category repeats');
+  assert(single.includes('<h1>Sample</h1>') && single.includes('<h2>Mixed Doubles</h2>') && single.includes('<p class="subline">Finished</p>') && (single.match(/Mon, Jul 14/g) || []).length === 1, 'single-day tournament: the hoisted date divider appears exactly once, no per-category repeats');
 
   // kiosk: strict same-day in the tournament timezone, from the device clock instant
   const at = iso => Date.parse(iso);
