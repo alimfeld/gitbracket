@@ -25,19 +25,36 @@ async function fetchJson(url) {
   }
 }
 
-// One page, fragment routing: #<slug>[/categories|venues|me[/pick|<player-id>]].
-// Segments are id-regex-checked first — a raw segment never reaches a URL.
+// One page, fragment routing: #<slug>[/schedule|venues][?cat=&player=&venue=].
+// Segments and param values are id-regex-checked first — raw input never reaches
+// a URL; unknown param names and bad values are ignored, never fatal.
 function parseRoute(hash) {
   if (hash === undefined) hash = location.hash;
-  const segs = String(hash).replace(/^#/, '').split('/');
+  const [path, query] = String(hash).replace(/^#/, '').split('?');
+  const segs = path.split('/');
   if (segs.length === 1 && segs[0] === '') return { view: 'index' };
-  if (segs.length > 3 || segs.some(s => !s || !ID_RE.test(s))) return null; // #../../ -> reject
-  const [slug, view, filter] = segs;
-  if (view === undefined) return { slug, view: 'categories' };
-  if (view === 'me') return filter === undefined ? { slug, view } : { slug, view, filter }; // me/<id> picks a player; me/pick forces the picker
-  if (view === 'categories' || view === 'venues') return filter === undefined ? { slug, view } : { slug, view, filter };
-  return null;
+  if (segs.length > 2 || segs.some(s => !s || !ID_RE.test(s))) return null; // #../../ -> reject
+  const [slug, view] = segs;
+  if (view !== undefined && view !== 'schedule' && view !== 'venues') return null;
+  const r = { slug, view: view || 'tournament' };
+  const q = new URLSearchParams(query);
+  for (const k of ['cat', 'player', 'venue']) {
+    const v = q.get(k);
+    if (v && ID_RE.test(v)) r[k] = v;
+  }
+  return r;
 }
+
+// Fragment URLs with params in fixed order. Each target keeps only the params
+// legal on it: cat and player are symmetric — applied on their home view
+// (tournament / schedule) and riding along on both, so switching views keeps
+// the focus and My Schedule brings the pick back. The kiosk sits on its own
+// path and carries neither.
+const LEGAL = { tournament: ['cat', 'player'], schedule: ['cat', 'player'], venues: ['venue'] };
+const href = (slug, view, p) => {
+  const q = LEGAL[view].filter(k => p[k]).map(k => `${k}=${p[k]}`).join('&');
+  return `#${slug}${view === 'tournament' ? '' : '/' + view}${q ? '?' + q : ''}`;
+};
 
 async function loadAll(route) {
   if (route.view === 'index') {
@@ -53,9 +70,9 @@ async function loadAll(route) {
 
 // ---------- renderers ----------
 
-const segmentBar = (slug, view) => {
-  const t = view === 'categories', m = view === 'me';
-  return `<nav class="segments" aria-label="Views"><a href="#${esc(slug)}"${t ? ' aria-current="true"' : ''}>Tournament</a><a href="#${esc(slug)}/me"${m ? ' aria-current="true"' : ''}>My Schedule</a></nav>`;
+const segmentBar = r => {
+  const t = r.view === 'tournament', m = r.view === 'schedule';
+  return `<nav class="segments" aria-label="Views"><a href="${esc(href(r.slug, 'tournament', r))}"${t ? ' aria-current="true"' : ''}>Tournament</a><a href="${esc(href(r.slug, 'schedule', r))}"${m ? ' aria-current="true"' : ''}>My Schedule</a></nav>`;
 };
 
 // The one missing-data message, verbatim in every view.
@@ -65,11 +82,12 @@ const MISSING = '<p>Missing tournament data — has the tournament been pushed?<
 const FULL_META = ['matchId', 'label', 'court', 'time'];
 const matchGrid = (ms, ctx) => `<section class="grid">${ms.map(m => matchCard(m, ctx, { meta: FULL_META })).join('')}</section>`;
 
-// Category pills — the tournament page's category filter.
-const catPills = (cats, slug, activeId, dropHref) => cats.map(c => {
-  const active = c.id === activeId;
-  const href = active ? dropHref : `#${slug}/categories/${c.id}`;
-  return `<a href="${esc(href)}"${active ? ' aria-current="true"' : ''}>${esc(c.name)}</a>`;
+// Category pills — the tournament page's category filter; other params (the
+// riding-along player) are preserved.
+const catPills = (cats, r) => cats.map(c => {
+  const active = c.id === r.cat;
+  const p = { ...r, cat: active ? undefined : c.id }; // active pill is the drop link for cat only
+  return `<a href="${esc(href(r.slug, 'tournament', p))}"${active ? ' aria-current="true"' : ''}>${esc(c.name)}</a>`;
 }).join('');
 
 function renderIndex(route, data) {
@@ -82,16 +100,16 @@ function renderIndex(route, data) {
 function renderTournament(route, data) {
   if (!data.tjson) return MISSING;
   const tz = data.tjson.timezone || 'UTC';
-  const parts = [segmentBar(data.t.slug, 'categories'), `<header><h1>${esc(data.t.name)}</h1>`];
+  const parts = [segmentBar(route), `<header><h1>${esc(data.t.name)}</h1>`];
   // the day and timezone are facts from the schedule — this page never trusts a clock
   const ts = (data.cats || []).flatMap(c => (c.matches || []).map(m => schedTime(m, tz))).filter(Number.isFinite);
   if (ts.length) {
     const day = new Intl.DateTimeFormat(undefined, { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric' }).format(Math.min(...ts));
     parts.push(`<p class="dayline">${esc(day)} · times are local${tz !== 'UTC' ? ` (${esc(tz)})` : ''} · reload for the latest</p>`);
   }
-  parts.push(`<nav class="pills" aria-label="Categories">${catPills(data.tjson.categories || [], data.t.slug, route.filter, `#${data.t.slug}`)}</nav></header>`);
+  parts.push(`<nav class="pills" aria-label="Categories">${catPills(data.tjson.categories || [], route)}</nav></header>`);
   for (const c of data.cats) {
-    if (route.filter && c.meta.id !== route.filter) continue; // pills keep every category; only the section list narrows
+    if (route.cat && c.meta.id !== route.cat) continue; // pills keep every category; only the section list narrows
     parts.push(catSection(makeCat(c, data.tjson)));
   }
   return parts.join('');
@@ -219,7 +237,7 @@ function catCtxs(data) {
 
 function renderVenue(route, data, now = Date.now()) {
   if (!data.tjson) return MISSING;
-  const v = route.filter;
+  const v = route.venue;
   const rows = [];
   const ctxs = catCtxs(data);
   for (const ctx of ctxs) {
@@ -274,7 +292,7 @@ function possibleLine(b) {
 
 function renderPlayer(route, data) {
   if (!data.tjson) return MISSING;
-  const pid = route.filter;
+  const pid = route.player;
   const players = (data.tjson.players || []).filter(p => p && typeof p === 'object' && typeof p.id === 'string');
   const p = pid ? players.find(x => x.id === pid) : null;
   if (!p) {
@@ -282,9 +300,9 @@ function renderPlayer(route, data) {
     const ctxs = catCtxs(data);
     const items = players.filter(pl => ctxs.some(c => playerMatches(c, pl.id).length))
       .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id))
-      .map(pl => `<li><a href="#${esc(data.t.slug)}/me/${esc(pl.id)}">${esc(pl.name || pl.id)}</a></li>`)
+      .map(pl => `<li><a href="${esc(href(data.t.slug, 'schedule', { cat: route.cat, player: pl.id }))}">${esc(pl.name || pl.id)}</a></li>`)
       .join('');
-    return `${segmentBar(data.t.slug, 'me')}<header><h1>Pick your player</h1></header><ul>${items || '<li>No players yet.</li>'}</ul>`;
+    return `${segmentBar(route)}<header><h1>Pick your player</h1></header><ul>${items || '<li>No players yet.</li>'}</ul>`;
   }
   const rows = [];
   const ctxs = catCtxs(data);
@@ -312,8 +330,7 @@ function renderPlayer(route, data) {
     if (!blocksByDay.has(key)) blocksByDay.set(key, []);
     blocksByDay.get(key).push({ ctx, ...span });
   }
-  // the schedule is "me" on this device
-  const parts = [segmentBar(data.t.slug, 'me'), `<header><div class="title-row"><h1>${esc(p.name)}</h1><a class="top" href="#${esc(data.t.slug)}/me/pick">Not you?</a></div></header>`];
+  const parts = [segmentBar(route), `<header><div class="title-row"><h1>${esc(p.name)}</h1><a class="top" href="${esc(href(data.t.slug, 'schedule', { cat: route.cat }))}">Not you?</a></div></header>`];
   if (rows.length) parts.push(`<p class="dayline">${wins} ${wins === 1 ? 'win' : 'wins'} · ${losses} ${losses === 1 ? 'loss' : 'losses'}${nextT ? ` · next ${fmtTime(nextT, next.ctx.tz)} · ${esc(next.ctx.venues.get(next.m.venue) || 'TBD')}` : ''} · reload for the latest</p>`);
   for (const [key, g] of groups) {
     parts.push(`<h2>${esc(key)}</h2>`);
@@ -341,17 +358,12 @@ function renderPlayer(route, data) {
 // Read-once views load once and recover via manual reload; the kiosk polls.
 function boot() {
   const app = document.querySelector('main');
-  const renderers = { index: renderIndex, categories: renderTournament, venues: renderVenue, me: renderPlayer };
-  // whose schedule "me" is — per-tournament, picker as fallback
-  const localPlayer = {
-    get: slug => { try { return localStorage.getItem(`gb.player.${slug}`); } catch { return null; } },
-    set: (slug, id) => { try { localStorage.setItem(`gb.player.${slug}`, id); } catch {} },
-  };
+  const renderers = { index: renderIndex, tournament: renderTournament, venues: renderVenue, schedule: renderPlayer };
   const pageTitle = (r, d) => {
     if (r.view === 'index' || !d.t) return 'Bracket';
-    if (r.view === 'me') {
-      if (r.filter) {
-        const p = ((d.tjson && d.tjson.players) || []).find(x => x && x.id === r.filter);
+    if (r.view === 'schedule') {
+      if (r.player) {
+        const p = ((d.tjson && d.tjson.players) || []).find(x => x && x.id === r.player);
         if (p) return `${d.t.name} — ${p.name || p.id}`;
       }
       return `${d.t.name} — My Schedule`;
@@ -398,17 +410,8 @@ function boot() {
   const render = (r, d) => {
     data = d;
     dataSlug = r.slug;
-    // "me" is who this device last watched; me/<id> is an explicit pick
-    if (r.view === 'me') {
-      const roster = (d.tjson && d.tjson.players) || [];
-      const wanted = r.filter === 'pick' ? null : (r.filter || localPlayer.get(r.slug));
-      const p = roster.find(x => x && x.id === wanted);
-      r = { ...r, filter: p ? p.id : undefined }; // a stale or unknown pick falls back to the picker
-      if (p) localPlayer.set(r.slug, p.id); // a pick is "me" on this device
-    }
     // the kiosk dark theme keys off body.venue — present only on the venue view
     document.body.classList.toggle('venue', r.view === 'venues');
-    document.body.classList.toggle('categories', r.view === 'categories');
     document.title = pageTitle(r, d);
     try {
       const html = renderers[r.view](r, d);

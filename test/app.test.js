@@ -15,22 +15,23 @@ const { loadRepo } = require('../src/tools.js');
 
 const sameRecord = (a, b) => a.wins === b.wins && a.gd === b.gd && a.pd === b.pd; // test-only — derive.js doesn't ship it
 
-test('parseRoute: fragment routing — bare slug defaults to categories, every segment id-gated', () => {
+test('parseRoute: fragment routing — bare slug is the tournament page, params id-gated, unknown input ignored', () => {
   assert.deepEqual(parseRoute(''), { view: 'index' }, 'no fragment: tournament list');
   assert.deepEqual(parseRoute('#'), { view: 'index' });
-  assert.deepEqual(parseRoute('#2026-mammut60'), { slug: '2026-mammut60', view: 'categories' }, 'bare slug: the tournament page, all categories');
-  assert.deepEqual(parseRoute('#2026-mammut60/categories'), { slug: '2026-mammut60', view: 'categories' });
-  assert.deepEqual(parseRoute('#2026-mammut60/categories/md'), { slug: '2026-mammut60', view: 'categories', filter: 'md' });
+  assert.deepEqual(parseRoute('#2026-mammut60'), { slug: '2026-mammut60', view: 'tournament' }, 'bare slug: the tournament page, all categories');
+  assert.deepEqual(parseRoute('#2026-mammut60/schedule'), { slug: '2026-mammut60', view: 'schedule' }, 'schedule without a player: the picker');
+  assert.deepEqual(parseRoute('#2026-mammut60/schedule?player=p1&cat=md'), { slug: '2026-mammut60', view: 'schedule', player: 'p1', cat: 'md' }, 'params in any parse order');
+  assert.deepEqual(parseRoute('#2026-mammut60?cat=md40'), { slug: '2026-mammut60', view: 'tournament', cat: 'md40' }, 'cat narrows the tournament page');
   assert.deepEqual(parseRoute('#2026-mammut60/venues'), { slug: '2026-mammut60', view: 'venues' });
-  assert.deepEqual(parseRoute('#2026-mammut60/venues/court-1'), { slug: '2026-mammut60', view: 'venues', filter: 'court-1' });
-  assert.deepEqual(parseRoute('#2026-mammut60/me'), { slug: '2026-mammut60', view: 'me' }, 'me view: the personal schedule');
-  assert.deepEqual(parseRoute('#2026-mammut60/me/p1'), { slug: '2026-mammut60', view: 'me', filter: 'p1' }, 'me/<id>: an explicit pick');
-  assert.deepEqual(parseRoute('#2026-mammut60/me/pick'), { slug: '2026-mammut60', view: 'me', filter: 'pick' }, 'me/pick: the picker even with a stored player');
+  assert.deepEqual(parseRoute('#2026-mammut60/venues?venue=court-1'), { slug: '2026-mammut60', view: 'venues', venue: 'court-1' });
+  assert.deepEqual(parseRoute('#2026-mammut60/venues?venue=Court%201'), { slug: '2026-mammut60', view: 'venues' }, 'param value failing the id regex is ignored, not fatal');
+  assert.deepEqual(parseRoute('#2026-mammut60?bogus=x&cat=md'), { slug: '2026-mammut60', view: 'tournament', cat: 'md' }, 'unknown param names are ignored');
   assert.equal(parseRoute('#2026-mammut60/players'), null, 'legacy players route is dead');
-  assert.equal(parseRoute('#2026-mammut60/players/p1'), null, 'legacy players/<id> route is dead');
+  assert.equal(parseRoute('#2026-mammut60/me'), null, 'legacy me route is dead');
+  assert.equal(parseRoute('#2026-mammut60/categories/md'), null, 'legacy categories/<id> route is dead — filters are query params now');
   assert.equal(parseRoute('#2026-mammut60/bogus'), null, 'unknown view');
   assert.equal(parseRoute('#2026-mammut60/venues/'), null, 'empty segment');
-  assert.equal(parseRoute('#2026-mammut60/categories/md/x'), null, 'too many segments');
+  assert.equal(parseRoute('#2026-mammut60/schedule/x'), null, 'too many segments');
   assert.equal(parseRoute('#../..'), null, 'traversal rejected');
   assert.equal(parseRoute('#/'), null, 'no slug');
 });
@@ -47,7 +48,7 @@ test('loadAll: a slug route fetches only the tournament file; the index view onl
     return body === null ? Promise.resolve({ ok: false }) : Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
   };
   try {
-    const slug = await loadAll({ slug: 'sample', view: 'categories' });
+    const slug = await loadAll({ slug: 'sample', view: 'tournament' });
     assert.deepEqual(calls, ['tournaments/sample.json'], 'slug route: one fetch, no index roundtrip');
     assert.equal(slug.t.name, 'Sample', 'name comes from the tournament file');
     assert.equal(slug.t.slug, 'sample', 'slug comes from the route');
@@ -56,7 +57,7 @@ test('loadAll: a slug route fetches only the tournament file; the index view onl
     assert.deepEqual(calls, ['tournaments/sample.json', 'tournaments.json'], 'index view: fetches only the index');
     assert.equal(list.index[0].slug, 'sample');
     assert.equal(list.tjson, undefined, 'index view carries no tournament data');
-    const missing = await loadAll({ slug: 'nope', view: 'categories' });
+    const missing = await loadAll({ slug: 'nope', view: 'tournament' });
     assert.equal(missing.t, null, 'unknown slug: tjson 404s to null');
     assert.equal(missing.tjson, null, 'no crash on a 404');
   } finally {
@@ -244,7 +245,7 @@ test('result statuses render: W/O and void on cards, settled matches off the kio
   const repo = loadRepo(FIX('result'));
   const info = repo.tournaments.get('result');
   const data = { index: repo.index, t: repo.index[0], tjson: info.tjson, cats: toCats(info.tjson) };
-  const st = renderTournament({ slug: 'result', view: 'categories' }, data);
+  const st = renderTournament({ slug: 'result', view: 'tournament' }, data);
   assert(st.includes('<span>void</span>'), 'void renders on its card');
   // m2 is pool A, walkover winner b (p3): the W/O mark rides the winner's row
   assert(st.includes('<span>P3</span><span class="score"><span>W/O</span></span>'), 'W/O renders on the winning side');
@@ -322,7 +323,7 @@ test('bracket: slot labels are plain text — no link wrapping, no trace machine
     const info = repo.tournaments.get('sample');
     return { repo, data: { index: repo.index, t: repo.index[0], tjson: info.tjson, cats: toCats(info.tjson) } };
   })().data;
-  const html = renderTournament({ slug: 'sample', view: 'categories', filter: 'md40' }, data);
+  const html = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' }, data);
   assert(html.includes('<span>Winner of SF (match 8)</span>') && !html.includes('<a href="#m-'), 'slot labels are plain text, not anchors');
   assert(!html.includes('data-feeders') && !html.includes('id="m-'), 'cards are static nodes — the trace graph shipped nothing');
 });
@@ -411,7 +412,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
     };
   };
   const { data } = dataOf('sample');
-  const no = () => ({ slug: 'sample', view: 'categories' });
+  const no = () => ({ slug: 'sample', view: 'tournament' });
   const standings = renderTournament(no(), data);
   assert(!standings.includes('data-feeders') && !standings.includes('data-hl') && !standings.includes('data-cat'), 'nothing of the old trace machinery ships — cards are static');
   assert(standings.includes('Pool A') && standings.includes('Final') && standings.includes('Winner of SF (match 8)'), 'standings renders pools, bracket, and slot labels');
@@ -419,10 +420,10 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(standings.includes('class="ph"'), 'unplayed best-of slots render as placeholders');
   assert(standings.includes('Ada Lovelace'), 'standings renders player names');
   assert(standings.includes('1 · Pool A · Court 1 · 09:00') && !standings.includes('md40 · 1 · Pool A'), 'standings card meta: match · label · venue · time, no category id');
-  assert(standings.includes('<nav class="segments" aria-label="Views"><a href="#sample" aria-current="true">Tournament</a><a href="#sample/me">My Schedule</a></nav>'), 'tournament page: segment switch, Tournament current');
-  const filtered = renderTournament({ slug: 'sample', view: 'categories', filter: 'md40' }, data);
+  assert(standings.includes('<nav class="segments" aria-label="Views"><a href="#sample" aria-current="true">Tournament</a><a href="#sample/schedule">My Schedule</a></nav>'), 'tournament page: segment switch, Tournament current');
+  const filtered = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' }, data);
   assert((filtered.match(/<h2>/g) || []).length === 1 && filtered.includes('Pool A'), 'category filter narrows to one section');
-  assert(filtered.includes('#sample/categories/xd'), 'pills still list every category on a filtered page');
+  assert(filtered.includes('#sample?cat=xd'), 'pills still list every category on a filtered page');
   assert(standings.includes('>Men&#39;s Doubles 40+</a>') && !standings.includes('>md40</a>'), 'standings pills show the category name');
   const venue = renderVenue({ slug: 'sample', view: 'venues' }, data);
   assert(venue.includes('Court 1') && venue.includes('Ada Lovelace'), 'venue page renders venue boards with match rows');
@@ -444,65 +445,65 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   // mid-groups state: an unresolved group match opens the schedule and re-counts the chip
   const midJson = JSON.parse(JSON.stringify(require(FIX('sample', 'tournaments', 'sample.json'))));
   midJson.matches.md40[0].result = undefined;
-  const mid = renderTournament({ slug: 'sample', view: 'categories', filter: 'md40' },
+  const mid = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' },
     { index: [], t: { slug: 'sample', name: midJson.name }, tjson: midJson,
       cats: toCats(midJson) });
   assert(mid.includes('<span class="chip">groups · 5 of 6 · next 09:00</span>'), 'running groups: phase chip counts and names the next slot');
   assert(mid.includes('<details open><summary>Group matches · 5 of 6 played</summary>'), 'running groups: schedule stays open');
   const { data: rdata } = dataOf('result');
-  const res = renderTournament({ slug: 'result', view: 'categories' }, rdata);
+  const res = renderTournament({ slug: 'result', view: 'tournament' }, rdata);
   assert(res.includes('<span class="adv">(Top 2 advance)</span>'), 'partial draw: top-k note');
   // the pool roster is the "who is in my pool" answer — it must render before the first result
   const preJson = JSON.parse(JSON.stringify(require(FIX('sample', 'tournaments', 'sample.json'))));
   for (const ms of Object.values(preJson.matches)) for (const m of ms) { delete m.result; delete m.games; }
-  const pre = renderTournament({ slug: 'sample', view: 'categories' },
+  const pre = renderTournament({ slug: 'sample', view: 'tournament' },
     { index: [], t: { slug: 'sample', name: preJson.name }, tjson: preJson,
       cats: toCats(preJson) });
   assert(pre.includes('<h3>Pools</h3>') && pre.includes('>Ada Lovelace / Grace Hopper</td>'), 'pools roster (teams) is visible before the first result');
   assert(pre.includes('<span class="chip">starts '), 'pre-start chip');
-  const ppage = renderPlayer({ slug: 'sample', view: 'me', filter: 'p1' }, data);
+  const ppage = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p1' }, data);
   assert(ppage.includes('<h1>Ada Lovelace</h1>'), 'player page: plain name');
   assert(ppage.includes('<p class="dayline">7 wins · 0 losses · next '), 'scoreboard line: record, then the next match by schedule');
   assert((ppage.match(/data-next/g) || []).length === 1, 'exactly the first unresolved card is marked next');
   assert(ppage.includes('<h2>Mon, Jul 14</h2>') && !ppage.includes('2025-07-14'), 'day headings are friendly dates, not ISO keys');
-  const p3 = renderPlayer({ slug: 'sample', view: 'me', filter: 'p3' }, data);
+  const p3 = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p3' }, data);
   assert(/note">\d+ more match(?:es)? possible in Men&#39;s Doubles 40\+ (— earliest \d\d:\d\d, latest \d\d:\d\d|at \d\d:\d\d)/.test(p3), 'possible note: count + window in plain words');
   assert(ppage.includes('<div class="head"><span>09:00</span><span>Court 1</span></div>'), 'player card headline: time left, court right');
   assert(ppage.includes("Men&#39;s Doubles 40+ · Pool A") && !ppage.includes('Men&#39;s Doubles 40+ · Pool A · '), 'player card meta: long cat name · label, no match id, no court/time');
   assert(ppage.includes('class="ph"'), 'player match cards render unplayed score slots too');
   assert(ppage.includes('Ada Lovelace'), 'player page finds the player');
-  assert(ppage.includes('<nav class="segments" aria-label="Views"><a href="#sample">Tournament</a><a href="#sample/me" aria-current="true">My Schedule</a></nav>'), 'player page: segment switch, My Schedule current');
-  assert(ppage.includes('<div class="title-row"><h1>Ada Lovelace</h1><a class="top" href="#sample/me/pick">Not you?</a></div>'), 'player page: Not you? leads back to the picker');
+  assert(ppage.includes('<nav class="segments" aria-label="Views"><a href="#sample?player=p1">Tournament</a><a href="#sample/schedule?player=p1" aria-current="true">My Schedule</a></nav>'), 'player page: segment switch, My Schedule current, pick preserved in links');
+  assert(ppage.includes('<div class="title-row"><h1>Ada Lovelace</h1><a class="top" href="#sample/schedule">Not you?</a></div>'), 'player page: Not you? drops the player param — the picker is schedule without one');
   assert(ppage.includes('#sample'), 'player page links the tournament name to the tournament page');
-  const picker = renderPlayer({ slug: 'sample', view: 'me' }, data);
-  assert(picker.includes('<nav class="segments" aria-label="Views"><a href="#sample">Tournament</a><a href="#sample/me" aria-current="true">My Schedule</a></nav>'), 'picker: segment switch, My Schedule current');
+  const picker = renderPlayer({ slug: 'sample', view: 'schedule' }, data);
+  assert(picker.includes('<nav class="segments" aria-label="Views"><a href="#sample">Tournament</a><a href="#sample/schedule" aria-current="true">My Schedule</a></nav>'), 'picker: segment switch, My Schedule current');
   assert(picker.includes('<header><h1>Pick your player</h1></header>'), 'picker: heading invites the pick');
   assert(!picker.includes('pills') && !picker.includes('cat-label'), 'picker is minimal: no category pills, no category labels');
-  assert(picker.includes('<li><a href="#sample/me/p1">Ada Lovelace</a></li>'), 'picker rows: plain name link to the explicit pick route');
-  const listed = [...picker.matchAll(/<li><a href="#sample\/me\/p\d+">([^<]*)<\/a><\/li>/g)].map(m => m[1]);
+  assert(picker.includes('<li><a href="#sample/schedule?player=p1">Ada Lovelace</a></li>'), 'picker rows: plain name link carrying the player param');
+  const listed = [...picker.matchAll(/<li><a href="#sample\/schedule\?player=p\d+">([^<]*)<\/a><\/li>/g)].map(m => m[1]);
   assert.deepEqual(listed, [...listed].sort((a, b) => a.localeCompare(b)), 'picker lists players alphabetically');
   assert(renderIndex({ view: 'index' }, data).includes('#sample'), 'index links the tournament');
   // a registered player with no match anywhere is not pickable — the pick must always render a schedule
   const sparse = JSON.parse(JSON.stringify(data.tjson));
   sparse.players.push({ id: 'bench', name: 'Ben Ched' });
-  const spr = renderPlayer({ slug: 'sample', view: 'me' }, { ...data, tjson: sparse });
+  const spr = renderPlayer({ slug: 'sample', view: 'schedule' }, { ...data, tjson: sparse });
   assert(spr.includes('Ada Lovelace') && !spr.includes('Ben Ched'), 'picker lists only participating players');
   // escaping: a hostile name must reach the DOM entity-encoded
   const evil = JSON.parse(JSON.stringify(data.tjson));
   evil.players[0].name = '<b>Ada</b> & "Co"';
-  const out = renderPlayer({ slug: 'sample', view: 'me', filter: 'p1' }, { ...data, tjson: evil });
+  const out = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p1' }, { ...data, tjson: evil });
   assert(out.includes('&lt;b&gt;Ada&lt;/b&gt; &amp; &quot;Co&quot;') && !out.includes('<b>Ada</b>'), 'player name is escaped');
   // hostile pool strings are free-form and land in the h4 heading — esc keeps them inert
   const evilPool = JSON.parse(JSON.stringify(require(FIX('sample', 'tournaments', 'sample.json'))));
   evilPool.matches.md40[0].pool = 'A" onclick="alert(1)';
   const pdata = { index: [], t: { slug: 'sample', name: evilPool.name }, tjson: evilPool,
     cats: toCats(evilPool) };
-  const ph = renderTournament({ slug: 'sample', view: 'categories', filter: 'md40' }, pdata);
+  const ph = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' }, pdata);
   assert(!ph.includes('<h4>Pool A" onclick='), 'the injected handler never lands in the DOM');
   assert(ph.includes('A&quot; onclick=&quot;alert(1)'), 'the pool string renders entity-encoded');
   // tied teams share the first rank of their group (standard competition ranking: 1 1 1 4)
   const { data: tdata } = dataOf('tie');
-  const tieHtml = renderTournament({ slug: 'tie', view: 'categories' }, tdata);
+  const tieHtml = renderTournament({ slug: 'tie', view: 'tournament' }, tdata);
   assert(!tieHtml.includes('†') && (tieHtml.match(/data-tie><td>1<\/td>/g) || []).length === 2, 'tied teams share rank 1, no dagger');
 });
 
@@ -515,9 +516,28 @@ test('renderPlayer: the next-match marker follows the row, not the id — same i
   tjson.matches.md40[2].result = undefined; tjson.matches.md40[2].games = undefined; // md40 m3, 09:45 — earliest unresolved
   tjson.matches.xd[2].result = undefined;   tjson.matches.xd[2].games = undefined;   // xd m3, 13:45 — same id, later
   const data = { index: [], t: repo.index[0], tjson, cats: toCats(tjson) };
-  const html = renderPlayer({ slug: 'sample', view: 'me', filter: 'p1' }, data);
+  const html = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p1' }, data);
   const marked = html.match(/<article[^>]*data-next[\s\S]*?<\/article>/);
   assert.notEqual(marked, null, 'some card is marked next');
   assert.equal((html.match(/data-next/g) || []).length, 1, 'exactly one card — the xd m3 card must not inherit the mark');
   assert(marked[0].includes('09:45') && marked[0].includes("Men&#39;s Doubles 40+ · Pool A"), 'the marked card is md40 m3, the earliest unresolved');
+});
+
+test('routing: cat and player ride along between tournament and schedule — applied on their home view only', () => {
+  const repo = loadRepo(FIX('sample'));
+  const info = repo.tournaments.get('sample');
+  const data = { index: repo.index, t: { slug: 'sample', name: info.tjson.name }, tjson: info.tjson, cats: toCats(info.tjson) };
+  // tournament -> schedule keeps the focus...
+  const t = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' }, data);
+  assert(t.includes('<a href="#sample/schedule?cat=md40">My Schedule</a>'), 'tournament page carries cat onto the schedule link');
+  // ...and schedule -> tournament restores it, player riding along so My Schedule brings the pick back
+  const s = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p1', cat: 'md40' }, data);
+  assert(s.includes('<a href="#sample?cat=md40&amp;player=p1"'), 'schedule page carries cat and player back onto the tournament link');
+  assert(s.includes('href="#sample/schedule?cat=md40">Not you?</a>'), 'Not you? keeps the context, drops only the player');
+  const back = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40', player: 'p1' }, data);
+  assert(back.includes('<a href="#sample/schedule?cat=md40&amp;player=p1">My Schedule</a>'), 'tournament page carries the pick onto its My Schedule link');
+  assert(back.includes('<a href="#sample?cat=xd&amp;player=p1"'), 'pill click keeps the riding-along player, swaps only cat');
+  assert(back.includes('<a href="#sample?player=p1" aria-current="true"'), 'the active pill drops only its own param');
+  const picker = renderPlayer({ slug: 'sample', view: 'schedule', cat: 'md40' }, data);
+  assert(picker.includes('#sample/schedule?cat=md40&amp;player='), 'picker picks preserve the carried cat');
 });
