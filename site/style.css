@@ -54,7 +54,7 @@ article { display: flex; flex-direction: column; gap: .3rem; border: 1px solid v
 
 /* the category switcher: a slimmer bar under the view bar, pinning below it —
    the open category stays switchable while the page scrolls */
-.cats { position: sticky; top: 4rem; z-index: 9; display: flex; gap: .25rem; padding: .3rem 0 .55rem; background: var(--paper); font-size: .85em; border-bottom: 1px solid var(--hairline); } /* top: 4rem ≈ the view bar's rendered height (.5 top pad + 2.45 link — .5×2 padding + 1.45 line — + 1 bottom pad + 1px border) */
+.cats { position: sticky; top: 4rem; z-index: 9; display: flex; gap: .25rem; padding: .3rem 0 .55rem; background: var(--paper); font-size: .85em; } /* top: 4rem ≈ the view bar's rendered height (.5 top pad + 2.45 link — .5×2 padding + 1.45 line — + 1 bottom pad + 1px border) */
 ul { list-style: none; padding: 0; }
 ul li { padding: .6rem 0; border-bottom: 1px solid var(--hairline); }
 ul li a + a { font-size: .8em; margin-left: .6rem; }
