@@ -454,11 +454,12 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(standings.includes('<h2>Men&#39;s Doubles 40+</h2><p class="subline">Knockout stage · Semifinals</p>') && !standings.includes('md40)</h2>'), 'category h2: plain name, status sentence on its own line below — the hoist suppresses inner dividers');
   assert(standings.includes('<h1>Sample</h1>') && standings.includes('</header><div class="day"><time datetime="2025-07-14">Mon, Jul 14</time></div>'), 'one-day tournament: the date hoists to a divider under the header, never into the title');
   assert(standings.includes('<p class="subline">Finished</p>'), 'a fully decided category reads finished');
-  assert(standings.includes('<h3>Group stage</h3><p class="subline"><progress value="6" max="6"></progress>6 of 6 played</p><details><summary>Group matches</summary>'), 'decided groups: heading with progress, schedule collapsed');
+  assert(standings.includes('<h3>Group stage</h3><p class="subline"><span>6 of 6 played</span><button type="button" class="toggle" data-stage="md40:groups" aria-expanded="false">Show matches</button></p><section class="grid" data-stage="md40:groups" hidden>'), 'decided groups: heading with count, cards collapsed by default');
+  assert(standings.includes('<h3>Pools</h3><p class="subline"><span>1 pool</span><button type="button" class="toggle" data-stage="md40:pools" aria-expanded="true">Hide pools</button></p><div class="pools" data-stage="md40:pools">'), 'pools: subline with count and disclosure, open by default');
   assert(standings.includes('Pool A <span class="adv">(All teams advance)</span>'), 'every team reaches the bracket — the note says so');
-  assert(standings.indexOf('<h3>Pools</h3>') < standings.indexOf('<details'), 'scoreboard leads the section');
-  assert(standings.indexOf('<details') < standings.indexOf('<h3>Knockout stage'), 'schedule before the bracket — chronological flow');
-  assert(standings.includes('<h3>Knockout stage</h3><p class="subline"><progress value="1" max="4"></progress>1 of 4 played</p>'), 'knockout heading carries its own progress line');
+  assert(standings.indexOf('<h3>Pools</h3>') < standings.indexOf('<h3>Group stage</h3>'), 'scoreboard leads the section');
+  assert(standings.indexOf('<h3>Group stage</h3>') < standings.indexOf('<h3>Knockout stage</h3>'), 'schedule before the bracket — chronological flow');
+  assert(standings.includes('<h3>Knockout stage</h3><p class="subline"><span>1 of 4 played</span><button type="button" class="toggle" data-stage="md40:ko" aria-expanded="true">Hide matches</button></p>') && !standings.includes('md40:ko" hidden'), 'decided groups open the knockout by default');
   // mid-groups state: an unresolved group match opens the schedule and re-counts the chip
   const midJson = JSON.parse(JSON.stringify(require(FIX('sample', 'tournaments', 'sample.json'))));
   midJson.matches.md40[0].result = undefined;
@@ -466,7 +467,8 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
     { index: [], t: { slug: 'sample', name: midJson.name }, tjson: midJson,
       cats: toCats(midJson) });
   assert(mid.includes('<p class="subline">Group stage · 5 of 6 played, next 09:00</p>'), 'running groups: the phase line counts and names the next slot');
-  assert(mid.includes('<h3>Group stage</h3><p class="subline"><progress value="5" max="6"></progress>5 of 6 played</p><details open><summary>Group matches</summary>'), 'running groups: progress under the heading, schedule stays open');
+  assert(mid.includes('<h3>Group stage</h3><p class="subline"><span>5 of 6 played</span><button type="button" class="toggle" data-stage="md40:groups" aria-expanded="true">Hide matches</button></p>') && !mid.includes('md40:groups" hidden'), 'running groups: count under the heading, cards stay open');
+  assert(mid.includes('data-stage="md40:ko" aria-expanded="false"') && mid.includes('data-stage="md40:ko" hidden'), 'undecided groups keep the knockout collapsed by default');
   const { data: rdata } = dataOf('result');
   const res = renderTournament({ slug: 'result', view: 'tournament' }, rdata);
   assert(res.includes('<span class="adv">(Top 2 advance)</span>'), 'partial draw: top-k note');
@@ -535,22 +537,22 @@ test('multi-day: day dividers mark only the day changes on the tournament page; 
   assert(!/<p class="subline">[A-Z][a-z]{2},/.test(page), 'a subline carries a status sentence, never a bare date');
   assert(page.includes('</header><div class="day"><time datetime="2026-07-11">Sat, Jul 11</time></div>'), 'the first divider always lands under the pills and states day one');
   assert((page.match(/datetime="2026-07-11"/g) || []).length === 1, 'groups rest on the pills divider — day one is never re-stated');
-  assert(page.includes('<div class="day"><time datetime="2026-07-12">Sun, Jul 12</time></div><h3>Knockout stage</h3><p class="subline"><progress value="0" max="3"></progress>0 of 3 played</p>') && page.includes('<h4>Semifinals</h4>') && page.includes('<h4>Final</h4>'), 'a whole-day knockout hoists its divider to the stage heading — the rounds stay plain');
-  assert(page.includes('<h3>Group stage</h3><p class="subline"><progress value="5" max="6"></progress>5 of 6 played</p><details open>'), 'a section that rests on the pills day carries no divider');
+  assert(page.includes('<div class="day"><time datetime="2026-07-12">Sun, Jul 12</time></div><h3>Knockout stage</h3><p class="subline"><span>0 of 3 played</span><button type="button" class="toggle" data-stage="md40:ko" aria-expanded="false">Show matches</button></p>') && page.includes('<h4 hidden data-stage="md40:ko">Semifinals</h4>') && page.includes('<h4 hidden data-stage="md40:ko">Final</h4>') && page.includes('data-stage="md40:ko" hidden'), 'a whole-day knockout hoists its divider to the stage heading — rounds collapse with the stage');
+  assert(page.includes('<h3>Group stage</h3><p class="subline"><span>5 of 6 played</span><button type="button" class="toggle" data-stage="md40:groups" aria-expanded="true">Hide matches</button></p>'), 'a section that rests on the pills day carries no divider');
   // groups straddling days: the run boundary splits its own divider out of the fold
   const split = JSON.parse(JSON.stringify(info.tjson));
   split.matches.md40[5].scheduled = '2026-07-12T15:00:00'; // m6 (pool) -> Sunday: group matches span days
   const spage = renderTournament({ slug: 'multiday', view: 'tournament' },
     { index: repo.index, t: data.t, tjson: split, cats: toCats(split) });
-  assert(spage.includes('<summary>Group matches</summary><section class="grid">') && spage.includes('</section><div class="day"><time datetime="2026-07-12">Sun, Jul 12</time></div><section class="grid">'), 'the Sunday run boundary splits its own divider inside the fold, the Saturday run rests on the pills divider');
+  assert(spage.includes('</button></p><section class="grid" data-stage="md40:groups">') && spage.includes('</section><div class="day"><time datetime="2026-07-12">Sun, Jul 12</time></div><section class="grid" data-stage="md40:groups">'), 'the Sunday run boundary splits its own divider — both runs render outside the fold');
   assert(!spage.includes('played · Sat'), 'no date suffix on a summary that does not unify its matches');
   // a round straddling days: the round's runs split, and a day that returns re-states itself
   split.matches.md40[7].scheduled = '2026-07-11T20:00:00'; // m8 (semi) -> Saturday evening
   const rpage = renderTournament({ slug: 'multiday', view: 'tournament' },
     { index: repo.index, t: data.t, tjson: split, cats: toCats(split) });
-  assert(rpage.includes('<div class="day"><time datetime="2026-07-11">Sat, Jul 11</time></div><h3>Knockout stage</h3>') && rpage.includes('<h4>Semifinals</h4><section class="grid">'), 'the stage heading shows its first content day — the Saturday semi dates the knockout itself');
-  assert(rpage.includes('</section><div class="day"><time datetime="2026-07-12">Sun, Jul 12</time></div><section class="grid">'), 'the Sunday semi run splits its own divider at the boundary');
-  assert(rpage.includes('<h4>Final</h4><section class="grid">'), 'the final rests on the Sunday divider the semis already stated');
+  assert(rpage.includes('<div class="day"><time datetime="2026-07-11">Sat, Jul 11</time></div><h3>Knockout stage</h3>') && rpage.includes('<h4 hidden data-stage="md40:ko">Semifinals</h4><section class="grid" data-stage="md40:ko" hidden>'), 'the stage heading shows its first content day — the Saturday semi dates the knockout itself');
+  assert(rpage.includes('</section><div class="day"><time datetime="2026-07-12">Sun, Jul 12</time></div><section class="grid" data-stage="md40:ko" hidden>'), 'the Sunday semi run splits its own divider at the boundary — visible even while the cards stay collapsed');
+  assert(rpage.includes('<h4 hidden data-stage="md40:ko">Final</h4><section class="grid" data-stage="md40:ko" hidden>'), 'the final rests on the Sunday divider the semis already stated');
   const sInfo = loadRepo(FIX('sample')).tournaments.get('sample');
   const single = renderTournament({ slug: 'sample', view: 'tournament' },
     { index: repo.index, t: { slug: 'sample', name: sInfo.tjson.name }, tjson: sInfo.tjson, cats: toCats(sInfo.tjson) });

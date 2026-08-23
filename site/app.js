@@ -80,7 +80,8 @@ const MISSING = '<p>No tournament data yet — check back soon.</p>';
 
 
 const FULL_META = ['label', 'court', 'time'];
-const matchGrid = (ms, ctx) => `<section class="grid">${ms.map(m => matchCard(m, ctx, { meta: FULL_META })).join('')}</section>`;
+// opts.stage ties the grid to a stage's show/hide button; opts.hidden starts it collapsed
+const matchGrid = (ms, ctx, opts = {}) => `<section class="grid"${opts.stage ? ` data-stage="${esc(opts.stage)}"` : ''}${opts.hidden ? ' hidden' : ''}>${ms.map(m => matchCard(m, ctx, { meta: FULL_META })).join('')}</section>`;
 
 // Category pills — the tournament page's category filter; other params (the
 // riding-along player) are preserved.
@@ -174,11 +175,13 @@ function catSection(ctx, axis) {
   const grp = [...byPool.values()].flat().sort((a, b) => (schedTime(a, ctx.tz) ?? 0) - (schedTime(b, ctx.tz) ?? 0));
   const phase = phaseLine(ctx); // one status sentence per category, on its own line under the heading
   parts.push(cover(dayRuns(ctx.matches, ctx), axis), `<h2>${esc(ctx.name)}</h2>${phase && `<p class="subline">${phase}</p>`}`);
-  // always visible: the tables answer "which pool am I in, who else is in mine"
+  // one line names the pool count; the tables hide behind the disclosure like match cards
   if (byPool.size) {
     const started = ctx.matches.some(isDone); // pre-play every team ties at zero — no highlight yet
     let anyTie = false;
-    parts.push('<h3>Pools</h3><div class="pools">');
+    const pkey = `${ctx.id}:pools`;
+    parts.push(`<h3>Pools</h3>`, foldLine(pkey, true, `${byPool.size} pool${byPool.size === 1 ? '' : 's'}`, 'pools'));
+    parts.push(`<div class="pools" data-stage="${esc(pkey)}">`);
     for (const [pool, poolMs] of byPool) {
       const adv = poolAdvance(ctx, pool);
       const note = !adv || adv.total === 0 ? ''
@@ -197,24 +200,27 @@ function catSection(ctx, axis) {
       });
       parts.push('</tbody></table></section>');
     }
-    parts.push('</div>');
-    // the highlight is color-only — one line names what it means
+    // the highlight is color-only — one line names what it means (rides the fold)
     if (anyTie) parts.push('<p class="note">Highlighted rows are dead ties on every tiebreaker — the organizer settles the order.</p>');
+    parts.push('</div>');
   }
-  // folds to a one-line summary once the groups are decided
+  // one fold per stage: day dividers always render, only the card grids hide;
+  // decided groups collapse to the heading + subline
   if (grp.length) {
     const played = grp.filter(isDone).length;
+    const collapses = played === grp.length;
     const runs = dayRuns(grp, ctx);
-    parts.push(cover(runs, axis), `<h3>Group stage</h3>`, progressDayline(played, grp.length));
-    const body = runs.map(r2 => `${dayDiv(r2.label, r2.iso, axis)}${matchGrid(r2.ms, ctx)}`).join('');
-    parts.push(`<details${played < grp.length ? ' open' : ''}><summary>Group matches</summary>${body}</details>`);
+    const key = `${ctx.id}:groups`;
+    parts.push(cover(runs, axis), `<h3>Group stage</h3>`, foldLine(key, !collapses, `${played} of ${grp.length} played`, 'matches'));
+    for (const r2 of runs) parts.push(dayDiv(r2.label, r2.iso, axis), matchGrid(r2.ms, ctx, { stage: key, hidden: collapses }));
   }
   if (ko.length) parts.push(bracketHtml(ctx, ko, axis));
   return parts.join('');
 }
 
-// one subline pattern per stage heading: bar + count
-const progressDayline = (done, total) => `<p class="subline"><progress value="${done}" max="${total}"></progress>${done} of ${total} played</p>`;
+// one subline pattern per stage: count left, disclosure right
+const foldLine = (key, open, left, noun) =>
+  `<p class="subline"><span>${left}</span><button type="button" class="toggle" data-stage="${esc(key)}" aria-expanded="${open}">${open ? 'Hide' : 'Show'} ${noun}</button></p>`;
 
 // Bracket order first: a card's position must match its QF/SF ordinal, which
 // schedule edits can't move. Time breaks ties and orders unnumbered matches.
@@ -230,16 +236,19 @@ function bracketHtml(ctx, ko, axis) {
     (cols[r] = cols[r] || []).push(m);
   }
   const koDone = ko.filter(isDone).length;
+  // knockout stays collapsed while the groups are undecided; a category with no
+  // groups is trivially decided, so its bracket shows
+  const grpDone = ctx.matches.filter(m => m.pool !== undefined).every(isDone);
+  const key = `${ctx.id}:ko`;
   const parts = [];
-  parts.push(cover(dayRuns(ko, ctx), axis), `<h3>Knockout stage</h3>`, progressDayline(koDone, ko.length));
+  parts.push(cover(dayRuns(ko, ctx), axis), `<h3>Knockout stage</h3>`, foldLine(key, grpDone, `${koDone} of ${ko.length} played`, 'matches'));
   for (let r = 0; r <= maxR; r++) { // index by depth, skip holes — labels stay aligned if a column is empty
     const ms = cols[r];
     if (!ms || !ms.length) continue;
     const label = roundName(maxR - r);
     const runs = dayRuns(ms, ctx);
-    parts.push(cover(runs, axis), `<h4>${label}</h4>`);
-    const body = runs.map(r2 => `${dayDiv(r2.label, r2.iso, axis)}${matchGrid(koOrder(r2.ms, ctx), ctx)}`).join('');
-    parts.push(body);
+    parts.push(cover(runs, axis), `<h4${!grpDone ? ' hidden' : ''} data-stage="${esc(key)}">${label}</h4>`);
+    for (const r2 of runs) parts.push(dayDiv(r2.label, r2.iso, axis), matchGrid(koOrder(r2.ms, ctx), ctx, { stage: key, hidden: !grpDone }));
   }
   return parts.join('');
 }
@@ -401,6 +410,21 @@ function renderPlayer(route, data) {
 // Read-once views load once and recover via manual reload; the kiosk polls.
 function boot() {
   const app = document.querySelector('main');
+
+  // stage disclosure: the button flips every card grid of its stage — day
+  // dividers sit outside the fold and never hide
+  app.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-stage]');
+    if (!b) return;
+    const open = b.getAttribute('aria-expanded') === 'true'; // currently shown
+    const key = b.dataset.stage;
+    for (const el of app.querySelectorAll('[data-stage]')) {
+      if (el !== b && el.dataset.stage === key) el.toggleAttribute('hidden', open);
+    }
+    b.setAttribute('aria-expanded', String(!open));
+    b.textContent = (open ? 'Show' : 'Hide') + ' ' + b.textContent.replace(/^(Hide|Show) /, ''); // the noun rides along — pool buttons say pools
+  });
+
   const renderers = { index: renderIndex, tournament: renderTournament, venues: renderVenue, schedule: renderPlayer };
   const pageTitle = (r, d) => {
     if (r.view === 'index' || !d.t) return 'Bracket';
