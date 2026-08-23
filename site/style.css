@@ -22,7 +22,9 @@ h2 { font-size: 1.2em; margin: 2rem 0 .6rem; }
 h3 { font-size: 1em; margin: 1.2rem 0 .4rem; color: var(--muted); }
 h4, h5 { font-size: .75em; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 1rem 0 0; }
 /* a day divider is a timeline marker: hairline rule, label centered on it — dates never ride headings */
-.day { display: flex; align-items: center; gap: .8em; margin: 1.3rem 0 .8rem; color: var(--muted); font-size: .8em; letter-spacing: .06em; }
+/* sticky makes each divider the scroll chip: the latest day pins under the segments until the next covers it */
+/* ponytail: top is a knob — 3.5rem clears the .segments box (.5rem padding x2 + 1.45 x .95em line + 1px border); only the non-kiosk page has .day */
+.day { display: flex; align-items: center; gap: .8em; margin: 1.3rem 0 .8rem; color: var(--muted); font-size: .8em; letter-spacing: .06em; position: sticky; top: 3.5rem; background: var(--paper); }
 .day::before, .day::after { content: ''; flex: 1; height: 1px; background: var(--line); }
 a { color: var(--accent); }
 
