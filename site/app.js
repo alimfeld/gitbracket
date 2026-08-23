@@ -188,8 +188,8 @@ function catSection(ctx, axis) {
         : adv.count >= adv.total ? 'All teams advance'
         : adv.top ? `Top ${adv.count} advance`
         : `${adv.count} teams advance`;
-      parts.push(`<section class="pool"><h4>Pool ${esc(String(pool))}${note ? ` <span class="adv">(${esc(note)})</span>` : ''}</h4>`);
-      parts.push('<table><thead><tr><th>#</th><th>Team</th><th>W</th><th>L</th><th>GD</th><th>PD</th></tr></thead><tbody>');
+      parts.push(`<section><h4>Pool ${esc(String(pool))}${note ? ` <span class="adv">(${esc(note)})</span>` : ''}</h4>`);
+      parts.push('<table><thead><tr><th scope="col">#</th><th scope="col">Team</th><th scope="col">W</th><th scope="col">L</th><th scope="col">GD</th><th scope="col">PD</th></tr></thead><tbody>');
       const st = poolStandings(ctx, pool, true); // pools come from matches, so partial standings always resolve
       const ranks = poolRanks(st);
       st.forEach((r, i) => {
