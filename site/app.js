@@ -120,12 +120,12 @@ function phaseLine(ctx) {
   if (ms.every(isDone)) return 'Finished';
   if (!ms.some(isDone)) {
     const ts = ms.map(m => schedTime(m, ctx.tz)).filter(Number.isFinite);
-    return `Starts ${ts.length ? fmtTime(Math.min(...ts), ctx.tz) : 'soon'}`;
+    return `Starts ${ts.length ? timeEl(Math.min(...ts), ctx.tz) : 'soon'}`;
   }
   const grp = ms.filter(m => m.pool !== undefined);
   if (grp.some(m => !isDone(m))) {
     const nextTs = grp.filter(m => !isDone(m)).map(m => schedTime(m, ctx.tz)).filter(Number.isFinite);
-    const next = nextTs.length ? `, next ${fmtTime(Math.min(...nextTs), ctx.tz)}` : '';
+    const next = nextTs.length ? `, next ${timeEl(Math.min(...nextTs), ctx.tz)}` : '';
     return `Group stage · ${grp.filter(isDone).length} of ${grp.length} played${next}`;
   }
   const next = ms.find(m => m.pool === undefined && !isDone(m));
@@ -253,6 +253,9 @@ function bracketHtml(ctx, ko, axis) {
   return parts.join('');
 }
 
+// datetime carries the instant (ISO); the label stays wall-clock
+const timeEl = (t, tz) => `<time datetime="${new Date(t).toISOString()}">${esc(fmtTime(t, tz))}</time>`;
+
 // opts.meta picks the meta items (fixed vocabulary); opts.head is an optional
 // [left, right] headline row — a cell is { key: item field } or { html: pre-rendered }.
 function matchCard(m, ctx, opts = {}) {
@@ -261,7 +264,7 @@ function matchCard(m, ctx, opts = {}) {
     catName: esc(ctx.name),
     label: esc(matchLabel(m, ctx)),
     court: m.venue ? esc(ctx.venues.get(m.venue) || m.venue) : 'TBD',
-    time: t !== null ? `<time datetime="${new Date(t).toISOString()}">${esc(fmtTime(t, ctx.tz))}</time>` : 'TBD',
+    time: t !== null ? timeEl(t, ctx.tz) : 'TBD',
   };
   const meta = opts.meta.map(k => item[k]).join(' · ');
   const head = opts.head ? `<div class="head">${opts.head.map(c => `<span>${c.html !== undefined ? c.html : item[c.key]}</span>`).join('')}</div>` : '';
@@ -326,10 +329,10 @@ function renderVenue(route, data, now = Date.now()) {
     col.push('<div class="stack">');
     for (const r of open) {
       const st = kioskStatus(r, now);
+      const when = timeEl(r.t, r.ctx.tz);
+      const flag = st === 'overdue' ? 'delayed' : st === 'live' ? 'live' : '';
       col.push(matchCard(r.m, r.ctx, { meta: ['catName', 'label'],
-        head: [st === 'overdue' ? { html: `${esc(fmtTime(r.t, r.ctx.tz))} <span class="flag">delayed</span>` }
-          : st === 'live' ? { html: `${esc(fmtTime(r.t, r.ctx.tz))} <span class="flag">live</span>` }
-          : { key: 'time' }], status: st }));
+        head: [{ html: flag ? `${when} <span class="flag">${flag}</span>` : when }], status: st }));
     }
     col.push('</div>');
     cols.push(`<section>${col.join('')}</section>`);
@@ -344,8 +347,8 @@ const dayShort = (t, tz) => new Intl.DateTimeFormat(undefined, { timeZone: tz, w
 function possibleLine(b) {
   const noun = b.count === 1 ? 'match' : 'matches';
   const when = b.min === b.max
-    ? `at ${fmtTime(b.min, b.ctx.tz)}`
-    : `— earliest ${fmtTime(b.min, b.ctx.tz)}, latest ${fmtTime(b.max, b.ctx.tz)}`;
+    ? `at ${timeEl(b.min, b.ctx.tz)}`
+    : `— earliest ${timeEl(b.min, b.ctx.tz)}, latest ${timeEl(b.max, b.ctx.tz)}`;
   return `<p class="note">${b.count} more ${noun} possible in ${esc(b.ctx.name)} ${when}</p>`;
 }
 

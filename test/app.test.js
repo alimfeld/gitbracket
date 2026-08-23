@@ -466,7 +466,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   const mid = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' },
     { index: [], t: { slug: 'sample', name: midJson.name }, tjson: midJson,
       cats: toCats(midJson) });
-  assert(mid.includes('<p class="subline">Group stage · 5 of 6 played, next 09:00</p>'), 'running groups: the phase line counts and names the next slot');
+  assert(mid.includes('<p class="subline">Group stage · 5 of 6 played, next <time datetime="2025-07-14T13:00:00.000Z">09:00</time></p>'), 'running groups: the phase line counts and names the next slot as a semantic <time>');
   assert(mid.includes('<h3>Group stage</h3><p class="subline"><span>5 of 6 played</span><button type="button" class="toggle" data-stage="md40:groups" aria-expanded="true">Hide matches</button></p>') && !mid.includes('md40:groups" hidden'), 'running groups: count under the heading, cards stay open');
   assert(mid.includes('data-stage="md40:ko" aria-expanded="false"') && mid.includes('data-stage="md40:ko" hidden'), 'undecided groups keep the knockout collapsed by default');
   const { data: rdata } = dataOf('result');
@@ -485,7 +485,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(!ppage.includes('data-next'), 'no next-match highlight — the unscored card is its own marker');
   assert(ppage.includes('<div class="day"><time datetime="2025-07-14">Mon, Jul 14</time></div>') && !ppage.includes('>2025-07-14'), 'day dividers show friendly dates, not ISO keys (the <time datetime> attribute may carry ISO)');
   const p3 = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p3' }, data);
-  assert(/note">\d+ more match(?:es)? possible in Men&#39;s Doubles 40\+ (— earliest \d\d:\d\d, latest \d\d:\d\d|at \d\d:\d\d)/.test(p3), 'possible note: count + window in plain words');
+  assert(/note">\d+ more match(?:es)? possible in Men&#39;s Doubles 40\+ (— earliest <time datetime="[^"]+">\d\d:\d\d<\/time>, latest <time datetime="[^"]+">\d\d:\d\d<\/time>|at <time datetime="[^"]+">\d\d:\d\d<\/time>)/.test(p3), 'possible note: count + window in semantic <time> elements');
   assert(ppage.includes('<div class="head"><span><time datetime=') && ppage.includes('</time></span><span>Court 1</span></div>'), 'player card headline: time left (semantic <time>), court right');
   assert(ppage.includes("Men&#39;s Doubles 40+ · Pool A") && !ppage.includes('Men&#39;s Doubles 40+ · Pool A · '), 'player card meta: long cat name · label, no match id, no court/time');
   assert(ppage.includes('class="ph"'), 'player match cards render unplayed score slots too');
