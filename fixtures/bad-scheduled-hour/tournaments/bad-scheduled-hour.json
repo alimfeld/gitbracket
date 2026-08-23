@@ -1,5 +1,6 @@
 {
   "name": "bad-scheduled-hour",
+  "location": "Test Hall",
   "timezone": "America/New_York",
   "venues": [
     {

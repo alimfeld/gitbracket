@@ -1,5 +1,6 @@
 {
   "name": "Multi Day Open",
+  "location": "Boston",
   "timezone": "America/New_York",
   "venues": [
     { "id": "court-1", "name": "Court 1" },

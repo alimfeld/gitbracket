@@ -1,5 +1,6 @@
 {
   "name": "Bad Dates Missing",
+  "location": "Test Hall",
   "timezone": "America/New_York",
   "venues": [
     {

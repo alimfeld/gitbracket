@@ -1,5 +1,6 @@
 {
   "name": "Bad Uppercase Id",
+  "location": "Test Hall",
   "timezone": "UTC",
   "venues": [
     {

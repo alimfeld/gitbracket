@@ -1,5 +1,6 @@
 {
   "name": "Place8",
+  "location": "Test Hall",
   "timezone": "UTC",
   "venues": [
     {

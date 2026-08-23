@@ -1,5 +1,6 @@
 {
   "name": "Bad Venue Overlap",
+  "location": "Test Hall",
   "timezone": "UTC",
   "venues": [
     {

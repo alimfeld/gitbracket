@@ -95,10 +95,10 @@ function renderIndex(route, data) {
     })
     .map(e => {
       const dates = fmtRange(e.dates); // stored ISO days -> span
-      return `<tr><td>${dates ? esc(dates) : ''}</td><td><a href="#${esc(e.slug)}">${esc(e.name || e.slug)}</a></td><td><a href="#${esc(e.slug)}/venues">Open</a></td></tr>`;
+      return `<tr><td>${dates ? esc(dates) : ''}</td><td><a href="#${esc(e.slug)}">${esc(e.name || e.slug)}</a> · <a href="#${esc(e.slug)}/venues">Venue board</a></td><td>${esc(e.location)}</td></tr>`;
     });
   if (!items.length) return `<h1>Tournaments</h1><p>No tournaments yet.</p>`;
-  return `<h1>Tournaments</h1><table><thead><tr><th scope="col">Date</th><th scope="col">Tournament</th><th scope="col">Venue board</th></tr></thead><tbody>${items.join('')}</tbody></table>`;
+  return `<h1>Tournaments</h1><table><thead><tr><th scope="col">Date</th><th scope="col">Tournament</th><th scope="col">Location</th></tr></thead><tbody>${items.join('')}</tbody></table>`;
 }
 
 // One category per page; the switcher is the navigation — the first category
@@ -116,9 +116,9 @@ function renderTournament(route, data) {
   const show = ctxs.find(c => c.id === route.cat) || ctxs[0]; // an unknown cat falls back to the first
   const multi = multiDay(ctxs);
   const parts = [segmentBar(route), `<header><h1>${esc(data.t.name)}</h1>`];
-  // the heading states the span and the zone once — single-day cards never repeat the date
+  // the heading states the span and the location once — single-day cards never repeat the date
   const range = dateRange(ctxs.flatMap(c => c.matches), tz);
-  parts.push(`<p class="subline">${[range, esc(tz)].filter(Boolean).join(' · ')}</p></header>`);
+  parts.push(`<p class="subline">${[range, esc(data.tjson.location)].filter(Boolean).join(' · ')}</p></header>`);
   // the category switcher pins under the view bar for the whole page — it must
   // sit outside the header, or the header's height would be its sticky ceiling
   parts.push(`<nav class="cats" aria-label="Categories">${catNav(data.t.slug, ctxs, route)}</nav>`);

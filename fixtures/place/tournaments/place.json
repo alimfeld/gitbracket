@@ -1,5 +1,6 @@
 {
   "name": "Placement",
+  "location": "Test Hall",
   "timezone": "UTC",
   "categories": [
     {

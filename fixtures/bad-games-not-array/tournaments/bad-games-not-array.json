@@ -1,5 +1,6 @@
 {
   "name": "Bad Games Not Array",
+  "location": "Test Hall",
   "timezone": "UTC",
   "categories": [{ "id": "t", "name": "T", "bestOf": { "groups": 1, "knockout": 3 } }],
   "players": [{ "id": "p1", "name": "P1" }, { "id": "p2", "name": "P2" }, { "id": "p3", "name": "P3" }],

@@ -12,6 +12,7 @@ const { matchSlotMs, schedDays } = require('../site/derive.js');
 const MINI = {
   slug: 'mini',
   name: 'Mini Open',
+  location: 'Zurich',
   timezone: 'Europe/Zurich',
   date: '2026-05-02',
   poolSize: 4,
@@ -32,7 +33,7 @@ const MINI = {
 function repoOf(tourney) {
   return {
     readErrs: [],
-    index: [{ slug: 'mini', name: 'Mini Open', dates: schedDays(Object.values(tourney.matches).flat(), tourney.timezone) }],
+    index: [{ slug: 'mini', name: 'Mini Open', location: tourney.location, dates: schedDays(Object.values(tourney.matches).flat(), tourney.timezone) }],
     tournaments: new Map([['mini', {
       tjson: tourney,
       matches: new Map(Object.entries(tourney.matches)),
@@ -70,6 +71,7 @@ test('a minimal spec generates a valid tournament', () => {
   assert.equal(tourney.matches.md.length, 9);
   assert.equal(tourney.matches.xd.length, 1);
   assert.ok(tourney.matches.md.every((m) => m.venue && m.scheduled));
+  assert.equal(tourney.location, 'Zurich');
 });
 
 test('the final override lands on the final and bronze match only', () => {
@@ -107,6 +109,7 @@ test('spec guards reject bad input fast', () => {
   assert.throws(() => generate({ ...MINI, blocks: undefined }), /blocks must be an id -> value map/);
   assert.throws(() => generate({ ...MINI, categories: 'oops' }), /categories must be an array/);
   assert.throws(() => generate({ ...MINI, name: undefined }), /name must be a non-empty string/);
+  assert.throws(() => generate({ ...MINI, location: '' }), /location must be a non-empty string/);
   assert.throws(() => generate({ ...MINI, timezone: undefined }), /timezone must be a non-empty string/);
 });
 
@@ -188,7 +191,7 @@ test('knockout false + placements silently ignores placements', () => {
     teams: { md: MINI.teams.md }, // no xd — categories only has md
   };
   const tourney = generate(spec);
-  const idx = { slug: 'mini', name: 'Mini Open', dates: schedDays(Object.values(tourney.matches).flat(), tourney.timezone) };
+  const idx = { slug: 'mini', name: 'Mini Open', location: tourney.location, dates: schedDays(Object.values(tourney.matches).flat(), tourney.timezone) };
   const { errs } = validateRepo({
     readErrs: [],
     index: [idx],

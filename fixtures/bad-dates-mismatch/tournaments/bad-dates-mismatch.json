@@ -1,5 +1,6 @@
 {
   "name": "Bad Dates Mismatch",
+  "location": "Test Hall",
   "timezone": "America/New_York",
   "venues": [
     {

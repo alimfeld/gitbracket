@@ -43,20 +43,23 @@ names a file in `site/tournaments/`:
 
 ```json
 [
-  { "slug": "2026-mammut60", "name": "Mammut Open 60+", "dates": ["2026-10-03"] }
+  { "slug": "2026-alpineopen", "name": "Alpine Open 60+", "location": "Bärenhalle, Grindelwald", "dates": ["2026-10-03"] }
 ]
 ```
 
-`dates` is the list page's day list (ascending ISO dates, required to match
-the schedule once the tournament is scheduled, like `name`).
+`location` is shown on the list page and tournament heading (instead of the
+timezone); required, and must match the file like `name`. `dates` is the list
+page's day list (ascending ISO dates, required to match the schedule once the
+tournament is scheduled, like `name`).
 
 The tournament file holds everything: venues, categories, players, and all
 matches keyed by category:
 
 ```jsonc
 {
-  "name": "Mammut Open 60+",
-  "timezone": "America/New_York",
+  "name": "Alpine Open 60+",
+  "location": "Bärenhalle, Grindelwald",
+  "timezone": "Europe/Zurich",
   "venues": [{ "id": "court-3", "name": "Court 3" }],
   "categories": [{ "id": "md40", "name": "Men's Doubles 40+",
     "bestOf": { "groups": 3, "knockout": 5 },
@@ -127,18 +130,18 @@ tournament and schedule so switching views keeps the focus and My Schedule
 restores it; `venue` lives on the kiosk alone:
 
 - `#` — lists tournaments, past and current; the only page with kiosk links.
-- `#<slug>` / `#<slug>?cat=<category-id>` — the tournament, one category at a time (the first by default); the date span and timezone in the heading, the category's span and status under its title.
+- `#<slug>` / `#<slug>?cat=<category-id>` — the tournament, one category at a time (the first by default); the date span and location in the heading, the category's span and status under its title.
 - `#<slug>/schedule?player=<player-id>` — My Schedule for that player; without a valid `player` (or via "Not you?") it shows a picker of participating players. The URL is the only memory of a pick — share or bookmark it.
 - `#<slug>/venues?venue=<venue-id>` — the kiosk, the fullscreen board for the hall showing today's open matches on every court; `venue` narrows to one court.
 
 ## Specs
 
 `node gb.js schedule specs/<slug>.json` generates a tournament file from a
-spec — the single source for the schedule. `specs/2026-mammut60.json` is the
-worked example:
+spec — the single source for the schedule:
 
 ```jsonc
-{ "slug": "2026-mammut60", "name": "Mammut Open 60+",
+{ "slug": "2026-alpineopen", "name": "Alpine Open 60+",
+  "location": "Bärenhalle, Grindelwald",
   "timezone": "Europe/Zurich", "date": "2026-10-03", "poolSize": 5,
   "blocks": { "md": "09:00", "xd": "13:00" },
   "venues": { "court-1": "Court 1" },

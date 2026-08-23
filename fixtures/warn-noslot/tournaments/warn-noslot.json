@@ -1,5 +1,6 @@
 {
   "name": "Warn No Slot",
+  "location": "Test Hall",
   "timezone": "UTC",
   "venues": [{ "id": "court-1", "name": "Court 1" }],
   "categories": [{ "id": "t", "name": "T", "bestOf": { "groups": 1, "knockout": 1 } }],

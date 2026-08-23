@@ -372,7 +372,7 @@ test('placementLabel: 3rd/5th/7th place and classification semis', () => {
 test('placementLabel: depth-3 classification (16 teams, placements 16) labels every slot', () => {
   const teams = Array.from({ length: 16 }, (_, i) => [`p${i}`]);
   const tourney = generate({
-    slug: 'deep', name: 'Deep', timezone: 'UTC', date: '2026-05-02', poolSize: 4,
+    slug: 'deep', name: 'Deep', location: 'Geneva', timezone: 'UTC', date: '2026-05-02', poolSize: 4,
     blocks: { t: '09:00' }, venues: { 'court-1': 'Court 1' },
     players: Object.fromEntries(teams.map(([id]) => [id, id])),
     categories: [{ id: 't', name: 'Single', bestOf: 1, slotMinutes: 30, placements: 16 }],
@@ -459,7 +459,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(venue.includes("Men&#39;s Doubles 40+ · Final") && !venue.includes("Men&#39;s Doubles 40+ · 9 ·"), 'kiosk meta shows the long category name and label, no match id');
   assert(!venue.includes('<nav>'), 'kiosk has no breadcrumb');
   assert(standings.includes('<h2>Men&#39;s Doubles 40+</h2><p class="subline">Knockout stage · Semifinals</p>') && !standings.includes('<h2 id='), 'category h2: plain in-flow heading, status-only subline (the single-day heading already stated the date)');
-  assert(standings.includes('<h1>Sample</h1>') && standings.includes('<p class="subline">Mon, Jul 14 · America/New_York</p>'), 'one-day tournament: the heading subline states the date and the zone');
+  assert(standings.includes('<h1>Sample</h1>') && standings.includes('<p class="subline">Mon, Jul 14 · New York</p>'), 'one-day tournament: the heading subline states the date and the location');
   assert(!standings.includes('class="day"') && !standings.includes('Jul 14, '), 'single-day: no day dividers anywhere, and cards carry just the time');
   assert(xd.includes('<h2>Mixed Doubles</h2><p class="subline">Finished</p>'), 'a fully decided category: status-only subline on a single-day page');
   assert(standings.includes('<h3>Group stage</h3><div class="pools">'), 'group stage: pools first under the heading');
@@ -513,11 +513,11 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   const idx = renderIndex({ view: 'index' }, { index: [
     { slug: 'soon', name: 'Later' },
     { slug: 'wide', name: 'Wide', dates: ['2026-07-11', '2026-07-12'] },
-    { slug: 'sample', name: 'Sample', dates: ['2025-07-14'] },
+    { slug: 'sample', name: 'Sample', location: 'New York', dates: ['2025-07-14'] },
   ] });
-  assert(idx.includes('<table>') && idx.includes('<th scope="col">Date</th>') && idx.includes('<th scope="col">Tournament</th>') && idx.includes('<th scope="col">Venue board</th>'), 'index is a dated table with a venue-board column');
+  assert(idx.includes('<table>') && idx.includes('<th scope="col">Date</th>') && idx.includes('<th scope="col">Tournament</th>') && idx.includes('<th scope="col">Location</th>'), 'index is a dated table with a location column');
   assert(idx.indexOf('>Sample</a>') < idx.indexOf('>Wide</a>') && idx.indexOf('>Wide</a>') < idx.indexOf('>Later</a>'), 'sorted by start date, undated last');
-  assert(idx.includes('<td>Mon, Jul 14</td><td><a href="#sample">Sample</a></td><td><a href="#sample/venues">Open</a></td>'), 'columns: date, tournament, venue board (header names the column, links carry the verb)');
+  assert(idx.includes('<td>Mon, Jul 14</td><td><a href="#sample">Sample</a> · <a href="#sample/venues">Venue board</a></td><td>New York</td>'), 'columns: date, tournament (venue-board link rides along), location');
   assert(idx.includes('<td>Sat–Sun, Jul 11–12</td>'), 'multi-day spans collapse in the date cell');
   assert(idx.includes('<td></td><td><a href="#soon">Later</a>'), 'an undated tournament keeps an empty date cell');
   assert(!idx.includes('undefined') && !idx.includes('null'), 'no date renders clean, no null payload');
@@ -554,7 +554,7 @@ test('multi-day: cards carry their full date; single-day cards just the time; th
   const info = repo.tournaments.get('multiday');
   const data = { index: repo.index, t: { slug: 'multiday', name: info.tjson.name }, tjson: info.tjson, cats: toCats(info.tjson) };
   const page = renderTournament({ slug: 'multiday', view: 'tournament' }, data);
-  assert(page.includes('<p class="subline">Sat–Sun, Jul 11–12 · America/New_York</p>'), 'the heading subline collapses consecutive days and gives the zone');
+  assert(page.includes('<p class="subline">Sat–Sun, Jul 11–12 · Boston</p>'), 'the heading subline collapses consecutive days and gives the location');
   assert(page.includes('<h2>Men&#39;s Doubles 40+</h2><p class="subline">Sat–Sun, Jul 11–12 · Group stage · 5 of 6 played, next <time datetime="2026-07-11T15:00:00.000Z">11:00</time></p>'), 'the category subline spans the range and the live status');
   assert(!page.includes('class="day"') && !page.includes('Pools</h3>'), 'no day dividers, no separate pools section');
   assert(page.includes('<time datetime="2026-07-11T13:00:00.000Z">Sat, Jul 11, 09:00</time>') && page.includes('<time datetime="2026-07-11T15:00:00.000Z">Sat, Jul 11, 11:00</time>'), 'Saturday cards carry the date with the time');
@@ -570,7 +570,7 @@ test('multi-day: cards carry their full date; single-day cards just the time; th
   const sInfo = loadRepo(FIX('sample')).tournaments.get('sample');
   const single = renderTournament({ slug: 'sample', view: 'tournament' },
     { index: repo.index, t: { slug: 'sample', name: sInfo.tjson.name }, tjson: sInfo.tjson, cats: toCats(sInfo.tjson) });
-  assert(single.includes('<h1>Sample</h1>') && single.includes('<h2>Men&#39;s Doubles 40+</h2>') && single.includes('<p class="subline">Mon, Jul 14 · America/New_York</p>') && !single.includes('class="day"') && !single.includes('Jul 14, '), 'single-day tournament: one date in the heading subline, cards carry only the time');
+  assert(single.includes('<h1>Sample</h1>') && single.includes('<h2>Men&#39;s Doubles 40+</h2>') && single.includes('<p class="subline">Mon, Jul 14 · New York</p>') && !single.includes('class="day"') && !single.includes('Jul 14, '), 'single-day tournament: one date in the heading subline, cards carry only the time');
 
   // kiosk: strict same-day in the tournament timezone, from the device clock instant
   const at = iso => Date.parse(iso);
@@ -589,13 +589,13 @@ test('date spans: consecutive days collapse, sparse days list, a year boundary a
   ] } };
   const data = { index: [], t: { slug: 't', name: tjson.name }, tjson, cats: toCats(tjson) };
   const page = renderTournament({ slug: 't', view: 'tournament' }, data);
-  assert(page.includes('<p class="subline">Wed, Dec 30, Sat, Jan 2, 2027 · UTC</p>'), 'sparse days list each label; a year boundary appends the end year');
+  assert(page.includes('<p class="subline">Wed, Dec 30, Sat, Jan 2, 2027</p>'), 'sparse days list each label; a year boundary appends the end year; no location renders clean');
   // closing the gap makes the run consecutive — cross-month collapsed form
   tjson.matches.t.splice(1, 0,
     { id: 3, scheduled: '2026-12-31T09:00:00', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },
     { id: 4, scheduled: '2027-01-01T09:00:00', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] });
   const run = renderTournament({ slug: 't', view: 'tournament' }, data);
-  assert(run.includes('<p class="subline">Wed–Sat, Dec 30 – Jan 2, 2027 · UTC</p>'), 'consecutive cross-month days keep both months and the end year');
+  assert(run.includes('<p class="subline">Wed–Sat, Dec 30 – Jan 2, 2027</p>'), 'consecutive cross-month days keep both months and the end year');
 });
 
 test('routing: cat and player ride along between tournament and schedule — applied on their home view only', () => {

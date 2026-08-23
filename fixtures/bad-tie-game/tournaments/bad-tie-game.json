@@ -1,5 +1,6 @@
 {
   "name": "Tie Game",
+  "location": "Test Hall",
   "timezone": "America/New_York",
   "venues": [
     {

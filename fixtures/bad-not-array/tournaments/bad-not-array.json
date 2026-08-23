@@ -1,5 +1,6 @@
 {
   "name": "Bad Not Array",
+  "location": "Test Hall",
   "timezone": "UTC",
   "venues": [
     { "id": "court-1", "name": "Court 1" }

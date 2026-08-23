@@ -336,7 +336,7 @@ function assertPoolCoverage(teams, matches, poolSize) {
 // Spec -> the full tournament file body (skeleton + scheduled matches). Pure:
 // no I/O, so tests can run it against a spec in memory. main() does the writes.
 function generate(spec) {
-  const { slug, name, timezone, date: eventDate, poolSize, blocks: blockStart, venues, players, categories, teams } = spec;
+  const { slug, name, location, timezone, date: eventDate, poolSize, blocks: blockStart, venues, players, categories, teams } = spec;
 
   // ---- spec surface (fail fast; the gate below would catch most of these too) ----
   if (typeof slug !== 'string' || !ID_RE.test(slug)) throw new Error(`spec: slug ${JSON.stringify(slug)} must match ${ID_RE}`);
@@ -344,6 +344,7 @@ function generate(spec) {
   // A missing/mistyped field used to crash as a raw TypeError (Object.entries
   // on undefined) instead of a named spec error — same gate, named message.
   if (typeof name !== 'string' || !name) throw new Error(`spec: name must be a non-empty string, got ${JSON.stringify(name)}`);
+  if (typeof location !== 'string' || !location.trim()) throw new Error(`spec: location must be a non-empty string, got ${JSON.stringify(location)}`);
   if (typeof timezone !== 'string' || !timezone) throw new Error(`spec: timezone must be a non-empty string, got ${JSON.stringify(timezone)}`);
   const objMap = (v, field) => {
     if (typeof v !== 'object' || v === null || Array.isArray(v)) throw new Error(`spec: ${field} must be an id -> value map, got ${JSON.stringify(v)}`);
@@ -424,7 +425,7 @@ function generate(spec) {
     console.log(`${cat}: ${ms.length} matches`);
   }
 
-  return { name, timezone, venues: VENUES, categories: CATS, players: PLAYERS, matches: out };
+  return { name, location, timezone, venues: VENUES, categories: CATS, players: PLAYERS, matches: out };
 }
 
 // CLI entry (dispatched from gb.js): root is the repo root, specPath is
@@ -442,7 +443,7 @@ function main(root, specPath) {
   // keep the list page in sync — a tournament the index doesn't know is invisible
   const idxFile = path.join(siteRoot, 'tournaments.json');
   const idx = JSON.parse(fs.readFileSync(idxFile, 'utf8'));
-  const entry = { slug: spec.slug, name: spec.name, dates: schedDays(Object.values(tourney.matches).flat(), tourney.timezone) };
+  const entry = { slug: spec.slug, name: spec.name, location: spec.location, dates: schedDays(Object.values(tourney.matches).flat(), tourney.timezone) };
   const i = Array.isArray(idx) ? idx.findIndex((t) => t && t.slug === spec.slug) : -1;
   if (i >= 0) idx[i] = entry; else idx.push(entry);
   // keep the index's established one-entry-per-line format — index diffs stay per-tournament

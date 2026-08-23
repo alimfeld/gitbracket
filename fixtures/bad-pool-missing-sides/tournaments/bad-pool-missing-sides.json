@@ -1,5 +1,6 @@
 {
   "name": "Bad Pool Missing Sides",
+  "location": "Test Hall",
   "timezone": "UTC",
   "venues": [{ "id": "c", "name": "C" }],
   "categories": [{ "id": "t", "name": "T", "bestOf": { "groups": 1, "knockout": 3 }, "slotMinutes": { "groups": 30, "knockout": 45 } }],

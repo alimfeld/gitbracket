@@ -57,6 +57,7 @@ function validateRepo(repo) {
     const where = `tournaments.json [${i}]`;
     if (!t || typeof t !== 'object') { err(where, 'entry must be an object'); continue; }
     if (typeof t.name !== 'string' || !t.name.trim()) err(where, 'name must be a non-empty string');
+    if (typeof t.location !== 'string' || !t.location.trim()) err(where, 'location must be a non-empty string');
     if (t.dates !== undefined && (!Array.isArray(t.dates) || !t.dates.length || !t.dates.every(d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)))) err(where, 'dates must be a non-empty array of YYYY-MM-DD when present');
     if (typeof t.slug !== 'string' || !ID_RE.test(t.slug)) {
       err(where, `slug ${JSON.stringify(t.slug)} must match ${ID_RE}`);
@@ -65,13 +66,13 @@ function validateRepo(repo) {
     if (seenSlugs.has(t.slug)) err(where, `duplicate slug ${t.slug}`);
     seenSlugs.add(t.slug);
     const info = tournaments.get(t.slug);
-    if (info) validateTournamentData(t.slug, t.name, t.dates, info, errs, warns);
+    if (info) validateTournamentData(t.slug, t.name, t.location, t.dates, info, errs, warns);
   }
 
   return { errs, warns };
 }
 
-function validateTournamentData(slug, indexName, indexDates, info, errs, warns) {
+function validateTournamentData(slug, indexName, indexLocation, indexDates, info, errs, warns) {
   const tFile = `site/tournaments/${slug}.json`;
   const tjson = info.tjson;
   if (tjson === undefined) return; // unreadable — readErrs carries the message
@@ -84,6 +85,13 @@ function validateTournamentData(slug, indexName, indexDates, info, errs, warns) 
     err(tFile, 'name must be a non-empty string');
   } else if (tjson.name !== indexName) {
     err(tFile, `name ${JSON.stringify(tjson.name)} does not match the index entry ${JSON.stringify(indexName)}`);
+  }
+
+  // the list shows the index copy, the page the file's — they must agree
+  if (typeof tjson.location !== 'string' || !tjson.location.trim()) {
+    err(tFile, 'location must be a non-empty string');
+  } else if (typeof indexLocation === 'string' && tjson.location !== indexLocation) {
+    err(tFile, `location ${JSON.stringify(tjson.location)} does not match the index entry ${JSON.stringify(indexLocation)}`);
   }
 
   // the index copy must match the file's days — mirrors the name check above

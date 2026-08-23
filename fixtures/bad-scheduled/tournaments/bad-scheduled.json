@@ -1,5 +1,6 @@
 {
   "name": "Bad Scheduled",
+  "location": "Test Hall",
   "timezone": "UTC",
   "venues": [
     {

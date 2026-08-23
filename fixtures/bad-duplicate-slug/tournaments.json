@@ -1,6 +1,6 @@
 [
-  { "slug": "dup", "name": "First" },
-  { "slug": "dup", "name": "Second" },
-  { "name": "No slug A" },
-  { "name": "No slug B" }
+  { "slug": "dup", "name": "First", "location": "Test Hall" },
+  { "slug": "dup", "name": "Second", "location": "Test Hall" },
+  { "name": "No slug A", "location": "Test Hall" },
+  { "name": "No slug B", "location": "Test Hall" }
 ]
