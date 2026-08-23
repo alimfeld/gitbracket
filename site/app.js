@@ -386,7 +386,14 @@ function renderPlayer(route, data) {
     if (!blocksByDay.has(key)) blocksByDay.set(key, []);
     blocksByDay.get(key).push({ ctx, ...span });
   }
-  const parts = [segmentBar(route), `<header><div class="title-row"><h1>${esc(p.name)}</h1><a class="top" href="${esc(href(data.t.slug, 'schedule', { cat: route.cat }))}">Not you?</a></div></header>`];
+  // a void settles, counts nothing
+  let wins = 0, losses = 0;
+  for (const r of rows) {
+    const wi = winnerIdx(r.m);
+    if (wi === r.i) wins++;
+    else if (wi !== null) losses++;
+  }
+  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}</h1><p class="subline"><span>${wins} W · ${losses} L</span><a href="${esc(href(data.t.slug, 'schedule', { cat: route.cat }))}">Not you?</a></p></header>`];
   const axis = { day: null }; // the schedule is one timeline — each distinct day states itself once
   for (const [key, g] of groups) {
     parts.push(dayDiv(key, g.iso, axis));

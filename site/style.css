@@ -28,13 +28,6 @@ h4, h5 { font-size: .75em; text-transform: uppercase; letter-spacing: .06em; col
 .day::before, .day::after { content: ''; flex: 1; height: 1px; background: var(--line); }
 a { color: var(--accent); }
 
-/* the link rides the h1 line; the row owns the bottom spacing — the title's own margin would inflate it */
-/* line-height:1 on both — no leading, so centering hits the text, not the line box */
-.title-row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
-.title-row h1 { margin: 0; line-height: 1; }
-.top { color: var(--muted); font-size: .9em; text-decoration: none; white-space: nowrap; line-height: 1; }
-.top:hover { color: var(--accent); text-decoration: underline; }
-
 .adv { margin-left: .4em; font-size: .85em; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--muted); } /* how many teams leave the pool for the bracket — a parenthetical note, not title text */
 .subline { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; font-size: .9em; color: var(--muted); margin: -.4rem 0 .8rem; } /* category status sentence under its h2; stage sublines carry the count left and the disclosure right */
 .toggle { border: 0; background: none; padding: 0; font: inherit; color: var(--accent); cursor: pointer; white-space: nowrap; } /* show/hide under a stage heading — the one interactive affordance on the page */

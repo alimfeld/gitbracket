@@ -491,7 +491,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(ppage.includes('class="ph"'), 'player match cards render unplayed score slots too');
   assert(ppage.includes('Ada Lovelace'), 'player page finds the player');
   assert(ppage.includes('<nav class="segments" aria-label="Views"><a href="#sample?player=p1">Tournament</a><a href="#sample/schedule?player=p1" aria-current="true">My Schedule</a></nav>'), 'player page: segment switch, My Schedule current, pick preserved in links');
-  assert(ppage.includes('<div class="title-row"><h1>Ada Lovelace</h1><a class="top" href="#sample/schedule">Not you?</a></div>'), 'player page: Not you? drops the player param — the picker is schedule without one');
+  assert(ppage.includes('<p class="subline"><span>7 W · 0 L</span><a href="#sample/schedule">Not you?</a></p>'), 'player page: record + Not you? in the heading subline; the link drops the player param');
   assert(ppage.includes('#sample'), 'player page links the tournament name to the tournament page');
   const picker = renderPlayer({ slug: 'sample', view: 'schedule' }, data);
   assert(picker.includes('<nav class="segments" aria-label="Views"><a href="#sample">Tournament</a><a href="#sample/schedule" aria-current="true">My Schedule</a></nav>'), 'picker: segment switch, My Schedule current');
