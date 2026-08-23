@@ -527,27 +527,29 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
 });
 
 
-test('multi-day: day headings own the date on the tournament page; the kiosk shows today only', () => {
+test('multi-day: day dividers mark only the day changes on the tournament page; the kiosk shows today only', () => {
   const repo = loadRepo(FIX('multiday'));
   const info = repo.tournaments.get('multiday');
   const data = { index: repo.index, t: { slug: 'multiday', name: info.tjson.name }, tjson: info.tjson, cats: toCats(info.tjson) };
   const page = renderTournament({ slug: 'multiday', view: 'tournament' }, data);
   assert(!/<p class="subline">[A-Z][a-z]{2},/.test(page), 'a subline carries a status sentence, never a bare date');
-  assert(page.includes('<h3>Group stage</h3><div class="day"><time datetime="2026-07-11">Sat, Jul 11</time></div>'), 'a one-day group stage of a multi-day category carries its divider under the heading');
-  assert(page.includes('<h3>Knockout stage</h3><div class="day"><time datetime="2026-07-12">Sun, Jul 12</time></div><p class="subline"><progress value="0" max="3"></progress>0 of 3 played</p>') && page.includes('<h4>Semifinals</h4>') && page.includes('<h4>Final</h4>'), 'one-day knockout of a multi-day category dates its section divider, not the rounds');
-  // groups straddling days: the summary drops its divider, inner day dividers take over
+  assert(page.includes('</header><div class="day"><time datetime="2026-07-11">Sat, Jul 11</time></div>'), 'the first divider always lands under the pills and states day one');
+  assert((page.match(/datetime="2026-07-11"/g) || []).length === 1, 'groups rest on the pills divider — day one is never re-stated');
+  assert(page.includes('<h4>Semifinals</h4><div class="day"><time datetime="2026-07-12">Sun, Jul 12</time></div>') && page.includes('<h4>Final</h4><section class="grid">'), 'the divider appears exactly at the day change — before the first Sunday round, not before the final');
+  assert(page.includes('<h3>Group stage</h3><p class="subline"><progress value="5" max="6"></progress>5 of 6 played</p><details open>'), 'a section that does not change the day carries no divider');
+  // groups straddling days: the run boundary splits its own divider out of the fold
   const split = JSON.parse(JSON.stringify(info.tjson));
   split.matches.md40[5].scheduled = '2026-07-12T15:00:00'; // m6 (pool) -> Sunday: group matches span days
   const spage = renderTournament({ slug: 'multiday', view: 'tournament' },
     { index: repo.index, t: data.t, tjson: split, cats: toCats(split) });
-  assert(spage.includes('<div class="day"><time datetime="2026-07-11">Sat, Jul 11</time></div>') && spage.includes('<div class="day"><time datetime="2026-07-12">Sun, Jul 12</time></div>'), 'group matches spanning days split under day dividers');
+  assert(spage.includes('<summary>Group matches</summary><section class="grid">') && spage.includes('</section><div class="day"><time datetime="2026-07-12">Sun, Jul 12</time></div><section class="grid">'), 'the Sunday run boundary splits its own divider inside the fold, the Saturday run rests on the pills divider');
   assert(!spage.includes('played · Sat'), 'no date suffix on a summary that does not unify its matches');
-  // a round straddling days: rounds carry dividers, the straddling one splits under its own
+  // a round straddling days: the round's runs split, and a day that returns re-states itself
   split.matches.md40[7].scheduled = '2026-07-11T20:00:00'; // m8 (semi) -> Saturday evening
   const rpage = renderTournament({ slug: 'multiday', view: 'tournament' },
     { index: repo.index, t: data.t, tjson: split, cats: toCats(split) });
-  assert(rpage.includes('<h4>Final</h4><div class="day"><time datetime="2026-07-12">Sun, Jul 12</time></div>'), 'single-day round carries its divider when rounds differ');
-  assert(rpage.includes('<h4>Semifinals</h4>') && rpage.includes('<div class="day"><time datetime="2026-07-11">Sat, Jul 11</time></div>') && rpage.includes('<div class="day"><time datetime="2026-07-12">Sun, Jul 12</time></div>'), 'a round spanning days splits under its own dividers');
+  assert(rpage.includes('<h4>Semifinals</h4><div class="day"><time datetime="2026-07-11">Sat, Jul 11</time></div><section class="grid">') && rpage.includes('</section><div class="day"><time datetime="2026-07-12">Sun, Jul 12</time></div><section class="grid">'), 'straddling round: each run boundary emits its own divider');
+  assert(rpage.includes('<h4>Final</h4><section class="grid">'), 'the final rests on the Sunday divider the semis already stated');
   const sInfo = loadRepo(FIX('sample')).tournaments.get('sample');
   const single = renderTournament({ slug: 'sample', view: 'tournament' },
     { index: repo.index, t: { slug: 'sample', name: sInfo.tjson.name }, tjson: sInfo.tjson, cats: toCats(sInfo.tjson) });

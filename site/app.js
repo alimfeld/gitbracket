@@ -99,15 +99,16 @@ function renderIndex(route, data) {
 
 function renderTournament(route, data) {
   if (!data.tjson) return MISSING;
-  // one-day tournament: the date hoists to a divider under the header, nowhere below repeats it
-  const allMs = (data.cats || []).flatMap(c => c.matches || []);
-  const tRun = oneRun(allMs, { tz: data.tjson.timezone || 'UTC' });
+  // one date axis per render: the first divider lands under the pills, later ones only where the day changes
+  const cats = data.cats.filter(c => !route.cat || c.meta.id === route.cat);
+  const tz = data.tjson.timezone || 'UTC';
+  const axis = { day: null };
   const parts = [segmentBar(route), `<header><h1>${esc(data.t.name)}</h1>`];
   parts.push(`<nav class="pills" aria-label="Categories">${catPills(data.tjson.categories || [], route)}</nav></header>`);
-  if (tRun) parts.push(dayDiv(tRun.label, tRun.iso)); // the hoist: one dated divider, inner sections stay date-free
-  for (const c of data.cats) {
-    if (route.cat && c.meta.id !== route.cat) continue; // pills keep every category; only the section list narrows
-    parts.push(catSection(makeCat(c, data.tjson), tRun));
+  const first = earliestRun(cats, tz);
+  if (first) parts.push(dayDiv(first.label, first.iso, axis)); // the first divider always lands under the pills
+  for (const c of cats) {
+    parts.push(catSection(makeCat(c, data.tjson), axis));
   }
   return parts.join('');
 }
@@ -131,9 +132,9 @@ function phaseLine(ctx) {
   return `Knockout stage · ${next ? roundName(koColumn(next, ctx)) : 'awaiting'}`;
 }
 
-// Dates are a timeline axis over the category tree, never a heading level: every
-// block of same-day matches carries one divider (a dated hairline, `dayDiv`), so
-// the headings keep only names. A run owns its day when nothing above claimed it.
+// Dates are one timeline axis per render, never a heading level: a block of same-day
+// cards carries a divider (a dated hairline, `dayDiv`) only when its day differs from
+// the last divider's, so the first block of a day states it and later blocks rest on it.
 const dayLabel = (m, ctx) => { const t = schedTime(m, ctx.tz); return t === null ? 'Time TBD' : dayShort(t, ctx.tz); };
 const chrono = (ms, ctx) => [...ms].sort((a, b) => (schedTime(a, ctx.tz) ?? 0) - (schedTime(b, ctx.tz) ?? 0));
 const dayIso = (m, ctx) => { const t = schedTime(m, ctx.tz); return t === null ? null : dayKey(t, ctx.tz); };
@@ -146,11 +147,23 @@ const dayRuns = (ms, ctx) => {
   }
   return [...map.values()];
 };
-const oneRun = (ms, ctx) => { const runs = dayRuns(ms, ctx); return runs.length === 1 && runs[0].iso ? runs[0] : null; };
 // the divider label is the friendly wall-clock date; datetime carries the tz-local date
-const dayDiv = (label, iso) => `<div class="day">${iso ? `<time datetime="${iso}">${esc(label)}</time>` : esc(label)}</div>`;
+const dayDiv = (label, iso, axis) => {
+  if (label === axis.day) return ''; // the axis already states this day — no divider, no noise
+  axis.day = label;
+  return `<div class="day">${iso ? `<time datetime="${iso}">${esc(label)}</time>` : esc(label)}</div>`;
+};
+// the first day under the pills: the earliest scheduled wall-clock match among rendered categories
+const earliestRun = (cats, tz) => {
+  let best = null;
+  for (const c of cats) for (const m of c.matches || []) {
+    const t = schedTime(m, tz);
+    if (t !== null && (best === null || t < best)) best = t;
+  }
+  return best === null ? null : { label: dayShort(best, tz), iso: dayKey(best, tz) };
+};
 
-function catSection(ctx, upDay) {
+function catSection(ctx, axis) {
   const parts = [];
   const byPool = new Map(); // pool -> its group matches (creation order = pool order)
   const ko = [];
@@ -163,12 +176,8 @@ function catSection(ctx, upDay) {
   }
   // All pools, chronological by wall-clock (stable sort keeps file order on ties).
   const grp = [...byPool.values()].flat().sort((a, b) => (schedTime(a, ctx.tz) ?? 0) - (schedTime(b, ctx.tz) ?? 0));
-  const selfRun = !upDay && oneRun(ctx.matches, ctx); // this category unifies a day no ancestor claimed
-  const catDay = upDay || selfRun; // matches below are already dated by an ancestor
   const phase = phaseLine(ctx); // one status sentence per category, on its own line under the heading
-  parts.push(`<h2>${esc(ctx.name)}</h2>`);
-  if (selfRun) parts.push(dayDiv(selfRun.label, selfRun.iso));
-  parts.push(phase && `<p class="subline">${phase}</p>`);
+  parts.push(`<h2>${esc(ctx.name)}</h2>${phase && `<p class="subline">${phase}</p>`}`);
   // always visible: the tables answer "which pool am I in, who else is in mine"
   if (byPool.size) {
     const started = ctx.matches.some(isDone); // pre-play every team ties at zero — no highlight yet
@@ -199,16 +208,13 @@ function catSection(ctx, upDay) {
   // folds to a one-line summary once the groups are decided
   if (grp.length) {
     const played = grp.filter(isDone).length;
-    const gRun = !catDay && oneRun(grp, ctx);
-    const body = (gRun || catDay) ? matchGrid(grp, ctx) // grp is already chronological
-      : dayRuns(grp, ctx).map(r2 => `${dayDiv(r2.label, r2.iso)}${matchGrid(r2.ms, ctx)}`).join('');
-    // the divider owns the day like Knockout stage; progress sits below it, the fold only holds the cards
-    parts.push(`<h3>Group stage</h3>`);
-    if (gRun) parts.push(dayDiv(gRun.label, gRun.iso));
-    parts.push(progressDayline(played, grp.length));
+    const [first, ...rest] = dayRuns(grp, ctx);
+    // the first run's divider sits outside the fold; a run that changes the day splits its own grid
+    parts.push(`<h3>Group stage</h3>`, dayDiv(first.label, first.iso, axis), progressDayline(played, grp.length));
+    const body = matchGrid(first.ms, ctx) + rest.map(r2 => `${dayDiv(r2.label, r2.iso, axis)}${matchGrid(r2.ms, ctx)}`).join('');
     parts.push(`<details${played < grp.length ? ' open' : ''}><summary>Group matches</summary>${body}</details>`);
   }
-  if (ko.length) parts.push(bracketHtml(ctx, ko, catDay));
+  if (ko.length) parts.push(bracketHtml(ctx, ko, axis));
   return parts.join('');
 }
 
@@ -221,34 +227,24 @@ const koOrder = (ms, ctx) => [...ms].sort((a, b) =>
   (koOrdinal(a, ctx) || Infinity) - (koOrdinal(b, ctx) || Infinity) ||
   (schedTime(a, ctx.tz) ?? 0) - (schedTime(b, ctx.tz) ?? 0));
 
-function bracketHtml(ctx, ko, catDay) {
+function bracketHtml(ctx, ko, axis) {
   const maxR = ko.reduce((mx, m) => Math.max(mx, koColumn(m, ctx)), 0);
   const cols = [];
   for (const m of ko) {
     const r = maxR - koColumn(m, ctx); // koColumn is distance from the final; render that column rightmost
     (cols[r] = cols[r] || []).push(m);
   }
-  const koRun = catDay ? null : oneRun(ko, ctx); // whole bracket parked on one day?
-  const roundsDated = !catDay && !koRun;   // rounds differ -> each carries its own divider
   const koDone = ko.filter(isDone).length;
-  const parts = [`<h3>Knockout stage</h3>`];
-  if (koRun) parts.push(dayDiv(koRun.label, koRun.iso));
-  parts.push(progressDayline(koDone, ko.length));
+  const parts = [`<h3>Knockout stage</h3>`, progressDayline(koDone, ko.length)];
   for (let r = 0; r <= maxR; r++) { // index by depth, skip holes — labels stay aligned if a column is empty
     const ms = cols[r];
     if (!ms || !ms.length) continue;
     const label = roundName(maxR - r);
-    let body;
-    if (roundsDated) {
-      const rRun = oneRun(ms, ctx);
-      if (rRun) {
-        parts.push(`<h4>${label}</h4>`, dayDiv(rRun.label, rRun.iso), matchGrid(koOrder(ms, ctx), ctx));
-        continue;
-      }
-      // a single round straddles midnight — split it under its own dividers
-      body = dayRuns(ms, ctx).map(r2 => `${dayDiv(r2.label, r2.iso)}${matchGrid(koOrder(r2.ms, ctx), ctx)}`).join('');
-    } else body = matchGrid(koOrder(ms, ctx), ctx);
-    parts.push(`<h4>${label}</h4>`, body);
+    const [first, ...rest] = dayRuns(ms, ctx);
+    // the round's first run dates the h4 first; later runs split their own dividers in order
+    parts.push(`<h4>${label}</h4>`, dayDiv(first.label, first.iso, axis));
+    const body = matchGrid(koOrder(first.ms, ctx), ctx) + rest.map(r2 => `${dayDiv(r2.label, r2.iso, axis)}${matchGrid(koOrder(r2.ms, ctx), ctx)}`).join('');
+    parts.push(body);
   }
   return parts.join('');
 }
@@ -384,8 +380,9 @@ function renderPlayer(route, data) {
     blocksByDay.get(key).push({ ctx, ...span });
   }
   const parts = [segmentBar(route), `<header><div class="title-row"><h1>${esc(p.name)}</h1><a class="top" href="${esc(href(data.t.slug, 'schedule', { cat: route.cat }))}">Not you?</a></div></header>`];
+  const axis = { day: null }; // the schedule is one timeline — each distinct day states itself once
   for (const [key, g] of groups) {
-    parts.push(dayDiv(key, g.iso)); // a day divider, not a heading — the schedule reads as a timeline
+    parts.push(dayDiv(key, g.iso, axis));
     const day = [];
     const blocks = (blocksByDay.get(key) || []).sort((a, b) => a.min - b.min);
     let bi = 0;
