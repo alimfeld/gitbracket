@@ -17,6 +17,7 @@ body {
 }
 /* sizes are em — body font-size scales the whole app; the kiosk uses it as its one text knob */
 h1 { font-size: 1.6em; margin: 0 0 1rem; }
+h1:focus { outline: none; } /* focus target for view switches, not a keyboard stop */
 h2 { font-size: 1.2em; margin: 2rem 0 .6rem; }
 h3 { font-size: 1em; margin: 1.2rem 0 .4rem; color: var(--muted); }
 h4 { font-size: .75em; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 1rem 0 0; }

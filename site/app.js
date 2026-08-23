@@ -374,6 +374,7 @@ function boot() {
   let data = null;     // last good snapshot — a failed poll keeps the board up
   let dataSlug = null; // slug the snapshot belongs to — a route change to another tournament reloads
   let lastHtml = '';   // skip re-render when nothing changed — keeps selection/focus on the player page
+  let lastView = parseRoute()?.view ?? null; // start from the browser's restored position on reload
   let pollTimer = null, clockTimer = null;
 
   // Auto-refresh only on the kiosk; the other views are read-on-load.
@@ -413,9 +414,18 @@ function boot() {
     // the kiosk dark theme keys off body.venue — present only on the venue view
     document.body.classList.toggle('venue', r.view === 'venues');
     document.title = pageTitle(r, d);
+    // a new view is new content: start sighted users at the top and AT/keyboard users at its heading
+    const viewChanged = lastView !== r.view;
+    lastView = r.view;
     try {
       const html = renderers[r.view](r, d);
       if (html !== lastHtml) { app.innerHTML = html; lastHtml = html; }
+      if (viewChanged) {
+        window.scrollTo(0, 0);
+        const h1 = app.querySelector('h1');
+        h1.tabIndex = -1;
+        h1.focus({ preventScroll: true });
+      }
     } catch (e) {
       app.innerHTML = '<p>Render error.</p>';
       console.error(e);
