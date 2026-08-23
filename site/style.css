@@ -17,14 +17,13 @@ body {
 }
 /* sizes are em — the kiosk's body.venue font-size is the one text knob; the page takes the UA font size */
 h1 { font-size: 1.6em; margin: 0 0 1rem; }
-h1:focus { outline: none; } /* focus target for view switches, not a keyboard stop */
 h2 { font-size: 1.2em; margin: 2rem 0 .6rem; }
 h3 { font-size: 1em; margin: 1.2rem 0 .4rem; color: var(--muted); }
 h4 { font-size: .8em; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 1rem 0 0; } /* the secondary text tier: .8em every label — meta lines, day markers, table headers, pool/round names — one size, muted */
-/* a day divider is a timeline marker: hairline rule, label centered on it — dates never ride headings */
+/* the divider is a band, not a line: margins would leave transparent strips for content to scroll through — padding is the mask */
 /* sticky makes each divider the scroll chip: the latest day pins under the segments until the next covers it */
-/* ponytail: top is a knob — 3.5rem clears the .segments box (.5rem padding x2 + 1.45 x .95em line + 1px border); only the non-kiosk page has .day */
-.day { display: flex; align-items: center; gap: .8em; margin: 1.3rem 0 .8rem; color: var(--muted); font-size: .8em; letter-spacing: .06em; position: sticky; top: 3.5rem; background: var(--paper); }
+/* ponytail: top is a knob — 3rem = the .segments bar height (.5rem top pad + 1.45 line + 1px border + 1rem bottom pad), so the two bars sit flush as one opaque block; only the non-kiosk page has .day */
+.day { display: flex; align-items: center; gap: .8em; padding: 1.3rem 0 .8rem; color: var(--muted); font-size: .8em; letter-spacing: .06em; position: sticky; top: 3rem; z-index: 1; background: var(--paper); } /* z-index: 1 — a sticky band without its own layer leaks scrolled content through it on Safari's compositor */
 .day::before, .day::after { content: ''; flex: 1; height: 1px; background: var(--line); }
 /* fragment links are "visited" the moment they're followed — visited styling is noise, keep the accent */
 a, a:visited { color: var(--accent); }
@@ -46,7 +45,7 @@ a, a:visited { color: var(--accent); }
 article { display: flex; flex-direction: column; gap: .3rem; border: 1px solid var(--line); border-radius: .5rem; padding: .6rem .8rem; background: var(--paper); }
 .stack { display: flex; flex-direction: column; gap: .6rem; }
 .side { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; }
-.score { margin-left: auto; display: flex; gap: .4rem; }
+.score { display: flex; gap: .4rem; }
 .score span { font-weight: 600; min-width: 1.3em; text-align: right; }
 .score span.ph { opacity: .3; } /* unplayed best-of slot: the shape is the label */
 [data-win] { font-weight: 700; }
@@ -57,7 +56,7 @@ article { display: flex; flex-direction: column; gap: .3rem; border: 1px solid v
 .pills a { padding: .35rem .8rem; border: 1px solid var(--line); border-radius: 999px; text-decoration: none; }
 .pills a[aria-current] { background: var(--accent); border-color: var(--accent); color: #fff; }
 /* the destination switch floats above the page — content scrolls under it */
-.segments { position: sticky; top: 0; z-index: 10; display: flex; gap: .25rem; padding: .5rem 0; margin: 0 0 1rem; background: var(--paper); border-bottom: 1px solid var(--hairline); }
+.segments { position: sticky; top: 0; z-index: 10; display: flex; gap: .25rem; padding: .5rem 0 1rem; background: var(--paper); border-bottom: 1px solid var(--hairline); }
 .segments a { flex: 1; text-align: center; padding: .5rem; border-radius: .5rem; color: var(--ink); font-weight: 600; text-decoration: none; }
 .segments a:hover { background: #00000012; }
 .segments a[aria-current] { background: var(--accent); color: #fff; }

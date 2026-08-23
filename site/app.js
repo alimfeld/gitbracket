@@ -79,9 +79,8 @@ const segmentBar = r => {
 const MISSING = '<p>No tournament data yet — check back soon.</p>';
 
 
-const FULL_META = ['label', 'court', 'time'];
 // opts.stage ties the grid to a stage's show/hide button; opts.hidden starts it collapsed
-const matchGrid = (ms, ctx, opts = {}) => `<section class="grid"${opts.stage ? ` data-stage="${esc(opts.stage)}"` : ''}${opts.hidden ? ' hidden' : ''}>${ms.map(m => matchCard(m, ctx, { meta: FULL_META })).join('')}</section>`;
+const matchGrid = (ms, ctx, opts = {}) => `<section class="grid"${opts.stage ? ` data-stage="${esc(opts.stage)}"` : ''}${opts.hidden ? ' hidden' : ''}>${ms.map(m => matchCard(m, ctx, { meta: ['label', 'court', 'time'] })).join('')}</section>`;
 
 // Category pills — the tournament page's category filter; other params (the
 // riding-along player) are preserved.
@@ -491,18 +490,13 @@ function boot() {
     // the kiosk dark theme keys off body.venue — present only on the venue view
     document.body.classList.toggle('venue', r.view === 'venues');
     document.title = pageTitle(r, d);
-    // a new view is new content: start sighted users at the top and AT/keyboard users at its heading
+    // a new view is new content — start at the top; shorter pages clamp the residual scroll
     const viewChanged = lastView !== r.view;
     lastView = r.view;
     try {
       const html = renderers[r.view](r, d);
       if (html !== lastHtml) { app.innerHTML = html; lastHtml = html; }
-      if (viewChanged) {
-        window.scrollTo(0, 0);
-        const h1 = app.querySelector('h1');
-        h1.tabIndex = -1;
-        h1.focus({ preventScroll: true });
-      }
+      if (viewChanged) window.scrollTo(0, 0);
     } catch (e) {
       app.innerHTML = '<p>Something went wrong displaying this page.</p>';
       console.error(e);
