@@ -28,7 +28,9 @@ h4 { font-size: .8em; text-transform: uppercase; letter-spacing: .06em; color: v
 .day::before, .day::after { content: ''; flex: 1; height: 1px; background: var(--line); }
 
 .adv { margin-left: .4em; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--muted); } /* how many teams leave the pool for the bracket — a parenthetical note, not title text */
-.subline { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; color: var(--muted); margin: 0 0 .8rem; } /* category status sentence under its h2; stage sublines carry the count left and the disclosure right */
+.subline { color: var(--muted); margin: 0 0 .8rem; } /* category status sentence under its h2; stage sublines carry the count left and the disclosure right */
+/* only a subline that carries an action becomes a row — a plain status sentence must stay inline, flex would tear "Starts" from its time */
+.subline:has(button, a) { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
 .toggle { border: 0; background: none; padding: 0; font: inherit; color: var(--accent); cursor: pointer; white-space: nowrap; } /* show/hide under a stage heading — the one interactive affordance on the page */
 .toggle:hover { text-decoration: underline; }
 .grid[hidden], .pools[hidden] { display: none; } /* their display rules would beat the UA hidden rule */
