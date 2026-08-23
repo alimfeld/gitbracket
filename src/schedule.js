@@ -1,8 +1,7 @@
 // GitBracket tournament generator — `node gb.js schedule specs/<slug>.json`.
-// Reads a spec and writes the full tournament file wholesale (skeleton + every
-// scheduled match), keeping the index in sync; the file is never hand-edited —
-// scores and venue moves go through the REPL. Spec semantics: README (Specs);
-// the worked example is specs/2026-mammut60.json.
+// Writes the full tournament file wholesale (skeleton + scheduled matches) and
+// keeps the index in sync; the file is never hand-edited — scores and venue
+// moves go through the REPL. Specs: README (Specs); specs/2026-mammut60.json.
 //
 // Re-run after the registration deadline with the final spec.teams (shuffle
 // team order beforehand for a fair draw) — regeneration replaces the whole
@@ -221,7 +220,6 @@ function scheduleMatches(categories, venues, tz, slotCfgOf, eventDate, blockStar
   if (venues.length === 0) throw new Error('spec: venues must be a non-empty id -> name map');
   const offset = tzOffset(tz, eventDate);
   const startOf = (cat) => Date.parse(`${eventDate}T${blockStart[cat]}:00${offset}`);
-  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
   const courtUse = new Map(); // venue -> [{ start, end }]
   const playerUse = []; // { start, end, players: Set }
   const endOf = new Map(); // match id -> end ms (feeder floor)
@@ -249,8 +247,11 @@ function scheduleMatches(categories, venues, tz, slotCfgOf, eventDate, blockStar
           m.venue = venue;
           // local wall date + time in the event tz, no offset — the tz in the
           // file interprets it. A fixed eventDate prefix would backdate a slot
-          // crossing midnight by 24h, so the day comes from the instant.
-          m.scheduled = `${dayKey(t, tz)}T${fmt.format(new Date(t))}:00`;
+          // crossing midnight by 24h, so the day comes from the instant. The
+          // wall clock is typed parts with h23, so the ISO_RE contract can't
+          // depend on any locale's separator or hour cycle.
+          const wall = Object.fromEntries(new Intl.DateTimeFormat(undefined, { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(t)).map(x => [x.type, x.value]));
+          m.scheduled = `${dayKey(t, tz)}T${wall.hour}:${wall.minute}:00`;
           courtUse.set(venue, [...(courtUse.get(venue) ?? []), { start: t, end: t + slotMs }]);
           endOf.set(m.id, t + slotMs);
           if (m.pool !== undefined) poolDone.set(m.pool, Math.max(poolDone.get(m.pool) ?? start, t + slotMs));

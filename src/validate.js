@@ -7,7 +7,7 @@
 
 const path = require('path');
 const { loadRepo, isRealDate, slotsOverlap } = require('./tools.js');
-const { ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, isDone, poolStandings, resolveSide, isDeadTie, bestOfOf, countWins, schedTime, schedDays } = require('../site/derive.js');
+const { LOCALE, ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, isDone, poolStandings, resolveSide, isDeadTie, bestOfOf, countWins, schedTime, schedDays } = require('../site/derive.js');
 
 const RESULTS = ['winner', 'loser'];
 const RESULT_STATUSES = ['played', 'walkover', 'void'];
@@ -100,7 +100,7 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
     err(tFile, 'timezone required');
   } else {
     try {
-      new Intl.DateTimeFormat('en-US', { timeZone: tjson.timezone });
+      new Intl.DateTimeFormat(LOCALE, { timeZone: tjson.timezone });
       tzOk = true;
     }
     catch { err(tFile, `timezone ${JSON.stringify(tjson.timezone)} is not a valid IANA timezone`); }

@@ -3,6 +3,12 @@
 const ID_RE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/;
 
+// The one display dialect: every human-visible string renders in it, so the
+// kiosk and the tests never vary with the viewer's locale. Machine-read
+// tokens don't follow it — dayKey assembles ISO from typed parts, tzOffset
+// parses the offset name and stays pinned (see its comment).
+const LOCALE = 'en-US';
+
 // Shared side identity: sorted '|'-joined ids.
 const pairSig = ids => [...ids].sort().join('|');
 
@@ -341,7 +347,7 @@ function matchRound(m, ctx, memo = new Map()) {
   return d;
 }
 
-const ordRules = new Intl.PluralRules('en', { type: 'ordinal' });
+const ordRules = new Intl.PluralRules(LOCALE, { type: 'ordinal' });
 const ordinal = n => n + ({ one: 'st', two: 'nd', few: 'rd' }[ordRules.select(n)] || 'th');
 
 // Placement label (3rd/5th/7th place, classification semis), null for main-
@@ -402,9 +408,8 @@ function winnerDepth(ctx, id, memo = new Map()) {
   return 0;
 }
 
-// ---------- time ----------
-
-// "+02:00"-style offset for a date, noon-UTC anchor.
+// "+02:00"-style offset for a date, noon-UTC anchor. This parses the
+// GMT±HH:MM rendering, so the locale stays pinned even if LOCALE ever changes.
 // ponytail: wall times before a same-day clock change (a DST-shift morning) get
 // the post-transition offset, off by one hour — exact per-minute offsets only
 // if a tournament ever opens on a changeover day.
@@ -414,12 +419,16 @@ function tzOffset(tz, date) {
   return p && p.value !== 'GMT' ? p.value.replace('GMT', '') : '+00:00';
 }
 
+// Midnight is 00, never 24: hourCycle pins the day to 0-23 under any dialect.
 function fmtTime(t, tz) {
-  return new Intl.DateTimeFormat(undefined, { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(t);
+  return new Intl.DateTimeFormat(LOCALE, { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(t);
 }
 
+// Y-M-D assembled from typed parts: the ISO shape is stated here, not borrowed
+// from a locale whose canonical form happens to match (en-CA's).
 function dayKey(t, tz) {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(t);
+  const p = Object.fromEntries(new Intl.DateTimeFormat(undefined, { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(t).map(x => [x.type, x.value]));
+  return `${p.year}-${p.month}-${p.day}`;
 }
 
 // Anchor local wall time to an instant — the single derivation point.
@@ -430,10 +439,10 @@ function schedTime(m, tz) {
   return Number.isNaN(t) ? null : t;
 }
 
-const dayShort = (t, tz) => new Intl.DateTimeFormat(undefined, { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).format(t);
+const dayShort = (t, tz) => new Intl.DateTimeFormat(LOCALE, { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).format(t);
 
 // A calendar-day label needs no timezone — the weekday/month/day of a Y-M-D key are absolute.
-const dayLabel = k => new Intl.DateTimeFormat(undefined, { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(k + 'T00:00:00Z'));
+const dayLabel = k => new Intl.DateTimeFormat(LOCALE, { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(k + 'T00:00:00Z'));
 
 // Distinct scheduled days as sorted ISO date keys — the index's stored form.
 function schedDays(ms, tz) {
@@ -572,5 +581,5 @@ function matchLabel(m, ctx) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, countWins, sideIdx, sideLetter, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolAdvance, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dateRange, dayShort, fmtDiff, kioskStatus, roundName, koColumn, koOrdinal, matchLabel };
+  module.exports = { LOCALE, ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, countWins, sideIdx, sideLetter, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolAdvance, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dateRange, dayShort, fmtDiff, kioskStatus, roundName, koColumn, koOrdinal, matchLabel };
 }
