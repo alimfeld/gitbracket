@@ -63,7 +63,7 @@ ul li a + a { font-size: .8em; margin-left: .6rem; }
 table { border-collapse: collapse; width: 100%; }
 table th, table td { padding: .4rem .6rem; border-bottom: 1px solid var(--hairline); }
 table th { text-align: left; font-size: .8em; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
-table th:not(:first-child), table td:not(:first-child) { text-align: right; }
+.num { text-align: right; } /* numeric cells opt in */
 tr[data-tie] td { background: #fff3cd; }
 
 /* kiosk — body.venue flips the palette dark and scales text up (em everywhere) */

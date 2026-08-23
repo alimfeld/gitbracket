@@ -44,7 +44,7 @@ test('loadAll: a slug route fetches only the tournament file; the index view onl
   global.fetch = url => { // fetchJson passes { cache: 'no-cache' }; the stub ignores it
     calls.push(url);
     const body = {
-      'tournaments.json': [{ slug: 'sample', name: 'Sample' }],
+      'tournaments.json': [{ slug: 'sample', name: 'Sample', dates: ['2025-07-14'] }],
       'tournaments/sample.json': require(FIX('sample', 'tournaments', 'sample.json')),
     }[url] ?? null;
     return body === null ? Promise.resolve({ ok: false }) : Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
@@ -58,6 +58,7 @@ test('loadAll: a slug route fetches only the tournament file; the index view onl
     const list = await loadAll({ view: 'index' });
     assert.deepEqual(calls, ['tournaments/sample.json', 'tournaments.json'], 'index view: fetches only the index');
     assert.equal(list.index[0].slug, 'sample');
+    assert.deepEqual(list.index[0].dates, ['2025-07-14'], 'the stored ISO days ride through untouched — one fetch, no per-file roundtrips');
     assert.equal(list.tjson, undefined, 'index view carries no tournament data');
     const missing = await loadAll({ slug: 'nope', view: 'tournament' });
     assert.equal(missing.t, null, 'unknown slug: tjson 404s to null');
@@ -509,6 +510,17 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   const listed = [...picker.matchAll(/<li><a href="#sample\/schedule\?player=p\d+">([^<]*)<\/a><\/li>/g)].map(m => m[1]);
   assert.deepEqual(listed, [...listed].sort((a, b) => a.localeCompare(b)), 'picker lists players alphabetically');
   assert(renderIndex({ view: 'index' }, data).includes('#sample'), 'index links the tournament');
+  const idx = renderIndex({ view: 'index' }, { index: [
+    { slug: 'soon', name: 'Later' },
+    { slug: 'wide', name: 'Wide', dates: ['2026-07-11', '2026-07-12'] },
+    { slug: 'sample', name: 'Sample', dates: ['2025-07-14'] },
+  ] });
+  assert(idx.includes('<table>') && idx.includes('<th scope="col">Date</th>') && idx.includes('<th scope="col">Tournament</th>') && idx.includes('<th scope="col">Venue board</th>'), 'index is a dated table with a venue-board column');
+  assert(idx.indexOf('>Sample</a>') < idx.indexOf('>Wide</a>') && idx.indexOf('>Wide</a>') < idx.indexOf('>Later</a>'), 'sorted by start date, undated last');
+  assert(idx.includes('<td>Mon, Jul 14</td><td><a href="#sample">Sample</a></td><td><a href="#sample/venues">Open</a></td>'), 'columns: date, tournament, venue board (header names the column, links carry the verb)');
+  assert(idx.includes('<td>Sat–Sun, Jul 11–12</td>'), 'multi-day spans collapse in the date cell');
+  assert(idx.includes('<td></td><td><a href="#soon">Later</a>'), 'an undated tournament keeps an empty date cell');
+  assert(!idx.includes('undefined') && !idx.includes('null'), 'no date renders clean, no null payload');
   // a registered player with no match anywhere is not pickable — the pick must always render a schedule
   const sparse = JSON.parse(JSON.stringify(data.tjson));
   sparse.players.push({ id: 'bench', name: 'Ben Ched' });

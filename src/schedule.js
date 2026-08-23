@@ -11,7 +11,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { matchSlotMs, pairSig, dayKey, tzOffset, schedTime, ID_RE } = require('../site/derive.js');
+const { matchSlotMs, pairSig, dayKey, tzOffset, schedTime, ID_RE, schedDays } = require('../site/derive.js');
 const { writeTournament, slotsOverlap, isRealDate } = require('./tools.js');
 
 // Round-robin pairings, circle method: array of rounds, each a list of pairs.
@@ -442,7 +442,7 @@ function main(root, specPath) {
   // keep the list page in sync — a tournament the index doesn't know is invisible
   const idxFile = path.join(siteRoot, 'tournaments.json');
   const idx = JSON.parse(fs.readFileSync(idxFile, 'utf8'));
-  const entry = { slug: spec.slug, name: spec.name };
+  const entry = { slug: spec.slug, name: spec.name, dates: schedDays(Object.values(tourney.matches).flat(), tourney.timezone) };
   const i = Array.isArray(idx) ? idx.findIndex((t) => t && t.slug === spec.slug) : -1;
   if (i >= 0) idx[i] = entry; else idx.push(entry);
   // keep the index's established one-entry-per-line format — index diffs stay per-tournament

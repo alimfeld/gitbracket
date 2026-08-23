@@ -7,7 +7,7 @@
 
 const path = require('path');
 const { loadRepo, isRealDate, slotsOverlap } = require('./tools.js');
-const { ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, isDone, poolStandings, resolveSide, isDeadTie, bestOfOf, countWins, schedTime } = require('../site/derive.js');
+const { ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, isDone, poolStandings, resolveSide, isDeadTie, bestOfOf, countWins, schedTime, schedDays } = require('../site/derive.js');
 
 const RESULTS = ['winner', 'loser'];
 const RESULT_STATUSES = ['played', 'walkover', 'void'];
@@ -57,6 +57,7 @@ function validateRepo(repo) {
     const where = `tournaments.json [${i}]`;
     if (!t || typeof t !== 'object') { err(where, 'entry must be an object'); continue; }
     if (typeof t.name !== 'string' || !t.name.trim()) err(where, 'name must be a non-empty string');
+    if (t.dates !== undefined && (!Array.isArray(t.dates) || !t.dates.length || !t.dates.every(d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)))) err(where, 'dates must be a non-empty array of YYYY-MM-DD when present');
     if (typeof t.slug !== 'string' || !ID_RE.test(t.slug)) {
       err(where, `slug ${JSON.stringify(t.slug)} must match ${ID_RE}`);
       continue; // never track or look up a malformed slug
@@ -64,13 +65,13 @@ function validateRepo(repo) {
     if (seenSlugs.has(t.slug)) err(where, `duplicate slug ${t.slug}`);
     seenSlugs.add(t.slug);
     const info = tournaments.get(t.slug);
-    if (info) validateTournamentData(t.slug, t.name, info, errs, warns);
+    if (info) validateTournamentData(t.slug, t.name, t.dates, info, errs, warns);
   }
 
   return { errs, warns };
 }
 
-function validateTournamentData(slug, indexName, info, errs, warns) {
+function validateTournamentData(slug, indexName, indexDates, info, errs, warns) {
   const tFile = `site/tournaments/${slug}.json`;
   const tjson = info.tjson;
   if (tjson === undefined) return; // unreadable — readErrs carries the message
@@ -85,11 +86,29 @@ function validateTournamentData(slug, indexName, info, errs, warns) {
     err(tFile, `name ${JSON.stringify(tjson.name)} does not match the index entry ${JSON.stringify(indexName)}`);
   }
 
+  // the index copy must match the file's days — mirrors the name check above
+  let tzOk = false;
   if (typeof tjson.timezone !== 'string' || !tjson.timezone) {
     err(tFile, 'timezone required');
   } else {
-    try { new Intl.DateTimeFormat('en-US', { timeZone: tjson.timezone }); }
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: tjson.timezone });
+      tzOk = true;
+    }
     catch { err(tFile, `timezone ${JSON.stringify(tjson.timezone)} is not a valid IANA timezone`); }
+  }
+  if (tzOk) {
+    const derived = schedDays(Object.values(tjson.matches || {}).flat(), tjson.timezone);
+    if (indexDates === undefined) {
+      if (derived.length) err(tFile, `dates missing — the schedule spans ${JSON.stringify(derived)}`);
+    } else {
+      const same = derived.length === indexDates.length && derived.every((d, i) => d === indexDates[i]);
+      if (!same) {
+        err(tFile, derived.length === 0
+          ? `dates ${JSON.stringify(indexDates)} but the tournament schedules no matches`
+          : `dates ${JSON.stringify(indexDates)} does not match the schedule ${JSON.stringify(derived)}`);
+      }
+    }
   }
 
   const venues = new Set();

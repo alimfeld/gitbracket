@@ -43,9 +43,12 @@ names a file in `site/tournaments/`:
 
 ```json
 [
-  { "slug": "2026-mammut60", "name": "Mammut Open 60+" }
+  { "slug": "2026-mammut60", "name": "Mammut Open 60+", "dates": ["2026-10-03"] }
 ]
 ```
+
+`dates` is the list page's day list (ascending ISO dates, required to match
+the schedule once the tournament is scheduled, like `name`).
 
 The tournament file holds everything: venues, categories, players, and all
 matches keyed by category:

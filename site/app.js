@@ -84,11 +84,21 @@ const MISSING = '<p>No tournament data yet — check back soon.</p>';
 // day lands the multi-day flag on the cards (date + time)
 const matchGrid = (ms, ctx, day) => `<section class="grid">${ms.map(m => matchCard(m, ctx, { meta: ['label', 'court', 'time'], day })).join('')}</section>`;
 
+// Date leads, undated entries defer to the end, ties hold index order (stable sort).
 function renderIndex(route, data) {
   const items = data.index
     .filter(e => e && typeof e.slug === 'string' && ID_RE.test(e.slug))
-    .map(e => `<li><a href="#${esc(e.slug)}">${esc(e.name || e.slug)}</a> <a href="#${esc(e.slug)}/venues">Venue board</a></li>`);
-  return `<h1>Tournaments</h1><ul>${items.join('') || '<li>No tournaments yet.</li>'}</ul>`;
+    .sort((a, b) => {
+      const ad = a.dates && a.dates[0], bd = b.dates && b.dates[0];
+      if (ad && bd) return ad === bd ? 0 : ad < bd ? -1 : 1; // Y-M-D strings sort chronologically
+      return ad ? -1 : bd ? 1 : 0;
+    })
+    .map(e => {
+      const dates = fmtRange(e.dates); // stored ISO days -> span
+      return `<tr><td>${dates ? esc(dates) : ''}</td><td><a href="#${esc(e.slug)}">${esc(e.name || e.slug)}</a></td><td><a href="#${esc(e.slug)}/venues">Open</a></td></tr>`;
+    });
+  if (!items.length) return `<h1>Tournaments</h1><p>No tournaments yet.</p>`;
+  return `<h1>Tournaments</h1><table><thead><tr><th scope="col">Date</th><th scope="col">Tournament</th><th scope="col">Venue board</th></tr></thead><tbody>${items.join('')}</tbody></table>`;
 }
 
 // One category per page; the switcher is the navigation — the first category
@@ -167,14 +177,14 @@ function catSection(ctx, opts) {
           : adv.top ? `Top ${adv.count} advance`
           : `${adv.count} teams advance`;
         parts.push(`<section><h4>Pool ${esc(String(pool))}${note ? ` <span class="adv">(${esc(note)})</span>` : ''}</h4>`);
-        parts.push('<table><thead><tr><th scope="col">#</th><th scope="col">Team</th><th scope="col">W</th><th scope="col">L</th><th scope="col">GD</th><th scope="col">PD</th></tr></thead><tbody>');
+        parts.push('<table><thead><tr><th scope="col">#</th><th scope="col">Team</th><th scope="col" class="num">W</th><th scope="col" class="num">L</th><th scope="col" class="num">GD</th><th scope="col" class="num">PD</th></tr></thead><tbody>');
         const st = poolStandings(ctx, pool, true); // pools come from matches, so partial standings always resolve
         const ranks = poolRanks(st);
         st.forEach((r, i) => {
           const tied = started && isDeadTie(st, i + 1);
           if (tied) anyTie = true;
           const team = teamLabel(r.ids, ctx);
-          parts.push(`<tr${tied ? ' data-tie' : ''}><td>${ranks[i]}</td><td>${esc(team)}</td><td>${r.wins}</td><td>${r.losses}</td><td>${fmtDiff(r.gd)}</td><td>${fmtDiff(r.pd)}</td></tr>`);
+          parts.push(`<tr${tied ? ' data-tie' : ''}><td>${ranks[i]}</td><td>${esc(team)}</td><td class="num">${r.wins}</td><td class="num">${r.losses}</td><td class="num">${fmtDiff(r.gd)}</td><td class="num">${fmtDiff(r.pd)}</td></tr>`);
         });
         parts.push('</tbody></table></section>');
       }
@@ -304,8 +314,6 @@ function renderVenue(route, data, now = Date.now()) {
   return parts.join('');
 }
 
-const dayShort = (t, tz) => new Intl.DateTimeFormat(undefined, { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).format(t);
-
 // One tournament-wide fact, derived at render: do scheduled matches span more
 // than one wall-clock day? Gates the date on match cards — single-day pages
 // state the date once, multi-day cards carry their own.
@@ -320,34 +328,6 @@ const multiDay = ctxs => {
   return days.size > 1;
 };
 
-// Compact wall-clock date range over scheduled matches: one day its label;
-// consecutive days collapse weekday + month ("Sat–Sun, Jul 11–12"); sparse days
-// list each; a span crossing a year appends the end year. null = nothing scheduled.
-function dateRange(ms, tz) {
-  const seen = new Map();
-  for (const m of ms) {
-    const t = schedTime(m, tz);
-    if (t === null) continue;
-    const k = dayKey(t, tz);
-    if (!seen.has(k)) seen.set(k, dayShort(t, tz));
-  }
-  const ks = [...seen.keys()].sort();
-  if (!ks.length) return null;
-  if (ks.length === 1) return seen.get(ks[0]);
-  // day arithmetic on Y-M-D integers: tz-local midnight math drifts across DST
-  const n = k => { const [y, m, d] = k.split('-').map(Number); return y * 372 + m * 31 + d; };
-  const consec = ks.slice(1).every((k, i) => n(k) - n(ks[i]) === 1);
-  let out;
-  if (!consec) out = ks.map(k => seen.get(k)).join(', ');
-  else {
-    const a = seen.get(ks[0]), b = seen.get(ks.at(-1));
-    const wd = x => x.slice(0, 3); // dayShort "Sat, Jul 11" -> "Sat"
-    out = `${wd(a)}–${wd(b)}, ` + (a.slice(5, 8) === b.slice(5, 8)
-      ? `${a.slice(5)}–${b.slice(9)}` // same month, month repeated once: "Sat–Sun, Jul 11–12"
-      : `${a.slice(5)} – ${b.slice(5)}`); // month boundary keeps both: "Wed–Sat, Dec 30 – Jan 2"
-  }
-  return ks[0].slice(0, 4) !== ks.at(-1).slice(0, 4) ? `${out}, ${ks.at(-1).slice(0, 4)}` : out;
-}
 
 function possibleLine(b) {
   const noun = b.count === 1 ? 'match' : 'matches';

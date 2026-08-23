@@ -7,7 +7,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { generate } = require('../src/schedule.js');
 const { validateRepo } = require('../src/validate.js');
-const { matchSlotMs } = require('../site/derive.js');
+const { matchSlotMs, schedDays } = require('../site/derive.js');
 
 const MINI = {
   slug: 'mini',
@@ -32,7 +32,7 @@ const MINI = {
 function repoOf(tourney) {
   return {
     readErrs: [],
-    index: [{ slug: 'mini', name: 'Mini Open' }],
+    index: [{ slug: 'mini', name: 'Mini Open', dates: schedDays(Object.values(tourney.matches).flat(), tourney.timezone) }],
     tournaments: new Map([['mini', {
       tjson: tourney,
       matches: new Map(Object.entries(tourney.matches)),
@@ -188,7 +188,7 @@ test('knockout false + placements silently ignores placements', () => {
     teams: { md: MINI.teams.md }, // no xd — categories only has md
   };
   const tourney = generate(spec);
-  const idx = { slug: 'mini', name: 'Mini Open' };
+  const idx = { slug: 'mini', name: 'Mini Open', dates: schedDays(Object.values(tourney.matches).flat(), tourney.timezone) };
   const { errs } = validateRepo({
     readErrs: [],
     index: [idx],

@@ -424,10 +424,51 @@ function dayKey(t, tz) {
 
 // Anchor local wall time to an instant — the single derivation point.
 function schedTime(m, tz) {
-  const s = m.scheduled || '';
+  const s = (m && m.scheduled) || '';
   if (!ISO_RE.test(s)) return null;
   const t = Date.parse(s + tzOffset(tz, s.slice(0, 10)));
   return Number.isNaN(t) ? null : t;
+}
+
+const dayShort = (t, tz) => new Intl.DateTimeFormat(undefined, { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).format(t);
+
+// A calendar-day label needs no timezone — the weekday/month/day of a Y-M-D key are absolute.
+const dayLabel = k => new Intl.DateTimeFormat(undefined, { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(k + 'T00:00:00Z'));
+
+// Distinct scheduled days as sorted ISO date keys — the index's stored form.
+function schedDays(ms, tz) {
+  const ks = new Set();
+  for (const m of ms) {
+    const t = schedTime(m, tz);
+    if (t !== null) ks.add(dayKey(t, tz));
+  }
+  return [...ks].sort();
+}
+
+// Human span from ISO day keys — one day its label, consecutive days collapse,
+// sparse days list each, a year boundary appends the last year. null = nothing.
+function fmtRange(keys) {
+  const ks = (Array.isArray(keys) ? keys : []).filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k));
+  if (!ks.length) return null;
+  if (ks.length === 1) return dayLabel(ks[0]);
+  // day arithmetic on Y-M-D integers: tz-local midnight math drifts across DST
+  const n = k => { const [y, m, d] = k.split('-').map(Number); return y * 372 + m * 31 + d; };
+  const consec = ks.slice(1).every((k, i) => n(k) - n(ks[i]) === 1);
+  let out;
+  if (!consec) out = ks.map(dayLabel).join(', ');
+  else {
+    const a = dayLabel(ks[0]), b = dayLabel(ks.at(-1));
+    const wd = x => x.slice(0, 3); // dayLabel "Sat, Jul 11" -> "Sat"
+    out = `${wd(a)}–${wd(b)}, ` + (a.slice(5, 8) === b.slice(5, 8)
+      ? `${a.slice(5)}–${b.slice(9)}` // same month, month repeated once: "Sat–Sun, Jul 11–12"
+      : `${a.slice(5)} – ${b.slice(5)}`); // month boundary keeps both: "Wed–Sat, Dec 30 – Jan 2"
+  }
+  return ks[0].slice(0, 4) !== ks.at(-1).slice(0, 4) ? `${out}, ${ks.at(-1).slice(0, 4)}` : out;
+}
+
+// The tournament page's span, derived from the schedule.
+function dateRange(ms, tz) {
+  return fmtRange(schedDays(ms, tz));
 }
 
 function fmtDiff(n) {
@@ -531,5 +572,5 @@ function matchLabel(m, ctx) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, countWins, sideIdx, sideLetter, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolAdvance, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, dayKey, tzOffset, schedTime, fmtDiff, kioskStatus, roundName, koColumn, koOrdinal, matchLabel };
+  module.exports = { ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, countWins, sideIdx, sideLetter, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolAdvance, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dateRange, dayShort, fmtDiff, kioskStatus, roundName, koColumn, koOrdinal, matchLabel };
 }
