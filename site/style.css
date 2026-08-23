@@ -63,7 +63,7 @@ ul li a + a { font-size: .8em; margin-left: .6rem; }
 table { border-collapse: collapse; width: 100%; }
 table th, table td { padding: .4rem .6rem; border-bottom: 1px solid var(--hairline); }
 table th { text-align: left; font-size: .8em; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
-.num { text-align: right; } /* numeric cells opt in */
+.num { text-align: right; }
 tr[data-tie] td { background: #fff3cd; }
 
 /* kiosk — body.venue flips the palette dark and scales text up (em everywhere) */
@@ -86,6 +86,6 @@ body.venue main section { flex: 1 1 24rem; min-width: 0; }
 body.venue .stack { gap: 1.5rem; }
 /* status colors ride article[data-status]; the headline time is the colored cell */
 body.venue article[data-status="overdue"] .head span { color: var(--late); }
-body.venue .head .flag { font-size: .55em; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; } /* delayed / live — inherits the status color */
+body.venue .head .flag { font-size: .55em; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
 body.venue article[data-status="live"] .head span { color: var(--live); }
 body.venue article[data-status="next"] .head span { color: var(--queued); }

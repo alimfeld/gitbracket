@@ -7,8 +7,6 @@ if (typeof module !== 'undefined') {
   Object.assign(globalThis, require('./derive.js'));
 }
 
-// ---------- data loading ----------
-
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -70,8 +68,6 @@ async function loadAll(route) {
   return { t, tjson, cats: toCats(tjson) };
 }
 
-// ---------- renderers ----------
-
 const segmentBar = r => {
   const t = r.view === 'tournament', m = r.view === 'schedule';
   return `<nav class="segments" aria-label="Views"><a href="${esc(href(r.slug, 'tournament', r))}"${t ? ' aria-current="true"' : ''}>Tournament</a><a href="${esc(href(r.slug, 'schedule', r))}"${m ? ' aria-current="true"' : ''}>My Schedule</a></nav>`;
@@ -81,7 +77,6 @@ const segmentBar = r => {
 const MISSING = '<p>No tournament data yet — check back soon.</p>';
 
 
-// day lands the multi-day flag on the cards (date + time)
 const matchGrid = (ms, ctx, day) => `<section class="grid">${ms.map(m => matchCard(m, ctx, { meta: ['label', 'court', 'time'], day })).join('')}</section>`;
 
 // Date leads, undated entries defer to the end, ties hold index order (stable sort).
@@ -390,8 +385,6 @@ function renderPlayer(route, data) {
   if (!rows.length) parts.push('<p>No matches.</p>');
   return parts.join('');
 }
-
-// ---------- boot ----------
 
 // Read-once views load once and recover via manual reload; the kiosk polls.
 function boot() {

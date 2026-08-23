@@ -3,11 +3,6 @@
 
 // GitBracket CLI — the single entry point; every command dispatches into src/.
 // Run from anywhere under the repo root (the root is found by walking up).
-//
-//   node gb.js                      start the REPL (drops into the latest tournament)
-//   node gb.js validate [slug]      validate the repo (or one tournament), no REPL
-//   node gb.js schedule <spec>      generate a tournament from a spec file
-//   node gb.js publish              ship site/ to the domain in site/CNAME (surge)
 
 const { findRoot } = require('./src/tools.js');
 const repl = require('./src/repl.js');
