@@ -54,7 +54,6 @@ function splitPools(teams, poolSize) {
 // bronze match only — deeper placement matches use the default knockout config.
 function buildPlacement(losers, mid, fin) {
   const n = losers.length;
-  if (n < 2) return [];
   if (n === 2) {
     const m = { id: mid(), sides: [losers[0], losers[1]] };
     if (fin.bestOf !== undefined) m.bestOf = fin.bestOf; // fin is always {} or the spec's final object — all callers pass one

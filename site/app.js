@@ -112,7 +112,7 @@ const catNav = (slug, ctxs, route) => ctxs.map((c, i) => {
 function renderTournament(route, data) {
   if (!data.tjson) return MISSING;
   const tz = data.tjson.timezone || 'UTC';
-  const ctxs = data.cats.map(c => makeCat(c, data.tjson));
+  const ctxs = catCtxs(data);
   const show = ctxs.find(c => c.id === route.cat) || ctxs[0]; // an unknown cat falls back to the first
   const multi = multiDay(ctxs);
   const parts = [segmentBar(route), `<header><h1>${esc(data.t.name)}</h1>`];
@@ -411,7 +411,6 @@ function boot() {
   };
   let route = null;    // current fragment route — the kiosk poll reads it each tick
   let data = null;     // last good snapshot — a failed poll keeps the board up
-  let dataSlug = null; // slug the snapshot belongs to — a route change to another tournament reloads
   let lastHtml = '';   // skip re-render when nothing changed — keeps selection/focus on the player page
   let lastKey = '';    // view|cat — what the page shows; a change is new content, start at the top
   let pollTimer = null, clockTimer = null;
@@ -449,7 +448,6 @@ function boot() {
 
   const render = (r, d) => {
     data = d;
-    dataSlug = r.slug;
     // the kiosk dark theme keys off body.venue — present only on the venue view
     document.body.classList.toggle('venue', r.view === 'venues');
     document.title = pageTitle(r, d);
@@ -479,7 +477,7 @@ function boot() {
     }
     route = r;
     setKiosk(r.view === 'venues');
-    if (r.view === 'index' || r.slug !== dataSlug) {
+    if (r.view === 'index' || !(data && data.t && data.t.slug === r.slug)) { // index has no t — always reloads; a snapshot's t carries its slug
       data = null;
       lastHtml = '';
       load(r);
