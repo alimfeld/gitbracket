@@ -76,10 +76,10 @@ const segmentBar = r => {
 };
 
 // The one missing-data message, verbatim in every view.
-const MISSING = '<p>Missing tournament data — has the tournament been pushed?</p>';
+const MISSING = '<p>No tournament data yet — check back soon.</p>';
 
 
-const FULL_META = ['matchId', 'label', 'court', 'time'];
+const FULL_META = ['label', 'court', 'time'];
 const matchGrid = (ms, ctx) => `<section class="grid">${ms.map(m => matchCard(m, ctx, { meta: FULL_META })).join('')}</section>`;
 
 // Category pills — the tournament page's category filter; other params (the
@@ -93,7 +93,7 @@ const catPills = (cats, r) => cats.map(c => {
 function renderIndex(route, data) {
   const items = data.index
     .filter(e => e && typeof e.slug === 'string' && ID_RE.test(e.slug))
-    .map(e => `<li><a href="#${esc(e.slug)}">${esc(e.name || e.slug)}</a> <a href="#${esc(e.slug)}/venues">kiosk</a></li>`);
+    .map(e => `<li><a href="#${esc(e.slug)}">${esc(e.name || e.slug)}</a> <a href="#${esc(e.slug)}/venues">Venue board</a></li>`);
   return `<h1>Tournaments</h1><ul>${items.join('') || '<li>No tournaments yet.</li>'}</ul>`;
 }
 
@@ -165,6 +165,8 @@ function catSection(ctx, upDay) {
   parts.push(`<h2>${esc(ctx.name)}${selfDay ? ` · ${esc(selfDay)}` : ''}</h2>${phase && `<p class="subline">${phase}</p>`}`);
   // always visible: the tables answer "which pool am I in, who else is in mine"
   if (byPool.size) {
+    const started = ctx.matches.some(isDone); // pre-play every team ties at zero — no highlight yet
+    let anyTie = false;
     parts.push('<h3>Pools</h3><div class="pools">');
     for (const [pool, poolMs] of byPool) {
       const adv = poolAdvance(ctx, pool);
@@ -177,13 +179,16 @@ function catSection(ctx, upDay) {
       const st = poolStandings(ctx, pool, true); // pools come from matches, so partial standings always resolve
       const ranks = poolRanks(st);
       st.forEach((r, i) => {
-        const tied = isDeadTie(st, i + 1);
+        const tied = started && isDeadTie(st, i + 1);
+        if (tied) anyTie = true;
         const team = teamLabel(r.ids, ctx);
         parts.push(`<tr${tied ? ' data-tie' : ''}><td>${ranks[i]}</td><td>${esc(team)}</td><td>${r.wins}</td><td>${r.losses}</td><td>${fmtDiff(r.gd)}</td><td>${fmtDiff(r.pd)}</td></tr>`);
       });
       parts.push('</tbody></table></section>');
     }
     parts.push('</div>');
+    // the highlight is color-only — one line names what it means
+    if (anyTie) parts.push('<p class="note">Highlighted rows are dead ties on every tiebreaker — the organizer settles the order.</p>');
   }
   // folds to a one-line summary once the groups are decided
   if (grp.length) {
@@ -201,6 +206,12 @@ function catSection(ctx, upDay) {
 
 // one subline pattern per stage heading: bar + count
 const progressDayline = (done, total) => `<p class="subline"><progress value="${done}" max="${total}"></progress>${done} of ${total} played</p>`;
+
+// Bracket order first: a card's position must match its QF/SF ordinal, which
+// schedule edits can't move. Time breaks ties and orders unnumbered matches.
+const koOrder = (ms, ctx) => [...ms].sort((a, b) =>
+  (koOrdinal(a, ctx) || Infinity) - (koOrdinal(b, ctx) || Infinity) ||
+  (schedTime(a, ctx.tz) ?? 0) - (schedTime(b, ctx.tz) ?? 0));
 
 function bracketHtml(ctx, ko, catDay) {
   const maxR = ko.reduce((mx, m) => Math.max(mx, koColumn(m, ctx)), 0);
@@ -222,11 +233,11 @@ function bracketHtml(ctx, ko, catDay) {
       const rDay = oneDay(ms, ctx);
       if (rDay) {
         label += ` · ${esc(rDay)}`;
-        body = matchGrid(chrono(ms, ctx), ctx);
+        body = matchGrid(koOrder(ms, ctx), ctx);
       } else { // a single round straddles midnight — split it under its own headings
-        body = byDay(ms, ctx).map(([day, dms]) => `<h5>${esc(day)}</h5>${matchGrid(dms, ctx)}`).join('');
+        body = byDay(ms, ctx).map(([day, dms]) => `<h5>${esc(day)}</h5>${matchGrid(koOrder(dms, ctx), ctx)}`).join('');
       }
-    } else body = matchGrid(chrono(ms, ctx), ctx);
+    } else body = matchGrid(koOrder(ms, ctx), ctx);
     parts.push(`<h4>${label}</h4>`, body);
   }
   return parts.join('');
@@ -238,10 +249,9 @@ function matchCard(m, ctx, opts = {}) {
   const t = schedTime(m, ctx.tz);
   const item = {
     catName: esc(ctx.name),
-    matchId: esc(m.id),
     label: esc(matchLabel(m, ctx)),
     court: m.venue ? esc(ctx.venues.get(m.venue) || m.venue) : 'TBD',
-    time: t !== null ? esc(fmtTime(t, ctx.tz)) : 'TBD',
+    time: t !== null ? `<time datetime="${new Date(t).toISOString()}">${esc(fmtTime(t, ctx.tz))}</time>` : 'TBD',
   };
   const meta = opts.meta.map(k => item[k]).join(' · ');
   const head = opts.head ? `<div class="head">${opts.head.map(c => `<span>${c.html !== undefined ? c.html : item[c.key]}</span>`).join('')}</div>` : '';
@@ -256,7 +266,8 @@ function sideRow(m, ctx, i) {
   const bo = bestOfOf(m, ctx) || 1; // unset stage config -> one unmarked slot
   const slot = () => Array.from({ length: bo }, (_, g) => {
     const game = games[g];
-    return `<span${game ? '' : ' class="ph"'}>${game ? (i === 0 ? game.a : game.b) : '·'}</span>`;
+    // aria-hidden: the placeholder dot is shape-as-label, noise to a screen reader
+    return `<span${game ? '' : ' class="ph" aria-hidden="true"'}>${game ? (i === 0 ? game.a : game.b) : '·'}</span>`;
   }).join('');
   // the winning side carries the W/O mark (tennis draws put "w/o" beside the advancing name)
   const score = !r || r.status === 'played' ? slot()
@@ -306,7 +317,9 @@ function renderVenue(route, data, now = Date.now()) {
     for (const r of open) {
       const st = kioskStatus(r, now);
       col.push(matchCard(r.m, r.ctx, { meta: ['catName', 'label'],
-        head: [st === 'overdue' ? { html: `${esc(fmtTime(r.t, r.ctx.tz))} <span class="delayed">delayed</span>` } : { key: 'time' }], status: st }));
+        head: [st === 'overdue' ? { html: `${esc(fmtTime(r.t, r.ctx.tz))} <span class="flag">delayed</span>` }
+          : st === 'live' ? { html: `${esc(fmtTime(r.t, r.ctx.tz))} <span class="flag">live</span>` }
+          : { key: 'time' }], status: st }));
     }
     col.push('</div>');
     cols.push(`<section>${col.join('')}</section>`);
@@ -456,7 +469,7 @@ function boot() {
         h1.focus({ preventScroll: true });
       }
     } catch (e) {
-      app.innerHTML = '<p>Render error.</p>';
+      app.innerHTML = '<p>Something went wrong displaying this page.</p>';
       console.error(e);
     }
   };
@@ -467,7 +480,7 @@ function boot() {
     if (!r) {
       route = null;
       setKiosk(false);
-      app.innerHTML = '<p>Bad URL.</p>';
+      app.innerHTML = '<p>This link doesn\'t look right.</p><p><a href="#">All tournaments</a></p>';
       return;
     }
     route = r;

@@ -80,6 +80,9 @@ body.venue {
   --ink: #f2f2ec;
   --muted: #8a8a84;
   --line: #2a2a28;
+  --late: #ffb3ab;
+  --live: #ffd166;
+  --queued: #9a9a94;
   background: #000;
   max-width: none;
   font-size: 2.2rem;
@@ -90,7 +93,7 @@ body.venue .board { display: flex; gap: 2.5rem; align-items: flex-start; flex-wr
 body.venue main section { flex: 1 1 24rem; min-width: 0; }
 body.venue .stack { gap: 1.5rem; }
 /* status colors ride article[data-status]; the headline time is the colored cell */
-body.venue article[data-status="overdue"] .head span { color: #ffb3ab; }
-body.venue .head .delayed { font-size: .55em; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; } /* inherits the overdue red */
-body.venue article[data-status="live"] .head span { color: #ffd166; }
-body.venue article[data-status="next"] .head span { color: #9a9a94; }
+body.venue article[data-status="overdue"] .head span { color: var(--late); }
+body.venue .head .flag { font-size: .55em; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; } /* delayed / live — inherits the status color */
+body.venue article[data-status="live"] .head span { color: var(--live); }
+body.venue article[data-status="next"] .head span { color: var(--queued); }

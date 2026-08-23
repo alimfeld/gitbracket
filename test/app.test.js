@@ -176,7 +176,8 @@ test('kioskStatus: overdue / now / upcoming status per open card', () => {
 test('matchLabel: pool, placement, and round names on one card label', () => {
   const full = catOf('full', 't');
   assert(matchLabel(full.byId.get(1), full) === 'Pool A', 'pool match labels its pool');
-  assert(matchLabel(full.byId.get(7), full) === 'SF', 'semifinal');
+  assert(matchLabel(full.byId.get(7), full) === 'SF1', 'semifinal with bracket ordinal');
+  assert(matchLabel(full.byId.get(8), full) === 'SF2', 'second semifinal');
   assert(matchLabel(full.byId.get(10), full) === 'Final', 'final');
   assert(matchLabel(full.byId.get(9), full) === '3rd place', 'bronze via placementLabel');
   const md = catOf('sample', 'md40');
@@ -309,12 +310,23 @@ test('poolRanks: dead-tie members share their group rank, resolved rows have the
 test('slotLabel: unresolved slots describe the slot, not bare TBD', () => {
   const md = catOf('sample', 'md40');
   const m9 = md.byId.get(9);
-  assert(slotLabel(m9.sides[0], md) === 'Winner of SF (match 7)', 'winner slot names the feeder round and id');
-  assert(slotLabel(m9.sides[1], md) === 'Winner of SF (match 8)', 'unresolved match slot still names the feeder');
-  assert(slotLabel(md.byId.get(10).sides[0], md) === 'Loser of SF (match 7)', 'loser slot names the feeder');
+  assert(slotLabel(m9.sides[0], md) === 'Winner of SF1', 'winner slot names the feeder by bracket ordinal');
+  assert(slotLabel(m9.sides[1], md) === 'Winner of SF2', 'unresolved match slot still names the feeder');
+  assert(slotLabel(md.byId.get(10).sides[0], md) === 'Loser of SF1', 'loser slot names the feeder');
   const st = md.byId.get(7).sides[0];
   assert(slotLabel(st, md) === '1st in Pool A', 'pool slot labels rank');
   assert(slotLabel(md.byId.get(8).sides[1], md) === '3rd in Pool A', 'rank 3 ordinal');
+});
+
+test('koOrdinal: bracket ordinals are structural — schedule edits cannot renumber them', () => {
+  const tjson = require(FIX('sample', 'tournaments', 'sample.json'));
+  const raw = catOf('sample', 'md40').matches.map(m => ({ ...m }));
+  const t7 = raw.find(m => m.id === 7).scheduled, t8 = raw.find(m => m.id === 8).scheduled;
+  raw.find(m => m.id === 7).scheduled = t8; // swap the two SFs on the clock
+  raw.find(m => m.id === 8).scheduled = t7;
+  const md = makeCat({ meta: tjson.categories[0], matches: raw }, tjson);
+  assert(matchLabel(md.byId.get(7), md) === 'SF1' && matchLabel(md.byId.get(8), md) === 'SF2', 'labels read who feeds the final, not the clock');
+  assert(slotLabel(md.byId.get(9).sides[0], md) === 'Winner of SF1' && slotLabel(md.byId.get(9).sides[1], md) === 'Winner of SF2', 'references hold under schedule edits');
 });
 
 test('bracket: slot labels are plain text — no link wrapping, no trace machinery', () => {
@@ -324,7 +336,7 @@ test('bracket: slot labels are plain text — no link wrapping, no trace machine
     return { repo, data: { index: repo.index, t: repo.index[0], tjson: info.tjson, cats: toCats(info.tjson) } };
   })().data;
   const html = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' }, data);
-  assert(html.includes('<span>Winner of SF (match 8)</span>') && !html.includes('<a href="#m-'), 'slot labels are plain text, not anchors');
+  assert(html.includes('<span>Winner of SF2</span>') && !html.includes('<a href="#m-'), 'slot labels are plain text, not anchors');
   assert(!html.includes('data-feeders') && !html.includes('id="m-'), 'cards are static nodes — the trace graph shipped nothing');
 });
 
@@ -367,8 +379,10 @@ test('placementLabel: depth-3 classification (16 teams, placements 16) labels ev
   const labels = ctx.matches.filter(m => m.pool === undefined).map(m => matchLabel(m, ctx));
   const count = l => labels.filter(x => x === l).length;
   assert.equal(count('Final'), 1);
-  assert.equal(count('SF'), 2);
-  assert.equal(count('QF'), 4);
+  assert.equal(count('SF1'), 1);
+  assert.equal(count('SF2'), 1);
+  assert.equal(count('QF'), 0);
+  assert.deepEqual([1, 2, 3, 4].map(n => count('QF' + n)), [1, 1, 1, 1], 'QFs numbered by bracket position');
   assert.equal(count('Round of 16'), 8);
   assert.equal(count('3rd place'), 1, 'bronze');
   assert.equal(count('5th–8th semi'), 2, 'QF losers');
@@ -415,11 +429,11 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   const no = () => ({ slug: 'sample', view: 'tournament' });
   const standings = renderTournament(no(), data);
   assert(!standings.includes('data-feeders') && !standings.includes('data-hl') && !standings.includes('data-cat'), 'nothing of the old trace machinery ships — cards are static');
-  assert(standings.includes('Pool A') && standings.includes('Final') && standings.includes('Winner of SF (match 8)'), 'standings renders pools, bracket, and slot labels');
+  assert(standings.includes('Pool A') && standings.includes('Final') && standings.includes('Winner of SF2'), 'standings renders pools, bracket, and slot labels');
   assert(!standings.includes('BO3'), 'no best-of label — the score slots carry it');
   assert(standings.includes('class="ph"'), 'unplayed best-of slots render as placeholders');
   assert(standings.includes('Ada Lovelace'), 'standings renders player names');
-  assert(standings.includes('1 · Pool A · Court 1 · 09:00') && !standings.includes('md40 · 1 · Pool A'), 'standings card meta: match · label · venue · time, no category id');
+  assert(standings.includes('Pool A · Court 1 · <time datetime=') && !standings.includes('md40 · Pool A'), 'standings card meta: label · venue · time element, no match id, no category id');
   assert(standings.includes('<nav class="segments" aria-label="Views"><a href="#sample" aria-current="true">Tournament</a><a href="#sample/schedule">My Schedule</a></nav>'), 'tournament page: segment switch, Tournament current');
   const filtered = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' }, data);
   assert((filtered.match(/<h2>/g) || []).length === 1 && filtered.includes('Pool A'), 'category filter narrows to one section');
@@ -431,8 +445,10 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   const early = renderVenue({ slug: 'sample', view: 'venues' }, data, Date.parse('2025-07-14T08:00:00-04:00'));
   const late = renderVenue({ slug: 'sample', view: 'venues' }, data, Date.parse('2025-07-14T16:00:00-04:00'));
   assert(!early.includes('delayed</span>'), 'before the first start: no delayed remark');
-  assert(late.includes('12:15 <span class="delayed">delayed</span>'), 'slot fully elapsed: the headline time carries the remark beside it');
-  assert(late.match(/<span class="delayed">delayed<\/span>/g).length === late.match(/data-status="overdue"/g).length, 'every overdue card has the remark, and only overdue cards do');
+  assert(late.includes('<span class="flag">delayed</span>'), 'slot fully elapsed: the headline time carries the remark beside it');
+  const running = renderVenue({ slug: 'sample', view: 'venues' }, data, Date.parse('2025-07-14T12:20:00-04:00'));
+  assert(running.includes('<span class="flag">live</span>'), 'a match inside its slot says live in words, not hue alone');
+  assert(late.match(/<span class="flag">delayed<\/span>/g).length === late.match(/data-status="overdue"/g).length, 'every overdue card has the remark, and only overdue cards do');
   assert(venue.includes("Men&#39;s Doubles 40+ · Final") && !venue.includes("Men&#39;s Doubles 40+ · 9 ·"), 'kiosk meta shows the long category name and label, no match id');
   assert(!venue.includes('<nav>'), 'kiosk has no breadcrumb');
   assert(standings.includes('<h2>Men&#39;s Doubles 40+</h2><p class="subline">Knockout stage · Semifinals</p>') && !standings.includes('md40)</h2>'), 'category h2: plain name, status sentence on its own line below — the date hoisted to the h1');
@@ -465,10 +481,10 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   const ppage = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p1' }, data);
   assert(ppage.includes('<h1>Ada Lovelace</h1>'), 'player page: plain name');
   assert(!ppage.includes('data-next'), 'no next-match highlight — the unscored card is its own marker');
-  assert(ppage.includes('<h2>Mon, Jul 14</h2>') && !ppage.includes('2025-07-14'), 'day headings are friendly dates, not ISO keys');
+  assert(ppage.includes('<h2>Mon, Jul 14</h2>') && !ppage.includes('>2025-07-14'), 'day headings are friendly dates, not ISO keys (the <time datetime> attribute may carry ISO)');
   const p3 = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p3' }, data);
   assert(/note">\d+ more match(?:es)? possible in Men&#39;s Doubles 40\+ (— earliest \d\d:\d\d, latest \d\d:\d\d|at \d\d:\d\d)/.test(p3), 'possible note: count + window in plain words');
-  assert(ppage.includes('<div class="head"><span>09:00</span><span>Court 1</span></div>'), 'player card headline: time left, court right');
+  assert(ppage.includes('<div class="head"><span><time datetime=') && ppage.includes('</time></span><span>Court 1</span></div>'), 'player card headline: time left (semantic <time>), court right');
   assert(ppage.includes("Men&#39;s Doubles 40+ · Pool A") && !ppage.includes('Men&#39;s Doubles 40+ · Pool A · '), 'player card meta: long cat name · label, no match id, no court/time');
   assert(ppage.includes('class="ph"'), 'player match cards render unplayed score slots too');
   assert(ppage.includes('Ada Lovelace'), 'player page finds the player');
@@ -505,6 +521,9 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   const { data: tdata } = dataOf('tie');
   const tieHtml = renderTournament({ slug: 'tie', view: 'tournament' }, tdata);
   assert(!tieHtml.includes('†') && (tieHtml.match(/data-tie><td>1<\/td>/g) || []).length === 2, 'tied teams share rank 1, no dagger');
+  assert(tieHtml.includes('dead ties on every tiebreaker'), 'the color-only tie highlight carries a one-line legend');
+  // pre-play every team ties at zero — the highlight must wait for results
+  assert(!pre.includes('data-tie'), 'nothing played yet: no tie highlight, no legend');
 });
 
 

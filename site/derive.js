@@ -228,12 +228,14 @@ function resolveSide(side, ctx, memo = new Map()) {
   return null;
 }
 
-// Unresolved slot keeps what the slot IS: "Winner of SF (match 7)", "2nd in Pool A".
+// Unresolved slot keeps what the slot IS: "Winner of SF1", "2nd in Pool A".
 function slotLabel(side, ctx) {
   if (side && side.kind === 'match') {
+    const who = side.result === 'winner' ? 'Winner' : 'Loser';
     const ref = ctx.byId.get(side.match);
-    const what = ref ? matchLabel(ref, ctx) : side.match;
-    return `${side.result === 'winner' ? 'Winner' : 'Loser'} of ${what}${ref ? ` (match ${ref.id})` : ''}`;
+    if (!ref) return `${who} of match ${side.match}`; // dangling ref — the id is all there is
+    const what = matchLabel(ref, ctx); // QF/SF labels carry their bracket ordinal
+    return /\d$/.test(what) ? `${who} of ${what}` : `${who} of the ${what}`;
   }
   if (side && side.kind === 'pool') return `${ordinal(side.rank)} in Pool ${side.pool}`;
   return 'TBD';
@@ -448,6 +450,11 @@ function roundName(depthFromEnd) {
 
 // Column: 0 is the final, one back per winner edge. Depth-from-leaves can't
 // place a bye'd semi. Memo rides ctx._koCol — rebuilt each render.
+// The championship final, shared with koOrdinal: a knockout match no winner
+// feeds, outside the classification tree.
+const mainFinal = (ctx, parented) =>
+  ctx.matches.find(X => X.pool === undefined && !parented.has(X.id) && placementLabel(X, ctx) === null);
+
 function koColumn(m, ctx) {
   if (!ctx._koCol) {
     const memo = ctx._koCol = new Map();
@@ -457,7 +464,7 @@ function koColumn(m, ctx) {
         if (s && s.kind === 'match' && s.result === 'winner') winnerParent.set(s.match, X);
       }
     }
-    const final = ctx.matches.find(X => X.pool === undefined && !winnerParent.has(X.id) && placementLabel(X, ctx) === null);
+    const final = mainFinal(ctx, winnerParent);
     const col = (X) => {
       const got = memo.get(X.id);
       if (got !== undefined) return got;
@@ -478,14 +485,51 @@ function koColumn(m, ctx) {
   return ctx._koCol.get(m.id);
 }
 
+// Ordinal within round from who each winner feeds — Final 1, its feeders 1–2
+// by side, and so on down. Reads bracket structure, never `scheduled`, so
+// editing times can't renumber anything; only rewiring the bracket does (and
+// then the label should change). 0 = off the championship tree (classification
+// rounds — placementLabel names those).
+function koOrdinal(m, ctx) {
+  if (!ctx._koOrd) {
+    const kids = new Map();     // parent id -> feeder ids, born in side order
+    const parented = new Set();
+    for (const X of ctx.matches)
+      X.sides.forEach(s => {
+        if (s && s.kind === 'match' && s.result === 'winner') {
+          parented.add(s.match);
+          if (!kids.has(X.id)) kids.set(X.id, []);
+          kids.get(X.id).push(s.match);
+        }
+      });
+    const ord = ctx._koOrd = new Map();
+    const final = mainFinal(ctx, parented);
+    if (final) {
+      ord.set(final.id, 1);
+      for (const stack = [final.id]; stack.length;) { // visited check keeps a cyclic bracket from hanging
+        const p = stack.pop();
+        const o = ord.get(p);
+        for (const [k, id] of (kids.get(p) || []).entries()) {
+          if (!ord.has(id)) { ord.set(id, o * 2 - 1 + k); stack.push(id); }
+        }
+      }
+    }
+  }
+  return ctx._koOrd.get(m.id) || 0;
+}
+
 function matchLabel(m, ctx) {
   if (m.pool !== undefined) return `Pool ${m.pool}`;
   const pl = placementLabel(m, ctx);
   if (pl) return pl;
-  // cards abbreviate roundName's names — one vocabulary, two lengths
-  return roundName(koColumn(m, ctx)).replace('Semifinals', 'SF').replace('Quarterfinals', 'QF');
+  // cards abbreviate roundName's names — one vocabulary, two lengths; QF/SF
+  // carry their bracket ordinal, so slot references name a visible card
+  const full = roundName(koColumn(m, ctx));
+  const abbr = full.replace('Semifinals', 'SF').replace('Quarterfinals', 'QF');
+  // ponytail: only QF/SF get numbered — deeper rounds number when one needs cross-refs there
+  return abbr === full ? full : abbr + (koOrdinal(m, ctx) || '');
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, countWins, sideIdx, sideLetter, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolAdvance, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, dayKey, tzOffset, schedTime, fmtDiff, kioskStatus, roundName, koColumn, matchLabel };
+  module.exports = { ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, countWins, sideIdx, sideLetter, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolAdvance, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, dayKey, tzOffset, schedTime, fmtDiff, kioskStatus, roundName, koColumn, koOrdinal, matchLabel };
 }
