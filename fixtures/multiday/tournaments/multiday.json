@@ -1,0 +1,39 @@
+{
+  "name": "Multi Day Open",
+  "timezone": "America/New_York",
+  "venues": [
+    { "id": "court-1", "name": "Court 1" },
+    { "id": "court-2", "name": "Court 2" }
+  ],
+  "categories": [
+    {
+      "id": "md40",
+      "name": "Men's Doubles 40+",
+      "bestOf": { "groups": 3, "knockout": 3 },
+      "slotMinutes": { "groups": 60, "knockout": 90 }
+    }
+  ],
+  "players": [
+    { "id": "p1", "name": "Ada Lovelace" },
+    { "id": "p2", "name": "Grace Hopper" },
+    { "id": "p3", "name": "Katherine Johnson" },
+    { "id": "p4", "name": "Margaret Hamilton" },
+    { "id": "p5", "name": "Radia Perlman" },
+    { "id": "p6", "name": "Barbara Liskov" },
+    { "id": "p7", "name": "Frances Allen" },
+    { "id": "p8", "name": "Jean Bartik" }
+  ],
+  "matches": {
+    "md40": [
+      { "id": 1, "pool": "A", "venue": "court-1", "scheduled": "2026-07-11T09:00:00", "sides": [{ "kind": "players", "ids": ["p1", "p2"] }, { "kind": "players", "ids": ["p3", "p4"] }], "games": [{ "a": 11, "b": 9 }, { "a": 11, "b": 7 }], "result": { "status": "played", "winner": "a" } },
+      { "id": 2, "pool": "A", "venue": "court-2", "scheduled": "2026-07-11T09:00:00", "sides": [{ "kind": "players", "ids": ["p5", "p6"] }, { "kind": "players", "ids": ["p7", "p8"] }], "games": [{ "a": 11, "b": 8 }, { "a": 9, "b": 11 }, { "a": 11, "b": 6 }], "result": { "status": "played", "winner": "a" } },
+      { "id": 3, "pool": "A", "venue": "court-1", "scheduled": "2026-07-11T10:00:00", "sides": [{ "kind": "players", "ids": ["p1", "p2"] }, { "kind": "players", "ids": ["p5", "p6"] }], "games": [{ "a": 11, "b": 4 }, { "a": 11, "b": 5 }], "result": { "status": "played", "winner": "a" } },
+      { "id": 4, "pool": "A", "venue": "court-2", "scheduled": "2026-07-11T10:00:00", "sides": [{ "kind": "players", "ids": ["p3", "p4"] }, { "kind": "players", "ids": ["p7", "p8"] }], "games": [{ "a": 11, "b": 9 }, { "a": 11, "b": 13 }, { "a": 11, "b": 9 }], "result": { "status": "played", "winner": "a" } },
+      { "id": 5, "pool": "A", "venue": "court-1", "scheduled": "2026-07-11T11:00:00", "sides": [{ "kind": "players", "ids": ["p1", "p2"] }, { "kind": "players", "ids": ["p7", "p8"] }], "games": [{ "a": 11, "b": 6 }, { "a": 11, "b": 4 }], "result": { "status": "played", "winner": "a" } },
+      { "id": 6, "pool": "A", "venue": "court-2", "scheduled": "2026-07-11T11:00:00", "sides": [{ "kind": "players", "ids": ["p3", "p4"] }, { "kind": "players", "ids": ["p5", "p6"] }] },
+      { "id": 7, "venue": "court-1", "scheduled": "2026-07-12T09:00:00", "sides": [{ "kind": "pool", "pool": "A", "rank": 1 }, { "kind": "pool", "pool": "A", "rank": 4 }] },
+      { "id": 8, "venue": "court-2", "scheduled": "2026-07-12T09:00:00", "sides": [{ "kind": "pool", "pool": "A", "rank": 2 }, { "kind": "pool", "pool": "A", "rank": 3 }] },
+      { "id": 9, "venue": "court-1", "scheduled": "2026-07-12T11:00:00", "sides": [{ "kind": "match", "match": 7, "result": "winner" }, { "kind": "match", "match": 8, "result": "winner" }] }
+    ]
+  }
+}

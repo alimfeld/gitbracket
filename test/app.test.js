@@ -425,7 +425,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert((filtered.match(/<h2>/g) || []).length === 1 && filtered.includes('Pool A'), 'category filter narrows to one section');
   assert(filtered.includes('#sample?cat=xd'), 'pills still list every category on a filtered page');
   assert(standings.includes('>Men&#39;s Doubles 40+</a>') && !standings.includes('>md40</a>'), 'standings pills show the category name');
-  const venue = renderVenue({ slug: 'sample', view: 'venues' }, data);
+  const venue = renderVenue({ slug: 'sample', view: 'venues' }, data, Date.parse('2025-07-14T12:00:00-04:00')); // pinned to the fixture day — the kiosk shows today only
   assert(venue.includes('Court 1') && venue.includes('Ada Lovelace'), 'venue page renders venue boards with match rows');
   assert(venue.includes('data-status=') && !venue.includes('badge'), 'kiosk card: status rides the article (headline time colored); meta keeps cat · label only');
   const early = renderVenue({ slug: 'sample', view: 'venues' }, data, Date.parse('2025-07-14T08:00:00-04:00'));
@@ -435,9 +435,9 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(late.match(/<span class="delayed">delayed<\/span>/g).length === late.match(/data-status="overdue"/g).length, 'every overdue card has the remark, and only overdue cards do');
   assert(venue.includes("Men&#39;s Doubles 40+ · Final") && !venue.includes("Men&#39;s Doubles 40+ · 9 ·"), 'kiosk meta shows the long category name and label, no match id');
   assert(!venue.includes('<nav>'), 'kiosk has no breadcrumb');
-  assert(standings.includes('>Men&#39;s Doubles 40+ <span class="chip">knockout · Semifinals</span></h2>') && !standings.includes('md40)</h2>'), 'category h2: name, then the data-state phase chip');
+  assert(standings.includes('>Men&#39;s Doubles 40+ <span class="chip">knockout · Semifinals</span></h2>') && !standings.includes('md40)</h2>'), 'category h2: name and phase chip — the date hoisted to the h1');
+  assert(standings.includes('<h1>Sample · Mon, Jul 14</h1>'), 'one-day tournament: the h1 carries the date');
   assert(standings.includes('<span class="chip">finished</span>'), 'a fully decided category reads finished');
-  assert(standings.includes('times are local (America/New_York)'), 'dayline: day and the local-time note, derived from the schedule');
   assert(standings.includes('<details><summary>Group matches · 6 of 6 played</summary>'), 'decided groups: schedule collapses to its summary');
   assert(standings.includes('Pool A <span class="adv">(All teams advance)</span>'), 'every team reaches the bracket — the note says so');
   assert(standings.indexOf('<h3>Pools</h3>') < standings.indexOf('<details'), 'scoreboard leads the section');
@@ -506,6 +506,42 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(!tieHtml.includes('†') && (tieHtml.match(/data-tie><td>1<\/td>/g) || []).length === 2, 'tied teams share rank 1, no dagger');
 });
 
+
+test('multi-day: day headings own the date on the tournament page; the kiosk shows today only', () => {
+  const repo = loadRepo(FIX('multiday'));
+  const info = repo.tournaments.get('multiday');
+  const data = { index: repo.index, t: { slug: 'multiday', name: info.tjson.name }, tjson: info.tjson, cats: toCats(info.tjson) };
+  const page = renderTournament({ slug: 'multiday', view: 'tournament' }, data);
+  assert(!page.includes('dayline'), 'the first-day-only dayline is gone');
+  assert(page.includes('<summary>Group matches · 5 of 6 played · Sat, Jul 11</summary>'), 'a one-day group stage of a multi-day category carries its day');
+  assert(page.includes('<h3>Knockout stage · Sun, Jul 12</h3>') && page.includes('<h4>Semifinals</h4>') && page.includes('<h4>Final</h4>'), 'one-day knockout of a multi-day category dates the section heading, not the rounds');
+  // groups straddling days: the summary drops its suffix, inner h3 headings take over
+  const split = JSON.parse(JSON.stringify(info.tjson));
+  split.matches.md40[5].scheduled = '2026-07-12T15:00:00'; // m6 (pool) -> Sunday: group matches span days
+  const spage = renderTournament({ slug: 'multiday', view: 'tournament' },
+    { index: repo.index, t: data.t, tjson: split, cats: toCats(split) });
+  assert(spage.includes('<h3>Sat, Jul 11</h3>') && spage.includes('<h3>Sun, Jul 12</h3>'), 'group matches spanning days split under day headings');
+  assert(!spage.includes('played · Sat'), 'no date suffix on a summary that does not unify its matches');
+  // a round straddling days: rounds carry dates, the straddling one splits under h5
+  split.matches.md40[7].scheduled = '2026-07-11T20:00:00'; // m8 (semi) -> Saturday evening
+  const rpage = renderTournament({ slug: 'multiday', view: 'tournament' },
+    { index: repo.index, t: data.t, tjson: split, cats: toCats(split) });
+  assert(rpage.includes('<h4>Final · Sun, Jul 12</h4>'), 'single-day round carries its date when rounds differ');
+  assert(rpage.includes('<h4>Semifinals</h4>') && rpage.includes('<h5>Sat, Jul 11</h5>') && rpage.includes('<h5>Sun, Jul 12</h5>'), 'a round spanning days splits under its own headings');
+  const sInfo = loadRepo(FIX('sample')).tournaments.get('sample');
+  const single = renderTournament({ slug: 'sample', view: 'tournament' },
+    { index: repo.index, t: { slug: 'sample', name: sInfo.tjson.name }, tjson: sInfo.tjson, cats: toCats(sInfo.tjson) });
+  assert(!single.includes('dayline') && single.includes('<h1>Sample · Mon, Jul 14</h1>') && single.includes('<h2>Mixed Doubles <span class="chip">finished</span></h2>') && (single.match(/Mon, Jul 14/g) || []).length === 1, 'single-day tournament: the date rides the h1 exactly once, no per-category repeats');
+
+  // kiosk: strict same-day in the tournament timezone, from the device clock instant
+  const at = iso => Date.parse(iso);
+  const sat = renderVenue({ slug: 'multiday', view: 'venues' }, data, at('2026-07-11T12:00:00-04:00'));
+  assert(sat.includes('Katherine Johnson') && !sat.includes('>SF<') && !sat.includes('Final'), 'saturday board: open pool match, no tomorrow');
+  const sun = renderVenue({ slug: 'multiday', view: 'venues' }, data, at('2026-07-12T08:00:00-04:00'));
+  assert(sun.includes('· SF') && sun.includes('· Final') && !sun.includes('Katherine Johnson'), 'sunday board: knockout only, yesterday gone');
+  const mon = renderVenue({ slug: 'multiday', view: 'venues' }, data, at('2026-07-13T12:00:00-04:00'));
+  assert(mon.includes('Nothing scheduled.'), 'after the last day: drained board, not a stale schedule');
+});
 
 test('routing: cat and player ride along between tournament and schedule — applied on their home view only', () => {
   const repo = loadRepo(FIX('sample'));

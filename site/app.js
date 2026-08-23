@@ -99,18 +99,14 @@ function renderIndex(route, data) {
 
 function renderTournament(route, data) {
   if (!data.tjson) return MISSING;
-  const tz = data.tjson.timezone || 'UTC';
-  const parts = [segmentBar(route), `<header><h1>${esc(data.t.name)}</h1>`];
-  // the day and timezone are facts from the schedule — this page never trusts a clock
-  const ts = (data.cats || []).flatMap(c => (c.matches || []).map(m => schedTime(m, tz))).filter(Number.isFinite);
-  if (ts.length) {
-    const day = new Intl.DateTimeFormat(undefined, { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric' }).format(Math.min(...ts));
-    parts.push(`<p class="dayline">${esc(day)} · times are local${tz !== 'UTC' ? ` (${esc(tz)})` : ''} · reload for the latest</p>`);
-  }
+  // one-day tournament: the date hoists to the h1 and nowhere below repeats it
+  const allMs = (data.cats || []).flatMap(c => c.matches || []);
+  const tDay = oneDay(allMs, { tz: data.tjson.timezone || 'UTC' });
+  const parts = [segmentBar(route), `<header><h1>${esc(data.t.name)}${tDay ? ` · ${esc(tDay)}` : ''}</h1>`];
   parts.push(`<nav class="pills" aria-label="Categories">${catPills(data.tjson.categories || [], route)}</nav></header>`);
   for (const c of data.cats) {
     if (route.cat && c.meta.id !== route.cat) continue; // pills keep every category; only the section list narrows
-    parts.push(catSection(makeCat(c, data.tjson)));
+    parts.push(catSection(makeCat(c, data.tjson), tDay));
   }
   return parts.join('');
 }
@@ -134,7 +130,23 @@ function phaseChip(ctx) {
   return `<span class="chip">knockout · ${next ? roundName(koColumn(next, ctx)) : 'awaiting'}</span>`;
 }
 
-function catSection(ctx) {
+// Dates ride the highest heading that unifies them: a one-day category dates
+// its h2 and nothing below; in a multi-day category each section dates itself;
+// a section that spans days splits into inner day headings (level follows depth).
+const dayLabel = (m, ctx) => { const t = schedTime(m, ctx.tz); return t === null ? 'Time TBD' : dayShort(t, ctx.tz); };
+const chrono = (ms, ctx) => [...ms].sort((a, b) => (schedTime(a, ctx.tz) ?? 0) - (schedTime(b, ctx.tz) ?? 0));
+const oneDay = (ms, ctx) => { const days = new Set(ms.map(m => dayLabel(m, ctx))); return days.size === 1 ? [...days][0] : null; };
+const byDay = (ms, ctx) => {
+  const map = new Map();
+  for (const m of chrono(ms, ctx)) {
+    const key = dayLabel(m, ctx);
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(m);
+  }
+  return [...map];
+};
+
+function catSection(ctx, upDay) {
   const parts = [];
   const byPool = new Map(); // pool -> its group matches (creation order = pool order)
   const ko = [];
@@ -147,7 +159,9 @@ function catSection(ctx) {
   }
   // All pools, chronological by wall-clock (stable sort keeps file order on ties).
   const grp = [...byPool.values()].flat().sort((a, b) => (schedTime(a, ctx.tz) ?? 0) - (schedTime(b, ctx.tz) ?? 0));
-  parts.push(`<h2>${esc(ctx.name)} ${phaseChip(ctx)}</h2>`);
+  const selfDay = !upDay && oneDay(ctx.matches, ctx); // this category unifies a day no ancestor claimed
+  const catDay = upDay || selfDay; // matches below are already dated by an ancestor
+  parts.push(`<h2>${esc(ctx.name)} ${phaseChip(ctx)}${selfDay ? ` · ${esc(selfDay)}` : ''}</h2>`);
   // always visible: the tables answer "which pool am I in, who else is in mine"
   if (byPool.size) {
     parts.push('<h3>Pools</h3><div class="pools">');
@@ -174,25 +188,40 @@ function catSection(ctx) {
   if (grp.length) {
     const played = grp.filter(isDone).length;
     const label = played > 0 ? `Group matches · ${played} of ${grp.length} played` : `Group matches · ${grp.length}`;
-    parts.push(`<details${played < grp.length ? ' open' : ''}><summary>${esc(label)}</summary>${matchGrid(grp, ctx)}</details>`);
+    const gDay = !catDay && oneDay(grp, ctx);
+    const body = gDay || catDay ? matchGrid(grp, ctx) // grp is already chronological
+      : byDay(grp, ctx).map(([day, ms]) => `<h3>${esc(day)}</h3>${matchGrid(ms, ctx)}`).join('');
+    parts.push(`<details${played < grp.length ? ' open' : ''}><summary>${esc(label)}${gDay ? ` · ${esc(gDay)}` : ''}</summary>${body}</details>`);
   }
-  if (ko.length) parts.push(bracketHtml(ctx, ko));
+  if (ko.length) parts.push(bracketHtml(ctx, ko, catDay));
   return parts.join('');
 }
 
-function bracketHtml(ctx, ko) {
+function bracketHtml(ctx, ko, catDay) {
   const maxR = ko.reduce((mx, m) => Math.max(mx, koColumn(m, ctx)), 0);
   const cols = [];
   for (const m of ko) {
     const r = maxR - koColumn(m, ctx); // koColumn is distance from the final; render that column rightmost
     (cols[r] = cols[r] || []).push(m);
   }
-  const parts = ['<h3>Knockout stage</h3>'];
+  const koDay = catDay || oneDay(ko, ctx); // whole bracket parked on one day?
+  const roundsDated = !catDay && !koDay;   // rounds differ -> each carries its date
+  const parts = [`<h3>Knockout stage${koDay && !catDay ? ` · ${esc(koDay)}` : ''}</h3>`];
   for (let r = 0; r <= maxR; r++) { // index by depth, skip holes — labels stay aligned if a column is empty
     const ms = cols[r];
     if (!ms || !ms.length) continue;
-    parts.push(`<h4>${roundName(maxR - r)}</h4>`);
-    parts.push(matchGrid(ms, ctx));
+    let label = roundName(maxR - r);
+    let body;
+    if (roundsDated) {
+      const rDay = oneDay(ms, ctx);
+      if (rDay) {
+        label += ` · ${esc(rDay)}`;
+        body = matchGrid(chrono(ms, ctx), ctx);
+      } else { // a single round straddles midnight — split it under its own headings
+        body = byDay(ms, ctx).map(([day, dms]) => `<h5>${esc(day)}</h5>${matchGrid(dms, ctx)}`).join('');
+      }
+    } else body = matchGrid(chrono(ms, ctx), ctx);
+    parts.push(`<h4>${label}</h4>`, body);
   }
   return parts.join('');
 }
@@ -259,9 +288,10 @@ function renderVenue(route, data, now = Date.now()) {
     if (byVenue.has(r.m.venue)) byVenue.get(r.m.venue).push(r); // rows pre-sorted, buckets stay sorted
   }
   let any = false;
+  const today = dayKey(now, data.tjson.timezone || 'UTC'); // kiosk shows today only — an overnight screen must not list yesterday
   const cols = [];
   for (const id of venues) {
-    const open = byVenue.get(id).filter(r => !isDone(r.m)); // a result removes the card, everything else stays
+    const open = byVenue.get(id).filter(r => !isDone(r.m) && dayKey(r.t, r.ctx.tz) === today); // a result removes the card, everything else stays
     if (!open.length) continue;
     any = true;
     const col = [];

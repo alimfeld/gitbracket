@@ -125,7 +125,7 @@ lives on the kiosk alone:
 - `#` — lists tournaments, past and current; the only page with kiosk links.
 - `#<slug>?cat=<category-id>` — the tournament; `cat` narrows to one category.
 - `#<slug>/schedule?player=<player-id>` — My Schedule for that player; without a valid `player` (or via "Not you?") it shows a picker of participating players. The URL is the only memory of a pick — share or bookmark it.
-- `#<slug>/venues?venue=<venue-id>` — the kiosk, the fullscreen board for the hall showing the day live on every court; `venue` narrows to one court.
+- `#<slug>/venues?venue=<venue-id>` — the kiosk, the fullscreen board for the hall showing today's open matches on every court; `venue` narrows to one court.
 
 ## Specs
 
