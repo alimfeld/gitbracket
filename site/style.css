@@ -4,7 +4,7 @@
   --accent: #0a66c2;
   --muted: #6b6b70;
   --line: #d9d9d6;
-  --hairline: #eee;   /* row dividers — subtler than --line card borders */
+  --hairline: #eee; /* row color — keep distinct from --line or rows flatten */
 }
 * { box-sizing: border-box; }
 body {
@@ -15,19 +15,15 @@ body {
   line-height: 1.45;
   color: var(--ink);
 }
-/* sizes are em — the kiosk's body.venue font-size is the one text knob; the page takes the UA font size */
 h1 { font-size: 1.6em; margin: 0 0 1rem; }
-h2 { font-size: 1.2em; margin: 2rem 0 .6rem; } /* the category heading scrolls with its section — the pinned switcher above is the context */
-h3 { font-size: 1em; margin: 1rem 0 0; color: var(--muted); } /* stage headings scroll with their content — one category per page, the switcher is the pinned context; the next sibling (or the h4 in a grid, which won't collapse) provides the gap */
-h4 { font-size: .8em; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 1rem 0 0; } /* the secondary text tier: .8em every label — meta lines, table headers, pool/round names — one size, muted */
+h2 { font-size: 1.2em; margin: 2rem 0 .6rem; }
+h3 { font-size: 1em; margin: 1rem 0 0; }
+h4 { font-size: .8em; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 1rem 0 0; }
 a, a:visited { color: var(--accent); }
 
-.adv { margin-left: .4em; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--muted); } /* how many teams leave the pool for the bracket — a parenthetical note, not title text */
-.subline { color: var(--muted); margin: 0 0 .8rem; } /* text tier under a heading — category subline: status, plus the date span on multi-day pages; stage sublines carry the count left and the disclosure right */
-/* only a subline that carries an action becomes a row — a plain status sentence must stay inline, flex would tear "Starts" from its time */
+.adv { margin-left: .4em; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--muted); }
+.subline { color: var(--muted); margin: 0 0 .8rem; }
 .subline:has(button, a) { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
-
-/* minimal class set — state rides data-* attributes or aria-current */
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr)); gap: 1rem; margin-top: 1rem; }
 
@@ -38,23 +34,19 @@ article { display: flex; flex-direction: column; gap: .3rem; border: 1px solid v
 .side { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; }
 .score { display: flex; gap: .4rem; }
 .score span { font-weight: 600; min-width: 1.3em; text-align: right; }
-.score span.ph { opacity: .3; } /* unplayed best-of slot: the shape is the label */
+.score span.ph { opacity: .3; }
 [data-win] { font-weight: 700; }
 .meta { font-size: .8em; color: var(--muted); }
 .head { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; font-weight: 600; }
 
-/* the destination switch floats above the page — content scrolls under it */
 .segments { position: sticky; top: 0; z-index: 10; display: flex; gap: .25rem; padding: .5rem 0 1rem; background: var(--paper); border-bottom: 1px solid var(--hairline); }
-/* both bars share the segment look — only the padding differs */
 :is(.segments, .cats) a { flex: 1; text-align: center; border-radius: .5rem; color: var(--ink); font-weight: 600; text-decoration: none; }
 :is(.segments, .cats) a:hover { background: #00000012; }
 :is(.segments, .cats) a[aria-current] { background: var(--accent); color: #fff; }
 .segments a { padding: .5rem; }
 .cats a { padding: .3rem .4rem; }
 
-/* the category switcher: a slimmer bar under the view bar, pinning below it —
-   the open category stays switchable while the page scrolls */
-.cats { position: sticky; top: 4rem; z-index: 9; display: flex; gap: .25rem; padding: .3rem 0 .55rem; background: var(--paper); font-size: .85em; } /* top: 4rem ≈ the view bar's rendered height (.5 top pad + 2.45 link — .5×2 padding + 1.45 line — + 1 bottom pad + 1px border) */
+.cats { position: sticky; top: 4rem; /* tracks the view bar's rendered height — change either together */ z-index: 9; display: flex; gap: .25rem; padding: .3rem 0 .55rem; background: var(--paper); font-size: .85em; }
 ul { list-style: none; padding: 0; }
 ul li { padding: .6rem 0; border-bottom: 1px solid var(--hairline); }
 ul li a + a { font-size: .8em; margin-left: .6rem; }
@@ -66,7 +58,6 @@ table th { text-align: left; font-size: .8em; text-transform: uppercase; letter-
 .num { text-align: right; }
 tr[data-tie] td { background: #fff3cd; }
 
-/* kiosk — body.venue flips the palette dark and scales text up (em everywhere) */
 body.venue {
   --paper: #111;
   --ink: #f2f2ec;
@@ -84,7 +75,6 @@ body.venue header { display: flex; justify-content: space-between; align-items: 
 body.venue .board { display: flex; gap: 2.5rem; align-items: flex-start; flex-wrap: wrap; }
 body.venue main section { flex: 1 1 24rem; min-width: 0; }
 body.venue .stack { gap: 1.5rem; }
-/* status colors ride article[data-status]; the headline time is the colored cell */
 body.venue article[data-status="overdue"] .head span { color: var(--late); }
 body.venue .head .flag { font-size: .55em; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
 body.venue article[data-status="live"] .head span { color: var(--live); }
