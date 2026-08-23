@@ -112,22 +112,22 @@ function renderTournament(route, data) {
 }
 
 // data-only: played/unplayed + scheduled times, never the device clock
-function phaseChip(ctx) {
+function phaseLine(ctx) {
   const ms = ctx.matches;
   if (!ms.length) return '';
-  if (ms.every(isDone)) return '<span class="chip">finished</span>';
+  if (ms.every(isDone)) return 'Finished';
   if (!ms.some(isDone)) {
     const ts = ms.map(m => schedTime(m, ctx.tz)).filter(Number.isFinite);
-    return `<span class="chip">starts ${ts.length ? fmtTime(Math.min(...ts), ctx.tz) : 'soon'}</span>`;
+    return `Starts ${ts.length ? fmtTime(Math.min(...ts), ctx.tz) : 'soon'}`;
   }
   const grp = ms.filter(m => m.pool !== undefined);
   if (grp.some(m => !isDone(m))) {
     const nextTs = grp.filter(m => !isDone(m)).map(m => schedTime(m, ctx.tz)).filter(Number.isFinite);
-    const next = nextTs.length ? ` · next ${fmtTime(Math.min(...nextTs), ctx.tz)}` : '';
-    return `<span class="chip">groups · ${grp.filter(isDone).length} of ${grp.length}${next}</span>`;
+    const next = nextTs.length ? `, next ${fmtTime(Math.min(...nextTs), ctx.tz)}` : '';
+    return `Group stage · ${grp.filter(isDone).length} of ${grp.length} played${next}`;
   }
   const next = ms.find(m => m.pool === undefined && !isDone(m));
-  return `<span class="chip">knockout · ${next ? roundName(koColumn(next, ctx)) : 'awaiting'}</span>`;
+  return `Knockout stage · ${next ? roundName(koColumn(next, ctx)) : 'awaiting'}`;
 }
 
 // Dates ride the highest heading that unifies them: a one-day category dates
@@ -161,7 +161,8 @@ function catSection(ctx, upDay) {
   const grp = [...byPool.values()].flat().sort((a, b) => (schedTime(a, ctx.tz) ?? 0) - (schedTime(b, ctx.tz) ?? 0));
   const selfDay = !upDay && oneDay(ctx.matches, ctx); // this category unifies a day no ancestor claimed
   const catDay = upDay || selfDay; // matches below are already dated by an ancestor
-  parts.push(`<h2>${esc(ctx.name)} ${phaseChip(ctx)}${selfDay ? ` · ${esc(selfDay)}` : ''}</h2>`);
+  const phase = phaseLine(ctx); // one status sentence per category, on its own line under the heading
+  parts.push(`<h2>${esc(ctx.name)}${selfDay ? ` · ${esc(selfDay)}` : ''}</h2>${phase && `<p class="dayline">${phase}</p>`}`);
   // always visible: the tables answer "which pool am I in, who else is in mine"
   if (byPool.size) {
     parts.push('<h3>Pools</h3><div class="pools">');
@@ -187,11 +188,11 @@ function catSection(ctx, upDay) {
   // folds to a one-line summary once the groups are decided
   if (grp.length) {
     const played = grp.filter(isDone).length;
-    const label = played > 0 ? `Group matches · ${played} of ${grp.length} played` : `Group matches · ${grp.length}`;
     const gDay = !catDay && oneDay(grp, ctx);
     const body = gDay || catDay ? matchGrid(grp, ctx) // grp is already chronological
       : byDay(grp, ctx).map(([day, ms]) => `<h3>${esc(day)}</h3>${matchGrid(ms, ctx)}`).join('');
-    parts.push(`<details${played < grp.length ? ' open' : ''}><summary>${esc(label)}${gDay ? ` · ${esc(gDay)}` : ''}</summary>${body}</details>`);
+    // progress lives once, in the category's phase line — the summary only folds
+    parts.push(`<details${played < grp.length ? ' open' : ''}><summary>Group matches${gDay ? ` · ${esc(gDay)}` : ''}</summary>${body}</details>`);
   }
   if (ko.length) parts.push(bracketHtml(ctx, ko, catDay));
   return parts.join('');

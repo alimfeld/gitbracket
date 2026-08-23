@@ -435,10 +435,10 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(late.match(/<span class="delayed">delayed<\/span>/g).length === late.match(/data-status="overdue"/g).length, 'every overdue card has the remark, and only overdue cards do');
   assert(venue.includes("Men&#39;s Doubles 40+ · Final") && !venue.includes("Men&#39;s Doubles 40+ · 9 ·"), 'kiosk meta shows the long category name and label, no match id');
   assert(!venue.includes('<nav>'), 'kiosk has no breadcrumb');
-  assert(standings.includes('>Men&#39;s Doubles 40+ <span class="chip">knockout · Semifinals</span></h2>') && !standings.includes('md40)</h2>'), 'category h2: name and phase chip — the date hoisted to the h1');
+  assert(standings.includes('<h2>Men&#39;s Doubles 40+</h2><p class="dayline">Knockout stage · Semifinals</p>') && !standings.includes('md40)</h2>'), 'category h2: plain name, status sentence on its own line below — the date hoisted to the h1');
   assert(standings.includes('<h1>Sample · Mon, Jul 14</h1>'), 'one-day tournament: the h1 carries the date');
-  assert(standings.includes('<span class="chip">finished</span>'), 'a fully decided category reads finished');
-  assert(standings.includes('<details><summary>Group matches · 6 of 6 played</summary>'), 'decided groups: schedule collapses to its summary');
+  assert(standings.includes('<p class="dayline">Finished</p>'), 'a fully decided category reads finished');
+  assert(standings.includes('<details><summary>Group matches</summary>'), 'decided groups: schedule collapses to its summary');
   assert(standings.includes('Pool A <span class="adv">(All teams advance)</span>'), 'every team reaches the bracket — the note says so');
   assert(standings.indexOf('<h3>Pools</h3>') < standings.indexOf('<details'), 'scoreboard leads the section');
   assert(standings.indexOf('<details') < standings.indexOf('<h3>Knockout stage</h3>'), 'schedule before the bracket — chronological flow');
@@ -448,8 +448,8 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   const mid = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' },
     { index: [], t: { slug: 'sample', name: midJson.name }, tjson: midJson,
       cats: toCats(midJson) });
-  assert(mid.includes('<span class="chip">groups · 5 of 6 · next 09:00</span>'), 'running groups: phase chip counts and names the next slot');
-  assert(mid.includes('<details open><summary>Group matches · 5 of 6 played</summary>'), 'running groups: schedule stays open');
+  assert(mid.includes('<p class="dayline">Group stage · 5 of 6 played, next 09:00</p>'), 'running groups: the phase line counts and names the next slot');
+  assert(mid.includes('<details open><summary>Group matches</summary>'), 'running groups: schedule stays open');
   const { data: rdata } = dataOf('result');
   const res = renderTournament({ slug: 'result', view: 'tournament' }, rdata);
   assert(res.includes('<span class="adv">(Top 2 advance)</span>'), 'partial draw: top-k note');
@@ -460,7 +460,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
     { index: [], t: { slug: 'sample', name: preJson.name }, tjson: preJson,
       cats: toCats(preJson) });
   assert(pre.includes('<h3>Pools</h3>') && pre.includes('>Ada Lovelace / Grace Hopper</td>'), 'pools roster (teams) is visible before the first result');
-  assert(pre.includes('<span class="chip">starts '), 'pre-start chip');
+  assert(pre.includes('>Starts '), 'pre-start status line');
   const ppage = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p1' }, data);
   assert(ppage.includes('<h1>Ada Lovelace</h1>'), 'player page: plain name');
   assert(!ppage.includes('data-next'), 'no next-match highlight — the unscored card is its own marker');
@@ -512,8 +512,8 @@ test('multi-day: day headings own the date on the tournament page; the kiosk sho
   const info = repo.tournaments.get('multiday');
   const data = { index: repo.index, t: { slug: 'multiday', name: info.tjson.name }, tjson: info.tjson, cats: toCats(info.tjson) };
   const page = renderTournament({ slug: 'multiday', view: 'tournament' }, data);
-  assert(!page.includes('dayline'), 'the first-day-only dayline is gone');
-  assert(page.includes('<summary>Group matches · 5 of 6 played · Sat, Jul 11</summary>'), 'a one-day group stage of a multi-day category carries its day');
+  assert(!/<p class="dayline">[A-Z][a-z]{2},/.test(page), 'a dayline carries a status sentence, never a bare date');
+  assert(page.includes('<summary>Group matches · Sat, Jul 11</summary>'), 'a one-day group stage of a multi-day category carries its day');
   assert(page.includes('<h3>Knockout stage · Sun, Jul 12</h3>') && page.includes('<h4>Semifinals</h4>') && page.includes('<h4>Final</h4>'), 'one-day knockout of a multi-day category dates the section heading, not the rounds');
   // groups straddling days: the summary drops its suffix, inner h3 headings take over
   const split = JSON.parse(JSON.stringify(info.tjson));
@@ -531,7 +531,7 @@ test('multi-day: day headings own the date on the tournament page; the kiosk sho
   const sInfo = loadRepo(FIX('sample')).tournaments.get('sample');
   const single = renderTournament({ slug: 'sample', view: 'tournament' },
     { index: repo.index, t: { slug: 'sample', name: sInfo.tjson.name }, tjson: sInfo.tjson, cats: toCats(sInfo.tjson) });
-  assert(!single.includes('dayline') && single.includes('<h1>Sample · Mon, Jul 14</h1>') && single.includes('<h2>Mixed Doubles <span class="chip">finished</span></h2>') && (single.match(/Mon, Jul 14/g) || []).length === 1, 'single-day tournament: the date rides the h1 exactly once, no per-category repeats');
+  assert(single.includes('<h1>Sample · Mon, Jul 14</h1>') && single.includes('<h2>Mixed Doubles</h2>') && single.includes('<p class="dayline">Finished</p>') && (single.match(/Mon, Jul 14/g) || []).length === 1, 'single-day tournament: the date rides the h1 exactly once, no per-category repeats');
 
   // kiosk: strict same-day in the tournament timezone, from the device clock instant
   const at = iso => Date.parse(iso);
