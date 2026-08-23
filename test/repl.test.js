@@ -215,6 +215,25 @@ test('repl editDetail: venue/time edits report the move, never the match result'
   assert.equal(repl.editDetail('void', { result: { status: 'void' } }), 'void', 'void detail');
 });
 
+test('repl writeEdit: the gate sees schedule edits — a date the index lacks is rejected and rolled back', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gitbracket-'));
+  try {
+    const dataRoot = path.join(tmp, 'site');
+    fs.mkdirSync(dataRoot, { recursive: true });
+    fs.cpSync(FIX('sample'), dataRoot, { recursive: true });
+    const repo = loadRepo(dataRoot);
+    const file = path.join(dataRoot, 'tournaments', 'sample.json');
+    const before = fs.readFileSync(file, 'utf8');
+    const res = repl.writeEdit(dataRoot, repo, 'sample', 'md40', (c) => repl.applyTime(c, '2', '2025-07-15T09:00:00'));
+    assert(res.errs && res.errs.some(e => /dates/.test(e)), 'index dates must mismatch the edited schedule — the edit cannot silently pass');
+    assert(fs.readFileSync(file, 'utf8') === before, 'rejected edit rolls the file back byte-identical');
+    const m2 = repo.tournaments.get('sample').matches.get('md40').find(m => m.id === 2);
+    assert.equal(m2.scheduled, '2025-07-14T09:00:00', 'in-memory match restored for a same-process retry');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 test('repl writeEdit: rollback on validation failure, write on success (real disk)', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gitbracket-'));
   try {

@@ -101,14 +101,17 @@ function writeEdit(siteRoot, repo, slug, catId, apply) {
   const before = fs.readFileSync(file, 'utf8');
   const aerr = apply(ms, ctx);
   if (aerr) return { err: aerr };
+  // validate the snapshot the file will get: the dates-vs-index check reads
+  // info.tjson.matches, pass B reads info.matches — keep them the same arrays
+  const matches = {};
+  for (const [cid, arr] of info.matches) matches[cid] = arr;
+  info.tjson.matches = matches; // the arrays are info.matches' own, so a rollback splice restores this too
   const { errs } = validateRepo(repo);
   if (errs.length) {
     ms.splice(0, ms.length, ...((JSON.parse(before).matches || {})[catId] || [])); // undo the in-memory edit too — a same-process retry must start from the original
     fs.writeFileSync(file, before);
     return { errs };
   }
-  const matches = {};
-  for (const [cid, arr] of info.matches) matches[cid] = arr;
   writeTournament(siteRoot, slug, { ...info.tjson, matches });
   return { file };
 }
