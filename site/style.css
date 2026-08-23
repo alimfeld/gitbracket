@@ -26,6 +26,8 @@ h4 { font-size: .8em; text-transform: uppercase; letter-spacing: .06em; color: v
 /* ponytail: top is a knob — 3.5rem clears the .segments box (.5rem padding x2 + 1.45 x .95em line + 1px border); only the non-kiosk page has .day */
 .day { display: flex; align-items: center; gap: .8em; margin: 1.3rem 0 .8rem; color: var(--muted); font-size: .8em; letter-spacing: .06em; position: sticky; top: 3.5rem; background: var(--paper); }
 .day::before, .day::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+/* fragment links are "visited" the moment they're followed — visited styling is noise, keep the accent */
+a, a:visited { color: var(--accent); }
 
 .adv { margin-left: .4em; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--muted); } /* how many teams leave the pool for the bracket — a parenthetical note, not title text */
 .subline { color: var(--muted); margin: 0 0 .8rem; } /* category status sentence under its h2; stage sublines carry the count left and the disclosure right */
