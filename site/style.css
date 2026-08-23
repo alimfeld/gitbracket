@@ -11,25 +11,24 @@ body {
   margin: 0 auto;
   padding: 1.5rem 1.25rem 3rem;
   max-width: 60rem;
-  font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: system-ui, sans-serif;
+  line-height: 1.45;
   color: var(--ink);
-  background: var(--paper);
 }
-/* sizes are em — body font-size scales the whole app; the kiosk uses it as its one text knob */
+/* sizes are em — the kiosk's body.venue font-size is the one text knob; the page takes the UA font size */
 h1 { font-size: 1.6em; margin: 0 0 1rem; }
 h1:focus { outline: none; } /* focus target for view switches, not a keyboard stop */
 h2 { font-size: 1.2em; margin: 2rem 0 .6rem; }
 h3 { font-size: 1em; margin: 1.2rem 0 .4rem; color: var(--muted); }
-h4 { font-size: .75em; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 1rem 0 0; }
+h4 { font-size: .8em; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 1rem 0 0; } /* the secondary text tier: .8em every label — meta lines, day markers, table headers, pool/round names — one size, muted */
 /* a day divider is a timeline marker: hairline rule, label centered on it — dates never ride headings */
 /* sticky makes each divider the scroll chip: the latest day pins under the segments until the next covers it */
 /* ponytail: top is a knob — 3.5rem clears the .segments box (.5rem padding x2 + 1.45 x .95em line + 1px border); only the non-kiosk page has .day */
 .day { display: flex; align-items: center; gap: .8em; margin: 1.3rem 0 .8rem; color: var(--muted); font-size: .8em; letter-spacing: .06em; position: sticky; top: 3.5rem; background: var(--paper); }
 .day::before, .day::after { content: ''; flex: 1; height: 1px; background: var(--line); }
-a { color: var(--accent); }
 
-.adv { margin-left: .4em; font-size: .85em; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--muted); } /* how many teams leave the pool for the bracket — a parenthetical note, not title text */
-.subline { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; font-size: .9em; color: var(--muted); margin: -.4rem 0 .8rem; } /* category status sentence under its h2; stage sublines carry the count left and the disclosure right */
+.adv { margin-left: .4em; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--muted); } /* how many teams leave the pool for the bracket — a parenthetical note, not title text */
+.subline { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; color: var(--muted); margin: 0 0 .8rem; } /* category status sentence under its h2; stage sublines carry the count left and the disclosure right */
 .toggle { border: 0; background: none; padding: 0; font: inherit; color: var(--accent); cursor: pointer; white-space: nowrap; } /* show/hide under a stage heading — the one interactive affordance on the page */
 .toggle:hover { text-decoration: underline; }
 .grid[hidden], .pools[hidden] { display: none; } /* their display rules would beat the UA hidden rule */
@@ -54,15 +53,15 @@ article { display: flex; flex-direction: column; gap: .3rem; border: 1px solid v
 .pills a { padding: .35rem .8rem; border: 1px solid var(--line); border-radius: 999px; text-decoration: none; }
 .pills a[aria-current] { background: var(--accent); border-color: var(--accent); color: #fff; }
 /* the destination switch floats above the page — content scrolls under it */
-.segments { position: sticky; top: 0; z-index: 10; display: flex; gap: .25rem; padding: .5rem 0; margin: 0 0 1rem; background: color-mix(in srgb, var(--paper) 90%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--hairline); }
-.segments a { flex: 1; text-align: center; padding: .5rem; border-radius: .5rem; color: var(--ink); font-weight: 600; font-size: .95em; text-decoration: none; }
+.segments { position: sticky; top: 0; z-index: 10; display: flex; gap: .25rem; padding: .5rem 0; margin: 0 0 1rem; background: var(--paper); border-bottom: 1px solid var(--hairline); }
+.segments a { flex: 1; text-align: center; padding: .5rem; border-radius: .5rem; color: var(--ink); font-weight: 600; text-decoration: none; }
 .segments a:hover { background: #00000012; }
 .segments a[aria-current] { background: var(--accent); color: #fff; }
 
 ul { list-style: none; padding: 0; }
-ul li { padding: .6rem 0; border-bottom: 1px solid var(--hairline); font-size: 1.1em; }
+ul li { padding: .6rem 0; border-bottom: 1px solid var(--hairline); }
 ul li a + a { font-size: .8em; margin-left: .6rem; }
-.note { font-size: .85em; color: var(--muted); border: 1px dashed var(--line); border-radius: .5rem; padding: .4rem .8rem; margin: 0; }
+.note { color: var(--muted); border: 1px dashed var(--line); border-radius: .5rem; padding: .4rem .8rem; margin: 0; }
 
 table { border-collapse: collapse; width: 100%; }
 table th, table td { padding: .4rem .6rem; border-bottom: 1px solid var(--hairline); }
