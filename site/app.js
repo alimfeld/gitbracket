@@ -162,7 +162,7 @@ function catSection(ctx, upDay) {
   const selfDay = !upDay && oneDay(ctx.matches, ctx); // this category unifies a day no ancestor claimed
   const catDay = upDay || selfDay; // matches below are already dated by an ancestor
   const phase = phaseLine(ctx); // one status sentence per category, on its own line under the heading
-  parts.push(`<h2>${esc(ctx.name)}${selfDay ? ` · ${esc(selfDay)}` : ''}</h2>${phase && `<p class="dayline">${phase}</p>`}`);
+  parts.push(`<h2>${esc(ctx.name)}${selfDay ? ` · ${esc(selfDay)}` : ''}</h2>${phase && `<p class="subline">${phase}</p>`}`);
   // always visible: the tables answer "which pool am I in, who else is in mine"
   if (byPool.size) {
     parts.push('<h3>Pools</h3><div class="pools">');
@@ -191,12 +191,16 @@ function catSection(ctx, upDay) {
     const gDay = !catDay && oneDay(grp, ctx);
     const body = gDay || catDay ? matchGrid(grp, ctx) // grp is already chronological
       : byDay(grp, ctx).map(([day, ms]) => `<h3>${esc(day)}</h3>${matchGrid(ms, ctx)}`).join('');
-    // progress lives once, in the category's phase line — the summary only folds
-    parts.push(`<details${played < grp.length ? ' open' : ''}><summary>Group matches${gDay ? ` · ${esc(gDay)}` : ''}</summary>${body}</details>`);
+    // heading owns the date like Knockout stage; progress sits below it, the fold only holds the cards
+    parts.push(`<h3>Group stage${gDay ? ` · ${esc(gDay)}` : ''}</h3>${progressDayline(played, grp.length)}`);
+    parts.push(`<details${played < grp.length ? ' open' : ''}><summary>Group matches</summary>${body}</details>`);
   }
   if (ko.length) parts.push(bracketHtml(ctx, ko, catDay));
   return parts.join('');
 }
+
+// one subline pattern per stage heading: bar + count
+const progressDayline = (done, total) => `<p class="subline"><progress value="${done}" max="${total}"></progress>${done} of ${total} played</p>`;
 
 function bracketHtml(ctx, ko, catDay) {
   const maxR = ko.reduce((mx, m) => Math.max(mx, koColumn(m, ctx)), 0);
@@ -207,7 +211,8 @@ function bracketHtml(ctx, ko, catDay) {
   }
   const koDay = catDay || oneDay(ko, ctx); // whole bracket parked on one day?
   const roundsDated = !catDay && !koDay;   // rounds differ -> each carries its date
-  const parts = [`<h3>Knockout stage${koDay && !catDay ? ` · ${esc(koDay)}` : ''}</h3>`];
+  const koDone = ko.filter(isDone).length;
+  const parts = [`<h3>Knockout stage${koDay && !catDay ? ` · ${esc(koDay)}` : ''}</h3>${progressDayline(koDone, ko.length)}`];
   for (let r = 0; r <= maxR; r++) { // index by depth, skip holes — labels stay aligned if a column is empty
     const ms = cols[r];
     if (!ms || !ms.length) continue;

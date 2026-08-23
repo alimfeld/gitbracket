@@ -435,21 +435,22 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(late.match(/<span class="delayed">delayed<\/span>/g).length === late.match(/data-status="overdue"/g).length, 'every overdue card has the remark, and only overdue cards do');
   assert(venue.includes("Men&#39;s Doubles 40+ · Final") && !venue.includes("Men&#39;s Doubles 40+ · 9 ·"), 'kiosk meta shows the long category name and label, no match id');
   assert(!venue.includes('<nav>'), 'kiosk has no breadcrumb');
-  assert(standings.includes('<h2>Men&#39;s Doubles 40+</h2><p class="dayline">Knockout stage · Semifinals</p>') && !standings.includes('md40)</h2>'), 'category h2: plain name, status sentence on its own line below — the date hoisted to the h1');
+  assert(standings.includes('<h2>Men&#39;s Doubles 40+</h2><p class="subline">Knockout stage · Semifinals</p>') && !standings.includes('md40)</h2>'), 'category h2: plain name, status sentence on its own line below — the date hoisted to the h1');
   assert(standings.includes('<h1>Sample · Mon, Jul 14</h1>'), 'one-day tournament: the h1 carries the date');
-  assert(standings.includes('<p class="dayline">Finished</p>'), 'a fully decided category reads finished');
-  assert(standings.includes('<details><summary>Group matches</summary>'), 'decided groups: schedule collapses to its summary');
+  assert(standings.includes('<p class="subline">Finished</p>'), 'a fully decided category reads finished');
+  assert(standings.includes('<h3>Group stage</h3><p class="subline"><progress value="6" max="6"></progress>6 of 6 played</p><details><summary>Group matches</summary>'), 'decided groups: heading with progress, schedule collapsed');
   assert(standings.includes('Pool A <span class="adv">(All teams advance)</span>'), 'every team reaches the bracket — the note says so');
   assert(standings.indexOf('<h3>Pools</h3>') < standings.indexOf('<details'), 'scoreboard leads the section');
-  assert(standings.indexOf('<details') < standings.indexOf('<h3>Knockout stage</h3>'), 'schedule before the bracket — chronological flow');
+  assert(standings.indexOf('<details') < standings.indexOf('<h3>Knockout stage'), 'schedule before the bracket — chronological flow');
+  assert(standings.includes('<h3>Knockout stage</h3><p class="subline"><progress value="1" max="4"></progress>1 of 4 played</p>'), 'knockout heading carries its own progress line');
   // mid-groups state: an unresolved group match opens the schedule and re-counts the chip
   const midJson = JSON.parse(JSON.stringify(require(FIX('sample', 'tournaments', 'sample.json'))));
   midJson.matches.md40[0].result = undefined;
   const mid = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' },
     { index: [], t: { slug: 'sample', name: midJson.name }, tjson: midJson,
       cats: toCats(midJson) });
-  assert(mid.includes('<p class="dayline">Group stage · 5 of 6 played, next 09:00</p>'), 'running groups: the phase line counts and names the next slot');
-  assert(mid.includes('<details open><summary>Group matches</summary>'), 'running groups: schedule stays open');
+  assert(mid.includes('<p class="subline">Group stage · 5 of 6 played, next 09:00</p>'), 'running groups: the phase line counts and names the next slot');
+  assert(mid.includes('<h3>Group stage</h3><p class="subline"><progress value="5" max="6"></progress>5 of 6 played</p><details open><summary>Group matches</summary>'), 'running groups: progress under the heading, schedule stays open');
   const { data: rdata } = dataOf('result');
   const res = renderTournament({ slug: 'result', view: 'tournament' }, rdata);
   assert(res.includes('<span class="adv">(Top 2 advance)</span>'), 'partial draw: top-k note');
@@ -512,9 +513,9 @@ test('multi-day: day headings own the date on the tournament page; the kiosk sho
   const info = repo.tournaments.get('multiday');
   const data = { index: repo.index, t: { slug: 'multiday', name: info.tjson.name }, tjson: info.tjson, cats: toCats(info.tjson) };
   const page = renderTournament({ slug: 'multiday', view: 'tournament' }, data);
-  assert(!/<p class="dayline">[A-Z][a-z]{2},/.test(page), 'a dayline carries a status sentence, never a bare date');
-  assert(page.includes('<summary>Group matches · Sat, Jul 11</summary>'), 'a one-day group stage of a multi-day category carries its day');
-  assert(page.includes('<h3>Knockout stage · Sun, Jul 12</h3>') && page.includes('<h4>Semifinals</h4>') && page.includes('<h4>Final</h4>'), 'one-day knockout of a multi-day category dates the section heading, not the rounds');
+  assert(!/<p class="subline">[A-Z][a-z]{2},/.test(page), 'a subline carries a status sentence, never a bare date');
+  assert(page.includes('<h3>Group stage · Sat, Jul 11</h3>'), 'a one-day group stage of a multi-day category carries its day on its heading');
+  assert(page.includes('<h3>Knockout stage · Sun, Jul 12</h3><p class="subline"><progress value="0" max="3"></progress>0 of 3 played</p>') && page.includes('<h4>Semifinals</h4>') && page.includes('<h4>Final</h4>'), 'one-day knockout of a multi-day category dates the section heading, not the rounds');
   // groups straddling days: the summary drops its suffix, inner h3 headings take over
   const split = JSON.parse(JSON.stringify(info.tjson));
   split.matches.md40[5].scheduled = '2026-07-12T15:00:00'; // m6 (pool) -> Sunday: group matches span days
@@ -531,7 +532,7 @@ test('multi-day: day headings own the date on the tournament page; the kiosk sho
   const sInfo = loadRepo(FIX('sample')).tournaments.get('sample');
   const single = renderTournament({ slug: 'sample', view: 'tournament' },
     { index: repo.index, t: { slug: 'sample', name: sInfo.tjson.name }, tjson: sInfo.tjson, cats: toCats(sInfo.tjson) });
-  assert(single.includes('<h1>Sample · Mon, Jul 14</h1>') && single.includes('<h2>Mixed Doubles</h2>') && single.includes('<p class="dayline">Finished</p>') && (single.match(/Mon, Jul 14/g) || []).length === 1, 'single-day tournament: the date rides the h1 exactly once, no per-category repeats');
+  assert(single.includes('<h1>Sample · Mon, Jul 14</h1>') && single.includes('<h2>Mixed Doubles</h2>') && single.includes('<p class="subline">Finished</p>') && (single.match(/Mon, Jul 14/g) || []).length === 1, 'single-day tournament: the date rides the h1 exactly once, no per-category repeats');
 
   // kiosk: strict same-day in the tournament timezone, from the device clock instant
   const at = iso => Date.parse(iso);
