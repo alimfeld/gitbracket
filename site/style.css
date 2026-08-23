@@ -47,7 +47,6 @@ summary:hover { color: var(--accent); }
 .pools { display: grid; grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr)); gap: 1.5rem; margin-top: 1rem; align-items: start; }
 
 article { display: flex; flex-direction: column; gap: .3rem; border: 1px solid var(--line); border-radius: .5rem; padding: .6rem .8rem; background: var(--paper); }
-article[data-next] { border-color: var(--accent); } /* the player's next match — first unresolved by schedule */
 .stack { display: flex; flex-direction: column; gap: .6rem; }
 .side { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; }
 .score { margin-left: auto; display: flex; gap: .4rem; }

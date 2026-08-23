@@ -463,8 +463,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(pre.includes('<span class="chip">starts '), 'pre-start chip');
   const ppage = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p1' }, data);
   assert(ppage.includes('<h1>Ada Lovelace</h1>'), 'player page: plain name');
-  assert(ppage.includes('<p class="dayline">7 wins · 0 losses · next '), 'scoreboard line: record, then the next match by schedule');
-  assert((ppage.match(/data-next/g) || []).length === 1, 'exactly the first unresolved card is marked next');
+  assert(!ppage.includes('data-next'), 'no next-match highlight — the unscored card is its own marker');
   assert(ppage.includes('<h2>Mon, Jul 14</h2>') && !ppage.includes('2025-07-14'), 'day headings are friendly dates, not ISO keys');
   const p3 = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p3' }, data);
   assert(/note">\d+ more match(?:es)? possible in Men&#39;s Doubles 40\+ (— earliest \d\d:\d\d, latest \d\d:\d\d|at \d\d:\d\d)/.test(p3), 'possible note: count + window in plain words');
@@ -507,21 +506,6 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(!tieHtml.includes('†') && (tieHtml.match(/data-tie><td>1<\/td>/g) || []).length === 2, 'tied teams share rank 1, no dagger');
 });
 
-test('renderPlayer: the next-match marker follows the row, not the id — same id in another category stays unmarked', () => {
-  // Match ids are per-category (md40 3 and xd 3 are different matches). Both
-  // unresolved at different times: only the earliest may carry data-next.
-  const repo = loadRepo(FIX('sample'));
-  const info = repo.tournaments.get('sample');
-  const tjson = JSON.parse(JSON.stringify(info.tjson));
-  tjson.matches.md40[2].result = undefined; tjson.matches.md40[2].games = undefined; // md40 m3, 09:45 — earliest unresolved
-  tjson.matches.xd[2].result = undefined;   tjson.matches.xd[2].games = undefined;   // xd m3, 13:45 — same id, later
-  const data = { index: [], t: repo.index[0], tjson, cats: toCats(tjson) };
-  const html = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p1' }, data);
-  const marked = html.match(/<article[^>]*data-next[\s\S]*?<\/article>/);
-  assert.notEqual(marked, null, 'some card is marked next');
-  assert.equal((html.match(/data-next/g) || []).length, 1, 'exactly one card — the xd m3 card must not inherit the mark');
-  assert(marked[0].includes('09:45') && marked[0].includes("Men&#39;s Doubles 40+ · Pool A"), 'the marked card is md40 m3, the earliest unresolved');
-});
 
 test('routing: cat and player ride along between tournament and schedule — applied on their home view only', () => {
   const repo = loadRepo(FIX('sample'));

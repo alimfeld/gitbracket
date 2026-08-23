@@ -210,7 +210,7 @@ function matchCard(m, ctx, opts = {}) {
   };
   const meta = opts.meta.map(k => item[k]).join(' · ');
   const head = opts.head ? `<div class="head">${opts.head.map(c => `<span>${c.html !== undefined ? c.html : item[c.key]}</span>`).join('')}</div>` : '';
-  return `<article${opts.next ? ' data-next' : ''}${opts.status ? ` data-status="${opts.status}"` : ''}>${head}${sideRow(m, ctx, 0)}${sideRow(m, ctx, 1)}<div class="meta">${meta}</div></article>`;
+  return `<article${opts.status ? ` data-status="${opts.status}"` : ''}>${head}${sideRow(m, ctx, 0)}${sideRow(m, ctx, 1)}<div class="meta">${meta}</div></article>`;
 }
 
 function sideRow(m, ctx, i) {
@@ -310,11 +310,6 @@ function renderPlayer(route, data) {
     for (const pm of playerMatches(ctx, pid)) rows.push({ m: pm.m, i: pm.i, ctx });
   }
   rows.sort((a, b) => (schedTime(a.m, a.ctx.tz) ?? Infinity) - (schedTime(b.m, b.ctx.tz) ?? Infinity));
-  // record and next, straight from results and scheduled times — no clock
-  const wins = rows.filter(r => winnerIdx(r.m) === r.i).length;
-  const losses = rows.filter(r => winnerIdx(r.m) !== null && winnerIdx(r.m) !== r.i).length; // void: settled, neither
-  const next = rows.find(r => !isDone(r.m));
-  const nextT = next && schedTime(next.m, next.ctx.tz);
   const groups = new Map();
   for (const r of rows) {
     const t = schedTime(r.m, r.ctx.tz);
@@ -331,7 +326,6 @@ function renderPlayer(route, data) {
     blocksByDay.get(key).push({ ctx, ...span });
   }
   const parts = [segmentBar(route), `<header><div class="title-row"><h1>${esc(p.name)}</h1><a class="top" href="${esc(href(data.t.slug, 'schedule', { cat: route.cat }))}">Not you?</a></div></header>`];
-  if (rows.length) parts.push(`<p class="dayline">${wins} ${wins === 1 ? 'win' : 'wins'} · ${losses} ${losses === 1 ? 'loss' : 'losses'}${nextT ? ` · next ${fmtTime(nextT, next.ctx.tz)} · ${esc(next.ctx.venues.get(next.m.venue) || 'TBD')}` : ''} · reload for the latest</p>`);
   for (const [key, g] of groups) {
     parts.push(`<h2>${esc(key)}</h2>`);
     const day = [];
@@ -341,7 +335,6 @@ function renderPlayer(route, data) {
       const t = schedTime(r.m, r.ctx.tz), m = r.m, ctx = r.ctx;
       while (bi < blocks.length && blocks[bi].min < t) day.push(possibleLine(blocks[bi++]));
       day.push(matchCard(m, ctx, {
-        next: r === next, // the row, not its id — ids are per-category, two categories can share one
         meta: ['catName', 'label'],
         head: [{ key: 'time' }, { key: 'court' }],
       }));
