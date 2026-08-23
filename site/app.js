@@ -99,14 +99,13 @@ function renderIndex(route, data) {
 
 function renderTournament(route, data) {
   if (!data.tjson) return MISSING;
-  // one date axis per render: the first divider lands under the pills, later ones only where the day changes
+  // the page is just another block under the same rule: its day sits under the pills
   const cats = data.cats.filter(c => !route.cat || c.meta.id === route.cat);
   const tz = data.tjson.timezone || 'UTC';
   const axis = { day: null };
   const parts = [segmentBar(route), `<header><h1>${esc(data.t.name)}</h1>`];
   parts.push(`<nav class="pills" aria-label="Categories">${catPills(data.tjson.categories || [], route)}</nav></header>`);
-  const first = earliestRun(cats, tz);
-  if (first) parts.push(dayDiv(first.label, first.iso, axis)); // the first divider always lands under the pills
+  parts.push(cover(dayRuns(cats.flatMap(c => c.matches || []), { tz }), axis));
   for (const c of cats) {
     parts.push(catSection(makeCat(c, data.tjson), axis));
   }
@@ -132,9 +131,9 @@ function phaseLine(ctx) {
   return `Knockout stage · ${next ? roundName(koColumn(next, ctx)) : 'awaiting'}`;
 }
 
-// Dates are one timeline axis per render, never a heading level: a block of same-day
-// cards carries a divider (a dated hairline, `dayDiv`) only when its day differs from
-// the last divider's, so the first block of a day states it and later blocks rest on it.
+// Dates are one timeline axis per render, never a heading level: every heading shows the
+// day of its first scheduled content (a dated hairline, `dayDiv`) unless the last divider
+// already stated it; a block spanning days continues at its run boundaries inside.
 const dayLabel = (m, ctx) => { const t = schedTime(m, ctx.tz); return t === null ? 'Time TBD' : dayShort(t, ctx.tz); };
 const chrono = (ms, ctx) => [...ms].sort((a, b) => (schedTime(a, ctx.tz) ?? 0) - (schedTime(b, ctx.tz) ?? 0));
 const dayIso = (m, ctx) => { const t = schedTime(m, ctx.tz); return t === null ? null : dayKey(t, ctx.tz); };
@@ -153,14 +152,11 @@ const dayDiv = (label, iso, axis) => {
   axis.day = label;
   return `<div class="day">${iso ? `<time datetime="${iso}">${esc(label)}</time>` : esc(label)}</div>`;
 };
-// the first day under the pills: the earliest scheduled wall-clock match among rendered categories
-const earliestRun = (cats, tz) => {
-  let best = null;
-  for (const c of cats) for (const m of c.matches || []) {
-    const t = schedTime(m, tz);
-    if (t !== null && (best === null || t < best)) best = t;
-  }
-  return best === null ? null : { label: dayShort(best, tz), iso: dayKey(best, tz) };
+// one divider rule, every level: a heading shows the day of its first scheduled content
+// unless the axis already states it; spans continue at their run boundaries inside
+const cover = (runs, axis) => {
+  const day = runs.find(r => r.iso) || runs[0]; // first scheduled day; an all-TBD block says so
+  return day ? dayDiv(day.label, day.iso, axis) : '';
 };
 
 function catSection(ctx, axis) {
@@ -177,7 +173,7 @@ function catSection(ctx, axis) {
   // All pools, chronological by wall-clock (stable sort keeps file order on ties).
   const grp = [...byPool.values()].flat().sort((a, b) => (schedTime(a, ctx.tz) ?? 0) - (schedTime(b, ctx.tz) ?? 0));
   const phase = phaseLine(ctx); // one status sentence per category, on its own line under the heading
-  parts.push(`<h2>${esc(ctx.name)}</h2>${phase && `<p class="subline">${phase}</p>`}`);
+  parts.push(cover(dayRuns(ctx.matches, ctx), axis), `<h2>${esc(ctx.name)}</h2>${phase && `<p class="subline">${phase}</p>`}`);
   // always visible: the tables answer "which pool am I in, who else is in mine"
   if (byPool.size) {
     const started = ctx.matches.some(isDone); // pre-play every team ties at zero — no highlight yet
@@ -208,10 +204,9 @@ function catSection(ctx, axis) {
   // folds to a one-line summary once the groups are decided
   if (grp.length) {
     const played = grp.filter(isDone).length;
-    const [first, ...rest] = dayRuns(grp, ctx);
-    // the first run's divider sits outside the fold; a run that changes the day splits its own grid
-    parts.push(`<h3>Group stage</h3>`, dayDiv(first.label, first.iso, axis), progressDayline(played, grp.length));
-    const body = matchGrid(first.ms, ctx) + rest.map(r2 => `${dayDiv(r2.label, r2.iso, axis)}${matchGrid(r2.ms, ctx)}`).join('');
+    const runs = dayRuns(grp, ctx);
+    parts.push(cover(runs, axis), `<h3>Group stage</h3>`, progressDayline(played, grp.length));
+    const body = runs.map(r2 => `${dayDiv(r2.label, r2.iso, axis)}${matchGrid(r2.ms, ctx)}`).join('');
     parts.push(`<details${played < grp.length ? ' open' : ''}><summary>Group matches</summary>${body}</details>`);
   }
   if (ko.length) parts.push(bracketHtml(ctx, ko, axis));
@@ -235,15 +230,15 @@ function bracketHtml(ctx, ko, axis) {
     (cols[r] = cols[r] || []).push(m);
   }
   const koDone = ko.filter(isDone).length;
-  const parts = [`<h3>Knockout stage</h3>`, progressDayline(koDone, ko.length)];
+  const parts = [];
+  parts.push(cover(dayRuns(ko, ctx), axis), `<h3>Knockout stage</h3>`, progressDayline(koDone, ko.length));
   for (let r = 0; r <= maxR; r++) { // index by depth, skip holes — labels stay aligned if a column is empty
     const ms = cols[r];
     if (!ms || !ms.length) continue;
     const label = roundName(maxR - r);
-    const [first, ...rest] = dayRuns(ms, ctx);
-    // the round's first run dates the h4 first; later runs split their own dividers in order
-    parts.push(`<h4>${label}</h4>`, dayDiv(first.label, first.iso, axis));
-    const body = matchGrid(koOrder(first.ms, ctx), ctx) + rest.map(r2 => `${dayDiv(r2.label, r2.iso, axis)}${matchGrid(koOrder(r2.ms, ctx), ctx)}`).join('');
+    const runs = dayRuns(ms, ctx);
+    parts.push(cover(runs, axis), `<h4>${label}</h4>`);
+    const body = runs.map(r2 => `${dayDiv(r2.label, r2.iso, axis)}${matchGrid(koOrder(r2.ms, ctx), ctx)}`).join('');
     parts.push(body);
   }
   return parts.join('');
