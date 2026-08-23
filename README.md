@@ -114,16 +114,17 @@ organizer to settle.
 ## Views
 
 One page, fragment-routed: `#<slug>[/schedule|venues][?cat=&player=&venue=]`.
-`#<slug>` is the tournament page; a floating `Tournament | My Schedule` switch
-sits above the two tournament views. The kiosk is a separate mode, the index
-the front door. Filters are URL state, never device state — links carry the
-params legal on their target: `cat` and `player` are symmetric, each applied
-on its home view (tournament / schedule) and riding along on both, so
-switching views keeps the focus and My Schedule restores the pick; `venue`
-lives on the kiosk alone:
+`#<slug>` is the tournament page — one category at a time, the category switch
+pinned under the view bar; `?cat=` picks the category and the first is
+canonical at the bare slug. A floating `Tournament | My Schedule` switch sits
+above the two tournament views. The kiosk is a separate mode, the index the
+front door. The player pick is URL state, never device state — links carry
+only the params legal on their target: `cat` and `player` ride along between
+tournament and schedule so switching views keeps the focus and My Schedule
+restores it; `venue` lives on the kiosk alone:
 
 - `#` — lists tournaments, past and current; the only page with kiosk links.
-- `#<slug>?cat=<category-id>` — the tournament; `cat` narrows to one category.
+- `#<slug>` / `#<slug>?cat=<category-id>` — the tournament, one category at a time (the first by default); the date span and timezone in the heading, the category's span and status under its title.
 - `#<slug>/schedule?player=<player-id>` — My Schedule for that player; without a valid `player` (or via "Not you?") it shows a picker of participating players. The URL is the only memory of a pick — share or bookmark it.
 - `#<slug>/venues?venue=<venue-id>` — the kiosk, the fullscreen board for the hall showing today's open matches on every court; `venue` narrows to one court.
 

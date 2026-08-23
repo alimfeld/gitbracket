@@ -27,7 +27,9 @@ async function fetchJson(url) {
 
 // One page, fragment routing: #<slug>[/schedule|venues][?cat=&player=&venue=].
 // Segments and param values are id-regex-checked first — raw input never reaches
-// a URL; unknown param names and bad values are ignored, never fatal.
+// a URL; unknown param names and bad values are ignored, never fatal. Cat is a
+// param, never a path segment: the path keeps one grammar (view names only),
+// so a category id can't shadow a view.
 function parseRoute(hash) {
   if (hash === undefined) hash = location.hash;
   const [path, query] = String(hash).replace(/^#/, '').split('?');
@@ -46,12 +48,12 @@ function parseRoute(hash) {
 }
 
 // Fragment URLs with params in fixed order. Each target keeps only the params
-// legal on it: cat and player are symmetric — applied on their home view
-// (tournament / schedule) and riding along on both, so switching views keeps
-// the focus and My Schedule brings the pick back. The kiosk sits on its own
-// path and carries neither.
+// legal on it: cat and player are symmetric — cat picks the one category on the
+// tournament page, player the schedule, and both ride along across the two views
+// so switching keeps the focus and My Schedule restores the pick. The kiosk
+// sits on its own path and carries neither.
 const LEGAL = { tournament: ['cat', 'player'], schedule: ['cat', 'player'], venues: ['venue'] };
-const href = (slug, view, p) => {
+const href = (slug, view, p = {}) => {
   const q = LEGAL[view].filter(k => p[k]).map(k => `${k}=${p[k]}`).join('&');
   return `#${slug}${view === 'tournament' ? '' : '/' + view}${q ? '?' + q : ''}`;
 };
@@ -79,16 +81,8 @@ const segmentBar = r => {
 const MISSING = '<p>No tournament data yet — check back soon.</p>';
 
 
-// opts.stage ties the grid to a stage's show/hide button; opts.hidden starts it collapsed
-const matchGrid = (ms, ctx, opts = {}) => `<section class="grid"${opts.stage ? ` data-stage="${esc(opts.stage)}"` : ''}${opts.hidden ? ' hidden' : ''}>${ms.map(m => matchCard(m, ctx, { meta: ['label', 'court', 'time'] })).join('')}</section>`;
-
-// Category pills — the tournament page's category filter; other params (the
-// riding-along player) are preserved.
-const catPills = (cats, r) => cats.map(c => {
-  const active = c.id === r.cat;
-  const p = { ...r, cat: active ? undefined : c.id }; // active pill is the drop link for cat only
-  return `<a href="${esc(href(r.slug, 'tournament', p))}"${active ? ' aria-current="true"' : ''}>${esc(c.name)}</a>`;
-}).join('');
+// day lands the multi-day flag on the cards (date + time)
+const matchGrid = (ms, ctx, day) => `<section class="grid">${ms.map(m => matchCard(m, ctx, { meta: ['label', 'court', 'time'], day })).join('')}</section>`;
 
 function renderIndex(route, data) {
   const items = data.index
@@ -97,18 +91,28 @@ function renderIndex(route, data) {
   return `<h1>Tournaments</h1><ul>${items.join('') || '<li>No tournaments yet.</li>'}</ul>`;
 }
 
+// One category per page; the switcher is the navigation — the first category
+// stays canonical at the bare slug, the rest select via ?cat=.
+const catNav = (slug, ctxs, route) => ctxs.map((c, i) => {
+  const p = { ...route, cat: i === 0 ? undefined : c.id };
+  const active = (route.cat || ctxs[0].id) === c.id;
+  return `<a href="${esc(href(slug, 'tournament', p))}"${active ? ' aria-current="true"' : ''}>${esc(c.name || c.id)}</a>`;
+}).join('');
+
 function renderTournament(route, data) {
   if (!data.tjson) return MISSING;
-  // the page is just another block under the same rule: its day sits under the pills
-  const cats = data.cats.filter(c => !route.cat || c.meta.id === route.cat);
   const tz = data.tjson.timezone || 'UTC';
-  const axis = { day: null };
+  const ctxs = data.cats.map(c => makeCat(c, data.tjson));
+  const show = ctxs.find(c => c.id === route.cat) || ctxs[0]; // an unknown cat falls back to the first
+  const multi = multiDay(ctxs);
   const parts = [segmentBar(route), `<header><h1>${esc(data.t.name)}</h1>`];
-  parts.push(`<nav class="pills" aria-label="Categories">${catPills(data.tjson.categories || [], route)}</nav></header>`);
-  parts.push(cover(dayRuns(cats.flatMap(c => c.matches || []), { tz }), axis));
-  for (const c of cats) {
-    parts.push(catSection(makeCat(c, data.tjson), axis));
-  }
+  // the heading states the span and the zone once — single-day cards never repeat the date
+  const range = dateRange(ctxs.flatMap(c => c.matches), tz);
+  parts.push(`<p class="subline">${[range, esc(tz)].filter(Boolean).join(' · ')}</p></header>`);
+  // the category switcher pins under the view bar for the whole page — it must
+  // sit outside the header, or the header's height would be its sticky ceiling
+  parts.push(`<nav class="cats" aria-label="Categories">${catNav(data.t.slug, ctxs, route)}</nav>`);
+  parts.push(catSection(show, { multi }));
   return parts.join('');
 }
 
@@ -131,35 +135,7 @@ function phaseLine(ctx) {
   return `Knockout stage · ${next ? roundName(koColumn(next, ctx)) : 'awaiting'}`;
 }
 
-// Dates are one timeline axis per render, never a heading level: every heading shows the
-// day of its first scheduled content (a dated hairline, `dayDiv`) unless the last divider
-// already stated it; a block spanning days continues at its run boundaries inside.
-const dayLabel = (m, ctx) => { const t = schedTime(m, ctx.tz); return t === null ? 'Time TBD' : dayShort(t, ctx.tz); };
-const chrono = (ms, ctx) => [...ms].sort((a, b) => (schedTime(a, ctx.tz) ?? 0) - (schedTime(b, ctx.tz) ?? 0));
-const dayIso = (m, ctx) => { const t = schedTime(m, ctx.tz); return t === null ? null : dayKey(t, ctx.tz); };
-const dayRuns = (ms, ctx) => {
-  const map = new Map();
-  for (const m of chrono(ms, ctx)) {
-    const key = dayLabel(m, ctx);
-    if (!map.has(key)) map.set(key, { label: key, iso: dayIso(m, ctx), ms: [] });
-    map.get(key).ms.push(m);
-  }
-  return [...map.values()];
-};
-// the divider label is the friendly wall-clock date; datetime carries the tz-local date
-const dayDiv = (label, iso, axis) => {
-  if (label === axis.day) return ''; // the axis already states this day — no divider, no noise
-  axis.day = label;
-  return `<div class="day">${iso ? `<time datetime="${iso}">${esc(label)}</time>` : esc(label)}</div>`;
-};
-// one divider rule, every level: a heading shows the day of its first scheduled content
-// unless the axis already states it; spans continue at their run boundaries inside
-const cover = (runs, axis) => {
-  const day = runs.find(r => r.iso) || runs[0]; // first scheduled day; an all-TBD block says so
-  return day ? dayDiv(day.label, day.iso, axis) : '';
-};
-
-function catSection(ctx, axis) {
+function catSection(ctx, opts) {
   const parts = [];
   const byPool = new Map(); // pool -> its group matches (creation order = pool order)
   const ko = [];
@@ -172,54 +148,47 @@ function catSection(ctx, axis) {
   }
   // All pools, chronological by wall-clock (stable sort keeps file order on ties).
   const grp = [...byPool.values()].flat().sort((a, b) => (schedTime(a, ctx.tz) ?? 0) - (schedTime(b, ctx.tz) ?? 0));
-  const phase = phaseLine(ctx); // one status sentence per category, on its own line under the heading
-  parts.push(cover(dayRuns(ctx.matches, ctx), axis), `<h2>${esc(ctx.name)}</h2>${phase && `<p class="subline">${phase}</p>`}`);
-  // one line names the pool count; the tables hide behind the disclosure like match cards
-  if (byPool.size) {
-    const started = ctx.matches.some(isDone); // pre-play every team ties at zero — no highlight yet
-    let anyTie = false;
-    const pkey = `${ctx.id}:pools`;
-    parts.push(`<h3>Pools</h3>`, foldLine(pkey, true, `${byPool.size} pool${byPool.size === 1 ? '' : 's'}`, 'pools'));
-    parts.push(`<div class="pools" data-stage="${esc(pkey)}">`);
-    for (const [pool, poolMs] of byPool) {
-      const adv = poolAdvance(ctx, pool);
-      const note = !adv || adv.total === 0 ? ''
-        : adv.count >= adv.total ? 'All teams advance'
-        : adv.top ? `Top ${adv.count} advance`
-        : `${adv.count} teams advance`;
-      parts.push(`<section><h4>Pool ${esc(String(pool))}${note ? ` <span class="adv">(${esc(note)})</span>` : ''}</h4>`);
-      parts.push('<table><thead><tr><th scope="col">#</th><th scope="col">Team</th><th scope="col">W</th><th scope="col">L</th><th scope="col">GD</th><th scope="col">PD</th></tr></thead><tbody>');
-      const st = poolStandings(ctx, pool, true); // pools come from matches, so partial standings always resolve
-      const ranks = poolRanks(st);
-      st.forEach((r, i) => {
-        const tied = started && isDeadTie(st, i + 1);
-        if (tied) anyTie = true;
-        const team = teamLabel(r.ids, ctx);
-        parts.push(`<tr${tied ? ' data-tie' : ''}><td>${ranks[i]}</td><td>${esc(team)}</td><td>${r.wins}</td><td>${r.losses}</td><td>${fmtDiff(r.gd)}</td><td>${fmtDiff(r.pd)}</td></tr>`);
-      });
-      parts.push('</tbody></table></section>');
-    }
-    // the highlight is color-only — one line names what it means (rides the fold)
-    if (anyTie) parts.push('<p class="note">Highlighted rows are dead ties on every tiebreaker — the organizer settles the order.</p>');
-    parts.push('</div>');
-  }
-  // one fold per stage: day dividers always render, only the card grids hide;
-  // decided groups collapse to the heading + subline
+  // one category subline: the span of its scheduled days, then the status sentence
+  const phase = phaseLine(ctx);
+  const sub = [dateRange(ctx.matches, ctx.tz), phase].filter(Boolean).join(' · ');
+  parts.push(`<section class="cat"><h2>${esc(ctx.name)}</h2>${sub ? `<p class="subline">${sub}</p>` : ''}`);
   if (grp.length) {
-    const played = grp.filter(isDone).length;
-    const collapses = played === grp.length;
-    const runs = dayRuns(grp, ctx);
-    const key = `${ctx.id}:groups`;
-    parts.push(cover(runs, axis), `<h3>Group stage</h3>`, foldLine(key, !collapses, `${played} of ${grp.length} played`, 'matches'));
-    for (const r2 of runs) parts.push(dayDiv(r2.label, r2.iso, axis), matchGrid(r2.ms, ctx, { stage: key, hidden: collapses }));
+    parts.push(`<section class="stage"><h3>Group stage</h3>`);
+    // pools belong to the group stage — scoreboard first, cards last; the
+    // category subline above carries the status sentence
+    if (byPool.size) {
+      const started = ctx.matches.some(isDone); // pre-play every team ties at zero — no highlight yet
+      let anyTie = false;
+      parts.push('<div class="pools">');
+      for (const [pool] of byPool) {
+        const adv = poolAdvance(ctx, pool);
+        const note = !adv || adv.total === 0 ? ''
+          : adv.count >= adv.total ? 'All teams advance'
+          : adv.top ? `Top ${adv.count} advance`
+          : `${adv.count} teams advance`;
+        parts.push(`<section><h4>Pool ${esc(String(pool))}${note ? ` <span class="adv">(${esc(note)})</span>` : ''}</h4>`);
+        parts.push('<table><thead><tr><th scope="col">#</th><th scope="col">Team</th><th scope="col">W</th><th scope="col">L</th><th scope="col">GD</th><th scope="col">PD</th></tr></thead><tbody>');
+        const st = poolStandings(ctx, pool, true); // pools come from matches, so partial standings always resolve
+        const ranks = poolRanks(st);
+        st.forEach((r, i) => {
+          const tied = started && isDeadTie(st, i + 1);
+          if (tied) anyTie = true;
+          const team = teamLabel(r.ids, ctx);
+          parts.push(`<tr${tied ? ' data-tie' : ''}><td>${ranks[i]}</td><td>${esc(team)}</td><td>${r.wins}</td><td>${r.losses}</td><td>${fmtDiff(r.gd)}</td><td>${fmtDiff(r.pd)}</td></tr>`);
+        });
+        parts.push('</tbody></table></section>');
+      }
+      // the highlight is color-only — one line names what it means
+      if (anyTie) parts.push('<p class="note">Highlighted rows are dead ties on every tiebreaker — the organizer settles the order.</p>');
+      parts.push('</div>');
+    }
+    parts.push(matchGrid(grp, ctx, opts.multi), '</section>');
   }
-  if (ko.length) parts.push(bracketHtml(ctx, ko, axis));
+  if (ko.length) parts.push(bracketHtml(ctx, ko, opts.multi));
+  parts.push('</section>');
   return parts.join('');
 }
 
-// one subline pattern per stage: count left, disclosure right
-const foldLine = (key, open, left, noun) =>
-  `<p class="subline"><span>${left}</span><button type="button" class="toggle" data-stage="${esc(key)}" aria-expanded="${open}">${open ? 'Hide' : 'Show'} ${noun}</button></p>`;
 
 // Bracket order first: a card's position must match its QF/SF ordinal, which
 // schedule edits can't move. Time breaks ties and orders unnumbered matches.
@@ -227,33 +196,27 @@ const koOrder = (ms, ctx) => [...ms].sort((a, b) =>
   (koOrdinal(a, ctx) || Infinity) - (koOrdinal(b, ctx) || Infinity) ||
   (schedTime(a, ctx.tz) ?? 0) - (schedTime(b, ctx.tz) ?? 0));
 
-function bracketHtml(ctx, ko, axis) {
+function bracketHtml(ctx, ko, multi) {
   const maxR = ko.reduce((mx, m) => Math.max(mx, koColumn(m, ctx)), 0);
   const cols = [];
   for (const m of ko) {
     const r = maxR - koColumn(m, ctx); // koColumn is distance from the final; render that column rightmost
     (cols[r] = cols[r] || []).push(m);
   }
-  const koDone = ko.filter(isDone).length;
-  // knockout stays collapsed while the groups are undecided; a category with no
-  // groups is trivially decided, so its bracket shows
-  const grpDone = ctx.matches.filter(m => m.pool !== undefined).every(isDone);
-  const key = `${ctx.id}:ko`;
   const parts = [];
-  parts.push(cover(dayRuns(ko, ctx), axis), `<h3>Knockout stage</h3>`, foldLine(key, grpDone, `${koDone} of ${ko.length} played`, 'matches'));
+  parts.push(`<section class="stage"><h3>Knockout stage</h3>`);
   for (let r = 0; r <= maxR; r++) { // index by depth, skip holes — labels stay aligned if a column is empty
     const ms = cols[r];
     if (!ms || !ms.length) continue;
-    const label = roundName(maxR - r);
-    const runs = dayRuns(ms, ctx);
-    parts.push(cover(runs, axis), `<h4${!grpDone ? ' hidden' : ''} data-stage="${esc(key)}">${label}</h4>`);
-    for (const r2 of runs) parts.push(dayDiv(r2.label, r2.iso, axis), matchGrid(koOrder(r2.ms, ctx), ctx, { stage: key, hidden: !grpDone }));
+    parts.push(`<h4>${roundName(maxR - r)}</h4>`, matchGrid(koOrder(ms, ctx), ctx, multi));
   }
+  parts.push('</section>');
   return parts.join('');
 }
 
-// datetime carries the instant (ISO); the label stays wall-clock
-const timeEl = (t, tz) => `<time datetime="${new Date(t).toISOString()}">${esc(fmtTime(t, tz))}</time>`;
+// datetime carries the instant (ISO); the label stays wall-clock — multi-day
+// tournaments prefix the date so a scrolled page keeps day context on the card
+const timeEl = (t, tz, day) => `<time datetime="${new Date(t).toISOString()}">${esc((day ? `${dayShort(t, tz)}, ` : '') + fmtTime(t, tz))}</time>`;
 
 // opts.meta picks the meta items (fixed vocabulary); opts.head is an optional
 // [left, right] headline row — a cell is { key: item field } or { html: pre-rendered }.
@@ -263,7 +226,7 @@ function matchCard(m, ctx, opts = {}) {
     catName: esc(ctx.name),
     label: esc(matchLabel(m, ctx)),
     court: m.venue ? esc(ctx.venues.get(m.venue) || m.venue) : 'TBD',
-    time: t !== null ? timeEl(t, ctx.tz) : 'TBD',
+    time: t !== null ? timeEl(t, ctx.tz, opts.day) : 'TBD',
   };
   const meta = opts.meta.map(k => item[k]).join(' · ');
   const head = opts.head ? `<div class="head">${opts.head.map(c => `<span>${c.html !== undefined ? c.html : item[c.key]}</span>`).join('')}</div>` : '';
@@ -343,6 +306,49 @@ function renderVenue(route, data, now = Date.now()) {
 
 const dayShort = (t, tz) => new Intl.DateTimeFormat(undefined, { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).format(t);
 
+// One tournament-wide fact, derived at render: do scheduled matches span more
+// than one wall-clock day? Gates the date on match cards — single-day pages
+// state the date once, multi-day cards carry their own.
+const multiDay = ctxs => {
+  const days = new Set();
+  for (const c of ctxs) {
+    for (const m of c.matches) {
+      const t = schedTime(m, c.tz);
+      if (t !== null) days.add(dayKey(t, c.tz));
+    }
+  }
+  return days.size > 1;
+};
+
+// Compact wall-clock date range over scheduled matches: one day its label;
+// consecutive days collapse weekday + month ("Sat–Sun, Jul 11–12"); sparse days
+// list each; a span crossing a year appends the end year. null = nothing scheduled.
+function dateRange(ms, tz) {
+  const seen = new Map();
+  for (const m of ms) {
+    const t = schedTime(m, tz);
+    if (t === null) continue;
+    const k = dayKey(t, tz);
+    if (!seen.has(k)) seen.set(k, dayShort(t, tz));
+  }
+  const ks = [...seen.keys()].sort();
+  if (!ks.length) return null;
+  if (ks.length === 1) return seen.get(ks[0]);
+  // day arithmetic on Y-M-D integers: tz-local midnight math drifts across DST
+  const n = k => { const [y, m, d] = k.split('-').map(Number); return y * 372 + m * 31 + d; };
+  const consec = ks.slice(1).every((k, i) => n(k) - n(ks[i]) === 1);
+  let out;
+  if (!consec) out = ks.map(k => seen.get(k)).join(', ');
+  else {
+    const a = seen.get(ks[0]), b = seen.get(ks.at(-1));
+    const wd = x => x.slice(0, 3); // dayShort "Sat, Jul 11" -> "Sat"
+    out = `${wd(a)}–${wd(b)}, ` + (a.slice(5, 8) === b.slice(5, 8)
+      ? `${a.slice(5)}–${b.slice(9)}` // same month, month repeated once: "Sat–Sun, Jul 11–12"
+      : `${a.slice(5)} – ${b.slice(5)}`); // month boundary keeps both: "Wed–Sat, Dec 30 – Jan 2"
+  }
+  return ks[0].slice(0, 4) !== ks.at(-1).slice(0, 4) ? `${out}, ${ks.at(-1).slice(0, 4)}` : out;
+}
+
 function possibleLine(b) {
   const noun = b.count === 1 ? 'match' : 'matches';
   const when = b.min === b.max
@@ -367,24 +373,19 @@ function renderPlayer(route, data) {
   }
   const rows = [];
   const ctxs = catCtxs(data);
+  const multi = multiDay(ctxs);
   for (const ctx of ctxs) {
     for (const pm of playerMatches(ctx, pid)) rows.push({ m: pm.m, i: pm.i, ctx });
   }
   rows.sort((a, b) => (schedTime(a.m, a.ctx.tz) ?? Infinity) - (schedTime(b.m, b.ctx.tz) ?? Infinity));
-  const groups = new Map();
-  for (const r of rows) {
-    const key = dayLabel(r.m, r.ctx);
-    if (!groups.has(key)) groups.set(key, { iso: dayIso(r.m, r.ctx), rows: [] });
-    groups.get(key).rows.push(r);
-  }
-  const blocksByDay = new Map();
+  // one flat timeline — no day headers; multi-day cards carry their own date,
+  // a single-day page states it once in the heading
+  const blocks = [];
   for (const ctx of ctxs) {
     const span = possibleSpan(ctx, pid);
-    if (!span) continue;
-    const key = dayShort(span.min, ctx.tz);
-    if (!blocksByDay.has(key)) blocksByDay.set(key, []);
-    blocksByDay.get(key).push({ ctx, ...span });
+    if (span) blocks.push({ ctx, ...span });
   }
+  blocks.sort((a, b) => a.min - b.min);
   // a void settles, counts nothing
   let wins = 0, losses = 0;
   for (const r of rows) {
@@ -392,24 +393,19 @@ function renderPlayer(route, data) {
     if (wi === r.i) wins++;
     else if (wi !== null) losses++;
   }
-  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}</h1><p class="subline"><span>${wins} W · ${losses} L</span><a href="${esc(href(data.t.slug, 'schedule', { cat: route.cat }))}">Not you?</a></p></header>`];
-  const axis = { day: null }; // the schedule is one timeline — each distinct day states itself once
-  for (const [key, g] of groups) {
-    parts.push(dayDiv(key, g.iso, axis));
-    const day = [];
-    const blocks = (blocksByDay.get(key) || []).sort((a, b) => a.min - b.min);
-    let bi = 0;
-    for (const r of g.rows) {
-      const t = schedTime(r.m, r.ctx.tz), m = r.m, ctx = r.ctx;
-      while (bi < blocks.length && blocks[bi].min < t) day.push(possibleLine(blocks[bi++]));
-      day.push(matchCard(m, ctx, {
-        meta: ['catName', 'label'],
-        head: [{ key: 'time' }, { key: 'court' }],
-      }));
-    }
-    while (bi < blocks.length) day.push(possibleLine(blocks[bi++]));
-    parts.push(`<div class="stack">${day.join('')}</div>`);
+  const tz = data.tjson.timezone || 'UTC';
+  const first = rows.map(r => schedTime(r.m, r.ctx.tz)).find(t => t !== null);
+  const when = !multi && first !== undefined ? `${dayShort(first, tz)} · ` : '';
+  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}</h1><p class="subline"><span>${when}${wins} W · ${losses} L</span><a href="${esc(href(data.t.slug, 'schedule', { cat: route.cat }))}">Not you?</a></p></header>`];
+  const out = [];
+  let bi = 0;
+  for (const r of rows) {
+    const t = schedTime(r.m, r.ctx.tz), m = r.m, ctx = r.ctx;
+    while (bi < blocks.length && blocks[bi].min < t) out.push(possibleLine(blocks[bi++]));
+    out.push(matchCard(m, ctx, { meta: ['catName', 'label'], day: multi, head: [{ key: 'time' }, { key: 'court' }] }));
   }
+  while (bi < blocks.length) out.push(possibleLine(blocks[bi++]));
+  parts.push(`<div class="stack">${out.join('')}</div>`);
   if (!rows.length) parts.push('<p>No matches.</p>');
   return parts.join('');
 }
@@ -419,20 +415,6 @@ function renderPlayer(route, data) {
 // Read-once views load once and recover via manual reload; the kiosk polls.
 function boot() {
   const app = document.querySelector('main');
-
-  // stage disclosure: the button flips every card grid of its stage — day
-  // dividers sit outside the fold and never hide
-  app.addEventListener('click', (e) => {
-    const b = e.target.closest('button[data-stage]');
-    if (!b) return;
-    const open = b.getAttribute('aria-expanded') === 'true'; // currently shown
-    const key = b.dataset.stage;
-    for (const el of app.querySelectorAll('[data-stage]')) {
-      if (el !== b && el.dataset.stage === key) el.toggleAttribute('hidden', open);
-    }
-    b.setAttribute('aria-expanded', String(!open));
-    b.textContent = (open ? 'Show' : 'Hide') + ' ' + b.textContent.replace(/^(Hide|Show) /, ''); // the noun rides along — pool buttons say pools
-  });
 
   const renderers = { index: renderIndex, tournament: renderTournament, venues: renderVenue, schedule: renderPlayer };
   const pageTitle = (r, d) => {
@@ -450,7 +432,7 @@ function boot() {
   let data = null;     // last good snapshot — a failed poll keeps the board up
   let dataSlug = null; // slug the snapshot belongs to — a route change to another tournament reloads
   let lastHtml = '';   // skip re-render when nothing changed — keeps selection/focus on the player page
-  let lastView = parseRoute()?.view ?? null; // start from the browser's restored position on reload
+  let lastKey = '';    // view|cat — what the page shows; a change is new content, start at the top
   let pollTimer = null, clockTimer = null;
 
   // Auto-refresh only on the kiosk; the other views are read-on-load.
@@ -490,13 +472,15 @@ function boot() {
     // the kiosk dark theme keys off body.venue — present only on the venue view
     document.body.classList.toggle('venue', r.view === 'venues');
     document.title = pageTitle(r, d);
-    // a new view is new content — start at the top; shorter pages clamp the residual scroll
-    const viewChanged = lastView !== r.view;
-    lastView = r.view;
+    // a category or view switch is new content — start at the top; shorter
+    // pages clamp the residual scroll. Player/venue hops keep the position.
+    const key = `${r.view}|${r.cat || ''}`;
+    const contentChanged = key !== lastKey;
+    lastKey = key;
     try {
       const html = renderers[r.view](r, d);
       if (html !== lastHtml) { app.innerHTML = html; lastHtml = html; }
-      if (viewChanged) window.scrollTo(0, 0);
+      if (contentChanged) window.scrollTo(0, 0);
     } catch (e) {
       app.innerHTML = '<p>Something went wrong displaying this page.</p>';
       console.error(e);

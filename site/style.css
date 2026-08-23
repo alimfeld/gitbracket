@@ -17,30 +17,21 @@ body {
 }
 /* sizes are em — the kiosk's body.venue font-size is the one text knob; the page takes the UA font size */
 h1 { font-size: 1.6em; margin: 0 0 1rem; }
-h2 { font-size: 1.2em; margin: 2rem 0 .6rem; }
-h3 { font-size: 1em; margin: 1.2rem 0 .4rem; color: var(--muted); }
-h4 { font-size: .8em; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 1rem 0 0; } /* the secondary text tier: .8em every label — meta lines, day markers, table headers, pool/round names — one size, muted */
-/* the divider is a band, not a line: margins would leave transparent strips for content to scroll through — padding is the mask */
-/* sticky makes each divider the scroll chip: the latest day pins under the segments until the next covers it */
-/* ponytail: top is a knob — 3rem = the .segments bar height (.5rem top pad + 1.45 line + 1px border + 1rem bottom pad), so the two bars sit flush as one opaque block; only the non-kiosk page has .day */
-.day { display: flex; align-items: center; gap: .8em; padding: 1.3rem 0 .8rem; color: var(--muted); font-size: .8em; letter-spacing: .06em; position: sticky; top: 3rem; z-index: 1; background: var(--paper); } /* z-index: 1 — a sticky band without its own layer leaks scrolled content through it on Safari's compositor */
-.day::before, .day::after { content: ''; flex: 1; height: 1px; background: var(--line); }
-/* fragment links are "visited" the moment they're followed — visited styling is noise, keep the accent */
+h2 { font-size: 1.2em; margin: 2rem 0 .6rem; } /* the category heading scrolls with its section — the pinned switcher above is the context */
+h3 { font-size: 1em; margin: 1rem 0 0; color: var(--muted); } /* stage headings scroll with their content — one category per page, the switcher is the pinned context; the next sibling (or the h4 in a grid, which won't collapse) provides the gap */
+h4 { font-size: .8em; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 1rem 0 0; } /* the secondary text tier: .8em every label — meta lines, table headers, pool/round names — one size, muted */
 a, a:visited { color: var(--accent); }
 
 .adv { margin-left: .4em; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--muted); } /* how many teams leave the pool for the bracket — a parenthetical note, not title text */
-.subline { color: var(--muted); margin: 0 0 .8rem; } /* category status sentence under its h2; stage sublines carry the count left and the disclosure right */
+.subline { color: var(--muted); margin: 0 0 .8rem; } /* category subline under its heading (date span + status); stage sublines carry the count left and the disclosure right */
 /* only a subline that carries an action becomes a row — a plain status sentence must stay inline, flex would tear "Starts" from its time */
 .subline:has(button, a) { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
-.toggle { border: 0; background: none; padding: 0; font: inherit; color: var(--accent); cursor: pointer; white-space: nowrap; } /* show/hide under a stage heading — the one interactive affordance on the page */
-.toggle:hover { text-decoration: underline; }
-.grid[hidden], .pools[hidden] { display: none; } /* their display rules would beat the UA hidden rule */
 
 /* minimal class set — state rides data-* attributes or aria-current */
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr)); gap: 1rem; margin-top: 1rem; }
 
-.pools { display: grid; grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr)); gap: 1.5rem; margin-top: 1rem; align-items: start; }
+.pools { display: grid; grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr)); gap: 1rem; align-items: start; }
 
 article { display: flex; flex-direction: column; gap: .3rem; border: 1px solid var(--line); border-radius: .5rem; padding: .6rem .8rem; background: var(--paper); }
 .stack { display: flex; flex-direction: column; gap: .6rem; }
@@ -52,15 +43,18 @@ article { display: flex; flex-direction: column; gap: .3rem; border: 1px solid v
 .meta { font-size: .8em; color: var(--muted); }
 .head { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; font-weight: 600; }
 
-.pills { display: flex; gap: .5rem; flex-wrap: wrap; margin: 0 0 1.5rem; }
-.pills a { padding: .35rem .8rem; border: 1px solid var(--line); border-radius: 999px; text-decoration: none; }
-.pills a[aria-current] { background: var(--accent); border-color: var(--accent); color: #fff; }
 /* the destination switch floats above the page — content scrolls under it */
 .segments { position: sticky; top: 0; z-index: 10; display: flex; gap: .25rem; padding: .5rem 0 1rem; background: var(--paper); border-bottom: 1px solid var(--hairline); }
-.segments a { flex: 1; text-align: center; padding: .5rem; border-radius: .5rem; color: var(--ink); font-weight: 600; text-decoration: none; }
-.segments a:hover { background: #00000012; }
-.segments a[aria-current] { background: var(--accent); color: #fff; }
+/* both bars share the segment look — only the padding differs */
+:is(.segments, .cats) a { flex: 1; text-align: center; border-radius: .5rem; color: var(--ink); font-weight: 600; text-decoration: none; }
+:is(.segments, .cats) a:hover { background: #00000012; }
+:is(.segments, .cats) a[aria-current] { background: var(--accent); color: #fff; }
+.segments a { padding: .5rem; }
+.cats a { padding: .3rem .4rem; }
 
+/* the category switcher: a slimmer bar under the view bar, pinning below it —
+   the open category stays switchable while the page scrolls */
+.cats { position: sticky; top: 4rem; z-index: 9; display: flex; gap: .25rem; padding: .3rem 0 .55rem; background: var(--paper); font-size: .85em; border-bottom: 1px solid var(--hairline); } /* top: 4rem ≈ the view bar's rendered height (.5 top pad + 2.45 link — .5×2 padding + 1.45 line — + 1 bottom pad + 1px border) */
 ul { list-style: none; padding: 0; }
 ul li { padding: .6rem 0; border-bottom: 1px solid var(--hairline); }
 ul li a + a { font-size: .8em; margin-left: .6rem; }
