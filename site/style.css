@@ -35,6 +35,8 @@ h2 { font-size: 1.25rem; margin: calc(var(--space)*3) 0 var(--space); }
 h3 { font-size: 1.125rem; margin: calc(var(--space)*3) 0 var(--space); }
 h4 { font-size: 1rem; margin: calc(var(--space)*2) 0 var(--space); font-weight: 600; color: var(--muted); text-transform: uppercase; }
 
+header { margin: calc(var(--space)*2) 0 calc(var(--space)*3); }
+
 a { color: var(--accent); }
 
 .note { color: var(--muted); margin: var(--space) 0; border-left: 3px solid var(--line); padding-left: var(--space); }
