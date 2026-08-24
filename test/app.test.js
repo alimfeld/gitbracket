@@ -529,7 +529,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   // tied teams share the first rank of their group (standard competition ranking: 1 1 1 4)
   const { data: tdata } = dataOf('tie');
   const tieHtml = renderTournament({ slug: 'tie', view: 'tournament' }, tdata);
-  assert(!tieHtml.includes('†') && (tieHtml.match(/data-tie><td>1<\/td>/g) || []).length === 2, 'tied teams share rank 1, no dagger');
+  assert(!tieHtml.includes('†') && (tieHtml.match(/data-tie><td class="num">1<\/td>/g) || []).length === 2, 'tied teams share rank 1, no dagger');
   assert(tieHtml.includes('dead ties on every tiebreaker'), 'the color-only tie highlight carries a one-line legend');
   // pre-play every team ties at zero — the highlight must wait for results
   assert(!pre.includes('data-tie'), 'nothing played yet: no tie highlight, no legend');

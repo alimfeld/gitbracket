@@ -86,6 +86,7 @@ table { border-collapse: collapse; width: 100%; border: 1px solid var(--line); }
 th, td { padding: var(--space); text-align: left; }
 th { font-weight: 600; color: var(--muted); border-bottom: 1px solid var(--hairline); }
 tbody tr + tr td { border-top: 1px solid var(--hairline); } /* row separators never touch the outer edges — the table border owns them */
+th + th, td + td { border-left: 1px solid var(--hairline); } /* column separators, same interior-only rule */
 .num { text-align: right; }
 tr[data-tie] td { background: var(--tie); }
 

@@ -166,14 +166,14 @@ function catSection(ctx, opts) {
       parts.push('<div class="grid">');
       for (const [pool] of byPool) {
         parts.push(`<div><h4>Pool ${esc(String(pool))}</h4>`);
-        parts.push('<table><thead><tr><th scope="col">#</th><th scope="col">Team</th><th scope="col" class="num">W</th><th scope="col" class="num">L</th><th scope="col" class="num">GD</th><th scope="col" class="num">PD</th></tr></thead><tbody>');
+        parts.push('<table><thead><tr><th scope="col" class="num">#</th><th scope="col">Team</th><th scope="col" class="num">W</th><th scope="col" class="num">L</th><th scope="col" class="num">GD</th><th scope="col" class="num">PD</th></tr></thead><tbody>');
         const st = poolStandings(ctx, pool, true); // pools come from matches, so partial standings always resolve
         const ranks = poolRanks(st);
         st.forEach((r, i) => {
           const tied = started && isDeadTie(st, i + 1);
           if (tied) anyTie = true;
           const team = teamLabel(r.ids, ctx);
-          parts.push(`<tr${tied ? ' data-tie' : ''}><td>${ranks[i]}</td><td>${esc(team)}</td><td class="num">${r.wins}</td><td class="num">${r.losses}</td><td class="num">${fmtDiff(r.gd)}</td><td class="num">${fmtDiff(r.pd)}</td></tr>`);
+          parts.push(`<tr${tied ? ' data-tie' : ''}><td class="num">${ranks[i]}</td><td>${esc(team)}</td><td class="num">${r.wins}</td><td class="num">${r.losses}</td><td class="num">${fmtDiff(r.gd)}</td><td class="num">${fmtDiff(r.pd)}</td></tr>`);
         });
         parts.push('</tbody></table></div>');
       }
