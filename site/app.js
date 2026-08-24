@@ -77,7 +77,7 @@ const segmentBar = r => {
 const MISSING = '<p>No tournament data yet — check back soon.</p>';
 
 
-const matchGrid = (ms, ctx, day) => `<section class="grid">${ms.map(m => matchCard(m, ctx, { meta: ['label', 'court', 'time'], day })).join('')}</section>`;
+const matchGrid = (ms, ctx, day) => `<div class="grid">${ms.map(m => matchCard(m, ctx, { meta: ['label', 'court', 'time'], day })).join('')}</div>`;
 
 // Date leads, undated entries defer to the end, ties hold index order (stable sort).
 function renderIndex(route, data) {
@@ -113,9 +113,7 @@ function renderTournament(route, data) {
   const parts = [segmentBar(route), `<header><h1>${esc(data.t.name)}</h1>`];
   // the heading states the span and the location once — single-day cards never repeat the date
   const range = dateRange(ctxs.flatMap(c => c.matches), tz);
-  parts.push(`<p class="subline">${[range, esc(data.tjson.location)].filter(Boolean).join(' · ')}</p></header>`);
-  // the category switcher pins under the view bar for the whole page — it must
-  // sit outside the header, or the header's height would be its sticky ceiling
+  parts.push(`<p class="note">${[range, esc(data.tjson.location)].filter(Boolean).join(' · ')}</p></header>`);
   parts.push(`<nav class="cats" aria-label="Categories">${catNav(data.t.slug, ctxs, route)}</nav>`);
   parts.push(catSection(show, { multi }));
   return parts.join('');
@@ -157,22 +155,22 @@ function catSection(ctx, opts) {
   // pages only — a single-day heading already states the date once
   const phase = phaseLine(ctx);
   const sub = [opts.multi ? dateRange(ctx.matches, ctx.tz) : null, phase].filter(Boolean).join(' · ');
-  parts.push(`<section class="cat"><h2>${esc(ctx.name)}</h2>${sub ? `<p class="subline">${sub}</p>` : ''}`);
+  parts.push(`<section><h2>${esc(ctx.name)}</h2>${sub ? `<p class="note">${sub}</p>` : ''}`);
   if (grp.length) {
-    parts.push(`<section class="stage"><h3>Group stage</h3>`);
+    parts.push(`<section><h3>Group stage</h3>`);
     // pools belong to the group stage — scoreboard first, cards last; the
     // category subline above carries the status sentence
     if (byPool.size) {
       const started = ctx.matches.some(isDone); // pre-play every team ties at zero — no highlight yet
       let anyTie = false;
-      parts.push('<div class="pools">');
+      parts.push('<div class="grid">');
       for (const [pool] of byPool) {
         const adv = poolAdvance(ctx, pool);
         const note = !adv || adv.total === 0 ? ''
           : adv.count >= adv.total ? 'All teams advance'
           : adv.top ? `Top ${adv.count} advance`
           : `${adv.count} teams advance`;
-        parts.push(`<section><h4>Pool ${esc(String(pool))}${note ? ` <span class="adv">(${esc(note)})</span>` : ''}</h4>`);
+        parts.push(`<div><h4>Pool ${esc(String(pool))}${note ? ` <span class="adv">(${esc(note)})</span>` : ''}</h4>`);
         parts.push('<table><thead><tr><th scope="col">#</th><th scope="col">Team</th><th scope="col" class="num">W</th><th scope="col" class="num">L</th><th scope="col" class="num">GD</th><th scope="col" class="num">PD</th></tr></thead><tbody>');
         const st = poolStandings(ctx, pool, true); // pools come from matches, so partial standings always resolve
         const ranks = poolRanks(st);
@@ -182,13 +180,13 @@ function catSection(ctx, opts) {
           const team = teamLabel(r.ids, ctx);
           parts.push(`<tr${tied ? ' data-tie' : ''}><td>${ranks[i]}</td><td>${esc(team)}</td><td class="num">${r.wins}</td><td class="num">${r.losses}</td><td class="num">${fmtDiff(r.gd)}</td><td class="num">${fmtDiff(r.pd)}</td></tr>`);
         });
-        parts.push('</tbody></table></section>');
+        parts.push('</tbody></table></div>');
       }
       // the highlight is color-only — one line names what it means
       if (anyTie) parts.push('<p class="note">Highlighted rows are dead ties on every tiebreaker — the organizer settles the order.</p>');
       parts.push('</div>');
     }
-    parts.push(matchGrid(grp, ctx, opts.multi), '</section>');
+    parts.push(`<h4>Matches</h4>`, matchGrid(grp, ctx, opts.multi), '</section>');
   }
   if (ko.length) parts.push(bracketHtml(ctx, ko, opts.multi));
   parts.push('</section>');
@@ -210,7 +208,7 @@ function bracketHtml(ctx, ko, multi) {
     (cols[r] = cols[r] || []).push(m);
   }
   const parts = [];
-  parts.push(`<section class="stage"><h3>Knockout stage</h3>`);
+  parts.push(`<section><h3>Knockout stage</h3>`);
   for (let r = 0; r <= maxR; r++) { // index by depth, skip holes — labels stay aligned if a column is empty
     const ms = cols[r];
     if (!ms || !ms.length) continue;
@@ -372,7 +370,7 @@ function renderPlayer(route, data) {
   const tz = data.tjson.timezone || 'UTC';
   const first = rows.map(r => schedTime(r.m, r.ctx.tz)).find(t => t !== null);
   const when = !multi && first !== undefined ? `${dayShort(first, tz)} · ` : '';
-  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}</h1><p class="subline"><span>${when}${wins} W · ${losses} L</span><a href="${esc(href(data.t.slug, 'schedule', { cat: route.cat }))}">Not you?</a></p></header>`];
+  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}</h1><p class="note"><span>${when}${wins} W · ${losses} L</span><a href="${esc(href(data.t.slug, 'schedule', { cat: route.cat }))}">Not you?</a></p></header>`];
   const out = [];
   let bi = 0;
   for (const r of rows) {
@@ -381,8 +379,7 @@ function renderPlayer(route, data) {
     out.push(matchCard(m, ctx, { meta: ['catName', 'label'], day: multi, head: [{ key: 'time' }, { key: 'court' }] }));
   }
   while (bi < blocks.length) out.push(possibleLine(blocks[bi++]));
-  parts.push(`<div class="stack">${out.join('')}</div>`);
-  if (!rows.length) parts.push('<p>No matches.</p>');
+  parts.push(`<section><h2>Matches</h2>${rows.length ? `<div class="stack">${out.join('')}</div>` : '<p>No matches.</p>'}</section>`);
   return parts.join('');
 }
 
@@ -443,6 +440,8 @@ function boot() {
     data = d;
     // the kiosk dark theme keys off body.venue — present only on the venue view
     document.body.classList.toggle('venue', r.view === 'venues');
+    // tournament pages pin their view bar flush to the top; frontdoor/venue keep body padding
+    document.body.classList.toggle('flush', r.view === 'tournament' || r.view === 'schedule');
     document.title = pageTitle(r, d);
     // a category or view switch is new content — start at the top; shorter
     // pages clamp the residual scroll. Player/venue hops keep the position.

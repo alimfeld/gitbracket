@@ -458,25 +458,25 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(late.match(/<span class="flag">delayed<\/span>/g).length === late.match(/data-status="overdue"/g).length, 'every overdue card has the remark, and only overdue cards do');
   assert(venue.includes("Men&#39;s Doubles 40+ · Final") && !venue.includes("Men&#39;s Doubles 40+ · 9 ·"), 'kiosk meta shows the long category name and label, no match id');
   assert(!venue.includes('<nav>'), 'kiosk has no breadcrumb');
-  assert(standings.includes('<h2>Men&#39;s Doubles 40+</h2><p class="subline">Knockout stage · Semifinals</p>') && !standings.includes('<h2 id='), 'category h2: plain in-flow heading, status-only subline (the single-day heading already stated the date)');
-  assert(standings.includes('<h1>Sample</h1>') && standings.includes('<p class="subline">Mon, Jul 14 · New York</p>'), 'one-day tournament: the heading subline states the date and the location');
+  assert(standings.includes('<h2>Men&#39;s Doubles 40+</h2><p class="note">Knockout stage · Semifinals</p>') && !standings.includes('<h2 id='), 'category h2: plain in-flow heading, status-only subline (the single-day heading already stated the date)');
+  assert(standings.includes('<h1>Sample</h1>') && standings.includes('<p class="note">Mon, Jul 14 · New York</p>'), 'one-day tournament: the heading subline states the date and the location');
   assert(!standings.includes('class="day"') && !standings.includes('Jul 14, '), 'single-day: no day dividers anywhere, and cards carry just the time');
-  assert(xd.includes('<h2>Mixed Doubles</h2><p class="subline">Finished</p>'), 'a fully decided category: status-only subline on a single-day page');
-  assert(standings.includes('<h3>Group stage</h3><div class="pools">'), 'group stage: pools first under the heading');
-  assert(standings.includes('</div><section class="grid">'), 'group stage: pools first, then the cards — nothing between');
+  assert(xd.includes('<h2>Mixed Doubles</h2><p class="note">Finished</p>'), 'a fully decided category: status-only subline on a single-day page');
+  assert(standings.includes('<h3>Group stage</h3><div class="grid">'), 'group stage: pools first under the heading');
+  assert(standings.includes('</div><h4>Matches</h4><div class="grid">'), 'group stage: pools, then the Matches h4, then the cards');
   assert(!standings.includes('Pools</h3>') && !standings.includes('md40:pools'), 'pools are part of the group stage — no separate heading, no fold of their own');
   assert(standings.includes('Pool A <span class="adv">(All teams advance)</span>'), 'every team reaches the bracket — the note says so');
-  assert(standings.indexOf('<div class="pools">') < standings.indexOf('<section class="grid"'), 'pools lead the group matches inside the stage');
+  assert(standings.indexOf('<div class="grid">') < standings.indexOf('<h4>Matches</h4>'), 'pools lead the group matches inside the stage');
   assert(standings.indexOf('Group stage</h3>') < standings.indexOf('Knockout stage</h3>'), 'schedule before the bracket — chronological flow');
-  assert(standings.includes('<h3>Knockout stage</h3><h4>Semifinals</h4><section class="grid">'), 'knockout: rounds and cards — always open, no count subline');
+  assert(standings.includes('<h3>Knockout stage</h3><h4>Semifinals</h4><div class="grid">'), 'knockout: rounds and cards — always open, no count subline');
   // mid-groups state: an unresolved group match opens the schedule and re-counts the chip
   const midJson = JSON.parse(JSON.stringify(require(FIX('sample', 'tournaments', 'sample.json'))));
   midJson.matches.md40[0].result = undefined;
   const mid = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' },
     { index: [], t: { slug: 'sample', name: midJson.name }, tjson: midJson,
       cats: toCats(midJson) });
-  assert(mid.includes('<p class="subline">Group stage · 5 of 6 played, next <time datetime="2025-07-14T13:00:00.000Z">09:00</time></p>'), 'running groups: the subline carries the phase, the next slot is a semantic <time>');
-  assert(mid.includes('</div><section class="grid">'), 'running groups: pools, then the cards — the status lives in the category subline');
+  assert(mid.includes('<p class="note">Group stage · 5 of 6 played, next <time datetime="2025-07-14T13:00:00.000Z">09:00</time></p>'), 'running groups: the subline carries the phase, the next slot is a semantic <time>');
+  assert(mid.includes('</div><h4>Matches</h4><div class="grid">'), 'running groups: pools, then the Matches h4, then the cards — the status lives in the category subline');
   assert(!mid.includes('data-stage') && !mid.includes('toggle'), 'no disclosure machinery ships — nothing hides, nothing toggles');
   const { data: rdata } = dataOf('result');
   const res = renderTournament({ slug: 'result', view: 'tournament' }, rdata);
@@ -487,8 +487,8 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   const pre = renderTournament({ slug: 'sample', view: 'tournament' },
     { index: [], t: { slug: 'sample', name: preJson.name }, tjson: preJson,
       cats: toCats(preJson) });
-  assert(pre.includes('<div class="pools">') && pre.includes('>Ada Lovelace / Grace Hopper</td>'), 'pools roster (teams) is visible before the first result');
-  assert(pre.includes('<p class="subline">Starts '), 'pre-start status line');
+  assert(pre.includes('<div class="grid">') && pre.includes('>Ada Lovelace / Grace Hopper</td>'), 'pools roster (teams) is visible before the first result');
+  assert(pre.includes('<p class="note">Starts '), 'pre-start status line');
   const ppage = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p1' }, data);
   assert(ppage.includes('<h1>Ada Lovelace</h1>'), 'player page: plain name');
   assert(!ppage.includes('data-next'), 'no next-match highlight — the unscored card is its own marker');
@@ -500,7 +500,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(ppage.includes('class="ph"'), 'player match cards render unplayed score slots too');
   assert(ppage.includes('Ada Lovelace'), 'player page finds the player');
   assert(ppage.includes('<nav class="segments" aria-label="Views"><a href="#sample?player=p1">Tournament</a><a href="#sample/schedule?player=p1" aria-current="true">My Schedule</a></nav>'), 'player page: segment switch, My Schedule current, pick preserved in links');
-  assert(ppage.includes('<p class="subline"><span>Mon, Jul 14 · 7 W · 0 L</span><a href="#sample/schedule">Not you?</a></p>'), 'player page: single-day date + record and Not you? in the heading subline; the link drops the pick');
+  assert(ppage.includes('<p class="note"><span>Mon, Jul 14 · 7 W · 0 L</span><a href="#sample/schedule">Not you?</a></p>'), 'player page: single-day date + record and Not you? in the heading subline; the link drops the pick');
   assert(ppage.includes('#sample'), 'player page links the tournament name to the tournament page');
   const picker = renderPlayer({ slug: 'sample', view: 'schedule' }, data);
   assert(picker.includes('<nav class="segments" aria-label="Views"><a href="#sample">Tournament</a><a href="#sample/schedule" aria-current="true">My Schedule</a></nav>'), 'picker: segment switch, My Schedule current');
@@ -554,12 +554,12 @@ test('multi-day: cards carry their full date; single-day cards just the time; th
   const info = repo.tournaments.get('multiday');
   const data = { index: repo.index, t: { slug: 'multiday', name: info.tjson.name }, tjson: info.tjson, cats: toCats(info.tjson) };
   const page = renderTournament({ slug: 'multiday', view: 'tournament' }, data);
-  assert(page.includes('<p class="subline">Sat–Sun, Jul 11–12 · Boston</p>'), 'the heading subline collapses consecutive days and gives the location');
-  assert(page.includes('<h2>Men&#39;s Doubles 40+</h2><p class="subline">Sat–Sun, Jul 11–12 · Group stage · 5 of 6 played, next <time datetime="2026-07-11T15:00:00.000Z">11:00</time></p>'), 'the category subline spans the range and the live status');
+  assert(page.includes('<p class="note">Sat–Sun, Jul 11–12 · Boston</p>'), 'the heading subline collapses consecutive days and gives the location');
+  assert(page.includes('<h2>Men&#39;s Doubles 40+</h2><p class="note">Sat–Sun, Jul 11–12 · Group stage · 5 of 6 played, next <time datetime="2026-07-11T15:00:00.000Z">11:00</time></p>'), 'the category subline spans the range and the live status');
   assert(!page.includes('class="day"') && !page.includes('Pools</h3>'), 'no day dividers, no separate pools section');
   assert(page.includes('<time datetime="2026-07-11T13:00:00.000Z">Sat, Jul 11, 09:00</time>') && page.includes('<time datetime="2026-07-11T15:00:00.000Z">Sat, Jul 11, 11:00</time>'), 'Saturday cards carry the date with the time');
   assert(page.includes('<time datetime="2026-07-12T13:00:00.000Z">Sun, Jul 12, 09:00</time>') && page.includes('<time datetime="2026-07-12T15:00:00.000Z">Sun, Jul 12, 11:00</time>'), 'Sunday knockout cards carry the date too');
-  assert(page.includes('</div><section class="grid">'), 'the running group stage: pools, then cards');
+  assert(page.includes('</div><h4>Matches</h4><div class="grid">'), 'the running group stage: pools, then the Matches h4, then the cards');
   assert(page.includes('<h3>Knockout stage</h3><h4>Semifinals</h4>') && page.includes('<h4>Final</h4>'), 'the knockout is always open — rounds listed in order');
   // moving a match to another day just re-dates its card — no divider machinery
   const split = JSON.parse(JSON.stringify(info.tjson));
@@ -570,7 +570,7 @@ test('multi-day: cards carry their full date; single-day cards just the time; th
   const sInfo = loadRepo(FIX('sample')).tournaments.get('sample');
   const single = renderTournament({ slug: 'sample', view: 'tournament' },
     { index: repo.index, t: { slug: 'sample', name: sInfo.tjson.name }, tjson: sInfo.tjson, cats: toCats(sInfo.tjson) });
-  assert(single.includes('<h1>Sample</h1>') && single.includes('<h2>Men&#39;s Doubles 40+</h2>') && single.includes('<p class="subline">Mon, Jul 14 · New York</p>') && !single.includes('class="day"') && !single.includes('Jul 14, '), 'single-day tournament: one date in the heading subline, cards carry only the time');
+  assert(single.includes('<h1>Sample</h1>') && single.includes('<h2>Men&#39;s Doubles 40+</h2>') && single.includes('<p class="note">Mon, Jul 14 · New York</p>') && !single.includes('class="day"') && !single.includes('Jul 14, '), 'single-day tournament: one date in the heading subline, cards carry only the time');
 
   // kiosk: strict same-day in the tournament timezone, from the device clock instant
   const at = iso => Date.parse(iso);
@@ -589,13 +589,13 @@ test('date spans: consecutive days collapse, sparse days list, a year boundary a
   ] } };
   const data = { index: [], t: { slug: 't', name: tjson.name }, tjson, cats: toCats(tjson) };
   const page = renderTournament({ slug: 't', view: 'tournament' }, data);
-  assert(page.includes('<p class="subline">Wed, Dec 30, Sat, Jan 2, 2027</p>'), 'sparse days list each label; a year boundary appends the end year; no location renders clean');
+  assert(page.includes('<p class="note">Wed, Dec 30, Sat, Jan 2, 2027</p>'), 'sparse days list each label; a year boundary appends the end year; no location renders clean');
   // closing the gap makes the run consecutive — cross-month collapsed form
   tjson.matches.t.splice(1, 0,
     { id: 3, scheduled: '2026-12-31T09:00:00', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },
     { id: 4, scheduled: '2027-01-01T09:00:00', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] });
   const run = renderTournament({ slug: 't', view: 'tournament' }, data);
-  assert(run.includes('<p class="subline">Wed–Sat, Dec 30 – Jan 2, 2027</p>'), 'consecutive cross-month days keep both months and the end year');
+  assert(run.includes('<p class="note">Wed–Sat, Dec 30 – Jan 2, 2027</p>'), 'consecutive cross-month days keep both months and the end year');
 });
 
 test('routing: cat and player ride along between tournament and schedule — applied on their home view only', () => {
