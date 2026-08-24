@@ -581,6 +581,7 @@ test('date spans: consecutive days collapse, sparse days list, a year boundary a
   tjson.matches.t.splice(1, 0,
     { id: 3, scheduled: '2026-12-31T09:00:00', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },
     { id: 4, scheduled: '2027-01-01T09:00:00', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] });
+  data.cats = toCats(tjson); // contexts snapshot the matches — rebuild after mutating
   const run = renderTournament({ slug: 't', view: 'tournament' }, data);
   assert(run.includes('<p class="note">Wed–Sat, Dec 30 – Jan 2, 2027</p>'), 'consecutive cross-month days keep both months and the end year');
 });

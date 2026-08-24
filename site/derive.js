@@ -29,11 +29,11 @@ function makeCat(c, tjson) {
   };
 }
 
-// Category contexts: [{ meta, matches }]. A category without a matches array renders empty.
+// Category contexts (makeCat ready). A category without a matches array renders empty.
 function toCats(tjson) {
   const byCat = (tjson && tjson.matches && typeof tjson.matches === 'object') ? tjson.matches : {};
   const cats = (tjson && Array.isArray(tjson.categories)) ? tjson.categories : [];
-  return cats.map(c => ({ meta: c, matches: Array.isArray(byCat[c.id]) ? byCat[c.id] : [] }));
+  return cats.map(c => makeCat({ meta: c, matches: Array.isArray(byCat[c.id]) ? byCat[c.id] : [] }, tjson));
 }
 
 const stageOf = m => (m && m.pool !== undefined) ? 'groups' : 'knockout';

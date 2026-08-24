@@ -107,7 +107,7 @@ const catNav = (slug, ctxs, route) => ctxs.map((c, i) => {
 function renderTournament(route, data) {
   if (!data.tjson) return MISSING;
   const tz = data.tjson.timezone || 'UTC';
-  const ctxs = catCtxs(data);
+  const ctxs = data.cats;
   const show = ctxs.find(c => c.id === route.cat) || ctxs[0]; // an unknown cat falls back to the first
   const multi = multiDay(ctxs);
   const parts = [segmentBar(route), `<header><h1>${esc(data.t.name)}</h1>`];
@@ -251,15 +251,11 @@ function sideRow(m, ctx, i) {
   return `<div class="side"${w === i ? ' data-win' : ''}><span>${esc(sideLabel(m.sides[i], ctx))}</span><span class="score">${score}</span></div>`;
 }
 
-function catCtxs(data) {
-  return data.cats.map(c => makeCat(c, data.tjson));
-}
-
 function renderVenue(route, data, now = Date.now()) {
   if (!data.tjson) return MISSING;
   const v = route.venue;
   const rows = [];
-  const ctxs = catCtxs(data);
+  const ctxs = data.cats;
   for (const ctx of ctxs) {
     for (const m of ctx.matches) {
       if (!m || m.venue === undefined) continue;
@@ -269,8 +265,8 @@ function renderVenue(route, data, now = Date.now()) {
     }
   }
   rows.sort((a, b) => a.t - b.t);
-  // courts with no matches are simply absent; names come from makeCat's map
-  const venueNames = ctxs[0] ? ctxs[0].venues : new Map();
+  // courts with no matches are simply absent; names come straight from the tournament
+  const venueNames = new Map((data.tjson.venues || []).map(v => [v.id, v.name]));
   const venues = (data.tjson.venues || []).map(x => x.id).filter(id => rows.some(r => r.m.venue === id));
   const shown = v ? rows.filter(r => r.m.venue === v) : rows;
   const parts = [`<header><h1>${esc(data.t.name)}</h1><time id="k-clock"></time></header>`];
@@ -333,7 +329,7 @@ function renderPlayer(route, data) {
   const p = pid ? players.find(x => x.id === pid) : null;
   if (!p) {
     // only participants are pickable — a pick must always render a schedule
-    const ctxs = catCtxs(data);
+    const ctxs = data.cats;
     const items = players.filter(pl => ctxs.some(c => playerMatches(c, pl.id).length))
       .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id))
       .map(pl => `<li><a href="${esc(href(data.t.slug, 'schedule', { cat: route.cat, player: pl.id }))}">${esc(pl.name || pl.id)}</a></li>`)
@@ -342,7 +338,7 @@ function renderPlayer(route, data) {
     return `${segmentBar(route)}<header><h1>Pick your player</h1></header>${list}`;
   }
   const rows = [];
-  const ctxs = catCtxs(data);
+  const ctxs = data.cats;
   const multi = multiDay(ctxs);
   for (const ctx of ctxs) {
     for (const pm of playerMatches(ctx, pid)) rows.push({ m: pm.m, i: pm.i, ctx });
