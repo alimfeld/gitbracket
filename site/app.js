@@ -165,12 +165,7 @@ function catSection(ctx, opts) {
       let anyTie = false;
       parts.push('<div class="grid">');
       for (const [pool] of byPool) {
-        const adv = poolAdvance(ctx, pool);
-        const note = !adv || adv.total === 0 ? ''
-          : adv.count >= adv.total ? 'All teams advance'
-          : adv.top ? `Top ${adv.count} advance`
-          : `${adv.count} teams advance`;
-        parts.push(`<div><h4>Pool ${esc(String(pool))}${note ? ` <span class="adv">(${esc(note)})</span>` : ''}</h4>`);
+        parts.push(`<div><h4>Pool ${esc(String(pool))}</h4>`);
         parts.push('<table><thead><tr><th scope="col">#</th><th scope="col">Team</th><th scope="col" class="num">W</th><th scope="col" class="num">L</th><th scope="col" class="num">GD</th><th scope="col" class="num">PD</th></tr></thead><tbody>');
         const st = poolStandings(ctx, pool, true); // pools come from matches, so partial standings always resolve
         const ranks = poolRanks(st);

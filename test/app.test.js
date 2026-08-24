@@ -7,7 +7,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, poolAdvance, resolveSide, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, kioskStatus, matchLabel, schedTime, toCats } = require('../site/derive.js');
+const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, kioskStatus, matchLabel, schedTime, toCats } = require('../site/derive.js');
 const { parseRoute, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer } = require('../site/app.js');
 const { generate } = require('../src/schedule.js');
 const { FIX, catOf } = require('./helpers.js');
@@ -74,19 +74,6 @@ test('pool A standings: 4 sides, order, leader record', () => {
   assert(st && st.length === 4, 'pool A has 4 sides');
   assert(st[0].sig === 'p1|p2' && st[1].sig === 'p3|p4' && st[3].sig === 'p7|p8', 'pool A order by wins/gd/pd');
   assert(st[0].wins === 3 && st[0].gd === 6 && st[0].pd === 31, 'leader record');
-});
-
-test('poolAdvance: seats drawn from a pool — all, top-k, sparse, none', () => {
-  assert.deepEqual(poolAdvance(catOf('sample', 'md40'), 'A'), { count: 4, total: 4, top: true }, 'every team reaches the bracket');
-  assert.deepEqual(poolAdvance(catOf('result', 't'), 'A'), { count: 2, total: 3, top: true }, 'half the pool advances, one result still out');
-  assert.equal(poolAdvance(catOf('sample', 'xd'), 'A'), null, 'no knockout seat from this pool: no advance note');
-  const sparse = makeCat({ meta: {}, matches: [
-    { id: 1, pool: 'A', sides: [{ kind: 'players', ids: ['p1', 'p2'] }, { kind: 'players', ids: ['p3', 'p4'] }] },
-    { id: 2, pool: 'A', sides: [{ kind: 'players', ids: ['p1', 'p2'] }, { kind: 'players', ids: ['p5', 'p6'] }] },
-    { id: 3, pool: 'A', sides: [{ kind: 'players', ids: ['p3', 'p4'] }, { kind: 'players', ids: ['p5', 'p6'] }] },
-    { id: 4, sides: [{ kind: 'pool', pool: 'A', rank: 1 }, { kind: 'pool', pool: 'A', rank: 4 }] },
-  ] }, {});
-  assert.deepEqual(poolAdvance(sparse, 'A'), { count: 2, total: 3, top: false }, 'sparse ranks (1 and 4): count 2, not a top run');
 });
 
 test('standings tiebreak: wins, then head-to-head, then differentials', () => {
@@ -465,7 +452,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(standings.includes('<h3>Group stage</h3><div class="grid">'), 'group stage: pools first under the heading');
   assert(standings.includes('</div><h4>Matches</h4><div class="grid">'), 'group stage: pools, then the Matches h4, then the cards');
   assert(!standings.includes('Pools</h3>') && !standings.includes('md40:pools'), 'pools are part of the group stage — no separate heading, no fold of their own');
-  assert(standings.includes('Pool A <span class="adv">(All teams advance)</span>'), 'every team reaches the bracket — the note says so');
+  assert(standings.includes('Pool A</h4>'), 'pool heading stands alone — no advance note');
   assert(standings.indexOf('<div class="grid">') < standings.indexOf('<h4>Matches</h4>'), 'pools lead the group matches inside the stage');
   assert(standings.indexOf('Group stage</h3>') < standings.indexOf('Knockout stage</h3>'), 'schedule before the bracket — chronological flow');
   assert(standings.includes('<h3>Knockout stage</h3><h4>Semifinals</h4><div class="grid">'), 'knockout: rounds and cards — always open, no count subline');
@@ -480,7 +467,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(!mid.includes('data-stage') && !mid.includes('toggle'), 'no disclosure machinery ships — nothing hides, nothing toggles');
   const { data: rdata } = dataOf('result');
   const res = renderTournament({ slug: 'result', view: 'tournament' }, rdata);
-  assert(res.includes('<span class="adv">(Top 2 advance)</span>'), 'partial draw: top-k note');
+  assert(!res.includes('advance'), 'partial draw: no advance note on pool headings');
   // the pool roster is the "who is in my pool" answer — it must render before the first result
   const preJson = JSON.parse(JSON.stringify(require(FIX('sample', 'tournaments', 'sample.json'))));
   for (const ms of Object.values(preJson.matches)) for (const m of ms) { delete m.result; delete m.games; }

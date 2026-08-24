@@ -193,22 +193,6 @@ function poolLadder(list, ms, ctx) {
   return out;
 }
 
-// Bracket seats a pool feeds — count vs roster size drives the advance note
-// ("Top k" vs "All teams"); top flags a contiguous 1..count draw. null = none.
-function poolAdvance(ctx, pool) {
-  const ranks = new Set();
-  for (const m of ctx.matches) {
-    if (!m || m.pool !== undefined || !Array.isArray(m.sides)) continue;
-    for (const s of m.sides) {
-      if (s && s.kind === 'pool' && s.pool === pool && Number.isInteger(s.rank)) ranks.add(s.rank);
-    }
-  }
-  if (!ranks.size) return null; // no knockout seat draws from this pool
-  const total = (poolStandings(ctx, pool, true) || []).length; // partial: team count even mid-pool
-  const ks = [...ranks].sort((a, b) => a - b);
-  return { count: ks.length, total, top: ks.every((r, i) => r === i + 1) };
-}
-
 function resolveSide(side, ctx, memo = new Map()) {
   if (!side || typeof side !== 'object') return null;
   if (side.kind === 'players') return new Set(side.ids);
@@ -581,5 +565,5 @@ function matchLabel(m, ctx) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { LOCALE, ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, countWins, sideIdx, sideLetter, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolAdvance, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dateRange, dayShort, fmtDiff, kioskStatus, roundName, koColumn, koOrdinal, matchLabel };
+  module.exports = { LOCALE, ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, countWins, sideIdx, sideLetter, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dateRange, dayShort, fmtDiff, kioskStatus, roundName, koColumn, koOrdinal, matchLabel };
 }
