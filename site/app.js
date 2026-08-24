@@ -92,7 +92,7 @@ function renderIndex(route, data) {
       const dates = fmtRange(e.dates); // stored ISO days -> span
       return `<tr><td>${dates ? esc(dates) : ''}</td><td><a href="#${esc(e.slug)}">${esc(e.name || e.slug)}</a> · <a href="#${esc(e.slug)}/venues">Venue board</a></td><td>${esc(e.location)}</td></tr>`;
     });
-  if (!items.length) return `<h1>Tournaments</h1><p>No tournaments yet.</p>`;
+  if (!items.length) return `<h1>Tournaments</h1><p class="note">No tournaments yet.</p>`;
   return `<h1>Tournaments</h1><table><thead><tr><th scope="col">Date</th><th scope="col">Tournament</th><th scope="col">Location</th></tr></thead><tbody>${items.join('')}</tbody></table>`;
 }
 
@@ -299,7 +299,7 @@ function renderVenue(route, data, now = Date.now()) {
     cols.push(`<section>${col.join('')}</section>`);
   }
   parts.push(v ? cols.join('') : `<div class="board">${cols.join('')}</div>`);
-  if (!any) parts.push('<p>Nothing scheduled.</p>');
+  if (!any) parts.push('<p class="note">Nothing scheduled.</p>');
   return parts.join('');
 }
 
@@ -338,7 +338,8 @@ function renderPlayer(route, data) {
       .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id))
       .map(pl => `<li><a href="${esc(href(data.t.slug, 'schedule', { cat: route.cat, player: pl.id }))}">${esc(pl.name || pl.id)}</a></li>`)
       .join('');
-    return `${segmentBar(route)}<header><h1>Pick your player</h1></header><ul>${items || '<li>No players yet.</li>'}</ul>`;
+    const list = items ? `<ul>${items}</ul>` : '<p class="note">No players yet.</p>';
+    return `${segmentBar(route)}<header><h1>Pick your player</h1></header>${list}`;
   }
   const rows = [];
   const ctxs = catCtxs(data);
@@ -374,7 +375,7 @@ function renderPlayer(route, data) {
     out.push(matchCard(m, ctx, { meta: ['catName', 'label'], day: multi, head: [{ key: 'time' }, { key: 'court' }] }));
   }
   while (bi < blocks.length) out.push(possibleLine(blocks[bi++]));
-  parts.push(`<section><h2>Matches</h2>${rows.length ? `<div class="stack">${out.join('')}</div>` : '<p>No matches.</p>'}</section>`);
+  parts.push(`<section><h2>Matches</h2>${rows.length ? `<div class="stack">${out.join('')}</div>` : '<p class="note">No matches.</p>'}</section>`);
   return parts.join('');
 }
 
