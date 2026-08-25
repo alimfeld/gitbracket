@@ -283,23 +283,28 @@ function reachableKo(ctx, pid, starts) {
   return open;
 }
 
-// Longest chain of knockout matches starting at id (the match itself counts):
-// winner and loser branches are exclusive, so this is the max a team can still
-// play from that point. ponytail: O(N²) worst case with a shared memo (see
-// possibleSpan) — fine while brackets are tiny; a reverse-edge index is the
-// upgrade if they ever grow.
-function chainLen(ctx, id, memo = new Map()) {
+const matchEdge = s => s && s.kind === 'match';
+const winnerEdge = s => matchEdge(s) && s.result === 'winner'; // the only edge that feeds the final
+
+// Longest knockout chain feeding id — 0 when nothing feeds it. The edge filter
+// picks the measure: all match-kind edges (possibleSpan, +1 for the slot
+// itself: the max a team can still play from there) or winner edges only
+// (wdOf: round distance from the final — matchRound can't do it, it walks the
+// other way). Shared memo across ids — sibling paths share it, not just one
+// chain. ponytail: O(N²) worst case — fine while brackets are tiny; a
+// reverse-edge index is the upgrade if they ever grow.
+function chainDepth(ctx, id, edge, memo) {
   if (memo.has(id)) return memo.get(id);
-  memo.set(id, 0); // in-progress = cycle guard
-  const cs = [];
+  memo.set(id, 0); // in-progress = cycle guard; the validator rejects cycles first
+  let d = 0;
   for (const m of ctx.matches) {
-    if (!m || !Array.isArray(m.sides)) continue;
+    if (!m || !Array.isArray(m.sides)) continue; // malformed: the gate reports it, never a throw
     for (const s of m.sides) {
-      if (s && s.kind === 'match' && s.match === id) cs.push(m);
+      if (edge(s) && s.match === id) d = Math.max(d, 1 + chainDepth(ctx, m.id, edge, memo));
     }
   }
-  memo.set(id, 1 + (cs.length ? Math.max(...cs.map(c => chainLen(ctx, c.id, memo))) : 0));
-  return memo.get(id);
+  memo.set(id, d);
+  return d;
 }
 
 // Day-span of this player's open knockout slots (null when none); count = the
@@ -315,7 +320,7 @@ function possibleSpan(ctx, pid) {
   const memo = new Map(); // one memo across open ids — sibling paths share it, not just one chain
   const ts = open.map(id => schedTime(ctx.byId.get(id), ctx.tz)).filter(t => t !== null);
   if (!ts.length) return null;
-  return { min: Math.min(...ts), max: Math.max(...ts), count: Math.max(...open.map(id => chainLen(ctx, id, memo))) };
+  return { min: Math.min(...ts), max: Math.max(...ts), count: Math.max(...open.map(id => 1 + chainDepth(ctx, id, matchEdge, memo))) };
 }
 
 function matchRound(m, ctx, memo = new Map()) {
@@ -374,31 +379,15 @@ function plRange(m, ctx, memo) {
 }
 
 // Winner-edge distance to the final (0 = the final itself): the round a loser
-// edge branches from. matchRound can't do it — a bye'd semi is a leaf yet sits
-// one round below the final — and koColumn's memo can't serve it either: this
-// is read while koColumn's build is mid-flight, so it gets its own category
-// memo, fully built before any consumer reads it (in-progress values never
-// escape). Same discard-per-render contract as _koCol/_plMemo: toCats
-// rebuilds contexts every render.
+// edge branches from. koColumn's memo can't serve it either: this is read while
+// koColumn's build is mid-flight, so it gets its own category memo, fully
+// built before any consumer reads it (in-progress values never escape). Same
+// discard-per-render contract as _koCol/_plMemo: toCats rebuilds contexts
+// every render.
 function wdOf(ctx, id) {
   if (!ctx._wd) {
     const memo = ctx._wd = new Map();
-    const wd = (x) => {
-      if (memo.has(x)) return memo.get(x);
-      memo.set(x, -1); // in-progress = cycle guard; the validator rejects cycles first
-      for (const m of ctx.matches) {
-        if (!Array.isArray(m.sides)) continue; // malformed: the gate reports it, never a throw
-        for (const s of m.sides) {
-          if (s && s.kind === 'match' && s.result === 'winner' && s.match === x) {
-            memo.set(x, 1 + wd(m.id));
-            return memo.get(x);
-          }
-        }
-      }
-      memo.set(x, 0);
-      return 0;
-    };
-    for (const m of ctx.matches) wd(m.id);
+    for (const m of ctx.matches) chainDepth(ctx, m.id, winnerEdge, memo);
   }
   return ctx._wd.get(id);
 }
@@ -509,7 +498,7 @@ function koColumn(m, ctx) {
     for (const X of ctx.matches) {
       if (!Array.isArray(X.sides)) continue; // malformed: report, never throw
       for (const s of X.sides) {
-        if (s && s.kind === 'match' && s.result === 'winner') winnerParent.set(s.match, X);
+        if (winnerEdge(s)) winnerParent.set(s.match, X);
       }
     }
     const final = mainFinal(ctx, winnerParent);
@@ -544,7 +533,7 @@ function koOrdinal(m, ctx) {
     const parented = new Set();
     for (const X of ctx.matches)
       if (Array.isArray(X.sides)) X.sides.forEach(s => {
-        if (s && s.kind === 'match' && s.result === 'winner') {
+        if (winnerEdge(s)) {
           parented.add(s.match);
           if (!kids.has(X.id)) kids.set(X.id, []);
           kids.get(X.id).push(s.match);
