@@ -199,12 +199,12 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
       if (isDone(m)) continue;
       const t = schedTime(m, tjson.timezone);
       if (t === null) continue;
-      if (Number.isNaN(matchSlotMs(m, ctx))) noSlot.add(cat.id); // NaN slots make the kiosk's live/overdue windows uncomputable
+      if (Number.isNaN(matchSlotMs(m, ctx))) noSlot.add(cat.id); // NaN slots make the kiosk's due/delayed windows uncomputable
       sched.push({ f: `${tFile} matches.${cat.id}`, m, t, ctx });
     }
   }
   for (const cid of noSlot) {
-    warns.push(`${tFile} matches.${cid}: scheduled matches resolve to no slot length — set slotMinutes (per stage or per match) or the kiosk can't mark matches overdue`);
+    warns.push(`${tFile} matches.${cid}: scheduled matches resolve to no slot length — set slotMinutes (per stage or per match) or the kiosk can't mark matches delayed`);
   }
   for (let i = 0; i < sched.length; i++) {
     for (let j = i + 1; j < sched.length; j++) {

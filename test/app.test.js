@@ -144,7 +144,7 @@ test('matchSlotMs: match override > per-stage category config, no default', () =
   assert(Number.isNaN(matchSlotMs({}, { slotMinutes: { groups: 60 } })), 'groups config does not leak into knockout → NaN');
 });
 
-test('kioskStatus: overdue / now / upcoming status per open card', () => {
+test('kioskStatus: delayed / due / upcoming status per open card', () => {
   const ctx = makeCat({ meta: { bestOf: { knockout: 3 }, slotMinutes: { groups: 30, knockout: 45 } }, matches: [
     { id: 'm1', scheduled: '2025-07-14T09:00:00', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }], games: [{ a: 11, b: 5 }, { a: 11, b: 4 }], result: { status: 'played', winner: 'a' } },
     { id: 'm2', scheduled: '2025-07-14T08:30:00', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },
@@ -153,14 +153,14 @@ test('kioskStatus: overdue / now / upcoming status per open card', () => {
     { id: 'm5', scheduled: '2025-07-14T11:15:00', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },
     { id: 'm6', scheduled: '2025-07-14T10:00:00', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },
   ] }, { timezone: 'UTC', players: [] });
-  const now = Date.parse('2025-07-14T10:00:00Z'); // m2's slot ended 09:15 — long overdue
+  const now = Date.parse('2025-07-14T10:00:00Z'); // m2's slot ended 09:15 — long delayed
   const rows = ctx.matches.map(m => ({ m, t: schedTime(m, ctx.tz), ctx }));
   const st = id => kioskStatus(rows.find(r => r.m.id === id), now);
-  assert(st('m2') === 'overdue', 'slot fully elapsed without a result: overdue');
-  assert(st('m3') === 'live' && st('m6') === 'live', 'started and still inside its slot: Now');
+  assert(st('m2') === 'delayed', 'slot fully elapsed without a result: delayed');
+  assert(st('m3') === 'due' && st('m6') === 'due', 'started and still inside its slot: Due');
   assert(isDone(ctx.byId.get('m1')), 'a done match leaves the board');
   assert(st('m4') === 'next' && st('m5') === 'next', 'future starts: upcoming');
-  assert(st('m6') === 'live', 'the boundary instant (now === t) belongs to Now, not Next');
+  assert(st('m6') === 'due', 'the boundary instant (now === t) belongs to Due, not Next');
 });
 
 test('matchLabel: pool, placement, and round names on one card label', () => {
@@ -436,13 +436,14 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   const venue = renderVenue({ slug: 'sample', view: 'venues' }, data, Date.parse('2025-07-14T12:00:00-04:00')); // pinned to the fixture day — the kiosk shows today only
   assert(venue.includes('Court 1') && venue.includes('Ada Lovelace'), 'venue page renders venue boards with match rows');
   assert(venue.includes('data-status=') && !venue.includes('badge'), 'kiosk card: status rides the article (headline time colored); meta keeps cat · label only');
+  assert(venue.includes('style="--cols: 2"') && venue.includes('</h2><div></div>'), 'kiosk board: one grid row-major, columns per venue, holes as empty cells');
   const early = renderVenue({ slug: 'sample', view: 'venues' }, data, Date.parse('2025-07-14T08:00:00-04:00'));
   const late = renderVenue({ slug: 'sample', view: 'venues' }, data, Date.parse('2025-07-14T16:00:00-04:00'));
   assert(!early.includes('delayed</span>'), 'before the first start: no delayed remark');
   assert(late.includes('<span class="flag">delayed</span>'), 'slot fully elapsed: the headline time carries the remark beside it');
   const running = renderVenue({ slug: 'sample', view: 'venues' }, data, Date.parse('2025-07-14T12:20:00-04:00'));
-  assert(running.includes('<span class="flag">live</span>'), 'a match inside its slot says live in words, not hue alone');
-  assert(late.match(/<span class="flag">delayed<\/span>/g).length === late.match(/data-status="overdue"/g).length, 'every overdue card has the remark, and only overdue cards do');
+  assert(running.includes('<span class="flag">due</span>'), 'a match inside its slot says due in words, not hue alone');
+  assert(late.match(/<span class="flag">delayed<\/span>/g).length === late.match(/data-status="delayed"/g).length, 'every delayed card has the remark, and only delayed cards do');
   assert(venue.includes("Men&#39;s Doubles 40+ · Final") && !venue.includes("Men&#39;s Doubles 40+ · 9 ·"), 'kiosk meta shows the long category name and label, no match id');
   assert(!venue.includes('<nav>'), 'kiosk has no breadcrumb');
   assert(standings.includes('<h2>Men&#39;s Doubles 40+</h2><p class="note">Knockout stage · Semifinals</p>') && !standings.includes('<h2 id='), 'category h2: plain in-flow heading, status-only subline (the single-day heading already stated the date)');

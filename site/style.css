@@ -11,8 +11,8 @@
   --hairline: #eee;
   --hover: #00000014;
   --tie: #fff3cd;
-  --late: #b3261e;
-  --live: #9a6700;
+  --delayed: #b3261e;
+  --due: #15803d;
 }
 
 * {
@@ -58,7 +58,7 @@ h4 {
 }
 
 header {
-  margin: calc(var(--space)*2) 0 calc(var(--space)*3);
+  margin: calc(var(--space)*2) 0 var(--space);
 }
 
 a {
@@ -242,38 +242,27 @@ body.venue header {
 }
 
 .board {
-  display: flex;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 2rem;
-}
-
-.board>section {
-  flex: 1 1 24rem;
-  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+  row-gap: calc(var(--space)*2);
+  column-gap: 2rem;
 }
 
 #clock {
+  font-size: 1.5rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-article[data-status="overdue"] .head span {
-  color: var(--late);
+article[data-status="delayed"] .head span {
+  color: var(--delayed);
 }
 
-article[data-status="live"] .head span {
-  color: var(--live);
+article[data-status="due"] .head span {
+  color: var(--due);
 }
 
 article[data-status="next"] .head span {
   color: var(--muted);
-}
-
-.head .flag {
-  font-size: .55em;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .08em;
 }

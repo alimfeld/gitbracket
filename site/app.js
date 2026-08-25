@@ -267,35 +267,33 @@ function renderVenue(route, data, now = Date.now()) {
   rows.sort((a, b) => a.t - b.t);
   // courts with no matches are simply absent; names come straight from the tournament
   const venueNames = new Map((data.tjson.venues || []).map(v => [v.id, v.name]));
-  const venues = (data.tjson.venues || []).map(x => x.id).filter(id => rows.some(r => r.m.venue === id));
   const shown = v ? rows.filter(r => r.m.venue === v) : rows;
   const parts = [`<header><h1>${esc(data.t.name)}</h1><time id="clock"></time></header>`];
-  const byVenue = new Map(venues.map(id => [id, []]));
-  for (const r of shown) {
-    if (byVenue.has(r.m.venue)) byVenue.get(r.m.venue).push(r); // rows pre-sorted, buckets stay sorted
-  }
-  let any = false;
   const today = dayKey(now, data.tjson.timezone || 'UTC'); // kiosk shows today only — an overnight screen must not list yesterday
-  const cols = [];
-  for (const id of venues) {
-    const open = byVenue.get(id).filter(r => !isDone(r.m) && dayKey(r.t, r.ctx.tz) === today); // a result removes the card, everything else stays
-    if (!open.length) continue;
-    any = true;
-    const col = [];
-    col.push(`<h2>${esc(venueNames.get(id) || id)}</h2>`);
-    col.push('<div class="stack">');
-    for (const r of open) {
-      const st = kioskStatus(r, now);
-      const when = timeEl(r.t, r.ctx.tz);
-      const flag = st === 'overdue' ? 'delayed' : st === 'live' ? 'live' : '';
-      col.push(matchCard(r.m, r.ctx, { meta: ['catName', 'label'],
-        head: [{ html: flag ? `${when} <span class="flag">${flag}</span>` : when }], status: st }));
+  const open = shown.filter(r => !isDone(r.m) && dayKey(r.t, r.ctx.tz) === today); // a result removes the card, everything else stays
+  const cols = (data.tjson.venues || []).map(x => x.id).filter(id => open.some(r => r.m.venue === id));
+  if (!cols.length) return parts.join('') + '<p class="note">Nothing scheduled.</p>';
+  // columns are venues, rows are start times — every column holds the same
+  // cells, so the cards of one wave line up; holes stay empty cells
+  const byVenue = new Map(cols.map(id => [id, new Map()]));
+  for (const r of open) byVenue.get(r.m.venue).set(r.t, r);
+  const times = [...new Set(open.map(r => r.t))];
+  const card = r => {
+    const st = kioskStatus(r, now);
+    const when = timeEl(r.t, r.ctx.tz);
+    const flag = st === 'next' ? '' : st; // the status word is the flag (due/delayed); upcoming cards show none
+    return matchCard(r.m, r.ctx, { meta: ['catName', 'label'],
+      head: [{ html: when }, { html: flag ? `<span class="flag">${flag}</span>` : '' }], status: st });
+  };
+  const cells = [];
+  for (const id of cols) cells.push(`<h2>${esc(venueNames.get(id) || id)}</h2>`);
+  for (const t of times) {
+    for (const id of cols) {
+      const r = byVenue.get(id).get(t);
+      cells.push(r ? card(r) : '<div></div>');
     }
-    col.push('</div>');
-    cols.push(`<section>${col.join('')}</section>`);
   }
-  parts.push(v ? cols.join('') : `<div class="board">${cols.join('')}</div>`);
-  if (!any) parts.push('<p class="note">Nothing scheduled.</p>');
+  parts.push(`<div class="board" style="--cols: ${cols.length}">${cells.join('')}</div>`);
   return parts.join('');
 }
 

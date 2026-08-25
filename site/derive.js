@@ -79,7 +79,7 @@ function winnerIdx(m) {
 }
 
 function isDone(m) {
-  // Any result settles the match — void included (settled, never overdue).
+  // Any result settles the match — void included (settled, never delayed).
   return !!m && m.result !== undefined;
 }
 
@@ -470,8 +470,8 @@ function fmtDiff(n) {
 
 function kioskStatus(r, now) {
   const t = r.t;
-  if (now >= t + matchSlotMs(r.m, r.ctx)) return 'overdue';
-  if (now >= t) return 'live';
+  if (now >= t + matchSlotMs(r.m, r.ctx)) return 'delayed';
+  if (now >= t) return 'due';
   return 'next';
 }
 
