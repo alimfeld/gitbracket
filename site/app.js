@@ -92,8 +92,8 @@ function renderIndex(route, data) {
       const dates = fmtRange(e.dates); // stored ISO days -> span
       return `<tr><td>${dates ? esc(dates) : ''}</td><td><a href="#${esc(e.slug)}">${esc(e.name || e.slug)}</a> · <a href="#${esc(e.slug)}/venues">Venue board</a></td><td>${esc(e.location)}</td></tr>`;
     });
-  if (!items.length) return `<h1>Tournaments</h1><p class="note">No tournaments yet.</p>`;
-  return `<h1>Tournaments</h1><table><thead><tr><th scope="col">Date</th><th scope="col">Tournament</th><th scope="col">Location</th></tr></thead><tbody>${items.join('')}</tbody></table>`;
+  if (!items.length) return `<header><h1>Tournaments</h1><p class="note">No tournaments yet.</p></header>`;
+  return `<header><h1>Tournaments</h1></header><table><thead><tr><th scope="col">Date</th><th scope="col">Tournament</th><th scope="col">Location</th></tr></thead><tbody>${items.join('')}</tbody></table>`;
 }
 
 // One category per page; the switcher is the navigation — the first category
@@ -268,10 +268,14 @@ function renderVenue(route, data, now = Date.now()) {
   // courts with no matches are simply absent; names come straight from the tournament
   const venueNames = new Map((data.tjson.venues || []).map(v => [v.id, v.name]));
   const shown = v ? rows.filter(r => r.m.venue === v) : rows;
-  const parts = [`<header><h1>${esc(data.t.name)}</h1><time id="clock"></time></header>`];
-  const today = dayKey(now, data.tjson.timezone || 'UTC'); // kiosk shows today only — an overnight screen must not list yesterday
-  const open = shown.filter(r => !isDone(r.m) && dayKey(r.t, r.ctx.tz) === today); // a result removes the card, everything else stays
+  const tz = data.tjson.timezone || 'UTC';
+  const today = dayKey(now, tz); // one day per screen — an overnight board must not list yesterday
+  const firstDay = rows.map(r => dayKey(r.t, r.ctx.tz)).sort()[0];
+  // a screen switched on before day one has no today — preview the first day
+  const shownDay = firstDay && today < firstDay ? firstDay : today;
+  const open = shown.filter(r => !isDone(r.m) && dayKey(r.t, r.ctx.tz) === shownDay); // a result removes the card, everything else stays
   const cols = (data.tjson.venues || []).map(x => x.id).filter(id => open.some(r => r.m.venue === id));
+  const parts = [`<header><div><h1>${esc(data.t.name)}</h1><p class="note">${shownDay === today ? 'Today' : dayLabel(shownDay)}</p></div><time id="clock"></time></header>`];
   if (!cols.length) return parts.join('') + '<p class="note">Nothing scheduled.</p>';
   // columns are venues, rows are start times — every column holds the same
   // cells, so the cards of one wave line up; holes stay empty cells
@@ -404,8 +408,10 @@ function boot() {
       clockTimer = setInterval(() => {
         const el = document.getElementById('clock');
         if (el) {
-          el.textContent = fmtTime(Date.now(), (data && data.tjson && data.tjson.timezone) || 'UTC');
-          el.dateTime = new Date().toISOString(); // the instant, derived — the label stays wall clock
+          const now = Date.now();
+          const tz = (data && data.tjson && data.tjson.timezone) || 'UTC';
+          el.textContent = `${dayShort(now, tz)} · ${fmtTime(now, tz)}`; // the kiosk clock carries its date
+          el.dateTime = new Date(now).toISOString(); // the instant, derived — the label stays wall clock
         }
       }, 1000);
     } else if (!on && pollTimer) {
@@ -428,10 +434,8 @@ function boot() {
 
   const render = (r, d) => {
     data = d;
-    // the kiosk page layout keys off body.venue — present only on the venue view
+    // full-width board layout keys off body.venue — present only on the venue view
     document.body.classList.toggle('venue', r.view === 'venues');
-    // tournament pages pin their view bar flush to the top; frontdoor/venue keep body padding
-    document.body.classList.toggle('flush', r.view === 'tournament' || r.view === 'schedule');
     document.title = pageTitle(r, d);
     // a category or view switch is new content — start at the top; shorter
     // pages clamp the residual scroll. Player/venue hops keep the position.

@@ -537,7 +537,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
 });
 
 
-test('multi-day: cards carry their full date; single-day cards just the time; the kiosk shows today only', () => {
+test('multi-day: cards carry their full date; single-day cards just the time; the kiosk shows one day at a time, previewing day one early', () => {
   const repo = loadRepo(FIX('multiday'));
   const info = repo.tournaments.get('multiday');
   const data = { index: repo.index, t: { slug: 'multiday', name: info.tjson.name }, tjson: info.tjson, cats: toCats(info.tjson) };
@@ -564,10 +564,14 @@ test('multi-day: cards carry their full date; single-day cards just the time; th
   const at = iso => Date.parse(iso);
   const sat = renderVenue({ slug: 'multiday', view: 'venues' }, data, at('2026-07-11T12:00:00-04:00'));
   assert(sat.includes('Katherine Johnson') && !sat.includes('>SF<') && !sat.includes('Final'), 'saturday board: open pool match, no tomorrow');
+  assert(sat.includes('<p class="note">Today</p>'), 'today board: the note names the day shown');
   const sun = renderVenue({ slug: 'multiday', view: 'venues' }, data, at('2026-07-12T08:00:00-04:00'));
   assert(sun.includes('· SF') && sun.includes('· Final') && !sun.includes('Katherine Johnson'), 'sunday board: knockout only, yesterday gone');
   const mon = renderVenue({ slug: 'multiday', view: 'venues' }, data, at('2026-07-13T12:00:00-04:00'));
   assert(mon.includes('Nothing scheduled.'), 'after the last day: drained board, not a stale schedule');
+  const fri = renderVenue({ slug: 'multiday', view: 'venues' }, data, at('2026-07-10T12:00:00-04:00'));
+  assert(fri.includes('Katherine Johnson') && !fri.includes('>SF<') && !fri.includes('Final'), 'a day before day one: the board previews the first day, pools only');
+  assert(fri.includes('<p class="note">Sat, Jul 11</p>'), 'the preview note names the day shown, not today');
 });
 
 test('date spans: consecutive days collapse, sparse days list, a year boundary appends the year', () => {

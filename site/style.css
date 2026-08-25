@@ -22,14 +22,10 @@
 body {
   margin: 0 auto;
   max-width: 60rem;
-  padding: calc(var(--space)*3) calc(var(--space)*2) calc(var(--space)*6);
+  padding: 0 calc(var(--space)*2) calc(var(--space)*6);
   font: 100%/1.5 system-ui, sans-serif;
   color: var(--ink);
   background: var(--page);
-}
-
-body.flush {
-  padding-top: 0;
 }
 
 h1 {
