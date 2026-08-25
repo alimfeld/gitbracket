@@ -2,13 +2,13 @@
 
 const POLL_MS = 10000;
 
-// No script scope under node (the browser gets these as globals from the
-// derive.js script tag that loads first). Bind the same names here explicitly;
-// nothing lands on globalThis anymore. Keep the list equal to what app.js
-// references — a missing name throws in node tests — and note derive.js's const
-// exports (ID_RE, ISO_RE, LOCALE) sit on globalThis only when declared as var.
-const derive = typeof module !== 'undefined' ? require('./derive.js') : globalThis;
-const { ID_RE, toCats, bestOfOf, sideIdx, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, teamLabel, sideLabel, playerMatches, possibleSpan, fmtTime, dayKey, schedTime, fmtRange, dateRange, dayShort, dayLabel, fmtDiff, kioskStatus, roundName, koColumn, koOrdinal, matchLabel } = derive;
+// Browser: derive.js loads first (script tag) and its top-level names are
+// already page globals — functions/vars on globalThis, consts in the shared
+// global lexical environment — so re-declaring them here duplicates a global
+// binding. Node has no script-tag sharing, so the module lands on globalThis.
+if (typeof module !== 'undefined') {
+  Object.assign(globalThis, require('./derive.js'));
+}
 
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
