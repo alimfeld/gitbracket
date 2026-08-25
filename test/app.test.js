@@ -281,6 +281,20 @@ test('koColumn: a bye\'d semi sits in the semifinal column, not with round 1', (
     'balanced bracket unchanged: final 0, semis 1, bronze with the final');
 });
 
+test('bracket walkers tolerate a sideless match: report, never throw', () => {
+  const ko = makeCat({ meta: {}, matches: [
+    { id: 'sf1', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },
+    { id: 'sf2', sides: [{ kind: 'players', ids: ['c'] }, { kind: 'players', ids: ['d'] }] },
+    { id: 'f', sides: [{ kind: 'match', match: 'sf1', result: 'winner' }, { kind: 'match', match: 'sf2', result: 'winner' }] },
+    { id: 'b', sides: [{ kind: 'match', match: 'sf1', result: 'loser' }, { kind: 'match', match: 'sf2', result: 'loser' }] },
+    { id: 'x' },
+  ] }, { timezone: 'UTC', players: [] });
+  assert(koColumn(ko.byId.get('f'), ko) === 0 && koColumn(ko.byId.get('b'), ko) === 0, 'columns still compute around the broken match');
+  assert(koOrdinal(ko.byId.get('f'), ko) === 1 && koOrdinal(ko.byId.get('sf1'), ko) === 1, 'ordinals still compute');
+  assert(placementLabel(ko.byId.get('b'), ko) === '3rd place', 'placement still labels the bronze');
+  assert(typeof matchLabel(ko.byId.get('x'), ko) === 'string', 'the malformed match renders a label, never throws');
+});
+
 test('dead tie: standings tie + pool slot TBD', () => {
   const tie = catOf('tie', 't');
   const st = poolStandings(tie, 'A');

@@ -1,0 +1,19 @@
+{
+  "name": "Bad Sides Knockout",
+  "location": "Test Hall",
+  "timezone": "UTC",
+  "categories": [{ "id": "t", "name": "T", "bestOf": { "groups": 1, "knockout": 1 } }],
+  "players": [
+    { "id": "p1", "name": "P1" }, { "id": "p2", "name": "P2" },
+    { "id": "p3", "name": "P3" }, { "id": "p4", "name": "P4" }
+  ],
+  "matches": { "t": [
+    { "id": 1, "sides": [{ "kind": "players", "ids": ["p1"] }, { "kind": "players", "ids": ["p2"] }] },
+    { "id": 2, "sides": [{ "kind": "players", "ids": ["p3"] }, { "kind": "players", "ids": ["p4"] }] },
+    { "id": 3, "sides": [{ "kind": "match", "match": 1, "result": "winner" }, { "kind": "match", "match": 2, "result": "winner" }] },
+    { "id": 4, "sides": [{ "kind": "match", "match": 1, "result": "loser" }, { "kind": "match", "match": 2, "result": "loser" }] },
+    { "id": 5, "result": { "status": "played", "winner": "a" } },
+    { "id": 6, "sides": [{ "kind": "match", "match": 5, "result": "winner" }, { "kind": "players", "ids": ["p3"] }], "games": [{ "a": 2, "b": 0 }], "result": { "status": "played", "winner": "a" } },
+    { "id": 7, "sides": 5 }
+  ] }
+}

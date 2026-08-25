@@ -70,6 +70,7 @@ const V = [
   ['void result with a winner', 'bad-void-winner', r => r.errs.length > 0, /no winner/],
   ['void result carries games', 'bad-void-games', r => r.errs.length > 0, /mutually exclusive/],
   ['malformed match sides reported, not a crash', 'bad-sides', r => r.errs.length > 0, /exactly two sides required/],
+  ['malformed knockout sides reported while placement/scoring run, not a crash', 'bad-sides-knockout', r => r.errs.length > 0, /exactly two sides required/],
   ['scheduled match with no slot length warns', 'warn-noslot', r => r.errs.length === 0 && r.warns.length > 0, /no slot length/]
 ];
 for (const [name, dir, ok, re] of V) {

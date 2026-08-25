@@ -198,7 +198,7 @@ function resolveSide(side, ctx, memo = new Map()) {
   if (side.kind === 'players') return Array.isArray(side.ids) ? new Set(side.ids) : null; // a string ids would char-split in Set — malformed sides TBD, never a wrong team
   if (side.kind === 'match') {
     const m = ctx.byId.get(side.match);
-    if (!m) return null;
+    if (!m || !Array.isArray(m.sides)) return null; // no sides: malformed -> TBD, never a throw
     if (memo.has(m.id)) return memo.get(m.id) || null; // in-progress = cycle guard
     memo.set(m.id, undefined);
     const w = winnerIdx(m);
@@ -258,8 +258,9 @@ function playerMatches(ctx, pid) {
 
 // Open knockout seats from confirmed matches through undecided slots; a decided
 // feeder only forwards the branch the player got (confirmed ones render as cards).
-function reachableKo(ctx, pid) {
-  const starts = playerMatches(ctx, pid).filter(r => r.m.pool === undefined);
+// possibleSpan passes its playerMatches rows as starts — same filter, one scan.
+function reachableKo(ctx, pid, starts) {
+  if (!starts) starts = playerMatches(ctx, pid).filter(r => r.m.pool === undefined);
   const sideOf = new Map(starts.map(r => [r.m.id, r.i]));
   const open = new Set();
   const seen = new Set(sideOf.keys());
@@ -271,7 +272,7 @@ function reachableKo(ctx, pid) {
       if (m.pool !== undefined || !Array.isArray(m.sides) || seen.has(m.id)) continue;
       for (const s of m.sides) {
         if (!s || s.kind !== 'match' || s.match !== id) continue;
-        const pSide = sideOf.get(id); // only start nodes can be decided; candidates are undecided by construction
+        const pSide = sideOf.get(id); // only starts can be decided — a result forces its feeder chain decided (the validator's resolveSide rule), so candidates stay undecided
         if (w !== null && pSide !== undefined && (s.result === 'winner') !== (pSide === w)) continue;
         seen.add(m.id);
         open.add(m.id);
@@ -307,7 +308,7 @@ function chainLen(ctx, id, memo = new Map()) {
 function possibleSpan(ctx, pid) {
   const rows = playerMatches(ctx, pid);
   const ko = rows.filter(r => r.m.pool === undefined);
-  let open = [...reachableKo(ctx, pid)];
+  let open = [...reachableKo(ctx, pid, ko)];
   if (!open.length && rows.some(r => r.m.pool !== undefined) && !ko.length) {
     open = ctx.matches.filter(m => m.pool === undefined).map(m => m.id);
   }
@@ -319,6 +320,7 @@ function possibleSpan(ctx, pid) {
 
 function matchRound(m, ctx, memo = new Map()) {
   if (memo.has(m.id)) return memo.get(m.id);
+  if (!Array.isArray(m.sides)) return 0; // malformed leaf: report, never throw
   memo.set(m.id, 0); // in-progress = cycle guard
   let d = 0;
   for (const s of m.sides) {
@@ -341,18 +343,19 @@ function placementLabel(m, ctx) {
   if (!ctx._plMemo) ctx._plMemo = new Map();
   const r = plRange(m, ctx, ctx._plMemo);
   if (!r) return null;
-  const terminal = !ctx.matches.some(X => X.sides && X.sides.some(s => s && s.kind === 'match' && s.match === m.id && s.result === 'loser'));
+  const terminal = !ctx.matches.some(X => Array.isArray(X.sides) && X.sides.some(s => s && s.kind === 'match' && s.match === m.id && s.result === 'loser'));
   return terminal ? `${ordinal(r.lo)} place` : `${ordinal(r.lo)}–${ordinal(r.hi)} semi`;
 }
 
 // Half of a feeder's range: winner edges take the top, loser edges the bottom.
 const half = (r, top) => { const w = (r.hi - r.lo + 1) / 2; return top ? { lo: r.lo, hi: r.lo + w - 1 } : { lo: r.lo + w, hi: r.hi }; };
 
-// Loser range of a main-bracket round at winnerDepth d: [2^d + 1, 2^(d+1)].
-const loserRange = (X, ctx) => { const d = winnerDepth(ctx, X.id); return { lo: 2 ** d + 1, hi: 2 ** (d + 1) }; };
+// Loser range of a main-bracket round at winner-edge depth d: [2^d + 1, 2^(d+1)].
+const loserRange = (X, ctx) => { const d = wdOf(ctx, X.id); return { lo: 2 ** d + 1, hi: 2 ** (d + 1) }; };
 
 // Possible rank range; null for main-bracket matches. Memoized per category.
 function plRange(m, ctx, memo) {
+  if (!Array.isArray(m.sides)) return null; // malformed: report, never throw
   if (memo.has(m.id)) return memo.get(m.id);
   memo.set(m.id, null); // in-progress = cycle guard
   let lo = Infinity, hi = -Infinity;
@@ -371,25 +374,33 @@ function plRange(m, ctx, memo) {
 }
 
 // Winner-edge distance to the final (0 = the final itself): the round a loser
-// edge branches from. matchRound can't do it — a bye'd semi has leaf-depth 0
-// yet sits one round below the final. koColumn can't be reused here either:
-// plRange is called during koColumn's final-detection while its memo is
-// mid-build — its in-progress -1 guard would corrupt the ranges.
-// ponytail: fresh memo per call, O(N²) over plRange's recursion like chainLen —
-// fine while brackets are tiny; share one memo if they ever grow.
-function winnerDepth(ctx, id, memo = new Map()) {
-  if (memo.has(id)) return memo.get(id);
-  memo.set(id, -1); // in-progress = cycle guard
-  for (const m of ctx.matches) {
-    for (const s of m.sides) {
-      if (s && s.kind === 'match' && s.result === 'winner' && s.match === id) {
-        memo.set(id, 1 + winnerDepth(ctx, m.id, memo));
-        return memo.get(id);
+// edge branches from. matchRound can't do it — a bye'd semi is a leaf yet sits
+// one round below the final — and koColumn's memo can't serve it either: this
+// is read while koColumn's build is mid-flight, so it gets its own category
+// memo, fully built before any consumer reads it (in-progress values never
+// escape). Same discard-per-render contract as _koCol/_plMemo: toCats
+// rebuilds contexts every render.
+function wdOf(ctx, id) {
+  if (!ctx._wd) {
+    const memo = ctx._wd = new Map();
+    const wd = (x) => {
+      if (memo.has(x)) return memo.get(x);
+      memo.set(x, -1); // in-progress = cycle guard; the validator rejects cycles first
+      for (const m of ctx.matches) {
+        if (!Array.isArray(m.sides)) continue; // malformed: the gate reports it, never a throw
+        for (const s of m.sides) {
+          if (s && s.kind === 'match' && s.result === 'winner' && s.match === x) {
+            memo.set(x, 1 + wd(m.id));
+            return memo.get(x);
+          }
+        }
       }
-    }
+      memo.set(x, 0);
+      return 0;
+    };
+    for (const m of ctx.matches) wd(m.id);
   }
-  memo.set(id, 0);
-  return 0;
+  return ctx._wd.get(id);
 }
 
 // "+02:00"-style offset for a date, noon-UTC anchor. This parses the
@@ -482,10 +493,12 @@ function roundName(depthFromEnd) {
 }
 
 // Column: 0 is the final, one back per winner edge. Depth-from-leaves can't
-// place a bye'd semi. Memo rides ctx._koCol — safe because toCats discards the
-// context (memo included) every render, so each poll starts a fresh bracket.
-// The championship final, shared with koOrdinal: a knockout match no winner
-// feeds, outside the classification tree.
+// place a bye'd semi. Main-tree columns read ctx._wd (built before this, so no
+// interleaved in-progress values); the fallback sizes classification rounds
+// and the final anchors 0. Memo rides ctx._koCol — safe because toCats
+// discards the context (memo included) every render, so each poll starts a
+// fresh bracket. The championship final, shared with koOrdinal: a knockout
+// match no winner feeds, outside the classification tree.
 const mainFinal = (ctx, parented) =>
   ctx.matches.find(X => X.pool === undefined && !parented.has(X.id) && placementLabel(X, ctx) === null);
 
@@ -494,6 +507,7 @@ function koColumn(m, ctx) {
     const memo = ctx._koCol = new Map();
     const winnerParent = new Map();
     for (const X of ctx.matches) {
+      if (!Array.isArray(X.sides)) continue; // malformed: report, never throw
       for (const s of X.sides) {
         if (s && s.kind === 'match' && s.result === 'winner') winnerParent.set(s.match, X);
       }
@@ -505,10 +519,10 @@ function koColumn(m, ctx) {
       memo.set(X.id, -1); // in-progress = cycle guard
       const p = winnerParent.get(X.id);
       let r;
-      if (p && placementLabel(p, ctx) === null) r = 1 + col(p);
+      if (p && placementLabel(p, ctx) === null) r = wdOf(ctx, X.id);
       else if (X === final) r = 0;
       else {
-        const feeders = X.sides.filter(s => s && s.kind === 'match' && ctx.byId.has(s.match)).map(s => col(ctx.byId.get(s.match)));
+        const feeders = Array.isArray(X.sides) ? X.sides.filter(s => s && s.kind === 'match' && ctx.byId.has(s.match)).map(s => col(ctx.byId.get(s.match))) : [];
         r = feeders.length ? Math.max(...feeders) - 1 : matchRound(X, ctx);
       }
       memo.set(X.id, r);
@@ -529,7 +543,7 @@ function koOrdinal(m, ctx) {
     const kids = new Map();     // parent id -> feeder ids, born in side order
     const parented = new Set();
     for (const X of ctx.matches)
-      X.sides.forEach(s => {
+      if (Array.isArray(X.sides)) X.sides.forEach(s => {
         if (s && s.kind === 'match' && s.result === 'winner') {
           parented.add(s.match);
           if (!kids.has(X.id)) kids.set(X.id, []);
