@@ -1,11 +1,8 @@
 // GitBracket tournament generator — `node gb.js schedule specs/<slug>.json`.
 // Writes the full tournament file wholesale (skeleton + scheduled matches) and
 // keeps the index in sync; the file is never hand-edited — scores and venue
-// moves go through the REPL. Specs: README (Specs); specs/2026-mammut60.json.
-//
-// Re-run after the registration deadline with the final spec.teams (shuffle
-// team order beforehand for a fair draw) — regeneration replaces the whole
-// matches map, scores included, so it runs before results go in, never after.
+// moves go through the REPL. Specs (and the regeneration caveat) live in
+// README (Specs); specs/2026-mammut60.json is a working example.
 'use strict';
 
 const fs = require('fs');

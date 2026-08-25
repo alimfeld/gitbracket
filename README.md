@@ -173,7 +173,7 @@ spec — the single source for the schedule:
 
 ## Tools
 
-**`gb.js`** — the one CLI. `node gb.js` starts the match-day REPL (`help` inside for commands — every edit validates and commits itself); `node gb.js validate [slug]` checks data without the REPL; `node gb.js schedule <spec>` generates a tournament file from a spec (`specs/<slug>.json`); `node gb.js publish` ships `site/` to the domain in `site/CNAME`. The commands live as modules under `src/`; `site/` stays the shipping surface.
+**`gb.js`** — the one CLI. `node gb.js` starts the match-day REPL (`help` inside for commands — bare commands read, slash commands edit: `score`, `wo`, `void`, `venue`, `time`, `publish` — and every edit validates and commits itself); `node gb.js validate [slug]` checks data without the REPL; `node gb.js schedule <spec>` generates a tournament file from a spec (`specs/<slug>.json`); `node gb.js publish` ships `site/` to the domain in `site/CNAME` (requires the surge CLI: `npm install -g surge`). The commands live as modules under `src/`; `site/` stays the shipping surface.
 
 ## Development
 
