@@ -2,10 +2,13 @@
 
 const POLL_MS = 10000;
 
-
-if (typeof module !== 'undefined') {
-  Object.assign(globalThis, require('./derive.js'));
-}
+// No script scope under node (the browser gets these as globals from the
+// derive.js script tag that loads first). Bind the same names here explicitly;
+// nothing lands on globalThis anymore. Keep the list equal to what app.js
+// references — a missing name throws in node tests — and note derive.js's const
+// exports (ID_RE, ISO_RE, LOCALE) sit on globalThis only when declared as var.
+const derive = typeof module !== 'undefined' ? require('./derive.js') : globalThis;
+const { ID_RE, toCats, bestOfOf, sideIdx, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, teamLabel, sideLabel, playerMatches, possibleSpan, fmtTime, dayKey, schedTime, fmtRange, dateRange, dayShort, dayLabel, fmtDiff, kioskStatus, roundName, koColumn, koOrdinal, matchLabel } = derive;
 
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
@@ -270,7 +273,7 @@ function renderVenue(route, data, now = Date.now()) {
   const shown = v ? rows.filter(r => r.m.venue === v) : rows;
   const tz = data.tjson.timezone || 'UTC';
   const today = dayKey(now, tz); // one day per screen — an overnight board must not list yesterday
-  const firstDay = rows.map(r => dayKey(r.t, r.ctx.tz)).sort()[0];
+  const firstDay = rows.length ? dayKey(rows[0].t, rows[0].ctx.tz) : null; // rows are time-sorted above — the first instant's day
   // a screen switched on before day one has no today — preview the first day
   const shownDay = firstDay && today < firstDay ? firstDay : today;
   const open = shown.filter(r => !isDone(r.m) && dayKey(r.t, r.ctx.tz) === shownDay); // a result removes the card, everything else stays
