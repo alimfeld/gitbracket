@@ -181,7 +181,7 @@ function catSection(ctx, opts) {
       if (anyTie) parts.push('<p class="note">Highlighted rows are dead ties on every tiebreaker — the organizer settles the order.</p>');
       parts.push('</div>');
     }
-    parts.push(`<h4>Matches</h4>`, matchGrid(grp, ctx, opts.multi), '</section>');
+    parts.push(`<h4>Group matches</h4>`, matchGrid(grp, ctx, opts.multi), '</section>');
   }
   if (ko.length) parts.push(bracketHtml(ctx, ko, opts.multi));
   parts.push('</section>');

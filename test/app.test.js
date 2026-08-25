@@ -450,10 +450,10 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(!standings.includes('class="day"') && !standings.includes('Jul 14, '), 'single-day: no day dividers anywhere, and cards carry just the time');
   assert(xd.includes('<h2>Mixed Doubles</h2><p class="note">Finished</p>'), 'a fully decided category: status-only subline on a single-day page');
   assert(standings.includes('<h3>Group stage</h3><div class="grid">'), 'group stage: pools first under the heading');
-  assert(standings.includes('</div><h4>Matches</h4><div class="grid">'), 'group stage: pools, then the Matches h4, then the cards');
+  assert(standings.includes('</div><h4>Group matches</h4><div class="grid">'), 'group stage: pools, then the Matches h4, then the cards');
   assert(!standings.includes('Pools</h3>') && !standings.includes('md40:pools'), 'pools are part of the group stage — no separate heading, no fold of their own');
   assert(standings.includes('Pool A</h4>'), 'pool heading stands alone — no advance note');
-  assert(standings.indexOf('<div class="grid">') < standings.indexOf('<h4>Matches</h4>'), 'pools lead the group matches inside the stage');
+  assert(standings.indexOf('<div class="grid">') < standings.indexOf('<h4>Group matches</h4>'), 'pools lead the group matches inside the stage');
   assert(standings.indexOf('Group stage</h3>') < standings.indexOf('Knockout stage</h3>'), 'schedule before the bracket — chronological flow');
   assert(standings.includes('<h3>Knockout stage</h3><h4>Semifinals</h4><div class="grid">'), 'knockout: rounds and cards — always open, no count subline');
   // mid-groups state: an unresolved group match opens the schedule and re-counts the chip
@@ -463,7 +463,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
     { index: [], t: { slug: 'sample', name: midJson.name }, tjson: midJson,
       cats: toCats(midJson) });
   assert(mid.includes('<p class="note">Group stage · 5 of 6 played, next <time datetime="2025-07-14T13:00:00.000Z">09:00</time></p>'), 'running groups: the subline carries the phase, the next slot is a semantic <time>');
-  assert(mid.includes('</div><h4>Matches</h4><div class="grid">'), 'running groups: pools, then the Matches h4, then the cards — the status lives in the category subline');
+  assert(mid.includes('</div><h4>Group matches</h4><div class="grid">'), 'running groups: pools, then the Matches h4, then the cards — the status lives in the category subline');
   assert(!mid.includes('data-stage') && !mid.includes('toggle'), 'no disclosure machinery ships — nothing hides, nothing toggles');
   const { data: rdata } = dataOf('result');
   const res = renderTournament({ slug: 'result', view: 'tournament' }, rdata);
@@ -546,7 +546,7 @@ test('multi-day: cards carry their full date; single-day cards just the time; th
   assert(!page.includes('class="day"') && !page.includes('Pools</h3>'), 'no day dividers, no separate pools section');
   assert(page.includes('<time datetime="2026-07-11T13:00:00.000Z">Sat, Jul 11, 09:00</time>') && page.includes('<time datetime="2026-07-11T15:00:00.000Z">Sat, Jul 11, 11:00</time>'), 'Saturday cards carry the date with the time');
   assert(page.includes('<time datetime="2026-07-12T13:00:00.000Z">Sun, Jul 12, 09:00</time>') && page.includes('<time datetime="2026-07-12T15:00:00.000Z">Sun, Jul 12, 11:00</time>'), 'Sunday knockout cards carry the date too');
-  assert(page.includes('</div><h4>Matches</h4><div class="grid">'), 'the running group stage: pools, then the Matches h4, then the cards');
+  assert(page.includes('</div><h4>Group matches</h4><div class="grid">'), 'the running group stage: pools, then the Matches h4, then the cards');
   assert(page.includes('<h3>Knockout stage</h3><h4>Semifinals</h4>') && page.includes('<h4>Final</h4>'), 'the knockout is always open — rounds listed in order');
   // moving a match to another day just re-dates its card — no divider machinery
   const split = JSON.parse(JSON.stringify(info.tjson));
