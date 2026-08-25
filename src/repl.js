@@ -95,6 +95,15 @@ function writeEdit(siteRoot, repo, slug, catId, apply) {
   if (!cats.includes(catId)) return { err: `unknown category ${catId} — have: ${cats.join(', ')}` };
   const ms = info.matches.get(catId);
   if (!ms) return { err: `no matches for category ${catId}` };
+  // Tripwire, not data validation: tjson.matches and info.matches must hold the
+  // SAME arrays — the snapshot below and the rollback splice depend on identity,
+  // so an edit that copies instead of mutating fails here loudly, never as a
+  // silent divergence between the validator's snapshot and the live arrays.
+  for (const [cid, arr] of info.matches) {
+    if (!info.tjson.matches || info.tjson.matches[cid] !== arr) {
+      throw new Error(`writeEdit invariant: info.tjson.matches.${cid} is not the info.matches array`);
+    }
+  }
   const meta = info.tjson.categories.find(c => c.id === catId);
   const ctx = makeCat({ meta, matches: ms }, info.tjson);
   const file = path.join(siteRoot, 'tournaments', `${slug}.json`);

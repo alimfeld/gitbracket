@@ -234,6 +234,23 @@ test('repl writeEdit: the gate sees schedule edits — a date the index lacks is
   }
 });
 
+test('repl writeEdit: the identity tripwire fires when tjson.matches diverges from info.matches', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gitbracket-'));
+  try {
+    const dataRoot = path.join(tmp, 'site');
+    fs.mkdirSync(dataRoot, { recursive: true });
+    fs.cpSync(FIX('sample'), dataRoot, { recursive: true });
+    const repo = loadRepo(dataRoot);
+    const info = repo.tournaments.get('sample');
+    info.tjson.matches = { ...info.tjson.matches, md40: [...info.tjson.matches.md40] }; // a copy, not info.matches' own array
+    assert.throws(() => repl.writeEdit(dataRoot, repo, 'sample', 'md40', () => null), /invariant/);
+    info.tjson.matches.md40 = info.matches.get('md40'); // restore identity — the real path keeps it
+    assert.doesNotThrow(() => repl.writeEdit(dataRoot, repo, 'sample', 'md40', () => 'unknown match x'), 'a healthy repo passes the tripwire');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 test('repl writeEdit: rollback on validation failure, write on success (real disk)', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gitbracket-'));
   try {
