@@ -443,8 +443,8 @@ function fmtRange(keys) {
   const ks = (Array.isArray(keys) ? keys : []).filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k));
   if (!ks.length) return null;
   if (ks.length === 1) return dayLabel(ks[0]);
-  // day arithmetic on Y-M-D integers: tz-local midnight math drifts across DST
-  const n = k => { const [y, m, d] = k.split('-').map(Number); return y * 372 + m * 31 + d; };
+  // epoch day from UTC midnight — exact; tz-local midnight math drifts across DST
+  const n = k => Date.parse(k + 'T00:00:00Z') / 864e5;
   const consec = ks.slice(1).every((k, i) => n(k) - n(ks[i]) === 1);
   let out;
   if (!consec) out = ks.map(dayLabel).join(', ');
