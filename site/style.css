@@ -2,7 +2,6 @@
   --space: .5rem;
   --radius: .375rem;
   --page: #fdfdfc;
-  --paper: #fdfdfc;
   --ink: #1c1c1e;
   --accent: #0a66c2;
   --on-accent: #fff;
@@ -76,8 +75,8 @@ a {
 }
 
 :is(.segments, .cats) {
+  /* ponytail: --bar-h = segments' total height (padding + 1.5rem line + link padding + border); cats' sticky top rides on it — revisit if font or link padding change */
   --bar-h: calc(var(--space)*2 + 1.5rem + var(--space)*2 + 1px);
-  min-height: var(--bar-h);
   position: sticky;
   z-index: 10;
   display: flex;
@@ -85,7 +84,7 @@ a {
   gap: calc(var(--space)/2);
   padding: var(--space) 0;
   border-bottom: 1px solid var(--hairline);
-  background: var(--paper);
+  background: var(--page);
 }
 
 .segments {
@@ -177,7 +176,7 @@ article {
 }
 
 .meta {
-  font-size: .85em;
+  font-size: .875em;
   color: var(--muted);
 }
 
@@ -188,7 +187,17 @@ ul {
 }
 
 ul li {
-  padding: var(--space) 0;
+  padding: 0;
+}
+
+ul li a {
+  display: block;
+  padding: calc(var(--space)/2) var(--space);
+  border-radius: var(--radius);
+}
+
+ul li a:hover {
+  background: var(--hover);
 }
 
 table {
@@ -234,14 +243,14 @@ body.venue header {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  gap: 2rem;
+  gap: calc(var(--space)*4);
 }
 
 .board {
   display: grid;
   grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
   row-gap: calc(var(--space)*2);
-  column-gap: 2rem;
+  column-gap: calc(var(--space)*4);
 }
 
 #clock {

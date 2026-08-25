@@ -440,10 +440,10 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   const early = renderVenue({ slug: 'sample', view: 'venues' }, data, Date.parse('2025-07-14T08:00:00-04:00'));
   const late = renderVenue({ slug: 'sample', view: 'venues' }, data, Date.parse('2025-07-14T16:00:00-04:00'));
   assert(!early.includes('delayed</span>'), 'before the first start: no delayed remark');
-  assert(late.includes('<span class="flag">delayed</span>'), 'slot fully elapsed: the headline time carries the remark beside it');
+  assert(late.includes('<span>delayed</span>'), 'slot fully elapsed: the headline time carries the remark beside it');
   const running = renderVenue({ slug: 'sample', view: 'venues' }, data, Date.parse('2025-07-14T12:20:00-04:00'));
-  assert(running.includes('<span class="flag">due</span>'), 'a match inside its slot says due in words, not hue alone');
-  assert(late.match(/<span class="flag">delayed<\/span>/g).length === late.match(/data-status="delayed"/g).length, 'every delayed card has the remark, and only delayed cards do');
+  assert(running.includes('<span>due</span>'), 'a match inside its slot says due in words, not hue alone');
+  assert(late.match(/<span>delayed<\/span>/g).length === late.match(/data-status="delayed"/g).length, 'every delayed card has the remark, and only delayed cards do');
   assert(venue.includes("Men&#39;s Doubles 40+ · Final") && !venue.includes("Men&#39;s Doubles 40+ · 9 ·"), 'kiosk meta shows the long category name and label, no match id');
   assert(!venue.includes('<nav>'), 'kiosk has no breadcrumb');
   assert(standings.includes('<h2>Men&#39;s Doubles 40+</h2><p class="note">Knockout stage · Semifinals</p>') && !standings.includes('<h2 id='), 'category h2: plain in-flow heading, status-only subline (the single-day heading already stated the date)');
@@ -504,7 +504,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
     { slug: 'sample', name: 'Sample', location: 'New York', dates: ['2025-07-14'] },
   ] });
   assert(idx.includes('<table>') && idx.includes('<th scope="col">Date</th>') && idx.includes('<th scope="col">Tournament</th>') && idx.includes('<th scope="col">Location</th>'), 'index is a dated table with a location column');
-  assert(idx.indexOf('>Sample</a>') < idx.indexOf('>Wide</a>') && idx.indexOf('>Wide</a>') < idx.indexOf('>Later</a>'), 'sorted by start date, undated last');
+  assert(idx.indexOf('>Wide</a>') < idx.indexOf('>Sample</a>') && idx.indexOf('>Sample</a>') < idx.indexOf('>Later</a>'), 'sorted by start date descending, undated last');
   assert(idx.includes('<td>Mon, Jul 14</td><td><a href="#sample">Sample</a> · <a href="#sample/venues">Venue board</a></td><td>New York</td>'), 'columns: date, tournament (venue-board link rides along), location');
   assert(idx.includes('<td>Sat–Sun, Jul 11–12</td>'), 'multi-day spans collapse in the date cell');
   assert(idx.includes('<td></td><td><a href="#soon">Later</a>'), 'an undated tournament keeps an empty date cell');

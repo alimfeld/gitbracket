@@ -85,7 +85,7 @@ function renderIndex(route, data) {
     .filter(e => e && typeof e.slug === 'string' && ID_RE.test(e.slug))
     .sort((a, b) => {
       const ad = a.dates && a.dates[0], bd = b.dates && b.dates[0];
-      if (ad && bd) return ad === bd ? 0 : ad < bd ? -1 : 1; // Y-M-D strings sort chronologically
+      if (ad && bd) return ad === bd ? 0 : ad < bd ? 1 : -1; // Y-M-D strings sort chronologically, newest first
       return ad ? -1 : bd ? 1 : 0;
     })
     .map(e => {
@@ -287,7 +287,7 @@ function renderVenue(route, data, now = Date.now()) {
     const when = timeEl(r.t, r.ctx.tz);
     const flag = st === 'next' ? '' : st; // the status word is the flag (due/delayed); upcoming cards show none
     return matchCard(r.m, r.ctx, { meta: ['catName', 'label'],
-      head: [{ html: when }, { html: flag ? `<span class="flag">${flag}</span>` : '' }], status: st });
+      head: [{ html: when }, { html: flag }], status: st });
   };
   const cells = [];
   for (const id of cols) cells.push(`<h2>${esc(venueNames.get(id) || id)}</h2>`);
