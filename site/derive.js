@@ -1,6 +1,6 @@
 'use strict';
 
-const ID_RE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
+var ID_RE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/; // var, not const: app.js reads it off globalThis in the browser (script-scope consts are not globalThis properties)
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/;
 
 // The one display dialect: every human-visible string renders in it, so the
@@ -195,7 +195,7 @@ function poolLadder(list, ms, ctx) {
 
 function resolveSide(side, ctx, memo = new Map()) {
   if (!side || typeof side !== 'object') return null;
-  if (side.kind === 'players') return new Set(side.ids);
+  if (side.kind === 'players') return Array.isArray(side.ids) ? new Set(side.ids) : null; // a string ids would char-split in Set — malformed sides TBD, never a wrong team
   if (side.kind === 'match') {
     const m = ctx.byId.get(side.match);
     if (!m) return null;
@@ -438,8 +438,7 @@ function schedDays(ms, tz) {
   return [...ks].sort();
 }
 
-// Human span from ISO day keys — one day its label, consecutive days collapse,
-// sparse days list each, a year boundary appends the last year. null = nothing.
+// Human span from ISO day keys (null = nothing scheduled).
 function fmtRange(keys) {
   const ks = (Array.isArray(keys) ? keys : []).filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k));
   if (!ks.length) return null;
@@ -483,7 +482,8 @@ function roundName(depthFromEnd) {
 }
 
 // Column: 0 is the final, one back per winner edge. Depth-from-leaves can't
-// place a bye'd semi. Memo rides ctx._koCol — rebuilt each render.
+// place a bye'd semi. Memo rides ctx._koCol — safe because toCats discards the
+// context (memo included) every render, so each poll starts a fresh bracket.
 // The championship final, shared with koOrdinal: a knockout match no winner
 // feeds, outside the classification tree.
 const mainFinal = (ctx, parented) =>
@@ -523,7 +523,7 @@ function koColumn(m, ctx) {
 // by side, and so on down. Reads bracket structure, never `scheduled`, so
 // editing times can't renumber anything; only rewiring the bracket does (and
 // then the label should change). 0 = off the championship tree (classification
-// rounds — placementLabel names those).
+// rounds — placementLabel names those). Memo rides ctx._koOrd: same discard- per- render contract as _koCol/_plMemo.
 function koOrdinal(m, ctx) {
   if (!ctx._koOrd) {
     const kids = new Map();     // parent id -> feeder ids, born in side order

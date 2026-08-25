@@ -7,7 +7,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, kioskStatus, matchLabel, schedTime, toCats } = require('../site/derive.js');
+const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, koOrdinal, kioskStatus, matchLabel, schedTime, toCats, isDeadTie } = require('../site/derive.js');
 const { parseRoute, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer } = require('../site/app.js');
 const { generate } = require('../src/schedule.js');
 const { FIX, catOf } = require('./helpers.js');
@@ -126,6 +126,15 @@ test('slot resolution: walkover winner vs in-play TBD', () => {
   const w7 = resolveSide(m9.sides[0], md);
   assert(w7 && w7.has('p1') && w7.has('p2'), 'winner of walkover m7 resolves to p1/p2');
   assert(resolveSide(m9.sides[1], md) === null, 'winner of in-play m8 -> TBD');
+});
+
+test('resolveSide: string ids on a players side is TBD, never a char-split team', () => {
+  const ctx = makeCat({ meta: {}, matches: [
+    { id: 1, sides: [{ kind: 'players', ids: 'p1' }, { kind: 'players', ids: ['p2'] }] },
+  ] }, { timezone: 'UTC', players: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }] });
+  assert.equal(resolveSide(ctx.byId.get(1).sides[0], ctx), null, 'a string ids would char-split in Set — must resolve to nothing instead');
+  const ok = resolveSide(ctx.byId.get(1).sides[1], ctx);
+  assert(ok && ok.has('p2'), 'an array ids beside it still resolves');
 });
 
 test('slot resolution: loser path (bronze/placement)', () => {

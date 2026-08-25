@@ -7,7 +7,7 @@
 
 const path = require('path');
 const { loadRepo, isRealDate, slotsOverlap } = require('./tools.js');
-const { LOCALE, ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, isDone, poolStandings, resolveSide, isDeadTie, bestOfOf, countWins, schedTime, schedDays } = require('../site/derive.js');
+const { LOCALE, ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, isDone, poolStandings, resolveSide, isDeadTie, bestOfOf, countWins, schedTime, schedDays, placementLabel } = require('../site/derive.js');
 
 const RESULTS = ['winner', 'loser'];
 const RESULT_STATUSES = ['played', 'walkover', 'void'];
@@ -421,6 +421,21 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
       err(where, `unknown venue ${JSON.stringify(m.venue)}`);
     }
   }
+
+  // ---- the one-final rule: a knockout stage needs exactly one match on the
+  // winner tree that no match feeds, or the bracket renders two "Final" labels
+  // and the ordinal numbering picks an arbitrary root. placementLabel excludes
+  // classification matches (they sit under loser edges), same predicate the
+  // renderer's mainFinal uses — the gate reads derive.js, never app.js.
+  let finals = 0;
+  for (const m of matches) {
+    if (!m || typeof m !== 'object' || m.pool !== undefined || !Array.isArray(m.sides) || m.sides.length !== 2) continue;
+    if (placementLabel(m, ctx) !== null) continue;
+    if (matches.some(X => X && Array.isArray(X.sides)
+      && X.sides.some(s => s && s.kind === 'match' && s.result === 'winner' && s.match === m.id))) continue;
+    finals++;
+  }
+  if (finals > 1) err(cFile, `${finals} unfed knockout matches — exactly one championship final is allowed`);
 }
 
 function validateGames(games, target, where, err) {
