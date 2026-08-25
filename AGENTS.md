@@ -46,9 +46,10 @@ implement them; don't treat them as style.
 - **Markup is semantic, styling is minimal.** Shipped HTML uses real
   elements — headings, sections, articles, tables, `details`, navs, links —
   with one small stylesheet, no framework, no presentational classes from JS.
-  State rides `data-*` / `aria-current`, the kiosk palette is one body class,
-  and layout is flex/grid + `em` — one font-size knob scales the kiosk, and
-  there are no media queries. New markup reuses existing elements and rules;
+  State rides `data-*` / `aria-current`, body classes layer per-page layout
+  (a shared trait class like `flush`, an exclusive page class like `venue`),
+  and layout is flex/grid + `em` — browser zoom scales the kiosk, and there
+  are no media queries. New markup reuses existing elements and rules;
   a new class is a change to be justified.
 - **Never weaken a check to make data pass — fix the data.** Pre-commit runs
   validate + tests (the dev gate); `gb.js publish` re-runs validate (the data

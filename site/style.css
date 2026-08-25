@@ -1,23 +1,18 @@
 :root {
   --space: .5rem;
-  /* base spacing unit */
   --radius: .375rem;
   --page: #fdfdfc;
-  /* page background */
   --paper: #fdfdfc;
-  /* card surface */
   --ink: #1c1c1e;
   --accent: #0a66c2;
   --on-accent: #fff;
-  /* text on accent */
   --muted: #6b6b70;
   --line: #d9d9d6;
   --hairline: #eee;
-  /* keep distinct from --line */
   --hover: #00000014;
-  /* hover wash */
   --tie: #fff3cd;
-  /* tie rows */
+  --late: #b3261e;
+  --live: #9a6700;
 }
 
 * {
@@ -37,20 +32,22 @@ body.flush {
   padding-top: 0;
 }
 
-/* vertical rhythm: bottoms 1×; h2/h3 open 3×, h4 2×, h1 1× */
 h1 {
   font-size: 1.5rem;
   margin: var(--space) 0 var(--space);
 }
 
+h2,
+h3 {
+  margin: calc(var(--space)*3) 0 var(--space);
+}
+
 h2 {
   font-size: 1.25rem;
-  margin: calc(var(--space)*3) 0 var(--space);
 }
 
 h3 {
   font-size: 1.125rem;
-  margin: calc(var(--space)*3) 0 var(--space);
 }
 
 h4 {
@@ -82,8 +79,6 @@ a {
   align-items: baseline;
 }
 
-/* one bar owns its height; the category bar's sticky offset reads the same
-   value, so the labels and the top offset can't drift apart */
 :is(.segments, .cats) {
   --bar-h: calc(var(--space)*2 + 1.5rem + var(--space)*2 + 1px);
   min-height: var(--bar-h);
@@ -222,13 +217,11 @@ tbody tr+tr td {
   border-top: 1px solid var(--hairline);
 }
 
-/* row separators never touch the outer edges — the table border owns them */
 th+th,
 td+td {
   border-left: 1px solid var(--hairline);
 }
 
-/* column separators, same interior-only rule */
 .num {
   text-align: right;
 }
@@ -237,18 +230,8 @@ tr[data-tie] td {
   background: var(--tie);
 }
 
-/* venue kiosk */
 body.venue {
-  --page: #000;
-  --paper: #111;
-  --ink: #f2f2ec;
-  --muted: #8a8a84;
-  --line: #2a2a28;
-  --late: #ffb3ab;
-  --live: #ffd166;
-  --queued: #9a9a94;
   max-width: none;
-  font-size: 2.2rem;
 }
 
 body.venue header {
@@ -258,42 +241,37 @@ body.venue header {
   gap: 2rem;
 }
 
-body.venue .board {
+.board {
   display: flex;
   align-items: flex-start;
   flex-wrap: wrap;
   gap: 2rem;
 }
 
-body.venue main section {
+.board>section {
   flex: 1 1 24rem;
   min-width: 0;
 }
 
-body.venue .stack {
-  gap: 1.5rem;
-}
-
-#k-clock {
-  font-size: 1.6em;
+#clock {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-body.venue article[data-status="overdue"] .head span {
+article[data-status="overdue"] .head span {
   color: var(--late);
 }
 
-body.venue article[data-status="live"] .head span {
+article[data-status="live"] .head span {
   color: var(--live);
 }
 
-body.venue article[data-status="next"] .head span {
-  color: var(--queued);
+article[data-status="next"] .head span {
+  color: var(--muted);
 }
 
-body.venue .head .flag {
+.head .flag {
   font-size: .55em;
   font-weight: 700;
   text-transform: uppercase;

@@ -269,7 +269,7 @@ function renderVenue(route, data, now = Date.now()) {
   const venueNames = new Map((data.tjson.venues || []).map(v => [v.id, v.name]));
   const venues = (data.tjson.venues || []).map(x => x.id).filter(id => rows.some(r => r.m.venue === id));
   const shown = v ? rows.filter(r => r.m.venue === v) : rows;
-  const parts = [`<header><h1>${esc(data.t.name)}</h1><time id="k-clock"></time></header>`];
+  const parts = [`<header><h1>${esc(data.t.name)}</h1><time id="clock"></time></header>`];
   const byVenue = new Map(venues.map(id => [id, []]));
   for (const r of shown) {
     if (byVenue.has(r.m.venue)) byVenue.get(r.m.venue).push(r); // rows pre-sorted, buckets stay sorted
@@ -404,7 +404,7 @@ function boot() {
       // Clock lives in an element the change-guard never re-renders; look it up
       // fresh each tick (the poll re-renders).
       clockTimer = setInterval(() => {
-        const el = document.getElementById('k-clock');
+        const el = document.getElementById('clock');
         if (el) {
           el.textContent = fmtTime(Date.now(), (data && data.tjson && data.tjson.timezone) || 'UTC');
           el.dateTime = new Date().toISOString(); // the instant, derived — the label stays wall clock
@@ -430,7 +430,7 @@ function boot() {
 
   const render = (r, d) => {
     data = d;
-    // the kiosk dark theme keys off body.venue — present only on the venue view
+    // the kiosk page layout keys off body.venue — present only on the venue view
     document.body.classList.toggle('venue', r.view === 'venues');
     // tournament pages pin their view bar flush to the top; frontdoor/venue keep body padding
     document.body.classList.toggle('flush', r.view === 'tournament' || r.view === 'schedule');
