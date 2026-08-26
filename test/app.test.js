@@ -548,11 +548,10 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(standings.includes('<h1>Sample</h1>') && standings.includes('<p>Mon, Jul 14 · New York</p>'), 'one-day tournament: the heading subline states the date and the location');
   assert(!standings.includes('class="day"') && !standings.includes('Jul 14, '), 'single-day: no day dividers anywhere, and cards carry just the time');
   assert(xd.includes('<h2>Mixed Doubles</h2><p data-status="finished">Finished</p>'), 'a fully decided pool-only category: status-only subline on a single-day page, in the done-voice (no final, no podium)');
-  assert(standings.includes('<h3 id="groups">Group stage</h3><div class="grid">'), 'group stage: pools first under the heading');
-  assert(standings.includes('</div><h4>Group matches</h4><div class="grid">'), 'group stage: pools, then the Matches h4, then the cards');
+  assert(standings.includes('<h3>Group stage</h3><div class="grid">'), 'group stage: pools first under the heading');
+  assert(standings.includes('</div><h4 id="group-matches">Group matches</h4><div class="grid">'), 'group stage: pools, then the Matches h4, then the cards');
   assert(!standings.includes('Pools</h3>') && !standings.includes('md40:pools'), 'pools are part of the group stage — no separate heading, no fold of their own');
   assert(standings.includes('Pool A</h4>'), 'pool heading stands alone — no advance note');
-  assert(standings.indexOf('<div class="grid">') < standings.indexOf('<h4>Group matches</h4>'), 'pools lead the group matches inside the stage');
   assert(standings.indexOf('Group stage</h3>') < standings.indexOf('Knockout stage</h3>'), 'schedule before the bracket — chronological flow');
   assert(standings.includes('<h3>Knockout stage</h3><h4 id="ko-1">Semifinals</h4><div class="grid">'), 'knockout: rounds and cards — always open, no count subline');
   // mid-groups state: an unresolved group match opens the schedule and re-counts the chip
@@ -561,8 +560,8 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   const mid = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' },
     { index: [], t: { slug: 'sample', name: midJson.name }, tjson: midJson,
       cats: toCats(midJson) });
-  assert(mid.includes('<p><a data-jump="groups" href="#sample?cat=md40">Group stage</a> · 5 of 6 played</p>'), 'running groups: the stage word links to the group section and carries the progress count');
-  assert(mid.includes('</div><h4>Group matches</h4><div class="grid">'), 'running groups: pools, then the Matches h4, then the cards — the status lives in the category subline');
+  assert(mid.includes('<p><a data-jump="group-matches" href="#sample?cat=md40">Group stage</a> · 5 of 6 played</p>'), 'running groups: the stage word links to the group matches and carries the progress count');
+  assert(mid.includes('</div><h4 id="group-matches">Group matches</h4><div class="grid">'), 'running groups: pools, then the Matches h4, then the cards — the status lives in the category subline');
   assert(!mid.includes('data-stage') && !mid.includes('toggle'), 'no disclosure machinery ships — nothing hides, nothing toggles');
   const { data: rdata } = dataOf('result');
   const res = renderTournament({ slug: 'result', view: 'tournament' }, rdata);
@@ -633,10 +632,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   // tied teams share the first rank of their group (standard competition ranking: 1 1 1 4)
   const { data: tdata } = dataOf('tie');
   const tieHtml = renderTournament({ slug: 'tie', view: 'tournament' }, tdata);
-  assert(!tieHtml.includes('†') && (tieHtml.match(/data-tie><td class="num">1<\/td>/g) || []).length === 2, 'tied teams share rank 1, no dagger');
-  assert(tieHtml.includes('dead ties on every tiebreaker'), 'the color-only tie highlight carries a one-line legend');
-  // pre-play every team ties at zero — the highlight must wait for results
-  assert(!pre.includes('data-tie'), 'nothing played yet: no tie highlight, no legend');
+  assert(!tieHtml.includes('†') && (tieHtml.match(/<tr><td class="num">1<\/td>/g) || []).length === 2, 'tied teams share rank 1, no dagger');
 });
 
 
@@ -646,11 +642,11 @@ test('multi-day: cards carry their full date; single-day cards just the time; th
   const data = { index: repo.index, t: { slug: 'multiday', name: info.tjson.name }, tjson: info.tjson, cats: toCats(info.tjson) };
   const page = renderTournament({ slug: 'multiday', view: 'tournament' }, data);
   assert(page.includes('<p>Sat–Sun, Jul 11–12 · Boston</p>'), 'the heading subline collapses consecutive days and gives the location');
-  assert(page.includes('<h2>Men&#39;s Doubles 40+</h2><p>Sat–Sun, Jul 11–12</p><p><a data-jump="groups" href="#multiday">Group stage</a> · 5 of 6 played</p>'), 'the category subline splits the multi-day range from the live status');
+  assert(page.includes('<h2>Men&#39;s Doubles 40+</h2><p>Sat–Sun, Jul 11–12</p><p><a data-jump="group-matches" href="#multiday">Group stage</a> · 5 of 6 played</p>'), 'the category subline splits the multi-day range from the live status');
   assert(!page.includes('class="day"') && !page.includes('Pools</h3>'), 'no day dividers, no separate pools section');
   assert(page.includes('<time datetime="2026-07-11T13:00:00.000Z">Sat, Jul 11, 09:00</time>') && page.includes('<time datetime="2026-07-11T15:00:00.000Z">Sat, Jul 11, 11:00</time>'), 'Saturday cards carry the date with the time');
   assert(page.includes('<time datetime="2026-07-12T13:00:00.000Z">Sun, Jul 12, 09:00</time>') && page.includes('<time datetime="2026-07-12T15:00:00.000Z">Sun, Jul 12, 11:00</time>'), 'Sunday knockout cards carry the date too');
-  assert(page.includes('</div><h4>Group matches</h4><div class="grid">'), 'the running group stage: pools, then the Matches h4, then the cards');
+  assert(page.includes('</div><h4 id="group-matches">Group matches</h4><div class="grid">'), 'the running group stage: pools, then the Matches h4, then the cards');
   assert(page.includes('<h3>Knockout stage</h3><h4 id="ko-1">Semifinals</h4>') && page.includes('<h4 id="ko-0">Final</h4>'), 'the knockout is always open — rounds listed in order, wave ids on the headings');
   // the player page groups under date headings — the day owns the context, and
   // the possible line names its own day on multi-day pages

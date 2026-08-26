@@ -9,7 +9,6 @@
   --line: #d9d9d6;
   --hairline: #eee;
   --hover: #00000014;
-  --tie: #fff3cd;
   --overdue: #b3261e;
   --due: #15803d;
   /* one sticky nav bar's total height — segments stick at 0, cats below it,
@@ -254,10 +253,6 @@ td+td {
 
 .num {
   text-align: right;
-}
-
-tr[data-tie] td {
-  background: var(--tie);
 }
 
 body.venue {

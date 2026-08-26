@@ -127,7 +127,7 @@ function renderTournament(route, data) {
 const statusLine = (st, ctx, href) => {
   const jump = (text, id) => `<a data-jump="${id}" href="${esc(href)}">${text}</a>`;
   if (st.kind === 'starts') return `<p>Starts ${st.time !== null ? timeEl(st.time, ctx.tz) : 'soon'}</p>`;
-  if (st.kind === 'groups') return `<p>${jump('Group stage', 'groups')} · ${st.played} of ${st.count} played</p>`;
+  if (st.kind === 'groups') return `<p>${jump('Group stage', 'group-matches')} · ${st.played} of ${st.count} played</p>`;
   if (st.kind === 'ko') return `<p>Knockout stage · ${jump(waveWord(st.col), `ko-${st.col}`)}</p>`;
   if (st.kind === 'finished') return '<p data-status="finished">Finished</p>';
   // winners: the podium is one line, third only when a bronze match decided it;
@@ -158,12 +158,10 @@ function catSection(ctx, opts) {
   if (st) lines.push(statusLine(st, ctx, opts.href));
   parts.push(`<section><h2>${esc(ctx.name)}</h2>${lines.join('')}`);
   if (grp.length) {
-    parts.push(`<section><h3 id="groups">Group stage</h3>`);
+    parts.push(`<section><h3>Group stage</h3>`);
     // pools belong to the group stage — scoreboard first, cards last; the
     // category subline above carries the status sentence
     if (byPool.size) {
-      const started = ctx.matches.some(isDone); // pre-play every team ties at zero — no highlight yet
-      let anyTie = false;
       parts.push('<div class="grid">');
       for (const [pool] of byPool) {
         parts.push(`<div><h4>Pool ${esc(String(pool))}</h4>`);
@@ -171,18 +169,14 @@ function catSection(ctx, opts) {
         const st = poolStandings(ctx, pool, true); // pools come from matches, so partial standings always resolve
         const ranks = poolRanks(st);
         st.forEach((r, i) => {
-          const tied = started && isDeadTie(st, i + 1);
-          if (tied) anyTie = true;
           const team = teamLabel(r.ids, ctx);
-          parts.push(`<tr${tied ? ' data-tie' : ''}><td class="num">${ranks[i]}</td><td>${esc(team)}</td><td class="num">${r.wins}</td><td class="num">${r.losses}</td><td class="num">${fmtDiff(r.gd)}</td><td class="num">${fmtDiff(r.pd)}</td></tr>`);
+          parts.push(`<tr><td class="num">${ranks[i]}</td><td>${esc(team)}</td><td class="num">${r.wins}</td><td class="num">${r.losses}</td><td class="num">${fmtDiff(r.gd)}</td><td class="num">${fmtDiff(r.pd)}</td></tr>`);
         });
         parts.push('</tbody></table></div>');
       }
-      // the highlight is color-only — one line names what it means
-      if (anyTie) parts.push('<p class="note">Highlighted rows are dead ties on every tiebreaker — the organizer settles the order.</p>');
       parts.push('</div>');
     }
-    parts.push(`<h4>Group matches</h4>`, matchGrid(grp, ctx, opts.multi), '</section>');
+    parts.push(`<h4 id="group-matches">Group matches</h4>`, matchGrid(grp, ctx, opts.multi), '</section>');
   }
   if (ko.length) parts.push(bracketHtml(ctx, ko, opts.multi));
   parts.push('</section>');
