@@ -87,6 +87,8 @@ test('repl buildScheduled: builds local ISO-8601 wall time from hh:mm and timezo
   const r2 = repl.buildScheduled('9:00', 'America/New_York');
   assert(r2.includes('T09:00:00'), 'single-digit hour pads to 09');
   assert(repl.buildScheduled('25:00', 'UTC') === null, 'bad hour returns null');
+  assert(repl.buildScheduled('09:00', 'UTC', '2026-05-03') === '2026-05-03T09:00:00', 'an explicit date wins over today');
+  assert(repl.buildScheduled('09:00', 'UTC', '2026-02-30') === '2026-02-30T09:00:00', 'a format-valid but impossible date passes — the validator gate rejects it on write');
 });
 
 test('repl applyTime: sets scheduled field, repo validates', () => {
@@ -97,6 +99,10 @@ test('repl applyTime: sets scheduled field, repo validates', () => {
   assert(repl.applyTime(matches, 'nope', '2025-07-14T16:00:00') === 'unknown match nope', 'unknown match reported');
   const { errs } = validateRepo(repo);
   assert(errs.length === 0, 'edited repo still validates: ' + errs.join('; '));
+  assert(repl.applyTime(matches, '2', undefined) === null, 'clearing reports no error');
+  assert(matches.find(m => m.id === 2).scheduled === undefined, 'scheduled dropped — the match is unscheduled');
+  const { errs: errs2 } = validateRepo(repo);
+  assert(errs2.length === 0, 'an unscheduled match still validates: ' + errs2.join('; '));
 });
 
 test('repl rejects edits the validator would refuse', () => {

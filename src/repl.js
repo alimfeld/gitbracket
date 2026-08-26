@@ -70,12 +70,13 @@ function applyVenue(matches, matchId, venueId) {
   });
 }
 
-function buildScheduled(hhmm, tz) {
+function buildScheduled(hhmm, tz, date) {
   if (!/^\d{1,2}:\d{2}$/.test(hhmm)) return null;
   const [h, m] = hhmm.split(':');
   if (+h > 23 || +m > 59) return null;
-  const date = dayKey(Date.now(), tz); // tz-local date
-  return `${date}T${h.padStart(2,'0')}:${m}:00`; // wall time — the tournament tz interprets it
+  if (date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  // an impossible date (2026-02-30) passes this regex — the validator gate rejects it on write, like applyVenue's unknown venues
+  return `${date || dayKey(Date.now(), tz)}T${h.padStart(2,'0')}:${m}:00`; // wall time — the tournament tz interprets it
 }
 
 function applyTime(matches, matchId, isoString) {
@@ -310,7 +311,8 @@ ${C.bold('slash commands — they edit data or ship:')}
   /wo <cat> <id> <a|b>              walkover: side a or b wins without playing (opponent can't)
   /void <cat> <id>                  void: no winner, nothing counts (both sides out)
   /venue <cat> <id> <venue>         move a match to another court
-  /time <cat> <id> <hh:mm>          shift a match to another time today
+  /time <cat> <id> [date] <hh:mm>   shift a match, optionally to another day (date = YYYY-MM-DD)
+  /time <cat> <id> -                unschedule — the match goes back to TBD
   /publish                          validate, then ship site/ to the domain (git push stays manual)
 
 ${C.dim('a bare line never mutates data or ships — a bare mutator is rejected with "did you mean /…?"')}`;
@@ -440,7 +442,7 @@ const C = (() => {
 function editDetail(kind, m) {
   const r = m.result;
   return kind === 'score' ? (m.games || []).map(gg => `${gg.a}:${gg.b}`).join(' · ')
-    : kind === 'time' ? `→ ${m.scheduled}`
+    : kind === 'time' ? (m.scheduled === undefined ? '→ TBD' : `→ ${m.scheduled}`)
     : kind === 'venue' ? `→ ${m.venue}`
     : r.status === 'void' ? 'void' : `side ${r.winner} wins by walkover`;
 }
@@ -492,11 +494,15 @@ function editCmd(state, kind, cat, matchId, rest) {
     return applyAndCommit(state, 'venue', cat, matchId, c => applyVenue(c, matchId, venueId));
   }
   if (kind === 'time') {
-    const hhmm = rest[0];
-    if (!hhmm) return C.yellow('usage: /time <category> <match> <hh:mm>');
+    // args: [YYYY-MM-DD] hh:mm — a bare '-' unschedules the match back to TBD
+    const a = rest[0], b = rest[1];
+    const date = b !== undefined && /^\d{4}-\d{2}-\d{2}$/.test(a) ? a : undefined;
+    const arg = date !== undefined ? b : a;
+    if (!arg) return C.yellow('usage: /time <category> <match> [date] <hh:mm>  (or - to unschedule)');
+    if (arg === '-') return applyAndCommit(state, 'time', cat, matchId, c => applyTime(c, matchId, undefined));
     const tz = state.repo.tournaments.get(state.slug).tjson.timezone;
-    const iso = buildScheduled(hhmm, tz);
-    if (!iso) return C.red(`bad time ${JSON.stringify(hhmm)} — expected hh:mm, e.g. 10:30`);
+    const iso = buildScheduled(arg, tz, date);
+    if (!iso) return C.red(`bad time ${JSON.stringify(arg)} — expected hh:mm, e.g. 10:30`);
     return applyAndCommit(state, 'time', cat, matchId, c => applyTime(c, matchId, iso));
   }
 }
