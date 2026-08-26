@@ -278,8 +278,11 @@ function renderVenue(route, data, now = Date.now()) {
   const shownDay = firstDay && today < firstDay ? firstDay : today;
   const open = shown.filter(r => dayKey(r.t, r.ctx.tz) === shownDay); // the full day stays on the board; the scroll follows the current slot
   const cols = (data.tjson.venues || []).map(x => x.id).filter(id => open.some(r => r.m.venue === id));
-  const parts = [`<header><div><h1>${esc(data.t.name)}</h1><p class="note">${shownDay === today ? 'Today' : dayLabel(shownDay)}</p></div><time id="clock"></time></header>`];
-  if (!cols.length) return parts.join('') + '<p class="note">Nothing scheduled.</p>';
+  const header = `<header><div><h1>${esc(data.t.name)}</h1><p class="note">${shownDay === today ? 'Today' : dayLabel(shownDay)}</p></div><time id="clock"></time></header>`;
+  // header and venue titles stick as one block — the titles ride the running
+  // clock, aligned to the board by the shared --cols track
+  const top = `<div class="kiosk-top" style="--cols: ${cols.length}">${header}${cols.map(id => `<h2>${esc(venueNames.get(id) || id)}</h2>`).join('')}</div>`;
+  if (!cols.length) return top + '<p class="note">Nothing scheduled.</p>';
   // columns are venues, rows are start times — every column holds the same
   // cells, so the cards of one wave line up; holes stay empty cells. ponytail:
   // one card per (venue, start) cell — the validator only checks unplayed
@@ -297,7 +300,6 @@ function renderVenue(route, data, now = Date.now()) {
   };
   const cells = [];
   const anchorTime = times[currentRowIndex(times, now)];
-  for (const id of cols) cells.push(`<h2>${esc(venueNames.get(id) || id)}</h2>`);
   for (const t of times) {
     for (const id of cols) {
       const r = byVenue.get(id).get(t);
@@ -308,8 +310,7 @@ function renderVenue(route, data, now = Date.now()) {
   }
   // data-anchor: the board's current scroll row, derived here where times and now
   // live; boot() centers on it when it changes
-  parts.push(`<div class="board" data-anchor="${anchorTime}" style="--cols: ${cols.length}">${cells.join('')}</div>`);
-  return parts.join('');
+  return top + `<div class="board" data-anchor="${anchorTime}" style="--cols: ${cols.length}">${cells.join('')}</div>`;
 }
 
 // One tournament-wide fact, derived at render: do scheduled matches span more

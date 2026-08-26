@@ -74,7 +74,7 @@ a {
   align-items: baseline;
 }
 
-:is(.segments, .cats, body.venue header) {
+:is(.segments, .cats, .kiosk-top) {
   background: var(--page);
   border-bottom: 1px solid var(--hairline);
   animation: stick linear both;
@@ -245,15 +245,29 @@ body.venue {
   max-width: none;
 }
 
-body.venue header {
+/* header + venue titles stick as one block; the h2s share the board's --cols
+   track so a title stays pinned above its column */
+.kiosk-top {
   position: sticky;
   top: 0;
   z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+  column-gap: calc(var(--space)*4);
+}
+
+body.venue header {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
   gap: calc(var(--space)*4);
   padding-top: var(--space);
+  grid-column: 1 / -1;
+}
+
+.kiosk-top h2 {
+  margin: 0;
+  padding: calc(var(--space)*2) 0 var(--space);
 }
 
 @keyframes stick {
@@ -266,6 +280,7 @@ body.venue header {
   grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
   row-gap: calc(var(--space)*2);
   column-gap: calc(var(--space)*4);
+  margin-top: calc(var(--space)*2);
 }
 
 #clock {
