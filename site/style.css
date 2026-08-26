@@ -74,6 +74,14 @@ a {
   align-items: baseline;
 }
 
+:is(.segments, .cats, body.venue header) {
+  background: var(--page);
+  border-bottom: 1px solid var(--hairline);
+  animation: stick linear both;
+  animation-timeline: scroll();
+  animation-range: 0 2px;
+}
+
 :is(.segments, .cats) {
   /* ponytail: --bar-h = segments' total height (padding + 1.5rem line + link padding + border); cats' sticky top rides on it — revisit if font or link padding change */
   --bar-h: calc(var(--space)*2 + 1.5rem + var(--space)*2 + 1px);
@@ -83,8 +91,6 @@ a {
   flex-wrap: wrap;
   gap: calc(var(--space)/2);
   padding: var(--space) 0;
-  border-bottom: 1px solid var(--hairline);
-  background: var(--page);
 }
 
 .segments {
@@ -247,8 +253,12 @@ body.venue header {
   justify-content: space-between;
   align-items: baseline;
   gap: calc(var(--space)*4);
-  background: var(--page);
   padding-top: var(--space);
+}
+
+@keyframes stick {
+  /* negative spread trims sides/top / blurred — shadow reads as bottom-only */
+  to { box-shadow: 0 3px 3px -3px rgb(0 0 0 / .2); }
 }
 
 .board {
