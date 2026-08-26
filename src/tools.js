@@ -70,4 +70,11 @@ function writeTournament(siteRoot, slug, tjson) {
   fs.writeFileSync(path.join(siteRoot, 'tournaments', `${slug}.json`), JSON.stringify(tjson, null, 2) + '\n');
 }
 
-module.exports = { loadRepo, writeTournament, slotsOverlap, isRealDate, findRoot };
+// Write the index in its established one-entry-per-line shape — pretty-printing
+// the whole array would reflow every line on each add, blurring per-tournament
+// diffs. Sibling of writeTournament: both byte formats are contracts.
+function writeTournamentIndex(siteRoot, entries) {
+  fs.writeFileSync(path.join(siteRoot, 'tournaments.json'), '[' + entries.map((t) => `\n  ${JSON.stringify(t)}`).join(',') + '\n]\n');
+}
+
+module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, isRealDate, findRoot };

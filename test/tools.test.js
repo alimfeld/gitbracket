@@ -12,7 +12,7 @@ const os = require('os');
 const path = require('path');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { loadRepo, isRealDate, findRoot } = require('../src/tools.js');
+const { loadRepo, isRealDate, findRoot, writeTournamentIndex } = require('../src/tools.js');
 const { FIX } = require('./helpers.js');
 
 test('repo loadRepo: unreadable tournament files land in readErrs, the rest still load', () => {
@@ -27,6 +27,20 @@ test('repo loadRepo: unreadable tournament files land in readErrs, the rest stil
     assert(/bad\.json/.test(repo.readErrs[0]), 'readErrs names the file');
     assert(repo.tournaments.has('ok'), 'readable tournaments still load');
     assert(repo.tournaments.get('bad').tjson === undefined, 'unreadable tournament keeps its placeholder entry');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('tools writeTournamentIndex: one entry per line — index diffs stay per-tournament', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gitbracket-'));
+  try {
+    writeTournamentIndex(tmp, [
+      { slug: 'one', name: 'One', dates: ['2026-07-11'] },
+      { slug: 'two', name: 'Two' },
+    ]);
+    const out = fs.readFileSync(path.join(tmp, 'tournaments.json'), 'utf8');
+    assert.equal(out, '[\n  {"slug":"one","name":"One","dates":["2026-07-11"]},\n  {"slug":"two","name":"Two"}\n]\n', 'the byte shape is a contract, not an accident');
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

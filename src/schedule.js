@@ -8,7 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 const { matchSlotMs, pairSig, dayKey, tzOffset, schedTime, ID_RE, schedDays } = require('../site/derive.js');
-const { writeTournament, slotsOverlap, isRealDate } = require('./tools.js');
+const { writeTournament, writeTournamentIndex, slotsOverlap, isRealDate } = require('./tools.js');
 
 // Round-robin pairings, circle method: array of rounds, each a list of pairs.
 function roundRobin(teams) {
@@ -443,8 +443,7 @@ function main(root, specPath) {
   const entry = { slug: spec.slug, name: spec.name, location: spec.location, dates: schedDays(Object.values(tourney.matches).flat(), tourney.timezone) };
   const i = Array.isArray(idx) ? idx.findIndex((t) => t && t.slug === spec.slug) : -1;
   if (i >= 0) idx[i] = entry; else idx.push(entry);
-  // keep the index's established one-entry-per-line format — index diffs stay per-tournament
-  fs.writeFileSync(idxFile, '[' + idx.map((t) => `\n  ${JSON.stringify(t)}`).join(',') + '\n]\n');
+  writeTournamentIndex(siteRoot, idx); // the one-per-line shape — index diffs stay per-tournament
 
   console.log(`Wrote site/tournaments/${spec.slug}.json — run \`node gb.js validate\` before committing.`);
 }
