@@ -72,7 +72,7 @@
         "id": 2,
         "pool": "A",
         "venue": "court-1",
-        "scheduled": "2026-05-02T09:00:00",
+        "scheduled": "2026-05-02T09:30:00",
         "sides": [
           {
             "kind": "players",
@@ -96,7 +96,7 @@
         "id": 3,
         "pool": "A",
         "venue": "court-1",
-        "scheduled": "2026-05-02T09:00:00",
+        "scheduled": "2026-05-02T10:00:00",
         "sides": [
           {
             "kind": "players",
@@ -118,7 +118,7 @@
       {
         "id": 4,
         "venue": "court-1",
-        "scheduled": "2026-05-02T10:00:00",
+        "scheduled": "2026-05-02T11:00:00",
         "sides": [
           {
             "kind": "pool",

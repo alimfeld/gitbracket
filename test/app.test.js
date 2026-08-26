@@ -7,7 +7,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, koOrdinal, kioskStatus, matchLabel, schedTime, toCats, isDeadTie } = require('../site/derive.js');
+const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, koOrdinal, kioskStatus, currentRowIndex, matchLabel, schedTime, toCats, isDeadTie } = require('../site/derive.js');
 const { parseRoute, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer } = require('../site/app.js');
 const { generate } = require('../src/schedule.js');
 const { FIX, catOf } = require('./helpers.js');
@@ -153,7 +153,7 @@ test('matchSlotMs: match override > per-stage category config, no default', () =
   assert(Number.isNaN(matchSlotMs({}, { slotMinutes: { groups: 60 } })), 'groups config does not leak into knockout → NaN');
 });
 
-test('kioskStatus: delayed / due / upcoming status per open card', () => {
+test('kioskStatus: done / overdue / due / upcoming per card', () => {
   const ctx = makeCat({ meta: { bestOf: { knockout: 3 }, slotMinutes: { groups: 30, knockout: 45 } }, matches: [
     { id: 'm1', scheduled: '2025-07-14T09:00:00', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }], games: [{ a: 11, b: 5 }, { a: 11, b: 4 }], result: { status: 'played', winner: 'a' } },
     { id: 'm2', scheduled: '2025-07-14T08:30:00', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },
@@ -162,14 +162,25 @@ test('kioskStatus: delayed / due / upcoming status per open card', () => {
     { id: 'm5', scheduled: '2025-07-14T11:15:00', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },
     { id: 'm6', scheduled: '2025-07-14T10:00:00', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },
   ] }, { timezone: 'UTC', players: [] });
-  const now = Date.parse('2025-07-14T10:00:00Z'); // m2's slot ended 09:15 — long delayed
+  const now = Date.parse('2025-07-14T10:00:00Z'); // m2's slot ended 09:15 — long overdue
   const rows = ctx.matches.map(m => ({ m, t: schedTime(m, ctx.tz), ctx }));
   const st = id => kioskStatus(rows.find(r => r.m.id === id), now);
-  assert(st('m2') === 'delayed', 'slot fully elapsed without a result: delayed');
-  assert(st('m3') === 'due' && st('m6') === 'due', 'started and still inside its slot: Due');
-  assert(isDone(ctx.byId.get('m1')), 'a done match leaves the board');
-  assert(st('m4') === 'next' && st('m5') === 'next', 'future starts: upcoming');
-  assert(st('m6') === 'due', 'the boundary instant (now === t) belongs to Due, not Next');
+  assert(st('m1') === 'done', 'a result settles first: done, whatever the clock says');
+  assert(st('m2') === 'overdue', 'slot fully elapsed without a result: overdue');
+  assert(st('m3') === 'due' && st('m6') === 'due', 'started and still inside its slot: due');
+  assert(st('m4') === 'upcoming' && st('m5') === 'upcoming', 'future starts: upcoming');
+  assert(st('m6') === 'due', 'the boundary instant (now === t) belongs to due, not upcoming');
+});
+
+test('currentRowIndex: the current slot anchors the kiosk scroll', () => {
+  const times = ['2026-07-11T09:00:00', '2026-07-11T10:00:00', '2026-07-11T11:00:00'].map(s => Date.parse(s));
+  const at = s => Date.parse(s);
+  assert(currentRowIndex(times, at('2026-07-11T08:30:00')) === 0, 'before the first start: the first row');
+  assert(currentRowIndex(times, at('2026-07-11T09:00:00')) === 0, 'the boundary instant belongs to that slot');
+  assert(currentRowIndex(times, at('2026-07-11T09:30:00')) === 0, 'a gap sticks to the latest passed slot (a finished-early match stays centered)');
+  assert(currentRowIndex(times, at('2026-07-11T10:15:00')) === 1, 'inside a slot: that slot');
+  assert(currentRowIndex(times, at('2026-07-11T11:00:00')) === 2, 'the last slot: itself');
+  assert(currentRowIndex(times, at('2026-07-11T13:00:00')) === 2, 'after the last slot: it stays');
 });
 
 test('matchLabel: pool, placement, and round names on one card label', () => {
@@ -241,7 +252,7 @@ test('result statuses: walkover counts a win, void counts nothing, pool complete
   assert(resolveSide(f.sides[0], res) && resolveSide(f.sides[1], res), 'pool ranks resolve despite the void');
 });
 
-test('result statuses render: W/O and void on cards, settled matches off the kiosk', () => {
+test('result statuses render: W/O and void on cards, settled matches stay on the board', () => {
   const repo = loadRepo(FIX('result'));
   const info = repo.tournaments.get('result');
   const data = { index: repo.index, t: repo.index[0], tjson: info.tjson, cats: toCats(info.tjson) };
@@ -250,8 +261,11 @@ test('result statuses render: W/O and void on cards, settled matches off the kio
   // m2 is pool A, walkover winner b (p3): the W/O mark rides the winner's row
   assert(st.includes('<span>P3</span><span class="score"><span>W/O</span></span>'), 'W/O renders on the winning side');
   const venue = renderVenue({ slug: 'result', view: 'venues' }, data, Date.parse('2026-05-02T09:30:00Z'));
-  assert(venue.includes('P1') && venue.includes('P3'), 'the open final is on the board');
-  assert(!venue.includes('<span>void</span>') && !venue.includes('W/O'), 'settled (incl. void) matches leave the kiosk');
+  assert(venue.includes('P1') && venue.includes('P3'), 'the board carries every court-1 slot');
+  const nineThirty = Date.parse('2026-05-02T09:30:00Z');
+  assert(venue.includes('data-status="done"') && venue.includes('<span>void</span>') && venue.includes('W/O'), 'settled matches — played, walkover, void — all stay on the full-day board');
+  assert(venue.includes('data-status="upcoming"'), 'the open 11:00 final is still upcoming at 09:30');
+  assert(venue.includes(`data-anchor="${nineThirty}"`) && venue.includes(`<div data-current="${nineThirty}">`), 'the anchor is the current slot, on the board and on its row cells');
 });
 
 test('bracket depth', () => {
@@ -459,14 +473,17 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   const venue = renderVenue({ slug: 'sample', view: 'venues' }, data, Date.parse('2025-07-14T12:00:00-04:00')); // pinned to the fixture day — the kiosk shows today only
   assert(venue.includes('Court 1') && venue.includes('Ada Lovelace'), 'venue page renders venue boards with match rows');
   assert(venue.includes('data-status=') && !venue.includes('badge'), 'kiosk card: status rides the article (headline time colored); meta keeps cat · label only');
-  assert(venue.includes('style="--cols: 2"') && venue.includes('</h2><div></div>'), 'kiosk board: one grid row-major, columns per venue, holes as empty cells');
+  assert(venue.includes('style="--cols: 2"') && venue.includes('data-anchor="'), 'kiosk board: columns per venue, and the board carries its scroll anchor');
+  assert(venue.includes('data-current="') && venue.includes('</h2>'), 'kiosk board: the anchor row is scroll-targeted after the venue headers');
   const early = renderVenue({ slug: 'sample', view: 'venues' }, data, Date.parse('2025-07-14T08:00:00-04:00'));
   const late = renderVenue({ slug: 'sample', view: 'venues' }, data, Date.parse('2025-07-14T16:00:00-04:00'));
-  assert(!early.includes('delayed</span>'), 'before the first start: no delayed remark');
-  assert(late.includes('<span>delayed</span>'), 'slot fully elapsed: the headline time carries the remark beside it');
+  assert(!early.includes('overdue</span>'), 'before the first start: no overdue remark');
+  assert(late.includes('<span>overdue</span>'), 'slot fully elapsed without a result: the headline time carries the remark beside it');
   const running = renderVenue({ slug: 'sample', view: 'venues' }, data, Date.parse('2025-07-14T12:20:00-04:00'));
   assert(running.includes('<span>due</span>'), 'a match inside its slot says due in words, not hue alone');
-  assert(late.match(/<span>delayed<\/span>/g).length === late.match(/data-status="delayed"/g).length, 'every delayed card has the remark, and only delayed cards do');
+  assert(late.match(/<span>overdue<\/span>/g).length === late.match(/data-status="overdue"/g).length, 'every overdue card has the remark, and only overdue cards do');
+  const midday = renderVenue({ slug: 'sample', view: 'venues' }, data, Date.parse('2025-07-14T12:20:00-04:00'));
+  assert(midday.includes('data-status="done"'), 'a midday board keeps the morning results, muted');
   assert(venue.includes("Men&#39;s Doubles 40+ · Final") && !venue.includes("Men&#39;s Doubles 40+ · 9 ·"), 'kiosk meta shows the long category name and label, no match id');
   assert(!venue.includes('<nav>'), 'kiosk has no breadcrumb');
   assert(standings.includes('<h2>Men&#39;s Doubles 40+</h2><p class="note">Knockout stage · Semifinals</p>') && !standings.includes('<h2 id='), 'category h2: plain in-flow heading, status-only subline (the single-day heading already stated the date)');

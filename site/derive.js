@@ -79,7 +79,7 @@ function winnerIdx(m) {
 }
 
 function isDone(m) {
-  // Any result settles the match — void included (settled, never delayed).
+  // Any result settles the match — void included (settled, never overdue).
   return !!m && m.result !== undefined;
 }
 
@@ -469,9 +469,19 @@ function fmtDiff(n) {
 
 function kioskStatus(r, now) {
   const t = r.t;
-  if (now >= t + matchSlotMs(r.m, r.ctx)) return 'delayed';
+  if (isDone(r.m)) return 'done';
+  if (now >= t + matchSlotMs(r.m, r.ctx)) return 'overdue';
   if (now >= t) return 'due';
-  return 'next';
+  return 'upcoming';
+}
+
+// The kiosk's scroll anchor: the latest row start that has passed — the slot
+// "now" — else the first row. Pure time, never status, so a slot that finished
+// early stays centered until the next start. `times` must be ascending.
+function currentRowIndex(times, now) {
+  let i = times.length;
+  while (i > 0 && times[i - 1] > now) i--;
+  return i > 0 ? i - 1 : 0;
 }
 
 // Round names by distance from the final (2 -> Final, 4 -> Semifinals, ...);
@@ -568,5 +578,5 @@ function matchLabel(m, ctx) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { LOCALE, ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, countWins, sideIdx, sideLetter, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dateRange, dayShort, dayLabel, fmtDiff, kioskStatus, roundName, koColumn, koOrdinal, matchLabel };
+  module.exports = { LOCALE, ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, countWins, sideIdx, sideLetter, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dateRange, dayShort, dayLabel, fmtDiff, kioskStatus, currentRowIndex, roundName, koColumn, koOrdinal, matchLabel };
 }

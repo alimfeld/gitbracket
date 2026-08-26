@@ -132,7 +132,7 @@ restores it; `venue` lives on the kiosk alone:
 - `#` — lists tournaments, past and current; the only page with kiosk links.
 - `#<slug>` / `#<slug>?cat=<category-id>` — the tournament, one category at a time (the first by default); the date span and location in the heading, the category's span and status under its title.
 - `#<slug>/schedule?player=<player-id>` — My Schedule for that player; without a valid `player` (or via "Not you?") it shows a picker of participating players. The URL is the only memory of a pick — share or bookmark it.
-- `#<slug>/venues?venue=<venue-id>` — the kiosk, the fullscreen board for the hall showing today's open matches on every court; `venue` narrows to one court.
+- `#<slug>/venues?venue=<venue-id>` — the kiosk, the fullscreen board for the hall: the whole day's schedule on every court, auto-centered on the current slot (done matches stay, muted; overdue red, due green); `venue` narrows to one court.
 
 ## Specs
 

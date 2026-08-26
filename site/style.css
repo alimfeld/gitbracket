@@ -10,7 +10,7 @@
   --hairline: #eee;
   --hover: #00000014;
   --tie: #fff3cd;
-  --delayed: #b3261e;
+  --overdue: #b3261e;
   --due: #15803d;
 }
 
@@ -240,10 +240,15 @@ body.venue {
 }
 
 body.venue header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   display: flex;
   justify-content: space-between;
   align-items: baseline;
   gap: calc(var(--space)*4);
+  background: var(--page);
+  padding-top: var(--space);
 }
 
 .board {
@@ -260,14 +265,26 @@ body.venue header {
   white-space: nowrap;
 }
 
-article[data-status="delayed"] .head span {
-  color: var(--delayed);
+article[data-status="overdue"] {
+  border-color: var(--overdue);
+}
+
+article[data-status="overdue"] .head span {
+  color: var(--overdue);
+}
+
+article[data-status="due"] {
+  border-color: var(--due);
 }
 
 article[data-status="due"] .head span {
   color: var(--due);
 }
 
-article[data-status="next"] .head span {
+article[data-status="done"] {
+  border-color: var(--muted);
+}
+
+article[data-status="done"] .head span {
   color: var(--muted);
 }

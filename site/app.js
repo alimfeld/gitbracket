@@ -276,31 +276,39 @@ function renderVenue(route, data, now = Date.now()) {
   const firstDay = rows.length ? dayKey(rows[0].t, rows[0].ctx.tz) : null; // rows are time-sorted above — the first instant's day
   // a screen switched on before day one has no today — preview the first day
   const shownDay = firstDay && today < firstDay ? firstDay : today;
-  const open = shown.filter(r => !isDone(r.m) && dayKey(r.t, r.ctx.tz) === shownDay); // a result removes the card, everything else stays
+  const open = shown.filter(r => dayKey(r.t, r.ctx.tz) === shownDay); // the full day stays on the board; the scroll follows the current slot
   const cols = (data.tjson.venues || []).map(x => x.id).filter(id => open.some(r => r.m.venue === id));
   const parts = [`<header><div><h1>${esc(data.t.name)}</h1><p class="note">${shownDay === today ? 'Today' : dayLabel(shownDay)}</p></div><time id="clock"></time></header>`];
   if (!cols.length) return parts.join('') + '<p class="note">Nothing scheduled.</p>';
   // columns are venues, rows are start times — every column holds the same
-  // cells, so the cards of one wave line up; holes stay empty cells
+  // cells, so the cards of one wave line up; holes stay empty cells. ponytail:
+  // one card per (venue, start) cell — the validator only checks unplayed
+  // pairs, so a done match squeezed into a taken slot hides its sibling; fix the
+  // data, the grid has no cell for two.
   const byVenue = new Map(cols.map(id => [id, new Map()]));
   for (const r of open) byVenue.get(r.m.venue).set(r.t, r);
   const times = [...new Set(open.map(r => r.t))];
   const card = r => {
     const st = kioskStatus(r, now);
     const when = timeEl(r.t, r.ctx.tz);
-    const flag = st === 'next' ? '' : st; // the status word is the flag (due/delayed); upcoming cards show none
+    const flag = st === 'due' || st === 'overdue' ? st : ''; // the status word is the flag; done and upcoming cards show none
     return matchCard(r.m, r.ctx, { meta: ['catName', 'label'],
       head: [{ html: when }, { html: flag }], status: st });
   };
   const cells = [];
+  const anchorTime = times[currentRowIndex(times, now)];
   for (const id of cols) cells.push(`<h2>${esc(venueNames.get(id) || id)}</h2>`);
   for (const t of times) {
     for (const id of cols) {
       const r = byVenue.get(id).get(t);
-      cells.push(r ? card(r) : '<div></div>');
+      // only the anchor row's cells carry data-current — the scroll target; the
+      // anchor moves only when a status flip re-renders the board, so it stays fresh
+      cells.push(r ? (t === anchorTime ? `<div data-current="${r.t}">${card(r)}</div>` : card(r)) : '<div></div>');
     }
   }
-  parts.push(`<div class="board" style="--cols: ${cols.length}">${cells.join('')}</div>`);
+  // data-anchor: the board's current scroll row, derived here where times and now
+  // live; boot() centers on it when it changes
+  parts.push(`<div class="board" data-anchor="${anchorTime}" style="--cols: ${cols.length}">${cells.join('')}</div>`);
   return parts.join('');
 }
 
@@ -400,6 +408,7 @@ function boot() {
   let data = null;     // last good snapshot — a failed poll keeps the board up
   let lastHtml = '';   // skip re-render when nothing changed — keeps selection/focus on the player page
   let lastKey = '';    // view|cat — what the page shows; a change is new content, start at the top
+  let lastAnchor = null; // the board's data-anchor — the kiosk re-centers only when the current slot moves
   let pollTimer = null, clockTimer = null;
 
   // Auto-refresh only on the kiosk; the other views are read-on-load.
@@ -435,6 +444,18 @@ function boot() {
   };
   const tick = () => load(route);
 
+  // The kiosk follows the current slot: centre the board's anchor row, but only
+  // when it moves — a manual nudge then survives until the next slot starts.
+  const aim = () => {
+    if (route.view !== 'venues') { lastAnchor = null; return; }
+    const board = document.querySelector('.board');
+    const anchor = board && board.dataset.anchor;
+    if (!anchor || anchor === lastAnchor) return;
+    lastAnchor = anchor;
+    const cell = board.querySelector(`[data-current="${anchor}"]`);
+    if (cell) cell.scrollIntoView({ block: 'center' });
+  };
+
   const render = (r, d) => {
     data = d;
     // full-width board layout keys off body.venue — present only on the venue view
@@ -453,6 +474,7 @@ function boot() {
       app.innerHTML = '<p>Something went wrong displaying this page.</p>';
       console.error(e);
     }
+    aim();
   };
 
   // Fragment navigation: same-slug hops re-render from the cached snapshot.
