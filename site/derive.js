@@ -501,16 +501,36 @@ function roundName(depthFromEnd) {
 const mainFinal = (ctx, parented) =>
   ctx.matches.find(X => X.pool === undefined && !parented.has(X.id) && placementLabel(X, ctx) === null);
 
-function koColumn(m, ctx) {
-  if (!ctx._koCol) {
-    const memo = ctx._koCol = new Map();
+// Bracket parent-adjacency in one scan: winnerParent (fed id -> parent match),
+// kids (parent id -> feeder ids in side order), loserFed (loser-edge fed ids).
+// Every bracket consumer (koColumn, koOrdinal, winners, mainFinal) reads this
+// one map — one edge classification, no drift. Memo rides ctx._parents: same
+// discard-per-render contract as _koCol/_plMemo (toCats rebuilds contexts).
+function parentsOf(ctx) {
+  if (!ctx._parents) {
     const winnerParent = new Map();
+    const kids = new Map();
+    const loserFed = new Set();
     for (const X of ctx.matches) {
       if (!Array.isArray(X.sides)) continue; // malformed: report, never throw
       for (const s of X.sides) {
-        if (winnerEdge(s)) winnerParent.set(s.match, X);
+        if (!matchEdge(s)) continue;
+        if (s.result === 'winner') {
+          winnerParent.set(s.match, X);
+          if (!kids.has(X.id)) kids.set(X.id, []);
+          kids.get(X.id).push(s.match);
+        } else loserFed.add(s.match);
       }
     }
+    ctx._parents = { winnerParent, kids, loserFed };
+  }
+  return ctx._parents;
+}
+
+function koColumn(m, ctx) {
+  if (!ctx._koCol) {
+    const memo = ctx._koCol = new Map();
+    const { winnerParent } = parentsOf(ctx);
     const final = mainFinal(ctx, winnerParent);
     const col = (X) => {
       const got = memo.get(X.id);
@@ -539,18 +559,9 @@ function koColumn(m, ctx) {
 // rounds — placementLabel names those). Memo rides ctx._koOrd: same discard- per- render contract as _koCol/_plMemo.
 function koOrdinal(m, ctx) {
   if (!ctx._koOrd) {
-    const kids = new Map();     // parent id -> feeder ids, born in side order
-    const parented = new Set();
-    for (const X of ctx.matches)
-      if (Array.isArray(X.sides)) X.sides.forEach(s => {
-        if (winnerEdge(s)) {
-          parented.add(s.match);
-          if (!kids.has(X.id)) kids.set(X.id, []);
-          kids.get(X.id).push(s.match);
-        }
-      });
+    const { kids, winnerParent } = parentsOf(ctx);
     const ord = ctx._koOrd = new Map();
-    const final = mainFinal(ctx, parented);
+    const final = mainFinal(ctx, winnerParent);
     if (final) {
       ord.set(final.id, 1);
       for (const stack = [final.id]; stack.length;) { // visited check keeps a cyclic bracket from hanging
@@ -600,16 +611,8 @@ function nextKoWave(ctx) {
 // The final and bronze are found structurally, never by rendered label — a
 // vocabulary change to "Final"/"3rd place" must not kill the podium.
 function winners(ctx) {
-  const parented = new Set(); // ids some match feeds via a winner edge
-  const loserFed = new Set(); // ids some match feeds via a loser edge
-  for (const X of ctx.matches) {
-    if (!Array.isArray(X.sides)) continue;
-    for (const s of X.sides) {
-      if (!matchEdge(s)) continue;
-      (s.result === 'winner' ? parented : loserFed).add(s.match);
-    }
-  }
-  const m = mainFinal(ctx, parented); // the one knockout match nothing winner-feeds
+  const { winnerParent, loserFed } = parentsOf(ctx);
+  const m = mainFinal(ctx, winnerParent); // the one knockout match nothing winner-feeds
   if (!m || !m.result || winnerIdx(m) === null || !Array.isArray(m.sides)) return null;
   const a = resolveSide(m.sides[0], ctx), b = resolveSide(m.sides[1], ctx);
   if (!a || !b) return null;

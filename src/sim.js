@@ -17,7 +17,7 @@ const readline = require('readline');
 const { spawn } = require('child_process');
 const { makeCat, isDone, resolveSide, schedTime, matchLabel, sideLabel, bestOfOf, fmtTime } = require('../site/derive.js');
 const { loadRepo } = require('./tools.js');
-const { writeEdit, applyScore, formatMatchLine, listingSide, defaultSlug, C } = require('./repl.js');
+const { writeEdit, applyScore, formatMatchLine, defaultSlug, widthBag, C } = require('./repl.js');
 
 const STEP = 30 * 60 * 1000;  // ]/[ move the clock in 30 sim-minutes
 // ponytail: the digit keys cap the list at 9 — only a 10+ court hall ever
@@ -28,16 +28,16 @@ const LIST_CAP = 9;
 // Random games for a match: the winner side takes the target games, with the
 // loser's wins leading so no side reaches the target before the last game
 // (the validator's match-flow rule); deuce games (12+, +2) a fifth of the time.
-function makeGames(rnd, bestOf) {
+function makeGames(bestOf) {
   const target = (bestOf + 1) / 2;
-  const n = target + Math.floor(rnd() * (bestOf - target + 1));
-  const winnerIsA = rnd() < 0.5;
+  const n = target + Math.floor(Math.random() * (bestOf - target + 1));
+  const winnerIsA = Math.random() < 0.5;
   const games = [];
   for (let i = 0; i < n; i++) {
     const aWins = i < n - target ? !winnerIsA : winnerIsA;
-    const deuce = rnd() < 0.2;
-    const ws = deuce ? 12 + Math.floor(rnd() * 5) : 11;
-    const ls = deuce ? ws - 2 : Math.floor(rnd() * 10);
+    const deuce = Math.random() < 0.2;
+    const ws = deuce ? 12 + Math.floor(Math.random() * 5) : 11;
+    const ls = deuce ? ws - 2 : Math.floor(Math.random() * 10);
     games.push(aWins ? { a: ws, b: ls } : { a: ls, b: ws });
   }
   return games;
@@ -143,7 +143,7 @@ function repMain(state, server) {
   // rollback, byte-identical writes. Returns an error string or ''.
   const score = e => {
     const res = writeEdit(state.siteRoot, state.repo, state.slug, e.cat,
-      (ms, ctx) => applyScore(ms, e.m.id, makeGames(state.rnd, bestOfOf(e.m, ctx)), ctx));
+      (ms, ctx) => applyScore(ms, e.m.id, makeGames(bestOfOf(e.m, ctx)), ctx));
     return res.errs ? res.errs.join(' ') : res.err ? res.err : '';
   };
 
@@ -164,16 +164,10 @@ function repMain(state, server) {
 
   const render = () => {
     const { list, blocked } = planScorable(state.tjson, state.now);
-    // pass 1 — the width scan listText does for its sections; the sim is one
-    // screen, so the columns come from the due list itself
-    const g = { idw: 0, stagew: 0, leftw: 0, rightw: 0, venuew: 0 };
-    for (const e of list) {
-      g.idw = Math.max(g.idw, `${e.cat} ${e.m.id}`.length);
-      g.stagew = Math.max(g.stagew, e.stage.length);
-      g.leftw = Math.max(g.leftw, listingSide(e.m.sides[0], e.ctx).length);
-      g.rightw = Math.max(g.rightw, listingSide(e.m.sides[1], e.ctx).length);
-      g.venuew = Math.max(g.venuew, (e.m.venue || 'TBD').length);
-    }
+    // the columns come from the due list itself — the width bag is the same
+    // one listText feeds, so the sim line format can never drift from the listing
+    const { g, add } = widthBag();
+    for (const e of list) add(e);
     const lines = ['\x1b[2J\x1b[H', state.banner];
     lines.push(`${C.bold(state.tjson.name)} — sim ${C.cyan(fmtTime(state.now, tz))} · ${C.green(`${played()}/${state.total}`)} played` +
       (blocked.length ? ` · ${C.yellow(`${blocked.length} blocked: ${blocked.slice(0, 2).map(b => b.first
@@ -239,7 +233,7 @@ function main(root, args) {
     console.error('sim: nothing scheduled — generate a schedule first (node gb.js schedule specs/<slug>.json)');
     process.exit(1);
   }
-  const state = { siteRoot, repo, slug: key, tjson, rnd: Math.random, now: Math.min(...times), total: all.length };
+  const state = { siteRoot, repo, slug: key, tjson, now: Math.min(...times), total: all.length };
   const server = serve(siteRoot, () => state.now);
   server.listen(0, '127.0.0.1', () => {
     if (!process.stdin.isTTY) { console.error('sim: needs a terminal for keypresses'); process.exit(0); }

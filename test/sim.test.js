@@ -31,7 +31,6 @@ test('a play-through ends complete and validates clean', () => {
   const tz = tourney.timezone;
   const ctxOf = cid => makeCat({ meta: tourney.categories.find(c => c.id === cid), matches: tourney.matches[cid] }, tourney);
   const times = Object.values(tourney.matches).flat().map(m => schedTime(m, tz)).filter(Number.isFinite);
-  const rnd = Math.random;
   let now = Math.min(...times);
   const end = Math.max(...times);
   while (now <= end) {
@@ -39,7 +38,7 @@ test('a play-through ends complete and validates clean', () => {
     while (progress) {
       progress = false;
       for (const e of planScorable(tourney, now).list) {
-        applyScore(tourney.matches[e.cat], e.m.id, makeGames(rnd, bestOfOf(e.m, e.ctx)), e.ctx);
+        applyScore(tourney.matches[e.cat], e.m.id, makeGames(bestOfOf(e.m, e.ctx)), e.ctx);
         progress = true;
       }
     }

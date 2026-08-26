@@ -164,6 +164,21 @@ function formatMatchLine(cid, m, ctx, tz, stage, g) {
   return `${C.bold(ref.padEnd(g.idw))}  ${C.dim(stage)}${stagePad}  ${sides}  ${time}  ${venue}  ${score}`;
 }
 
+// Column widths for the shared match-line format — one bag, any row source.
+// listText and the sim feed it the same { cat, m, ctx, stage } rows, so the
+// padded line widths never drift between the listing and the rehearsal screen.
+const widthBag = () => {
+  const g = { idw: 0, stagew: 0, leftw: 0, rightw: 0, venuew: 0 };
+  const add = e => {
+    g.idw = Math.max(g.idw, `${e.cat} ${e.m.id}`.length);
+    g.stagew = Math.max(g.stagew, e.stage.length);
+    g.leftw = Math.max(g.leftw, listingSide(e.m.sides[0], e.ctx).length);
+    g.rightw = Math.max(g.rightw, listingSide(e.m.sides[1], e.ctx).length);
+    g.venuew = Math.max(g.venuew, (e.m.venue || 'TBD').length);
+  };
+  return { g, add };
+};
+
 // The `ls` filter: a case-insensitive substring over a player's id and
 // display name ("ada" finds p1/Ada Lovelace, "lovelace" also does; "win" does
 // not — unresolved slots have no player to match).
@@ -191,7 +206,7 @@ function listText(repo, slug, cats, needle) {
 
   // pass 1 — per-category blocks and the widths shared across every match
   const secs = [];
-  const g = { idw: 0, stagew: 0, leftw: 0, rightw: 0, venuew: 0 };
+  const { g, add } = widthBag();
   for (const cid of cats) {
     const meta = tjson.categories.find(c => c.id === cid);
     const matches = info.matches.get(cid) || [];
@@ -221,13 +236,7 @@ function listText(repo, slug, cats, needle) {
       // ids are chronological — listing by id is the day's running order, no
       // separate round/placement sort needed
       all.sort((a, b) => a.m.id - b.m.id);
-      for (const { m, stage } of all) {
-        g.idw = Math.max(g.idw, `${cid} ${m.id}`.length);
-        g.stagew = Math.max(g.stagew, stage.length);
-        g.leftw = Math.max(g.leftw, listingSide(m.sides[0], ctx).length);
-        g.rightw = Math.max(g.rightw, listingSide(m.sides[1], ctx).length);
-        g.venuew = Math.max(g.venuew, (m.venue || 'TBD').length);
-      }
+      for (const { m, stage } of all) add({ cat: cid, m, stage, ctx });
     }
     if (tables.length || all.length) secs.push({ cid, meta, ctx, tables, all });
   }
@@ -571,4 +580,4 @@ function main(root) {
   replMain(root, siteRoot, repo);
 }
 
-module.exports = { parseGame, buildScheduled, applyScore, applyResult, applyVenue, applyTime, writeEdit, commitMessage, editDetail, parseCmd, listText, formatMatchLine, listingSide, completer, defaultSlug, dispatch, main, C };
+module.exports = { parseGame, buildScheduled, applyScore, applyResult, applyVenue, applyTime, writeEdit, commitMessage, editDetail, parseCmd, listText, formatMatchLine, listingSide, widthBag, completer, defaultSlug, dispatch, main, C };

@@ -644,6 +644,20 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(!tieHtml.includes('†') && (tieHtml.match(/<tr><td class="num">1<\/td>/g) || []).length === 2, 'tied teams share rank 1, no dagger');
 });
 
+test('the next card is one card: a second category sharing the match id must not double-flag', () => {
+  // Match ids are per-category — Ada's first undone xd match is given the md40
+  // final's id (9); the old id-only comparison flagged both cards as next.
+  const tjson = JSON.parse(JSON.stringify(require(FIX('sample', 'tournaments', 'sample.json'))));
+  const xd = tjson.matches.xd.find(m => m.sides[0].ids.includes('p1'));
+  xd.id = 9;
+  delete xd.result;
+  delete xd.games;
+  const data = { index: [], t: { slug: 'sample', name: tjson.name }, tjson, cats: toCats(tjson) };
+  const ppage = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p1' }, data);
+  assert.equal((ppage.match(/<article id="next"/g) || []).length, 1, 'exactly one next card despite a shared id');
+  assert.equal((ppage.match(/<article id="next" data-status="next"/g) || []).length, 1, 'exactly one next card flag (the header line carries its own data-status)');
+});
+
 
 test('multi-day: cards carry their full date; single-day cards just the time; the kiosk shows one day at a time, previewing day one early', () => {
   const repo = loadRepo(FIX('multiday'));

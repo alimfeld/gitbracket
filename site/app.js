@@ -314,17 +314,9 @@ function renderVenue(route, data, now = Date.now()) {
 
 // One tournament-wide fact, derived at render: do scheduled matches span more
 // than one wall-clock day? Gates the date on match cards — single-day pages
-// state the date once, multi-day cards carry their own.
-const multiDay = ctxs => {
-  const days = new Set();
-  for (const c of ctxs) {
-    for (const m of c.matches) {
-      const t = schedTime(m, c.tz);
-      if (t !== null) days.add(dayKey(t, c.tz));
-    }
-  }
-  return days.size > 1;
-};
+// state the date once, multi-day cards carry their own. (Same derivation as
+// the index's stored dates: schedDays + dayKey — one day-key source.)
+const multiDay = ctxs => schedDays(ctxs.flatMap(c => c.matches), (ctxs[0] && ctxs[0].tz) || 'UTC').length > 1;
 
 
 function possibleLine(b, day) {
@@ -390,11 +382,11 @@ function renderPlayer(route, data) {
   // never repeat it; the heading swaps with each new day
   const out = [];
   let bi = 0;
-  const nextId = nextRow && nextRow.m.id;
   let curDay = null;
   for (const r of rows) {
     const t = schedTime(r.m, r.ctx.tz), m = r.m, ctx = r.ctx;
-    const isNext = m.id === nextId;
+    // the row itself, not the match id — ids are per-category, two cats can share one
+    const isNext = r === nextRow;
     while (bi < blocks.length && blocks[bi].min < t) out.push(possibleLine(blocks[bi++], multi));
     const day = t !== null ? dayKey(t, ctx.tz) : null;
     if (day !== curDay) {
