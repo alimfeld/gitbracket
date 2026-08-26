@@ -120,6 +120,11 @@ a {
   z-index: 9;
   font-size: .875em;
   flex-wrap: nowrap;
+  /* more categories than fit: the bar scrolls sideways instead of clipping the
+     last tab off-screen. ponytail: swipe/wheel only — arrow buttons if a hall
+     ever wants a static tablet bar with many categories */
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
 :is(.segments, .cats) a {
