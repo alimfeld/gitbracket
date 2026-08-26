@@ -674,7 +674,8 @@ test('multi-day: cards carry their full date; single-day cards just the time; th
   const sun = renderVenue({ slug: 'multiday', view: 'venues' }, data, at('2026-07-12T08:00:00-04:00'));
   assert(sun.includes('· SF') && sun.includes('· Final') && !sun.includes('Katherine Johnson'), 'sunday board: knockout only, yesterday gone');
   const mon = renderVenue({ slug: 'multiday', view: 'venues' }, data, at('2026-07-13T12:00:00-04:00'));
-  assert(mon.includes('Nothing scheduled.'), 'after the last day: drained board, not a stale schedule');
+  assert(mon.includes('· SF') && mon.includes('· Final') && !mon.includes('Katherine Johnson'), 'after the last day: the board falls back to the last day (Sunday knockout), not a stale today');
+  assert(mon.includes('<p>Sun, Jul 12</p>') && !mon.includes('<p>Today</p>'), 'the post-event board names the day shown, never today');
   const fri = renderVenue({ slug: 'multiday', view: 'venues' }, data, at('2026-07-10T12:00:00-04:00'));
   assert(fri.includes('Katherine Johnson') && !fri.includes('>SF<') && !fri.includes('Final'), 'a day before day one: the board previews the first day, pools only');
   assert(fri.includes('<p>Sat, Jul 11</p>'), 'the preview note names the day shown, not today');

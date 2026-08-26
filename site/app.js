@@ -268,8 +268,10 @@ function renderVenue(route, data, now = Date.now()) {
   const tz = data.tjson.timezone || 'UTC';
   const today = dayKey(now, tz); // one day per screen — an overnight board must not list yesterday
   const firstDay = rows.length ? dayKey(rows[0].t, rows[0].ctx.tz) : null; // rows are time-sorted above — the first instant's day
-  // a screen switched on before day one has no today — preview the first day
-  const shownDay = firstDay && today < firstDay ? firstDay : today;
+  const lastDay = rows.length ? dayKey(rows.at(-1).t, rows.at(-1).ctx.tz) : null; // … and the last instant's
+  // no "today" inside the event's span: before day one preview day one (a screen switched on early
+  // shows the schedule); after the last day show its board — "Today · Nothing scheduled." reads stale
+  const shownDay = firstDay && today < firstDay ? firstDay : lastDay && today > lastDay ? lastDay : today;
   const open = shown.filter(r => dayKey(r.t, r.ctx.tz) === shownDay); // the full day stays on the board; the scroll follows the current slot
   const cols = (data.tjson.venues || []).map(x => x.id).filter(id => open.some(r => r.m.venue === id));
   const header = `<header><div><h1>${esc(data.t.name)}</h1><p>${shownDay === today ? 'Today' : dayLabel(shownDay)}</p></div><time id="clock"></time></header>`;
