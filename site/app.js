@@ -1,6 +1,8 @@
 'use strict';
 
 const POLL_MS = 10000;
+const GRACE_MS = 30000;  // a manual nudge survives this long before the follow snaps back
+const FOLLOW_MS = 60000; // the kiosk re-follows the play on this cadence, data change or not
 
 // Browser: derive.js loads first (script tag) and its top-level names are
 // already page globals — functions/vars on globalThis, consts in the shared
@@ -295,13 +297,13 @@ function renderVenue(route, data, now = Date.now()) {
   for (const t of times) {
     for (const id of cols) {
       const r = byVenue.get(id).get(t);
-      // only the anchor row's cells carry data-current — the scroll target; the
-      // anchor moves only when a status flip re-renders the board, so it stays fresh
+      // only the anchor row's cells carry data-current — the scroll target; a
+      // render recomputes the anchor from now, which is what the follow needs
       cells.push(r ? (t === anchorTime ? `<div data-current="${r.t}">${card(r)}</div>` : card(r)) : '<div></div>');
     }
   }
-  // data-anchor: the board's current scroll row, derived here where times and now
-  // live; boot() centers on it when it changes
+  // data-anchor: the board's current row start time, derived here where times and
+  // now live; the follow scrolls to the row's data-current cells
   return top + `<div class="board" data-anchor="${anchorTime}" style="--cols: ${cols.length}">${cells.join('')}</div>`;
 }
 
@@ -415,7 +417,8 @@ function boot() {
   let data = null;     // last good snapshot — a failed poll keeps the board up
   let lastHtml = '';   // skip re-render when nothing changed — keeps selection/focus on the player page
   let lastKey = '';    // view|cat — what the page shows; a change is new content, start at the top
-  let lastAnchor = null; // the board's data-anchor — the kiosk re-centers only when the current slot moves
+  let lastUserScroll = 0; // last wheel/touch/scroll-key input — the follow waits GRACE_MS after it
+  let lastFollow = 0;     // last minute-tick re-follow — the kiosk tracks the play even when data never changes
   let pollTimer = null, clockTimer = null;
 
   // Auto-refresh only on the kiosk; the other views are read-on-load.
@@ -425,12 +428,18 @@ function boot() {
       // Clock lives in an element the change-guard never re-renders; look it up
       // fresh each tick (the poll re-renders).
       clockTimer = setInterval(() => {
+        const now = Date.now();
         const el = document.getElementById('clock');
         if (el) {
-          const now = Date.now();
           const tz = (data && data.tjson && data.tjson.timezone) || 'UTC';
           el.textContent = `${dayShort(now, tz)} · ${fmtTime(now, tz)}`; // the kiosk clock carries its date
           el.dateTime = new Date(now).toISOString(); // the instant, derived — the label stays wall clock
+        }
+        // once a minute, re-follow from the last snapshot — statuses and the anchor
+        // recompute against now, so the play is tracked through a quiet hour too
+        if (now - lastFollow >= FOLLOW_MS && data) {
+          lastFollow = now;
+          render(route, data);
         }
       }, 1000);
     } else if (!on && pollTimer) {
@@ -451,16 +460,13 @@ function boot() {
   };
   const tick = () => load(route);
 
-  // The kiosk follows the current slot: centre the board's anchor row, but only
-  // when it moves — a manual nudge then survives until the next slot starts.
+  // The kiosk follows the current slot: centre the anchor row on every render —
+  // but only once the user has stopped scrolling for GRACE_MS, so a manual nudge
+  // survives; the minute tick in the clock handler re-aims quiet stretches.
   const aim = () => {
-    if (route.view !== 'venues') { lastAnchor = null; return; }
-    const board = document.querySelector('.board');
-    const anchor = board && board.dataset.anchor;
-    if (!anchor || anchor === lastAnchor) return;
-    lastAnchor = anchor;
-    const cell = board.querySelector(`[data-current="${anchor}"]`);
-    if (cell) cell.scrollIntoView({ block: 'center' });
+    if (route.view !== 'venues' || Date.now() - lastUserScroll < GRACE_MS) return;
+    const cell = document.querySelector('.board [data-current]');
+    if (cell) cell.scrollIntoView({ block: 'center', behavior: 'smooth' });
   };
 
   const render = (r, d) => {
@@ -510,6 +516,13 @@ function boot() {
     const el = document.getElementById(id);
     if (el) el.scrollIntoView({ block: 'start' });
   };
+  // Any scroll input pauses the follow — wheel, touch, and keys; the 'scroll'
+  // event itself can't be trusted: the follow's own smooth scroll fires it.
+  const stamp = () => { lastUserScroll = Date.now(); };
+  window.addEventListener('wheel', stamp, { passive: true });
+  window.addEventListener('touchmove', stamp, { passive: true });
+  window.addEventListener('keydown', stamp);
+
   document.addEventListener('click', e => {
     const a = e.target.closest('a[data-jump]');
     if (!a) return;
