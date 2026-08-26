@@ -173,7 +173,7 @@ spec — the single source for the schedule:
 
 ## Tools
 
-**`gb.js`** — the one CLI. `node gb.js` starts the match-day REPL (`help` inside for commands — bare commands read, slash commands edit: `score`, `wo`, `void`, `venue`, `time`, `publish` — and every edit validates and commits itself); `node gb.js validate [slug]` checks data without the REPL; `node gb.js schedule <spec>` generates a tournament file from a spec (`specs/<slug>.json`); `node gb.js publish` ships `site/` to the domain in `site/CNAME` (requires the surge CLI: `npm install -g surge`). The commands live as modules under `src/`; `site/` stays the shipping surface.
+**`gb.js`** — the one CLI. `node gb.js` starts the match-day REPL (`help` inside for commands — bare commands read, slash commands edit: `score`, `wo`, `void`, `venue`, `time`, `publish` — and every edit validates and commits itself); `node gb.js validate [slug]` checks data without the REPL; `node gb.js schedule <spec>` generates a tournament file from a spec (`specs/<slug>.json`); `node gb.js publish` ships `site/` to the domain in `site/CNAME` (requires the surge CLI: `npm install -g surge`); `node gb.js sim [slug] [--seed N]` rehearses a tournament in a browser: it copies `site/` to the gitignored `.sim/`, serves it with `Date.now` overridden to a sim clock, and opens a keypress-driven REPL that advances the clock and scores matches with random (seeded) results through the same validation path — the venue board goes live in the browser, and nothing is ever committed. The commands live as modules under `src/`; `site/` stays the shipping surface.
 
 ## Development
 

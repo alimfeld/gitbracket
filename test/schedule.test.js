@@ -8,27 +8,7 @@ const assert = require('node:assert');
 const { generate } = require('../src/schedule.js');
 const { validateRepo } = require('../src/validate.js');
 const { matchSlotMs, schedDays } = require('../site/derive.js');
-
-const MINI = {
-  slug: 'mini',
-  name: 'Mini Open',
-  location: 'Zurich',
-  timezone: 'Europe/Zurich',
-  date: '2026-05-02',
-  poolSize: 4,
-  blocks: { md: '09:00', xd: '13:00' },
-  venues: { 'court-1': 'Court 1', 'court-2': 'Court 2' },
-  players: { ada: 'Ada', ben: 'Ben', cid: 'Cid', dan: 'Dan', eve: 'Eve', fin: 'Fin', gus: 'Gus', huw: 'Huw', ida: 'Ida', jan: 'Jan', kim: 'Kim' },
-  categories: [
-    { id: 'md', name: 'Men', bestOf: 1, slotMinutes: 30, final: { bestOf: 3, slotMinutes: 60 } },
-    { id: 'xd', name: 'Mixed', bestOf: 1, slotMinutes: 30 },
-  ],
-  // md: 5 teams -> 2 pools (3+2), knockout + bronze. xd: 2 teams -> 1 pool, no knockout.
-  teams: {
-    md: [['ada', 'ben'], ['cid', 'dan'], ['eve', 'fin'], ['gus', 'huw'], ['ida', 'jan']],
-    xd: [['ada', 'cid'], ['ben', 'eve']],
-  },
-};
+const { MINI } = require('./helpers.js');
 
 function repoOf(tourney) {
   return {

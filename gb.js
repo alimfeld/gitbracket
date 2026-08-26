@@ -9,8 +9,9 @@ const repl = require('./src/repl.js');
 const validate = require('./src/validate.js');
 const schedule = require('./src/schedule.js');
 const publish = require('./src/publish.js');
+const sim = require('./src/sim.js');
 
-const USAGE = 'usage: node gb.js [validate [slug]] [schedule <specs/xxx.json>] [publish]';
+const USAGE = 'usage: node gb.js [validate [slug]] [schedule <specs/xxx.json>] [publish] [sim [slug] [--seed n]]';
 
 function main(argv) {
   const root = findRoot();
@@ -18,6 +19,7 @@ function main(argv) {
   if (verb === 'validate') return validate.main(root, args[0]);
   if (verb === 'schedule') return schedule.main(root, args[0]);
   if (verb === 'publish') return publish.main(root);
+  if (verb === 'sim') return sim.main(root, args);
   if (verb === undefined) return repl.main(root);
   console.error(`unknown command ${verb} — ${USAGE}`);
   process.exit(1);

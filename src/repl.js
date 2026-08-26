@@ -565,4 +565,4 @@ function main(root) {
   replMain(root, siteRoot, repo);
 }
 
-module.exports = { parseGame, buildScheduled, applyScore, applyResult, applyVenue, applyTime, writeEdit, commitMessage, editDetail, parseCmd, listText, completer, defaultSlug, dispatch, main };
+module.exports = { parseGame, buildScheduled, applyScore, applyResult, applyVenue, applyTime, writeEdit, commitMessage, editDetail, parseCmd, listText, formatMatchLine, completer, defaultSlug, dispatch, main, C };
