@@ -9,7 +9,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { loadRepo } = require('../src/tools.js');
 const { validateRepo } = require('../src/validate.js');
-const { makeCat } = require('../site/derive.js');
+const { makeCat, matchLabel, schedTime, fmtTime } = require('../site/derive.js');
 const repl = require('../src/repl.js');
 const { FIX, hasErr } = require('./helpers.js');
 
@@ -189,6 +189,29 @@ test('repl listText: matches are listed in chronological id order', () => {
   assert(ids.length > 1, 'multiple match lines to compare');
   const sorted = [...ids].sort((a, b) => a - b);
   assert.deepEqual(ids, sorted, `match ids in id order, got ${ids.join(',')}`);
+});
+
+test('repl formatMatchLine: a filled width bag keeps time and venue aligned across lines', () => {
+  // the sim's screen — and listText's pass 1 — fill this bag from the lines
+  // about to render; without it, every column collapses to its own content
+  const repo = loadRepo(FIX('sample'));
+  const { tjson, matches, ctx } = md40Ctx(repo);
+  const tz = tjson.timezone;
+  const m1 = matches.find(m => m.id === 1); // pool match — long player names
+  const m9 = matches.find(m => m.id === 9); // final — short slot labels
+  const g = { idw: 0, stagew: 0, leftw: 0, rightw: 0, venuew: 0 };
+  for (const m of [m1, m9]) {
+    g.idw = Math.max(g.idw, `md40 ${m.id}`.length);
+    g.stagew = Math.max(g.stagew, matchLabel(m, ctx).length);
+    g.leftw = Math.max(g.leftw, repl.listingSide(m.sides[0], ctx).length);
+    g.rightw = Math.max(g.rightw, repl.listingSide(m.sides[1], ctx).length);
+    g.venuew = Math.max(g.venuew, (m.venue || 'TBD').length);
+  }
+  const at = m => repl.formatMatchLine('md40', m, ctx, tz, matchLabel(m, ctx), g);
+  const l1 = at(m1), l9 = at(m9);
+  const pos = (l, s) => l.indexOf(s);
+  assert.equal(pos(l1, fmtTime(schedTime(m1, tz), tz)), pos(l9, fmtTime(schedTime(m9, tz), tz)), 'time column lines up');
+  assert.equal(pos(l1, m1.venue), pos(l9, m9.venue), 'venue column lines up');
 });
 
 test('repl listText: dead-tied standings rows share the group rank', () => {

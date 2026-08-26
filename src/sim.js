@@ -17,7 +17,7 @@ const readline = require('readline');
 const { spawn } = require('child_process');
 const { makeCat, isDone, resolveSide, schedTime, matchLabel, sideLabel, bestOfOf, fmtTime } = require('../site/derive.js');
 const { loadRepo } = require('./tools.js');
-const { writeEdit, applyScore, formatMatchLine, defaultSlug, C } = require('./repl.js');
+const { writeEdit, applyScore, formatMatchLine, listingSide, defaultSlug, C } = require('./repl.js');
 
 const STEP = 30 * 60 * 1000;  // ]/[ move the clock in 30 sim-minutes
 // ponytail: the digit keys cap the list at 9 — only a 10+ court hall ever
@@ -164,7 +164,16 @@ function repMain(state, server) {
 
   const render = () => {
     const { list, blocked } = planScorable(state.tjson, state.now);
+    // pass 1 — the width scan listText does for its sections; the sim is one
+    // screen, so the columns come from the due list itself
     const g = { idw: 0, stagew: 0, leftw: 0, rightw: 0, venuew: 0 };
+    for (const e of list) {
+      g.idw = Math.max(g.idw, `${e.cat} ${e.m.id}`.length);
+      g.stagew = Math.max(g.stagew, e.stage.length);
+      g.leftw = Math.max(g.leftw, listingSide(e.m.sides[0], e.ctx).length);
+      g.rightw = Math.max(g.rightw, listingSide(e.m.sides[1], e.ctx).length);
+      g.venuew = Math.max(g.venuew, (e.m.venue || 'TBD').length);
+    }
     const lines = ['\x1b[2J\x1b[H', state.banner];
     lines.push(`${C.bold(state.tjson.name)} — sim ${C.cyan(fmtTime(state.now, tz))} · ${C.green(`${played()}/${state.total}`)} played` +
       (blocked.length ? ` · ${C.yellow(`${blocked.length} blocked: ${blocked.slice(0, 2).map(b => b.first
