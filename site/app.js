@@ -482,9 +482,10 @@ function boot() {
     // full-width board layout keys off body.venue — present only on the venue view
     document.body.classList.toggle('venue', r.view === 'venues');
     document.title = pageTitle(r, d);
-    // a category or view switch is new content — start at the top; shorter
-    // pages clamp the residual scroll. Player/venue hops keep the position.
-    const key = `${r.view}|${r.cat || ''}`;
+    // a view, category, or player change is new content — start at the top;
+    // shorter pages clamp the residual scroll. A venue hop keeps the position
+    // (the kiosk re-aims itself each minute).
+    const key = `${r.view}|${r.cat || ''}|${r.player || ''}`;
     const contentChanged = key !== lastKey;
     lastKey = key;
     try {
