@@ -597,10 +597,17 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   const picker = renderPlayer({ slug: 'sample', view: 'schedule' }, data);
   assert(picker.includes('<nav class="segments" aria-label="Views"><a href="#sample">Tournament</a><a href="#sample/schedule" aria-current="true">My Schedule</a></nav>'), 'picker: segment switch, My Schedule current');
   assert(picker.includes('<header><h1>Pick your player</h1></header>'), 'picker: heading invites the pick');
-  assert(!picker.includes('pills') && !picker.includes('cat-label'), 'picker is minimal: no category pills, no category labels');
+  assert(!picker.includes('pills') && !picker.includes('cat-label'), 'picker stays minimal: no pills, no category-label classes — category names are real headings');
+  assert(picker.includes('<section><h2>Men&#39;s Doubles 40+</h2><ul>') && picker.includes('<section><h2>Mixed Doubles</h2><ul>'), 'picker groups players per category under a heading');
   assert(picker.includes('<li><a href="#sample/schedule?player=p1">Ada Lovelace</a></li>'), 'picker rows: plain name link carrying the player param');
-  const listed = [...picker.matchAll(/<li><a href="#sample\/schedule\?player=p\d+">([^<]*)<\/a><\/li>/g)].map(m => m[1]);
-  assert.deepEqual(listed, [...listed].sort((a, b) => a.localeCompare(b)), 'picker lists players alphabetically');
+  // per-section alphabetical; a player in two categories appears in both sections
+  const secs = picker.split('<section>').slice(1);
+  const namesOf = sec => [...sec.matchAll(/<li><a href="#sample\/schedule\?player=p\d+">([^<]*)<\/a><\/li>/g)].map(m => m[1]);
+  for (const sec of secs) {
+    const names = namesOf(sec);
+    assert.deepEqual(names, [...names].sort((a, b) => a.localeCompare(b)), 'each category section lists players alphabetically');
+  }
+  assert(namesOf(picker).filter(n => n === 'Ada Lovelace').length === 2, 'a player in md40 and xd appears in both sections');
   assert(renderIndex({ view: 'index' }, data).includes('#sample'), 'index links the tournament');
   const idx = renderIndex({ view: 'index' }, { index: [
     { slug: 'soon', name: 'Later' },

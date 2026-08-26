@@ -338,14 +338,20 @@ function renderPlayer(route, data) {
   const players = (data.tjson.players || []).filter(p => p && typeof p === 'object' && typeof p.id === 'string');
   const p = pid ? players.find(x => x.id === pid) : null;
   if (!p) {
-    // only participants are pickable — a pick must always render a schedule
+    // only participants are pickable — a pick must always render a schedule. One
+    // section per category: the picker doubles as "who is in which category", and
+    // the browser's native find covers name search — no JS search box at this size
     const ctxs = data.cats;
-    const items = players.filter(pl => ctxs.some(c => playerMatches(c, pl.id).length))
-      .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id))
-      .map(pl => `<li><a href="${esc(href(data.t.slug, 'schedule', { cat: route.cat, player: pl.id }))}">${esc(pl.name || pl.id)}</a></li>`)
-      .join('');
-    const list = items ? `<ul>${items}</ul>` : '<p>No players yet.</p>';
-    return `${segmentBar(route)}<header><h1>Pick your player</h1></header>${list}`;
+    const secs = ctxs.map(c => {
+      const items = players
+        .filter(pl => playerMatches(c, pl.id).length)
+        .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id))
+        .map(pl => `<li><a href="${esc(href(data.t.slug, 'schedule', { cat: route.cat, player: pl.id }))}">${esc(pl.name || pl.id)}</a></li>`)
+        .join('');
+      return items ? `<section><h2>${esc(c.name || c.id)}</h2><ul>${items}</ul></section>` : '';
+    }).join('');
+    if (!secs) return `${segmentBar(route)}<header><h1>Pick your player</h1></header><p>No players yet.</p>`;
+    return `${segmentBar(route)}<header><h1>Pick your player</h1></header>${secs}`;
   }
   const rows = [];
   const ctxs = data.cats;
