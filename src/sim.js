@@ -25,18 +25,6 @@ const STEP = 30 * 60 * 1000;  // ]/[ move the clock in 30 sim-minutes
 // when a hall that big simulates.
 const LIST_CAP = 9;
 
-// Deterministic PRNG — same seed, same tournament, every run.
-function rng(seed) {
-  let s = seed >>> 0;
-  return () => {
-    s = (s + 0x6D2B79F5) >>> 0;
-    let t = s;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 // Random games for a match: the winner side takes the target games, with the
 // loser's wins leading so no side reaches the target before the last game
 // (the validator's match-flow rule); deuce games (12+, +2) a fifth of the time.
@@ -222,11 +210,9 @@ function repMain(state, server) {
   render();
 }
 
-// CLI entry (dispatched from gb.js): args = ['<slug>', '--seed', '<n>'].
+// CLI entry (dispatched from gb.js): args = ['<slug>'].
 function main(root, args) {
-  const seedIdx = args.indexOf('--seed');
-  const seed = seedIdx !== -1 ? Number(args[seedIdx + 1]) : Date.now();
-  const slug = args.find((a, i) => a && !a.startsWith('-') && i !== seedIdx + 1) || null;
+  const slug = args.find((a) => a && !a.startsWith('-')) || null;
   const siteRoot = copySite(root);
   const repo = loadRepo(siteRoot);
   if (repo.readErrs.length) { console.error(repo.readErrs.join('\n')); process.exit(1); }
@@ -244,17 +230,16 @@ function main(root, args) {
     console.error('sim: nothing scheduled — generate a schedule first (node gb.js schedule specs/<slug>.json)');
     process.exit(1);
   }
-  const state = { siteRoot, repo, slug: key, tjson, rnd: rng(seed), seed, now: Math.min(...times), total: all.length };
+  const state = { siteRoot, repo, slug: key, tjson, rnd: Math.random, now: Math.min(...times), total: all.length };
   const server = serve(siteRoot, () => state.now);
   server.listen(0, '127.0.0.1', () => {
     if (!process.stdin.isTTY) { console.error('sim: needs a terminal for keypresses'); process.exit(0); }
     const url = `http://127.0.0.1:${server.address().port}/`;
     state.banner = `${C.bold(tjson.name)} — simulated day in ${C.cyan('.sim/site')} (never committed)\n` +
-      `${C.cyan(url)} — opening your browser; the kiosk goes live each poll, the other views refresh on reload\n` +
-      `seed ${seed} — rerun with --seed ${seed} to replay this exact day`;
+      `${C.cyan(url)} — opening your browser; the kiosk goes live each poll, the other views refresh on reload`;
     openBrowser(url);
     repMain(state, server);
   });
 }
 
-module.exports = { rng, makeGames, planScorable, STEP, main };
+module.exports = { makeGames, planScorable, STEP, main };

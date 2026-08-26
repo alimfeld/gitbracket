@@ -11,7 +11,7 @@ const schedule = require('./src/schedule.js');
 const publish = require('./src/publish.js');
 const sim = require('./src/sim.js');
 
-const USAGE = 'usage: node gb.js [validate [slug]] [schedule <specs/xxx.json>] [publish] [sim [slug] [--seed n]]';
+const USAGE = 'usage: node gb.js [validate [slug]] [schedule <specs/xxx.json>] [publish] [sim [slug]]';
 
 function main(argv) {
   const root = findRoot();

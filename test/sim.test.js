@@ -1,8 +1,8 @@
 'use strict';
-// sim.js — the pure engine. A full seeded play-through of a generated
-// tournament is the strongest check: if the random games, the dependency
-// ordering, or the scorable rule ever broke the model, the real validator
-// (the same gate writeEdit and the pre-commit hook run) complains at the end.
+// sim.js — the pure engine. A full play-through of a generated tournament is
+// the strongest check: if the random games, the dependency ordering, or the
+// scorable rule ever broke the model, the real validator (the same gate
+// writeEdit and the pre-commit hook run) complains at the end.
 
 const test = require('node:test');
 const assert = require('node:assert');
@@ -10,7 +10,7 @@ const { generate } = require('../src/schedule.js');
 const { validateRepo } = require('../src/validate.js');
 const { applyScore } = require('../src/repl.js');
 const { makeCat, isDone, countWins, bestOfOf, schedTime, schedDays } = require('../site/derive.js');
-const { rng, makeGames, planScorable, STEP } = require('../src/sim.js');
+const { makeGames, planScorable, STEP } = require('../src/sim.js');
 const { MINI } = require('./helpers.js');
 
 test('the scorable list holds at most one match per venue', () => {
@@ -26,12 +26,12 @@ test('the scorable list holds at most one match per venue', () => {
   }
 });
 
-test('a seeded play-through ends complete and validates clean', () => {
+test('a play-through ends complete and validates clean', () => {
   const tourney = generate(MINI);
   const tz = tourney.timezone;
   const ctxOf = cid => makeCat({ meta: tourney.categories.find(c => c.id === cid), matches: tourney.matches[cid] }, tourney);
   const times = Object.values(tourney.matches).flat().map(m => schedTime(m, tz)).filter(Number.isFinite);
-  const rnd = rng(42);
+  const rnd = Math.random;
   let now = Math.min(...times);
   const end = Math.max(...times);
   while (now <= end) {
