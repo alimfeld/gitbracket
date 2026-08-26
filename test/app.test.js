@@ -519,7 +519,11 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(pre.includes('<p class="note">Starts '), 'pre-start status line');
   const ppage = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p1' }, data);
   assert(ppage.includes('<h1>Ada Lovelace</h1>'), 'player page: plain name');
-  assert(!ppage.includes('data-next'), 'no next-match highlight — the unscored card is its own marker');
+  const nextAt = ppage.indexOf('data-status="next"');
+  assert(nextAt !== -1 && ppage.indexOf('data-status="next"', nextAt + 1) === -1, 'the player page highlights exactly one next match');
+  assert(ppage.slice(nextAt).includes("Men&#39;s Doubles 40+ · Final"), 'the highlight lands on the first unscored match — the md40 Final');
+  const allDone = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p2' }, dataOf('result').data);
+  assert(!allDone.includes('data-status="next"'), 'fully scored player: no next-match highlight');
   assert(!ppage.includes('class="day"') && !ppage.includes('>2025-07-14'), 'single-day player page: no day dividers, friendly dates never render as text payload');
   const p3 = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p3' }, data);
   assert(/note">\d+ more match(?:es)? possible in Men&#39;s Doubles 40\+ (— earliest <time datetime="[^"]+">\d\d:\d\d<\/time>, latest <time datetime="[^"]+">\d\d:\d\d<\/time>|at <time datetime="[^"]+">\d\d:\d\d<\/time>)/.test(p3), 'possible note: count + window in semantic <time> elements');

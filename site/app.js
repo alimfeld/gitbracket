@@ -379,10 +379,11 @@ function renderPlayer(route, data) {
   const parts = [segmentBar(route), `<header><h1>${esc(p.name)}</h1><p class="note"><span>${when}${wins} W · ${losses} L</span><a href="${esc(href(data.t.slug, 'schedule', { cat: route.cat }))}">Not you?</a></p></header>`];
   const out = [];
   let bi = 0;
+  const nextId = rows.find(r => !isDone(r.m))?.m.id;
   for (const r of rows) {
     const t = schedTime(r.m, r.ctx.tz), m = r.m, ctx = r.ctx;
     while (bi < blocks.length && blocks[bi].min < t) out.push(possibleLine(blocks[bi++]));
-    out.push(matchCard(m, ctx, { meta: ['catName', 'label'], day: multi, head: [{ key: 'time' }, { key: 'court' }] }));
+    out.push(matchCard(m, ctx, { meta: ['catName', 'label'], day: multi, head: [{ key: 'time' }, { key: 'court' }], status: m.id === nextId ? 'next' : undefined }));
   }
   while (bi < blocks.length) out.push(possibleLine(blocks[bi++]));
   parts.push(`<section><h2>Matches</h2>${rows.length ? `<div class="stack">${out.join('')}</div>` : '<p class="note">No matches.</p>'}</section>`);

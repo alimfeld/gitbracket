@@ -313,3 +313,7 @@ article[data-status="done"] {
 article[data-status="done"] .head span {
   color: var(--muted);
 }
+
+article[data-status="next"] {
+  border-color: var(--accent);
+}
