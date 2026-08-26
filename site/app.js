@@ -1,7 +1,6 @@
 'use strict';
 
 const POLL_MS = 10000;
-const GRACE_MS = 30000;  // a manual nudge survives this long before the follow snaps back
 const FOLLOW_MS = 60000; // the kiosk re-follows the play on this cadence, data change or not
 
 // Browser: derive.js loads first (script tag) and its top-level names are
@@ -417,7 +416,6 @@ function boot() {
   let data = null;     // last good snapshot — a failed poll keeps the board up
   let lastHtml = '';   // skip re-render when nothing changed — keeps selection/focus on the player page
   let lastKey = '';    // view|cat — what the page shows; a change is new content, start at the top
-  let lastUserScroll = 0; // last wheel/touch/scroll-key input — the follow waits GRACE_MS after it
   let lastFollow = 0;     // last minute-tick re-follow — the kiosk tracks the play even when data never changes
   let pollTimer = null, clockTimer = null;
 
@@ -460,11 +458,9 @@ function boot() {
   };
   const tick = () => load(route);
 
-  // The kiosk follows the current slot: centre the anchor row on every render —
-  // but only once the user has stopped scrolling for GRACE_MS, so a manual nudge
-  // survives; the minute tick in the clock handler re-aims quiet stretches.
+  // The kiosk follows the current slot: centre the anchor row on every render;
+  // the clock handler re-aims on its own minute, so a quiet hour still tracks.
   const aim = () => {
-    if (route.view !== 'venues' || Date.now() - lastUserScroll < GRACE_MS) return;
     const cell = document.querySelector('.board [data-current]');
     if (cell) cell.scrollIntoView({ block: 'center', behavior: 'smooth' });
   };
@@ -516,13 +512,6 @@ function boot() {
     const el = document.getElementById(id);
     if (el) el.scrollIntoView({ block: 'start' });
   };
-  // Any scroll input pauses the follow — wheel, touch, and keys; the 'scroll'
-  // event itself can't be trusted: the follow's own smooth scroll fires it.
-  const stamp = () => { lastUserScroll = Date.now(); };
-  window.addEventListener('wheel', stamp, { passive: true });
-  window.addEventListener('touchmove', stamp, { passive: true });
-  window.addEventListener('keydown', stamp);
-
   document.addEventListener('click', e => {
     const a = e.target.closest('a[data-jump]');
     if (!a) return;
