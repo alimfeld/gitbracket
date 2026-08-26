@@ -597,15 +597,35 @@ function nextKoWave(ctx) {
 // third off the bronze match (the semifinal losers' match), fourth off its
 // loser. Null when nothing is decided — a void final or an unresolved side
 // leaves no winner to name, and a category without a final has no podium.
+// The final and bronze are found structurally, never by rendered label — a
+// vocabulary change to "Final"/"3rd place" must not kill the podium.
 function winners(ctx) {
-  const m = ctx.matches.find(X => X && X.pool === undefined && matchLabel(X, ctx) === 'Final');
+  const parented = new Set(); // ids some match feeds via a winner edge
+  const loserFed = new Set(); // ids some match feeds via a loser edge
+  for (const X of ctx.matches) {
+    if (!Array.isArray(X.sides)) continue;
+    for (const s of X.sides) {
+      if (!matchEdge(s)) continue;
+      (s.result === 'winner' ? parented : loserFed).add(s.match);
+    }
+  }
+  const m = mainFinal(ctx, parented); // the one knockout match nothing winner-feeds
   if (!m || !m.result || winnerIdx(m) === null || !Array.isArray(m.sides)) return null;
   const a = resolveSide(m.sides[0], ctx), b = resolveSide(m.sides[1], ctx);
   if (!a || !b) return null;
   const w = winnerIdx(m);
   const out = { first: [...a], second: [...b], third: null, fourth: null };
   if (w === 1) { out.first = [...b]; out.second = [...a]; }
-  const bronze = ctx.matches.find(X => X && X.pool === undefined && matchLabel(X, ctx) === '3rd place');
+  // the bronze is the terminal match whose possible range starts at 3rd place —
+  // loserFed keeps a mid-bracket '3rd–4th semi' (range lo 3, loser edge to a
+  // decider) from being read as the decider itself
+  const pMemo = new Map(); // plRange's default memo is per-call — one memo across the scan
+  let bronze = null;
+  for (const X of ctx.matches) {
+    if (!X || X.pool !== undefined || loserFed.has(X.id)) continue;
+    const r = plRange(X, ctx, pMemo);
+    if (r && r.lo === 3) { bronze = X; break; }
+  }
   if (bronze && bronze.result && winnerIdx(bronze) !== null && Array.isArray(bronze.sides)) {
     const x = resolveSide(bronze.sides[winnerIdx(bronze)], ctx), y = resolveSide(bronze.sides[1 - winnerIdx(bronze)], ctx);
     if (x) out.third = [...x];
