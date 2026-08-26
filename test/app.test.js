@@ -560,6 +560,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
     { index: [], t: { slug: 'sample', name: midJson.name }, tjson: midJson,
       cats: toCats(midJson) });
   assert(mid.includes('<p><a data-jump="group-matches" href="#sample?cat=md40">Group stage</a> · 5 of 6 played</p>'), 'running groups: the stage word links to the group matches and carries the progress count');
+  assert(mid.includes('<tr><td class="num">1</td><td>Ada Lovelace / Grace Hopper</td>'), 'ranks return once a pool has a decided match');
   assert(mid.includes('</div><h4 id="group-matches">Group matches</h4><div class="grid">'), 'running groups: pools, then the Matches h4, then the cards — the status lives in the category subline');
   assert(!mid.includes('data-stage') && !mid.includes('toggle'), 'no disclosure machinery ships — nothing hides, nothing toggles');
   const { data: rdata } = dataOf('result');
@@ -573,6 +574,8 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
       cats: toCats(preJson) });
   assert(pre.includes('<div class="grid">') && pre.includes('>Ada Lovelace / Grace Hopper</td>'), 'pools roster (teams) is visible before the first result');
   assert(pre.includes('<p>Starts '), 'pre-start status line');
+  assert(!pre.includes('class="num">1</td>'), 'no phantom rank 1s before any result');
+  assert(pre.includes('<td class="num"></td>'), 'rank cells stay blank until a pool has a decided match');
   const ppage = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p1' }, data);
   assert(ppage.includes('<h1>Ada Lovelace<a href="#sample/schedule">Not you?</a></h1>'), 'player page: the pick-correcting link rides the name in the title, separated by space not punctuation');
   const nextCard = ppage.indexOf('<article id="next"');
