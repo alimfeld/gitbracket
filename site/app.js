@@ -37,6 +37,9 @@ function parseRoute(hash) {
   const [path, query] = String(hash).replace(/^#/, '').split('?');
   const segs = path.split('/');
   if (segs.length === 1 && segs[0] === '') return { view: 'index' };
+  // ponytail: no match deep-links — an in-page anchor (?cat=md#final) dies on the
+  // id regex here. Upgrade path if event comms ever asks: anchor-aware routing,
+  // ids on cards, one scroll handler.
   if (segs.length > 2 || segs.some(s => !s || !ID_RE.test(s))) return null; // #../../ -> reject
   const [slug, view] = segs;
   if (view !== undefined && view !== 'schedule' && view !== 'venues') return null;
