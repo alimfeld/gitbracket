@@ -19,8 +19,7 @@ const { makeCat, isDone, resolveSide, schedTime, matchLabel, sideLabel, bestOfOf
 const { loadRepo } = require('./tools.js');
 const { writeEdit, applyScore, formatMatchLine, defaultSlug, C } = require('./repl.js');
 
-const STEP = 15 * 60 * 1000;  // ]/[ move the clock in 15 sim-minutes
-const PACES = [1, 5, 15, 60];  // sim-minutes per real minute; p cycles
+const STEP = 30 * 60 * 1000;  // ]/[ move the clock in 30 sim-minutes
 // ponytail: the digit keys cap the list at 9 — only a 10+ court hall ever
 // exceeds it (the venue rule caps the list at the venue count); page the list
 // when a hall that big simulates.
@@ -149,7 +148,6 @@ function openBrowser(url) {
 
 function repMain(state, server) {
   const tz = state.tjson.timezone || 'UTC';
-  let autoplay = null;
   let lastErr = '';
 
   const played = () => Object.values(state.tjson.matches || {}).flat().filter(isDone).length;
@@ -192,12 +190,11 @@ function repMain(state, server) {
       if (list.length > LIST_CAP) lines.push(C.dim(`+${list.length - LIST_CAP} more due — x scores them all`));
     } else lines.push(C.dim('nothing due — ] advances the clock'));
     if (lastErr) lines.push(C.red(lastErr));
-    lines.push(`${C.dim('1-9 score · x all · ] +15m · [ rewind · a autoplay')} ${autoplay ? C.green('on') : C.dim('off')}${C.dim(` · p pace ${state.pace}× · q quit — rewind never un-scores`)}`);
+    lines.push(`${C.dim('1-9 score · x all · ] +30m · [ rewind · q quit — rewind never un-scores')}`);
     process.stdout.write(lines.join('\n') + '\n');
   };
 
   const quit = () => {
-    if (autoplay) clearInterval(autoplay);
     if (process.stdin.isTTY) process.stdin.setRawMode(false);
     server.close();
     console.log(C.dim('\nbye — the day stayed in .sim/, nothing committed'));
@@ -208,24 +205,13 @@ function repMain(state, server) {
     if (key && key.ctrl && key.name === 'c') return quit();
     if (str === 'q') return quit();
     lastErr = '';
-    if (str === 'a') {
-      if (autoplay) { clearInterval(autoplay); autoplay = null; }
-      else autoplay = setInterval(() => {
-        state.now += state.pace * 1000;
-        lastErr = scoreAll();
-        render();
-      }, 1000);
-    } else {
-      if (autoplay) { clearInterval(autoplay); autoplay = null; } // any manual key takes over
-      if (str === 'x') lastErr = scoreAll();
-      else if (str === ']') state.now += STEP;
-      else if (str === '[') state.now -= STEP;
-      else if (str === 'p') state.pace = PACES[(PACES.indexOf(state.pace) + 1) % PACES.length];
-      else if (str && str >= '1' && str <= '9') {
-        const n = Number(str) - 1;
-        const e = planScorable(state.tjson, state.now).list[n];
-        if (e) lastErr = score(e);
-      }
+    if (str === 'x') lastErr = scoreAll();
+    else if (str === ']') state.now += STEP;
+    else if (str === '[') state.now -= STEP;
+    else if (str && str >= '1' && str <= '9') {
+      const n = Number(str) - 1;
+      const e = planScorable(state.tjson, state.now).list[n];
+      if (e) lastErr = score(e);
     }
     render();
   };
@@ -258,7 +244,7 @@ function main(root, args) {
     console.error('sim: nothing scheduled — generate a schedule first (node gb.js schedule specs/<slug>.json)');
     process.exit(1);
   }
-  const state = { siteRoot, repo, slug: key, tjson, rnd: rng(seed), seed, now: Math.min(...times), pace: 60, total: all.length };
+  const state = { siteRoot, repo, slug: key, tjson, rnd: rng(seed), seed, now: Math.min(...times), total: all.length };
   const server = serve(siteRoot, () => state.now);
   server.listen(0, '127.0.0.1', () => {
     if (!process.stdin.isTTY) { console.error('sim: needs a terminal for keypresses'); process.exit(0); }
