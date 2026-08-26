@@ -95,7 +95,7 @@ function renderIndex(route, data) {
       const dates = fmtRange(e.dates); // stored ISO days -> span
       return `<tr><td>${dates ? esc(dates) : ''}</td><td><a href="#${esc(e.slug)}">${esc(e.name || e.slug)}</a> · <a href="#${esc(e.slug)}/venues">Venue board</a></td><td>${esc(e.location)}</td></tr>`;
     });
-  if (!items.length) return `<header><h1>Tournaments</h1><p class="note">No tournaments yet.</p></header>`;
+  if (!items.length) return `<header><h1>Tournaments</h1><p>No tournaments yet.</p></header>`;
   return `<header><h1>Tournaments</h1></header><table><thead><tr><th scope="col">Date</th><th scope="col">Tournament</th><th scope="col">Location</th></tr></thead><tbody>${items.join('')}</tbody></table>`;
 }
 
@@ -116,30 +116,26 @@ function renderTournament(route, data) {
   const parts = [segmentBar(route), `<header><h1>${esc(data.t.name)}</h1>`];
   // the heading states the span and the location once — single-day cards never repeat the date
   const range = dateRange(ctxs.flatMap(c => c.matches), tz);
-  parts.push(`<p class="note">${[range, esc(data.tjson.location)].filter(Boolean).join(' · ')}</p></header>`);
+  parts.push(`<p>${[range, esc(data.tjson.location)].filter(Boolean).join(' · ')}</p></header>`);
   parts.push(`<nav class="cats" aria-label="Categories">${catNav(data.t.slug, ctxs, route)}</nav>`);
-  parts.push(catSection(show, { multi }));
+  parts.push(catSection(show, { multi, href: href(data.t.slug, 'tournament', route) }));
   return parts.join('');
 }
 
-// data-only: played/unplayed + scheduled times, never the device clock
-function phaseLine(ctx) {
-  const ms = ctx.matches;
-  if (!ms.length) return '';
-  if (ms.every(isDone)) return 'Finished';
-  if (!ms.some(isDone)) {
-    const ts = ms.map(m => schedTime(m, ctx.tz)).filter(Number.isFinite);
-    return `Starts ${ts.length ? timeEl(Math.min(...ts), ctx.tz) : 'soon'}`;
-  }
-  const grp = ms.filter(m => m.pool !== undefined);
-  if (grp.some(m => !isDone(m))) {
-    const nextTs = grp.filter(m => !isDone(m)).map(m => schedTime(m, ctx.tz)).filter(Number.isFinite);
-    const next = nextTs.length ? `, next ${timeEl(Math.min(...nextTs), ctx.tz)}` : '';
-    return `Group stage · ${grp.filter(isDone).length} of ${grp.length} played${next}`;
-  }
-  const next = ms.find(m => m.pool === undefined && !isDone(m));
-  return `Knockout stage · ${next ? roundName(koColumn(next, ctx)) : 'awaiting'}`;
-}
+// data-only: played/unplayed + scheduled times, never the device clock —
+// the stage word links to its section (data-jump) when one exists.
+const statusLine = (st, ctx, href) => {
+  const jump = (text, id) => `<a data-jump="${id}" href="${esc(href)}">${text}</a>`;
+  if (st.kind === 'starts') return `<p>Starts ${st.time !== null ? timeEl(st.time, ctx.tz) : 'soon'}</p>`;
+  if (st.kind === 'groups') return `<p>${jump('Group stage', 'groups')} · ${st.played} of ${st.count} played</p>`;
+  if (st.kind === 'ko') return `<p>Knockout stage · ${jump(waveWord(st.col), `ko-${st.col}`)}</p>`;
+  if (st.kind === 'finished') return '<p data-status="finished">Finished</p>';
+  // winners: the podium is one line, third only when a bronze match decided it;
+  // the names carry the weight, Finished dims — the podium stays full
+  const names = [st.first, st.second, st.third].filter(Boolean).map(ids => teamLabel(ids, ctx));
+  const ranks = ['Champion', 'Runner-up', '3rd'];
+  return `<p>${names.map((n, i) => `${ranks[i]} <strong>${esc(n)}</strong>`).join(' · ')}</p>`;
+};
 
 function catSection(ctx, opts) {
   const parts = [];
@@ -154,13 +150,15 @@ function catSection(ctx, opts) {
   }
   // All pools, chronological by wall-clock (stable sort keeps file order on ties).
   const grp = [...byPool.values()].flat().sort((a, b) => (schedTime(a, ctx.tz) ?? 0) - (schedTime(b, ctx.tz) ?? 0));
-  // one category subline: the status sentence; the day span joins on multi-day
-  // pages only — a single-day heading already states the date once
-  const phase = phaseLine(ctx);
-  const sub = [opts.multi ? dateRange(ctx.matches, ctx.tz) : null, phase].filter(Boolean).join(' · ');
-  parts.push(`<section><h2>${esc(ctx.name)}</h2>${sub ? `<p class="note">${sub}</p>` : ''}`);
+  // one category subline: the date span on multi-day pages only — a single-day
+  // heading already states the date once — then the status sentence or podium
+  const st = catStatus(ctx);
+  const lines = [];
+  if (opts.multi) lines.push(`<p>${esc(dateRange(ctx.matches, ctx.tz))}</p>`);
+  if (st) lines.push(statusLine(st, ctx, opts.href));
+  parts.push(`<section><h2>${esc(ctx.name)}</h2>${lines.join('')}`);
   if (grp.length) {
-    parts.push(`<section><h3>Group stage</h3>`);
+    parts.push(`<section><h3 id="groups">Group stage</h3>`);
     // pools belong to the group stage — scoreboard first, cards last; the
     // category subline above carries the status sentence
     if (byPool.size) {
@@ -210,7 +208,7 @@ function bracketHtml(ctx, ko, multi) {
   for (let r = 0; r <= maxR; r++) { // index by depth, skip holes — labels stay aligned if a column is empty
     const ms = cols[r];
     if (!ms || !ms.length) continue;
-    parts.push(`<h4>${roundName(maxR - r)}</h4>`, matchGrid(koOrder(ms, ctx), ctx, multi));
+    parts.push(`<h4 id="ko-${maxR - r}">${roundName(maxR - r)}</h4>`, matchGrid(koOrder(ms, ctx), ctx, multi));
   }
   parts.push('</section>');
   return parts.join('');
@@ -232,7 +230,7 @@ function matchCard(m, ctx, opts = {}) {
   };
   const meta = opts.meta.map(k => item[k]).join(' · ');
   const head = opts.head ? `<div class="head">${opts.head.map(c => `<span>${c.html !== undefined ? c.html : item[c.key]}</span>`).join('')}</div>` : '';
-  return `<article${opts.status ? ` data-status="${opts.status}"` : ''}>${head}${sideRow(m, ctx, 0)}${sideRow(m, ctx, 1)}<div class="meta">${meta}</div></article>`;
+  return `<article${opts.id ? ` id="${opts.id}"` : ''}${opts.status ? ` data-status="${opts.status}"` : ''}>${head}${sideRow(m, ctx, 0)}${sideRow(m, ctx, 1)}<div class="meta">${meta}</div></article>`;
 }
 
 function sideRow(m, ctx, i) {
@@ -278,11 +276,11 @@ function renderVenue(route, data, now = Date.now()) {
   const shownDay = firstDay && today < firstDay ? firstDay : today;
   const open = shown.filter(r => dayKey(r.t, r.ctx.tz) === shownDay); // the full day stays on the board; the scroll follows the current slot
   const cols = (data.tjson.venues || []).map(x => x.id).filter(id => open.some(r => r.m.venue === id));
-  const header = `<header><div><h1>${esc(data.t.name)}</h1><p class="note">${shownDay === today ? 'Today' : dayLabel(shownDay)}</p></div><time id="clock"></time></header>`;
+  const header = `<header><div><h1>${esc(data.t.name)}</h1><p>${shownDay === today ? 'Today' : dayLabel(shownDay)}</p></div><time id="clock"></time></header>`;
   // header and venue titles stick as one block — the titles ride the running
   // clock, aligned to the board by the shared --cols track
   const top = `<div class="kiosk-top" style="--cols: ${cols.length}">${header}${cols.map(id => `<h2>${esc(venueNames.get(id) || id)}</h2>`).join('')}</div>`;
-  if (!cols.length) return top + '<p class="note">Nothing scheduled.</p>';
+  if (!cols.length) return top + '<p>Nothing scheduled.</p>';
   // columns are venues, rows are start times — every column holds the same
   // cells, so the cards of one wave line up; holes stay empty cells. ponytail:
   // one card per (venue, start) cell — the validator only checks unplayed
@@ -328,11 +326,11 @@ const multiDay = ctxs => {
 };
 
 
-function possibleLine(b) {
+function possibleLine(b, day) {
   const noun = b.count === 1 ? 'match' : 'matches';
   const when = b.min === b.max
-    ? `at ${timeEl(b.min, b.ctx.tz)}`
-    : `— earliest ${timeEl(b.min, b.ctx.tz)}, latest ${timeEl(b.max, b.ctx.tz)}`;
+    ? `at ${timeEl(b.min, b.ctx.tz, day)}`
+    : `— earliest ${timeEl(b.min, b.ctx.tz, day)}, latest ${timeEl(b.max, b.ctx.tz, day)}`;
   return `<p class="note">${b.count} more ${noun} possible in ${esc(b.ctx.name)} ${when}</p>`;
 }
 
@@ -348,45 +346,58 @@ function renderPlayer(route, data) {
       .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id))
       .map(pl => `<li><a href="${esc(href(data.t.slug, 'schedule', { cat: route.cat, player: pl.id }))}">${esc(pl.name || pl.id)}</a></li>`)
       .join('');
-    const list = items ? `<ul>${items}</ul>` : '<p class="note">No players yet.</p>';
+    const list = items ? `<ul>${items}</ul>` : '<p>No players yet.</p>';
     return `${segmentBar(route)}<header><h1>Pick your player</h1></header>${list}`;
   }
   const rows = [];
   const ctxs = data.cats;
-  const multi = multiDay(ctxs);
+  const multi = multiDay(ctxs); // the possible-line times need their date on multi-day pages
   for (const ctx of ctxs) {
     for (const pm of playerMatches(ctx, pid)) rows.push({ m: pm.m, i: pm.i, ctx });
   }
   rows.sort((a, b) => (schedTime(a.m, a.ctx.tz) ?? Infinity) - (schedTime(b.m, b.ctx.tz) ?? Infinity));
-  // one flat timeline — no day headers; multi-day cards carry their own date,
-  // a single-day page states it once in the heading
+  // one flat timeline under date headings — the day owns the context, so cards
+  // never repeat it; the heading swaps with each new day
   const blocks = [];
   for (const ctx of ctxs) {
     const span = possibleSpan(ctx, pid);
     if (span) blocks.push({ ctx, ...span });
   }
   blocks.sort((a, b) => a.min - b.min);
-  // a void settles, counts nothing
-  let wins = 0, losses = 0;
-  for (const r of rows) {
-    const wi = winnerIdx(r.m);
-    if (wi === r.i) wins++;
-    else if (wi !== null) losses++;
+  const statuses = [];
+  for (const ctx of ctxs) {
+    const s = playerStatus(ctx, pid);
+    if (s) statuses.push(`<strong>${esc(ctx.name || ctx.id)}</strong>: ${esc(s)}`);
   }
-  const tz = data.tjson.timezone || 'UTC';
-  const first = rows.map(r => schedTime(r.m, r.ctx.tz)).find(t => t !== null);
-  const when = !multi && first !== undefined ? `${dayShort(first, tz)} · ` : '';
-  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}</h1><p class="note"><span>${when}${wins} W · ${losses} L</span><a href="${esc(href(data.t.slug, 'schedule', { cat: route.cat }))}">Not you?</a></p></header>`];
+  // two short lines: the standing answers "where am I", the next match answers
+  // "what's next" — one detail line each, nothing else makes the header
+  const nextRow = rows.find(r => !isDone(r.m));
+  let next = null;
+  if (nextRow) {
+    const m = nextRow.m, nctx = nextRow.ctx;
+    const t = schedTime(m, nctx.tz);
+    next = `<a data-jump="next" href="${esc(href(data.t.slug, 'schedule', route))}">Next: ${esc(nctx.name)} · ${esc(matchLabel(m, nctx))}${t !== null ? ` · ${timeEl(t, nctx.tz, multi)}` : ' · TBD'} · ${m.venue ? esc(nctx.venues.get(m.venue) || m.venue) : 'TBD'}</a>`;
+  }
+  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}<a href="${esc(href(data.t.slug, 'schedule', { cat: route.cat }))}">Not you?</a></h1>${statuses.length ? `<p>${statuses.join(' · ')}</p>` : ''}${next ? `<p data-status="next">${next}</p>` : ''}</header>`];
+  // one flat timeline under date headings — the day owns the context, so cards
+  // never repeat it; the heading swaps with each new day
   const out = [];
   let bi = 0;
-  const nextId = rows.find(r => !isDone(r.m))?.m.id;
+  const nextId = nextRow && nextRow.m.id;
+  let curDay = null;
   for (const r of rows) {
     const t = schedTime(r.m, r.ctx.tz), m = r.m, ctx = r.ctx;
-    while (bi < blocks.length && blocks[bi].min < t) out.push(possibleLine(blocks[bi++]));
-    out.push(matchCard(m, ctx, { meta: ['catName', 'label'], day: multi, head: [{ key: 'time' }, { key: 'court' }], status: m.id === nextId ? 'next' : undefined }));
+    const isNext = m.id === nextId;
+    while (bi < blocks.length && blocks[bi].min < t) out.push(possibleLine(blocks[bi++], multi));
+    const day = t !== null ? dayKey(t, ctx.tz) : null;
+    if (day !== curDay) {
+      curDay = day;
+      out.push(`<h2>${esc(day === null ? 'Unscheduled' : dayLabel(day))}</h2>`);
+    }
+    out.push(matchCard(m, ctx, { meta: ['catName', 'label'], head: [{ key: 'time' }, { key: 'court' }], status: isNext ? 'next' : undefined, id: isNext ? 'next' : undefined }));
   }
-  while (bi < blocks.length) out.push(possibleLine(blocks[bi++]));
-  parts.push(`<section><h2>Matches</h2>${rows.length ? `<div class="stack">${out.join('')}</div>` : '<p class="note">No matches.</p>'}</section>`);
+  while (bi < blocks.length) out.push(possibleLine(blocks[bi++], multi));
+  parts.push(`<section>${rows.length ? `<div class="stack">${out.join('')}</div>` : '<p>No matches.</p>'}</section>`);
   return parts.join('');
 }
 
@@ -498,6 +509,19 @@ function boot() {
       render(r, data);
     }
   };
+
+  // data-jump links keep the route — the href stays a valid fragment; a click
+  // only scrolls the target section (every jump link is same-view today)
+  const jumpTo = id => {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ block: 'start' });
+  };
+  document.addEventListener('click', e => {
+    const a = e.target.closest('a[data-jump]');
+    if (!a) return;
+    e.preventDefault();
+    jumpTo(a.dataset.jump);
+  });
 
   navigate();
   window.addEventListener('hashchange', navigate);

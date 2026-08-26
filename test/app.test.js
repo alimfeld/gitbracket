@@ -7,7 +7,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, koOrdinal, kioskStatus, currentRowIndex, matchLabel, schedTime, toCats, isDeadTie } = require('../site/derive.js');
+const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, koOrdinal, kioskStatus, currentRowIndex, matchLabel, schedTime, toCats, isDeadTie, waveWord, winners, catStatus, playerStatus, teamLabel } = require('../site/derive.js');
 const { parseRoute, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer } = require('../site/app.js');
 const { generate } = require('../src/schedule.js');
 const { FIX, catOf } = require('./helpers.js');
@@ -192,6 +192,64 @@ test('matchLabel: pool, placement, and round names on one card label', () => {
   assert(matchLabel(full.byId.get(9), full) === '3rd place', 'bronze via placementLabel');
   const md = catOf('sample', 'md40');
   assert(matchLabel(md.byId.get(9), md) === 'Final' && matchLabel(md.byId.get(10), md) === '3rd place', 'sample: m9 final, m10 bronze');
+});
+
+test('catStatus: starts, groups progress, the KO wave in play, and the podium at full finish', () => {
+  const tjson = require(FIX('sample', 'tournaments', 'sample.json'));
+  const mk = ms => makeCat({ meta: tjson.categories[0], matches: ms }, tjson);
+  const base = catOf('sample', 'md40').matches;
+  const pre = mk(base.map(m => ({ ...m, games: [], result: undefined })));
+  assert(catStatus(pre).kind === 'starts' && catStatus(pre).time === Date.parse('2025-07-14T09:00:00-04:00'), 'nothing played: starts at the earliest scheduled time, in a semantic time element');
+  const mid = mk(base.map(m => m.id === 1 ? { ...m, result: undefined } : m));
+  const g = catStatus(mid);
+  assert(g.kind === 'groups' && g.played === 5 && g.count === 6, 'groups live: the progress count, no next-slot noise');
+  const live = catOf('sample', 'md40');
+  const k = catStatus(live);
+  assert(k.kind === 'ko' && k.col === 1 && waveWord(k.col) === 'SF', 'the SF is in play — a scheduled final/bronze stays silent while its semifinal still decides them');
+  const full = catOf('full', 't');
+  const w = catStatus(full);
+  assert(w.kind === 'winners' && w.first.join() === 'p1' && w.second.join() === 'p5' && w.third.join() === 'p6', 'full finish: the podium off the played final and bronze');
+  const xd = catOf('sample', 'xd');
+  assert(catStatus(xd).kind === 'finished', 'pool-only finish: no final to name, plain Finished');
+});
+
+// podium details: third exists only when a bronze match decided it; a void
+// anywhere leaves no winner to name — the line falls back to Finished
+const place8Ctx = tjson => makeCat({ meta: tjson.categories[0], matches: tjson.matches.t }, tjson);
+
+test('winners: first/second off the final, third/fourth off the bronze; voids kill the line', () => {
+  const p8 = catOf('place8', 't');
+  const w = winners(p8);
+  assert(w.first.join() === 'p1' && w.second.join() === 'p2' && w.third.join() === 'p5' && w.fourth.join() === 'p6', 'a full eight-bracket: champion, runner-up, third and fourth from the played matches');
+  const tjson = JSON.parse(JSON.stringify(require(FIX('place8', 'tournaments', 'place8.json'))));
+  tjson.matches.t.find(m => m.id === 19).result = { status: 'void' };
+  const voidFinal = place8Ctx(tjson);
+  assert(winners(voidFinal) === null && catStatus(voidFinal).kind === 'finished', 'a void final decides nothing — no podium, plain Finished');
+  const bjson = JSON.parse(JSON.stringify(require(FIX('place8', 'tournaments', 'place8.json'))));
+  bjson.matches.t.find(m => m.id === 20).result = { status: 'void' };
+  const bw = winners(place8Ctx(bjson));
+  assert(bw.first.join() === 'p1' && bw.second.join() === 'p2' && bw.third === null, 'a void bronze drops the third-place prize, keeps the podium');
+  assert(waveWord(0) === 'Final' && waveWord(1) === 'SF' && waveWord(2) === 'QF' && waveWord(3) === 'Round of 16', 'wave words: abbreviated near rounds, far rounds stay full');
+});
+
+test('playerStatus: per-category standing — the live wave, the podium, elimination', () => {
+  const md = catOf('sample', 'md40');
+  assert(playerStatus(md, 'p5') === 'In SF', 'a player whose semifinal is undecided reads the wave word');
+  assert(playerStatus(md, 'p1') === 'In the final', 'a player who already won their semi is in the final, awaiting the other side');
+  const full = catOf('full', 't');
+  assert(playerStatus(full, 'p1') === 'Champion' && playerStatus(full, 'p5') === 'Runner-up'
+    && playerStatus(full, 'p6') === '3rd' && playerStatus(full, 'p2') === '4th', 'podium words off the played bracket');
+  assert(playerStatus(full, 'p3') === 'Out in groups', 'pools without a knockout seat: out, terminal, plain');
+  assert(playerStatus(full, 'p4') === null, 'a player with no matches in the category renders no status');
+  assert(playerStatus(catOf('sample', 'xd'), 'p3') === 'Out in groups', 'pool-only category: decided, no podium');
+  // the podium renders as the category subline, names from the player registry
+  const repo = loadRepo(FIX('full'));
+  const info = repo.tournaments.get('full');
+  const html = renderTournament({ slug: 'full', view: 'tournament' },
+    { index: [], t: { slug: 'full', name: info.tjson.name }, tjson: info.tjson, cats: toCats(info.tjson) });
+  const w = winners(catOf('full', 't'));
+  const podium = `<p>Champion <strong>${teamLabel(w.first, catOf('full', 't'))}</strong> · Runner-up <strong>${teamLabel(w.second, catOf('full', 't'))}</strong> · 3rd <strong>${teamLabel(w.third, catOf('full', 't'))}</strong></p>`;
+  assert(html.includes(podium), 'a finished bracket renders the podium as its subline');
 });
 
 test('reachableKo: undecided feeder keeps both branches; decided feeder gates the closed one', () => {
@@ -486,24 +544,24 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(midday.includes('data-status="done"'), 'a midday board keeps the morning results, muted');
   assert(venue.includes("Men&#39;s Doubles 40+ · Final") && !venue.includes("Men&#39;s Doubles 40+ · 9 ·"), 'kiosk meta shows the long category name and label, no match id');
   assert(!venue.includes('<nav>'), 'kiosk has no breadcrumb');
-  assert(standings.includes('<h2>Men&#39;s Doubles 40+</h2><p class="note">Knockout stage · Semifinals</p>') && !standings.includes('<h2 id='), 'category h2: plain in-flow heading, status-only subline (the single-day heading already stated the date)');
-  assert(standings.includes('<h1>Sample</h1>') && standings.includes('<p class="note">Mon, Jul 14 · New York</p>'), 'one-day tournament: the heading subline states the date and the location');
+  assert(standings.includes('<h2>Men&#39;s Doubles 40+</h2><p>Knockout stage · <a data-jump="ko-1" href="#sample">SF</a></p>') && !standings.includes('<h2 id='), 'category h2: plain in-flow heading, the wave word links to its section (single-day heading already stated the date)');
+  assert(standings.includes('<h1>Sample</h1>') && standings.includes('<p>Mon, Jul 14 · New York</p>'), 'one-day tournament: the heading subline states the date and the location');
   assert(!standings.includes('class="day"') && !standings.includes('Jul 14, '), 'single-day: no day dividers anywhere, and cards carry just the time');
-  assert(xd.includes('<h2>Mixed Doubles</h2><p class="note">Finished</p>'), 'a fully decided category: status-only subline on a single-day page');
-  assert(standings.includes('<h3>Group stage</h3><div class="grid">'), 'group stage: pools first under the heading');
+  assert(xd.includes('<h2>Mixed Doubles</h2><p data-status="finished">Finished</p>'), 'a fully decided pool-only category: status-only subline on a single-day page, in the done-voice (no final, no podium)');
+  assert(standings.includes('<h3 id="groups">Group stage</h3><div class="grid">'), 'group stage: pools first under the heading');
   assert(standings.includes('</div><h4>Group matches</h4><div class="grid">'), 'group stage: pools, then the Matches h4, then the cards');
   assert(!standings.includes('Pools</h3>') && !standings.includes('md40:pools'), 'pools are part of the group stage — no separate heading, no fold of their own');
   assert(standings.includes('Pool A</h4>'), 'pool heading stands alone — no advance note');
   assert(standings.indexOf('<div class="grid">') < standings.indexOf('<h4>Group matches</h4>'), 'pools lead the group matches inside the stage');
   assert(standings.indexOf('Group stage</h3>') < standings.indexOf('Knockout stage</h3>'), 'schedule before the bracket — chronological flow');
-  assert(standings.includes('<h3>Knockout stage</h3><h4>Semifinals</h4><div class="grid">'), 'knockout: rounds and cards — always open, no count subline');
+  assert(standings.includes('<h3>Knockout stage</h3><h4 id="ko-1">Semifinals</h4><div class="grid">'), 'knockout: rounds and cards — always open, no count subline');
   // mid-groups state: an unresolved group match opens the schedule and re-counts the chip
   const midJson = JSON.parse(JSON.stringify(require(FIX('sample', 'tournaments', 'sample.json'))));
   midJson.matches.md40[0].result = undefined;
   const mid = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' },
     { index: [], t: { slug: 'sample', name: midJson.name }, tjson: midJson,
       cats: toCats(midJson) });
-  assert(mid.includes('<p class="note">Group stage · 5 of 6 played, next <time datetime="2025-07-14T13:00:00.000Z">09:00</time></p>'), 'running groups: the subline carries the phase, the next slot is a semantic <time>');
+  assert(mid.includes('<p><a data-jump="groups" href="#sample?cat=md40">Group stage</a> · 5 of 6 played</p>'), 'running groups: the stage word links to the group section and carries the progress count');
   assert(mid.includes('</div><h4>Group matches</h4><div class="grid">'), 'running groups: pools, then the Matches h4, then the cards — the status lives in the category subline');
   assert(!mid.includes('data-stage') && !mid.includes('toggle'), 'no disclosure machinery ships — nothing hides, nothing toggles');
   const { data: rdata } = dataOf('result');
@@ -516,15 +574,16 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
     { index: [], t: { slug: 'sample', name: preJson.name }, tjson: preJson,
       cats: toCats(preJson) });
   assert(pre.includes('<div class="grid">') && pre.includes('>Ada Lovelace / Grace Hopper</td>'), 'pools roster (teams) is visible before the first result');
-  assert(pre.includes('<p class="note">Starts '), 'pre-start status line');
+  assert(pre.includes('<p>Starts '), 'pre-start status line');
   const ppage = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p1' }, data);
-  assert(ppage.includes('<h1>Ada Lovelace</h1>'), 'player page: plain name');
-  const nextAt = ppage.indexOf('data-status="next"');
-  assert(nextAt !== -1 && ppage.indexOf('data-status="next"', nextAt + 1) === -1, 'the player page highlights exactly one next match');
-  assert(ppage.slice(nextAt).includes("Men&#39;s Doubles 40+ · Final"), 'the highlight lands on the first unscored match — the md40 Final');
+  assert(ppage.includes('<h1>Ada Lovelace<a href="#sample/schedule">Not you?</a></h1>'), 'player page: the pick-correcting link rides the name in the title, separated by space not punctuation');
+  const nextCard = ppage.indexOf('<article id="next"');
+  assert(nextCard !== -1 && ppage.indexOf('<article id="next">', nextCard + 1) === -1, 'exactly one next match card, carrying the jump target (the header line links to it)');
+  assert(ppage.slice(nextCard).includes("Men&#39;s Doubles 40+ · Final"), 'the next card is the first unscored match — the md40 Final');
   const allDone = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p2' }, dataOf('result').data);
   assert(!allDone.includes('data-status="next"'), 'fully scored player: no next-match highlight');
-  assert(!ppage.includes('class="day"') && !ppage.includes('>2025-07-14'), 'single-day player page: no day dividers, friendly dates never render as text payload');
+  assert(ppage.includes('<h2>Mon, Jul 14</h2>'), 'the day section title carries the date — cards stay bare in it');
+  assert(!ppage.includes('class="day"') && !ppage.includes('>2025-07-14'), 'no day-divider machinery, no raw ISO payload — the heading is the day');
   const p3 = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p3' }, data);
   assert(/note">\d+ more match(?:es)? possible in Men&#39;s Doubles 40\+ (— earliest <time datetime="[^"]+">\d\d:\d\d<\/time>, latest <time datetime="[^"]+">\d\d:\d\d<\/time>|at <time datetime="[^"]+">\d\d:\d\d<\/time>)/.test(p3), 'possible note: count + window in semantic <time> elements');
   assert(ppage.includes('<div class="head"><span><time datetime=') && ppage.includes('</time></span><span>Court 1</span></div>'), 'player card headline: time left (semantic <time>), court right');
@@ -532,7 +591,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(ppage.includes('class="ph"'), 'player match cards render unplayed score slots too');
   assert(ppage.includes('Ada Lovelace'), 'player page finds the player');
   assert(ppage.includes('<nav class="segments" aria-label="Views"><a href="#sample?player=p1">Tournament</a><a href="#sample/schedule?player=p1" aria-current="true">My Schedule</a></nav>'), 'player page: segment switch, My Schedule current, pick preserved in links');
-  assert(ppage.includes('<p class="note"><span>Mon, Jul 14 · 7 W · 0 L</span><a href="#sample/schedule">Not you?</a></p>'), 'player page: single-day date + record and Not you? in the heading subline; the link drops the pick');
+  assert(ppage.includes('<p><strong>Men&#39;s Doubles 40+</strong>: In the final · <strong>Mixed Doubles</strong>: Out in groups</p><p data-status="next"><a data-jump="next" href="#sample/schedule?player=p1">Next: Men&#39;s Doubles 40+ · Final · <time datetime="2025-07-14T16:15:00.000Z">12:15</time> · Court 1</a></p>'), 'player page: standing and next each on their own line — next is a real link to the next card so its accent is honest');
   assert(ppage.includes('#sample'), 'player page links the tournament name to the tournament page');
   const picker = renderPlayer({ slug: 'sample', view: 'schedule' }, data);
   assert(picker.includes('<nav class="segments" aria-label="Views"><a href="#sample">Tournament</a><a href="#sample/schedule" aria-current="true">My Schedule</a></nav>'), 'picker: segment switch, My Schedule current');
@@ -586,13 +645,18 @@ test('multi-day: cards carry their full date; single-day cards just the time; th
   const info = repo.tournaments.get('multiday');
   const data = { index: repo.index, t: { slug: 'multiday', name: info.tjson.name }, tjson: info.tjson, cats: toCats(info.tjson) };
   const page = renderTournament({ slug: 'multiday', view: 'tournament' }, data);
-  assert(page.includes('<p class="note">Sat–Sun, Jul 11–12 · Boston</p>'), 'the heading subline collapses consecutive days and gives the location');
-  assert(page.includes('<h2>Men&#39;s Doubles 40+</h2><p class="note">Sat–Sun, Jul 11–12 · Group stage · 5 of 6 played, next <time datetime="2026-07-11T15:00:00.000Z">11:00</time></p>'), 'the category subline spans the range and the live status');
+  assert(page.includes('<p>Sat–Sun, Jul 11–12 · Boston</p>'), 'the heading subline collapses consecutive days and gives the location');
+  assert(page.includes('<h2>Men&#39;s Doubles 40+</h2><p>Sat–Sun, Jul 11–12</p><p><a data-jump="groups" href="#multiday">Group stage</a> · 5 of 6 played</p>'), 'the category subline splits the multi-day range from the live status');
   assert(!page.includes('class="day"') && !page.includes('Pools</h3>'), 'no day dividers, no separate pools section');
   assert(page.includes('<time datetime="2026-07-11T13:00:00.000Z">Sat, Jul 11, 09:00</time>') && page.includes('<time datetime="2026-07-11T15:00:00.000Z">Sat, Jul 11, 11:00</time>'), 'Saturday cards carry the date with the time');
   assert(page.includes('<time datetime="2026-07-12T13:00:00.000Z">Sun, Jul 12, 09:00</time>') && page.includes('<time datetime="2026-07-12T15:00:00.000Z">Sun, Jul 12, 11:00</time>'), 'Sunday knockout cards carry the date too');
   assert(page.includes('</div><h4>Group matches</h4><div class="grid">'), 'the running group stage: pools, then the Matches h4, then the cards');
-  assert(page.includes('<h3>Knockout stage</h3><h4>Semifinals</h4>') && page.includes('<h4>Final</h4>'), 'the knockout is always open — rounds listed in order');
+  assert(page.includes('<h3>Knockout stage</h3><h4 id="ko-1">Semifinals</h4>') && page.includes('<h4 id="ko-0">Final</h4>'), 'the knockout is always open — rounds listed in order, wave ids on the headings');
+  // the player page groups under date headings — the day owns the context, and
+  // the possible line names its own day on multi-day pages
+  const ppage = renderPlayer({ slug: 'multiday', view: 'schedule', player: 'p1' }, data);
+  assert(ppage.includes('<h2>Sat, Jul 11</h2>') && !ppage.includes('<h2>Sun, Jul 12</h2>') && !ppage.includes('day: true'), 'the player page headers its days; p1 has Saturday cards only, so no Sunday section');
+  assert(ppage.includes('earliest <time datetime="2026-07-12T13:00:00.000Z">Sun, Jul 12, 09:00</time>'), 'the possible line carries its own date on multi-day pages');
   // moving a match to another day just re-dates its card — no divider machinery
   const split = JSON.parse(JSON.stringify(info.tjson));
   split.matches.md40[5].scheduled = '2026-07-12T15:00:00'; // m6 (pool) -> Sunday
@@ -602,20 +666,20 @@ test('multi-day: cards carry their full date; single-day cards just the time; th
   const sInfo = loadRepo(FIX('sample')).tournaments.get('sample');
   const single = renderTournament({ slug: 'sample', view: 'tournament' },
     { index: repo.index, t: { slug: 'sample', name: sInfo.tjson.name }, tjson: sInfo.tjson, cats: toCats(sInfo.tjson) });
-  assert(single.includes('<h1>Sample</h1>') && single.includes('<h2>Men&#39;s Doubles 40+</h2>') && single.includes('<p class="note">Mon, Jul 14 · New York</p>') && !single.includes('class="day"') && !single.includes('Jul 14, '), 'single-day tournament: one date in the heading subline, cards carry only the time');
+  assert(single.includes('<h1>Sample</h1>') && single.includes('<h2>Men&#39;s Doubles 40+</h2>') && single.includes('<p>Mon, Jul 14 · New York</p>') && !single.includes('class="day"') && !single.includes('Jul 14, '), 'single-day tournament: one date in the heading subline, cards carry only the time');
 
   // kiosk: strict same-day in the tournament timezone, from the device clock instant
   const at = iso => Date.parse(iso);
   const sat = renderVenue({ slug: 'multiday', view: 'venues' }, data, at('2026-07-11T12:00:00-04:00'));
   assert(sat.includes('Katherine Johnson') && !sat.includes('>SF<') && !sat.includes('Final'), 'saturday board: open pool match, no tomorrow');
-  assert(sat.includes('<p class="note">Today</p>'), 'today board: the note names the day shown');
+  assert(sat.includes('<p>Today</p>'), 'today board: the note names the day shown');
   const sun = renderVenue({ slug: 'multiday', view: 'venues' }, data, at('2026-07-12T08:00:00-04:00'));
   assert(sun.includes('· SF') && sun.includes('· Final') && !sun.includes('Katherine Johnson'), 'sunday board: knockout only, yesterday gone');
   const mon = renderVenue({ slug: 'multiday', view: 'venues' }, data, at('2026-07-13T12:00:00-04:00'));
   assert(mon.includes('Nothing scheduled.'), 'after the last day: drained board, not a stale schedule');
   const fri = renderVenue({ slug: 'multiday', view: 'venues' }, data, at('2026-07-10T12:00:00-04:00'));
   assert(fri.includes('Katherine Johnson') && !fri.includes('>SF<') && !fri.includes('Final'), 'a day before day one: the board previews the first day, pools only');
-  assert(fri.includes('<p class="note">Sat, Jul 11</p>'), 'the preview note names the day shown, not today');
+  assert(fri.includes('<p>Sat, Jul 11</p>'), 'the preview note names the day shown, not today');
 });
 
 test('date spans: consecutive days collapse, sparse days list, a year boundary appends the year', () => {
@@ -625,14 +689,14 @@ test('date spans: consecutive days collapse, sparse days list, a year boundary a
   ] } };
   const data = { index: [], t: { slug: 't', name: tjson.name }, tjson, cats: toCats(tjson) };
   const page = renderTournament({ slug: 't', view: 'tournament' }, data);
-  assert(page.includes('<p class="note">Wed, Dec 30, Sat, Jan 2, 2027</p>'), 'sparse days list each label; a year boundary appends the end year; no location renders clean');
+  assert(page.includes('<p>Wed, Dec 30, Sat, Jan 2, 2027</p>'), 'sparse days list each label; a year boundary appends the end year; no location renders clean');
   // closing the gap makes the run consecutive — cross-month collapsed form
   tjson.matches.t.splice(1, 0,
     { id: 3, scheduled: '2026-12-31T09:00:00', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },
     { id: 4, scheduled: '2027-01-01T09:00:00', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] });
   data.cats = toCats(tjson); // contexts snapshot the matches — rebuild after mutating
   const run = renderTournament({ slug: 't', view: 'tournament' }, data);
-  assert(run.includes('<p class="note">Wed–Sat, Dec 30 – Jan 2, 2027</p>'), 'consecutive cross-month days keep both months and the end year');
+  assert(run.includes('<p>Wed–Sat, Dec 30 – Jan 2, 2027</p>'), 'consecutive cross-month days keep both months and the end year');
 });
 
 test('routing: cat and player ride along between tournament and schedule — applied on their home view only', () => {

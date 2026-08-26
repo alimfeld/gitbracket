@@ -12,6 +12,10 @@
   --tie: #fff3cd;
   --overdue: #b3261e;
   --due: #15803d;
+  /* one sticky nav bar's total height — segments stick at 0, cats below it,
+  and jump targets clear one bar (player page) or two (tournament page).
+  ponytail: padding + 1.5rem line + link padding + border — revisit on font change */
+  --bar-h: calc(var(--space)*2 + 1.5rem + var(--space)*2 + 1px);
 }
 
 * {
@@ -30,6 +34,20 @@ body {
 h1 {
   font-size: 1.5rem;
   margin: var(--space) 0 var(--space);
+}
+
+/* the pick-correcting "Not you?" rides the title as a quiet aside, pushed to the far right */
+h1:has(a) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--space)*2);
+}
+
+h1 a {
+  font-size: .625em;
+  font-weight: normal;
+  text-decoration: underline;
 }
 
 h2,
@@ -52,6 +70,16 @@ h4 {
   text-transform: uppercase;
 }
 
+/* data-jump targets land below the sticky nav bars — one bar on the player
+   page, segments + cats on the tournament page */
+:is(h3, h4)[id] {
+  scroll-margin-top: calc(var(--bar-h)*2);
+}
+
+article[id] {
+  scroll-margin-top: var(--bar-h);
+}
+
 header {
   margin: calc(var(--space)*2) 0 var(--space);
 }
@@ -67,13 +95,6 @@ a {
   padding-left: var(--space);
 }
 
-.note:has(a) {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space);
-  align-items: baseline;
-}
-
 :is(.segments, .cats, .kiosk-top) {
   background: var(--page);
   border-bottom: 1px solid var(--hairline);
@@ -83,8 +104,6 @@ a {
 }
 
 :is(.segments, .cats) {
-  /* ponytail: --bar-h = segments' total height (padding + 1.5rem line + link padding + border); cats' sticky top rides on it — revisit if font or link padding change */
-  --bar-h: calc(var(--space)*2 + 1.5rem + var(--space)*2 + 1px);
   position: sticky;
   z-index: 10;
   display: flex;
@@ -316,4 +335,14 @@ article[data-status="done"] .head span {
 
 article[data-status="next"] {
   border-color: var(--accent);
+}
+
+/* the player header's next-match line speaks in the same state as the card */
+p[data-status="next"] {
+  color: var(--accent);
+}
+
+/* a concluded category says so in the done-voice — muted, like done cards */
+p[data-status="finished"] {
+  color: var(--muted);
 }

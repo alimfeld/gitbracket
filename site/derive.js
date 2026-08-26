@@ -577,6 +577,98 @@ function matchLabel(m, ctx) {
   return abbr === full ? full : abbr + (koOrdinal(m, ctx) || '');
 }
 
+// ---- Status derivation: what a category or player's line says ----------------
+
+// Wave word for a column: the stage name, never a specific match — placement
+// matches share their wave's column, so a pending bronze reads "Final" too.
+const waveWord = col => roundName(col).replace('Semifinals', 'SF').replace('Quarterfinals', 'QF');
+
+// The wave in play: the lowest column whose undone matches are playable — a
+// scheduled final doesn't claim the status while its semifinals still decide
+// it. Falls back to all undone matches on malformed sides.
+function nextKoWave(ctx) {
+  const undone = ctx.matches.filter(m => m.pool === undefined && !m.result);
+  if (!undone.length) return null;
+  const playable = undone.filter(m => !Array.isArray(m.sides) || m.sides.every(s => resolveSide(s, ctx)));
+  // ponytail: an unsettled dead tie blocks every wave — this falls back to the
+  // lowest column ("Final"), which reads wrong; the tie row is already flagged
+  // and the organizer settles it, so the mislabel is brief. Gate the fallback on
+  // pool resolution if a format ever needs the status accurate through ties.
+  return Math.min(...(playable.length ? playable : undone).map(m => koColumn(m, ctx)));
+}
+
+// The podium from played results: first/second off the championship final,
+// third off the bronze match (the semifinal losers' match), fourth off its
+// loser. Null when nothing is decided — a void final or an unresolved side
+// leaves no winner to name, and a category without a final has no podium.
+function winners(ctx) {
+  const m = ctx.matches.find(X => X && X.pool === undefined && matchLabel(X, ctx) === 'Final');
+  if (!m || !m.result || winnerIdx(m) === null || !Array.isArray(m.sides)) return null;
+  const a = resolveSide(m.sides[0], ctx), b = resolveSide(m.sides[1], ctx);
+  if (!a || !b) return null;
+  const w = winnerIdx(m);
+  const out = { first: [...a], second: [...b], third: null, fourth: null };
+  if (w === 1) { out.first = [...b]; out.second = [...a]; }
+  const bronze = ctx.matches.find(X => X && X.pool === undefined && matchLabel(X, ctx) === '3rd place');
+  if (bronze && bronze.result && winnerIdx(bronze) !== null && Array.isArray(bronze.sides)) {
+    const x = resolveSide(bronze.sides[winnerIdx(bronze)], ctx), y = resolveSide(bronze.sides[1 - winnerIdx(bronze)], ctx);
+    if (x) out.third = [...x];
+    if (y) out.fourth = [...y];
+  }
+  return out;
+}
+
+// Category status line: the facts a renderer turns into the subline.
+// kind: starts (nothing played) | groups | ko | finished | winners.
+function catStatus(ctx) {
+  const ms = ctx.matches;
+  if (!ms.length) return null;
+  if (ms.every(isDone)) {
+    const w = winners(ctx);
+    return w ? { kind: 'winners', ...w } : { kind: 'finished' };
+  }
+  if (!ms.some(isDone)) {
+    const ts = ms.map(m => schedTime(m, ctx.tz)).filter(Number.isFinite);
+    return { kind: 'starts', time: ts.length ? Math.min(...ts) : null };
+  }
+  const grp = ms.filter(m => m.pool !== undefined);
+  if (grp.some(m => !isDone(m))) return { kind: 'groups', played: grp.filter(isDone).length, count: grp.length };
+  const col = nextKoWave(ctx);
+  return { kind: 'ko', col };
+}
+
+const inWord = col => col === 0 ? 'In the final' : `In ${waveWord(col)}`;
+const elimWord = col => col === 0 ? 'Eliminated in the final' : `Eliminated in ${waveWord(col)}`;
+
+// A player's standing in one category, as a plain word — the schedule page
+// never links it; the tournament page's wave links are category-level, not
+// per-player.
+function playerStatus(ctx, pid) {
+  const rows = playerMatches(ctx, pid);
+  if (!rows.length) return null;
+  const undone = rows.filter(r => !isDone(r.m));
+  if (undone.length) {
+    const koRows = undone.filter(r => r.m.pool === undefined);
+    if (!koRows.length) return 'In groups';
+    return inWord(Math.max(...koRows.map(r => koColumn(r.m, ctx))));
+  }
+  // every match they're in is decided below
+  if (ctx.matches.every(isDone)) {
+    const w = winners(ctx);
+    if (w) {
+      if (w.first.includes(pid)) return 'Champion';
+      if (w.second.includes(pid)) return 'Runner-up';
+      if (w.third && w.third.includes(pid)) return '3rd';
+      if (w.fourth && w.fourth.includes(pid)) return '4th';
+    }
+  }
+  const lost = rows.filter(r => { const w = winnerIdx(r.m); return w !== null && w !== r.i; }); // void settles, counts nothing
+  const koLost = lost.filter(r => r.m.pool === undefined);
+  if (koLost.length) return elimWord(Math.max(...koLost.map(r => koColumn(r.m, ctx))));
+  const poolsDone = ctx.matches.filter(m => m.pool !== undefined).every(isDone);
+  return poolsDone ? 'Out in groups' : 'In groups';
+}
+
 if (typeof module !== 'undefined') {
-  module.exports = { LOCALE, ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, countWins, sideIdx, sideLetter, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dateRange, dayShort, dayLabel, fmtDiff, kioskStatus, currentRowIndex, roundName, koColumn, koOrdinal, matchLabel };
+  module.exports = { LOCALE, ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, countWins, sideIdx, sideLetter, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dateRange, dayShort, dayLabel, fmtDiff, kioskStatus, currentRowIndex, roundName, koColumn, koOrdinal, matchLabel, waveWord, winners, catStatus, playerStatus };
 }
