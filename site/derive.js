@@ -323,21 +323,6 @@ function possibleSpan(ctx, pid) {
   return { min: Math.min(...ts), max: Math.max(...ts), count: Math.max(...open.map(id => 1 + chainDepth(ctx, id, matchEdge, memo))) };
 }
 
-function matchRound(m, ctx, memo = new Map()) {
-  if (memo.has(m.id)) return memo.get(m.id);
-  if (!Array.isArray(m.sides)) return 0; // malformed leaf: report, never throw
-  memo.set(m.id, 0); // in-progress = cycle guard
-  let d = 0;
-  for (const s of m.sides) {
-    if (s && s.kind === 'match') {
-      const ref = ctx.byId.get(s.match);
-      if (ref) d = Math.max(d, 1 + matchRound(ref, ctx, memo));
-    }
-  }
-  memo.set(m.id, d);
-  return d;
-}
-
 const ordRules = new Intl.PluralRules(LOCALE, { type: 'ordinal' });
 const ordinal = n => n + ({ one: 'st', two: 'nd', few: 'rd' }[ordRules.select(n)] || 'th');
 
@@ -542,7 +527,8 @@ function koColumn(m, ctx) {
       else if (X === final) r = 0;
       else {
         const feeders = Array.isArray(X.sides) ? X.sides.filter(s => s && s.kind === 'match' && ctx.byId.has(s.match)).map(s => col(ctx.byId.get(s.match))) : [];
-        r = feeders.length ? Math.max(...feeders) - 1 : matchRound(X, ctx);
+        // feeders empty = no match-kind refs = a leaf; depth from leaves is 0
+        r = feeders.length ? Math.max(...feeders) - 1 : 0;
       }
       memo.set(X.id, r);
       return r;
@@ -689,5 +675,5 @@ function playerStatus(ctx, pid) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { LOCALE, ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, countWins, sideIdx, sideLetter, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dateRange, dayShort, dayLabel, fmtDiff, kioskStatus, currentRowIndex, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, playerStatus };
+  module.exports = { LOCALE, ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, countWins, sideIdx, sideLetter, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, placementLabel, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dateRange, dayShort, dayLabel, fmtDiff, kioskStatus, currentRowIndex, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, playerStatus };
 }

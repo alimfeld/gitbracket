@@ -7,7 +7,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, koOrdinal, kioskStatus, currentRowIndex, matchLabel, schedTime, toCats, isDeadTie, winners, catStatus, playerStatus, teamLabel } = require('../site/derive.js');
+const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, koOrdinal, kioskStatus, currentRowIndex, matchLabel, schedTime, toCats, isDeadTie, winners, catStatus, playerStatus, teamLabel } = require('../site/derive.js');
 const { parseRoute, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer } = require('../site/app.js');
 const { generate } = require('../src/schedule.js');
 const { FIX, catOf } = require('./helpers.js');
@@ -323,11 +323,6 @@ test('result statuses render: W/O and void on cards, settled matches stay on the
   assert(venue.includes('data-status="done"') && venue.includes('<span>void</span>') && venue.includes('W/O'), 'settled matches — played, walkover, void — all stay on the full-day board');
   assert(venue.includes('data-status="upcoming"'), 'the open 11:00 final is still upcoming at 09:30');
   assert(venue.includes(`data-anchor="${nineThirty}"`) && venue.includes(`<div data-current="${nineThirty}">`), 'the anchor is the current slot, on the board and on its row cells');
-});
-
-test('bracket depth', () => {
-  const md = catOf('sample', 'md40');
-  assert(matchRound(md.byId.get(7), md) === 0 && matchRound(md.byId.get(9), md) === 1 && matchRound(md.byId.get(10), md) === 1, 'bracket depth');
 });
 
 test('koColumn: a bye\'d semi sits in the semifinal column, not with round 1', () => {

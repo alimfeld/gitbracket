@@ -7,7 +7,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { matchSlotMs, pairSig, dayKey, tzOffset, schedTime, ID_RE, schedDays } = require('../site/derive.js');
+const { matchSlotMs, pairSig, dayKey, tzOffset, schedTime, fmtTime, ID_RE, schedDays } = require('../site/derive.js');
 const { writeTournament, writeTournamentIndex, slotsOverlap, isRealDate } = require('./tools.js');
 
 // Round-robin pairings, circle method: array of rounds, each a list of pairs.
@@ -244,11 +244,8 @@ function scheduleMatches(categories, venues, tz, slotCfgOf, eventDate, blockStar
           m.venue = venue;
           // local wall date + time in the event tz, no offset — the tz in the
           // file interprets it. A fixed eventDate prefix would backdate a slot
-          // crossing midnight by 24h, so the day comes from the instant. The
-          // wall clock is typed parts with h23, so the ISO_RE contract can't
-          // depend on any locale's separator or hour cycle.
-          const wall = Object.fromEntries(new Intl.DateTimeFormat(undefined, { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(t)).map(x => [x.type, x.value]));
-          m.scheduled = `${dayKey(t, tz)}T${wall.hour}:${wall.minute}:00`;
+          // crossing midnight by 24h, so the day comes from the instant.
+          m.scheduled = `${dayKey(t, tz)}T${fmtTime(t, tz)}:00`;
           courtUse.set(venue, [...(courtUse.get(venue) ?? []), { start: t, end: t + slotMs }]);
           endOf.set(m.id, t + slotMs);
           if (m.pool !== undefined) poolDone.set(m.pool, Math.max(poolDone.get(m.pool) ?? start, t + slotMs));
