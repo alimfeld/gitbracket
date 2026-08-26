@@ -128,7 +128,7 @@ const statusLine = (st, ctx, href) => {
   const jump = (text, id) => `<a data-jump="${id}" href="${esc(href)}">${text}</a>`;
   if (st.kind === 'starts') return `<p>Starts ${st.time !== null ? timeEl(st.time, ctx.tz) : 'soon'}</p>`;
   if (st.kind === 'groups') return `<p>${jump('Group stage', 'group-matches')} · ${st.played} of ${st.count} played</p>`;
-  if (st.kind === 'ko') return `<p>Knockout stage · ${jump(waveWord(st.col), `ko-${st.col}`)}</p>`;
+  if (st.kind === 'ko') return `<p>Knockout stage · ${jump(roundName(st.col), `ko-${st.col}`)}</p>`;
   if (st.kind === 'finished') return '<p data-status="finished">Finished</p>';
   // winners: the podium is one line, third only when a bronze match decided it;
   // the names carry the weight, Finished dims — the podium stays full

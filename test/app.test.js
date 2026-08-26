@@ -7,7 +7,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, koOrdinal, kioskStatus, currentRowIndex, matchLabel, schedTime, toCats, isDeadTie, waveWord, winners, catStatus, playerStatus, teamLabel } = require('../site/derive.js');
+const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, matchRound, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, koOrdinal, kioskStatus, currentRowIndex, matchLabel, schedTime, toCats, isDeadTie, winners, catStatus, playerStatus, teamLabel } = require('../site/derive.js');
 const { parseRoute, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer } = require('../site/app.js');
 const { generate } = require('../src/schedule.js');
 const { FIX, catOf } = require('./helpers.js');
@@ -205,7 +205,7 @@ test('catStatus: starts, groups progress, the KO wave in play, and the podium at
   assert(g.kind === 'groups' && g.played === 5 && g.count === 6, 'groups live: the progress count, no next-slot noise');
   const live = catOf('sample', 'md40');
   const k = catStatus(live);
-  assert(k.kind === 'ko' && k.col === 1 && waveWord(k.col) === 'SF', 'the SF is in play — a scheduled final/bronze stays silent while its semifinal still decides them');
+  assert(k.kind === 'ko' && k.col === 1 && roundName(k.col) === 'Semifinals', 'the Semifinals are in play — a scheduled final/bronze stays silent while its semifinals still decide them');
   const full = catOf('full', 't');
   const w = catStatus(full);
   assert(w.kind === 'winners' && w.first.join() === 'p1' && w.second.join() === 'p5' && w.third.join() === 'p6', 'full finish: the podium off the played final and bronze');
@@ -229,12 +229,11 @@ test('winners: first/second off the final, third/fourth off the bronze; voids ki
   bjson.matches.t.find(m => m.id === 20).result = { status: 'void' };
   const bw = winners(place8Ctx(bjson));
   assert(bw.first.join() === 'p1' && bw.second.join() === 'p2' && bw.third === null, 'a void bronze drops the third-place prize, keeps the podium');
-  assert(waveWord(0) === 'Final' && waveWord(1) === 'SF' && waveWord(2) === 'QF' && waveWord(3) === 'Round of 16', 'wave words: abbreviated near rounds, far rounds stay full');
 });
 
 test('playerStatus: per-category standing — the live wave, the podium, elimination', () => {
   const md = catOf('sample', 'md40');
-  assert(playerStatus(md, 'p5') === 'In SF', 'a player whose semifinal is undecided reads the wave word');
+  assert(playerStatus(md, 'p5') === 'In Semifinals', 'a player whose semifinal is undecided reads the full wave name');
   assert(playerStatus(md, 'p1') === 'In the final', 'a player who already won their semi is in the final, awaiting the other side');
   const full = catOf('full', 't');
   assert(playerStatus(full, 'p1') === 'Champion' && playerStatus(full, 'p5') === 'Runner-up'
@@ -544,7 +543,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(midday.includes('data-status="done"'), 'a midday board keeps the morning results, muted');
   assert(venue.includes("Men&#39;s Doubles 40+ · Final") && !venue.includes("Men&#39;s Doubles 40+ · 9 ·"), 'kiosk meta shows the long category name and label, no match id');
   assert(!venue.includes('<nav>'), 'kiosk has no breadcrumb');
-  assert(standings.includes('<h2>Men&#39;s Doubles 40+</h2><p>Knockout stage · <a data-jump="ko-1" href="#sample">SF</a></p>') && !standings.includes('<h2 id='), 'category h2: plain in-flow heading, the wave word links to its section (single-day heading already stated the date)');
+  assert(standings.includes('<h2>Men&#39;s Doubles 40+</h2><p>Knockout stage · <a data-jump="ko-1" href="#sample">Semifinals</a></p>') && !standings.includes('<h2 id='), 'category h2: plain in-flow heading, the wave name links to its section (single-day heading already stated the date)');
   assert(standings.includes('<h1>Sample</h1>') && standings.includes('<p>Mon, Jul 14 · New York</p>'), 'one-day tournament: the heading subline states the date and the location');
   assert(!standings.includes('class="day"') && !standings.includes('Jul 14, '), 'single-day: no day dividers anywhere, and cards carry just the time');
   assert(xd.includes('<h2>Mixed Doubles</h2><p data-status="finished">Finished</p>'), 'a fully decided pool-only category: status-only subline on a single-day page, in the done-voice (no final, no podium)');

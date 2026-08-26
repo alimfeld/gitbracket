@@ -579,10 +579,6 @@ function matchLabel(m, ctx) {
 
 // ---- Status derivation: what a category or player's line says ----------------
 
-// Wave word for a column: the stage name, never a specific match — placement
-// matches share their wave's column, so a pending bronze reads "Final" too.
-const waveWord = col => roundName(col).replace('Semifinals', 'SF').replace('Quarterfinals', 'QF');
-
 // The wave in play: the lowest column whose undone matches are playable — a
 // scheduled final doesn't claim the status while its semifinals still decide
 // it. Falls back to all undone matches on malformed sides.
@@ -637,8 +633,8 @@ function catStatus(ctx) {
   return { kind: 'ko', col };
 }
 
-const inWord = col => col === 0 ? 'In the final' : `In ${waveWord(col)}`;
-const elimWord = col => col === 0 ? 'Eliminated in the final' : `Eliminated in ${waveWord(col)}`;
+const inWord = col => col === 0 ? 'In the final' : `In ${roundName(col)}`;
+const elimWord = col => col === 0 ? 'Eliminated in the final' : `Eliminated in ${roundName(col)}`;
 
 // A player's standing in one category, as a plain word — the schedule page
 // never links it; the tournament page's wave links are category-level, not
@@ -670,5 +666,5 @@ function playerStatus(ctx, pid) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { LOCALE, ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, countWins, sideIdx, sideLetter, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dateRange, dayShort, dayLabel, fmtDiff, kioskStatus, currentRowIndex, roundName, koColumn, koOrdinal, matchLabel, waveWord, winners, catStatus, playerStatus };
+  module.exports = { LOCALE, ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, countWins, sideIdx, sideLetter, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, matchRound, placementLabel, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dateRange, dayShort, dayLabel, fmtDiff, kioskStatus, currentRowIndex, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, playerStatus };
 }
