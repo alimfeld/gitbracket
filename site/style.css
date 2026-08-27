@@ -32,10 +32,9 @@ body {
 
 h1 {
   font-size: 1.5rem;
-  margin: var(--space) 0 var(--space);
+  margin: var(--space) 0 calc(var(--space)*2);
 }
 
-/* the pick-correcting "Not you?" rides the title as a quiet aside, pushed to the far right */
 h1:has(a) {
   display: flex;
   align-items: center;
@@ -51,7 +50,7 @@ h1 a {
 
 h2,
 h3 {
-  margin: calc(var(--space)*3) 0 var(--space);
+  margin: calc(var(--space)*3) 0 calc(var(--space)*2);
 }
 
 h2 {
@@ -64,9 +63,8 @@ h3 {
 
 h4 {
   font-size: 1rem;
-  margin: calc(var(--space)*2) 0 var(--space);
+  margin: calc(var(--space)*2) 0;
   color: var(--muted);
-  text-transform: uppercase;
 }
 
 /* data-jump targets land below the sticky nav bars — one bar on the player
@@ -87,9 +85,14 @@ a {
   color: var(--accent);
 }
 
+/* paragraphs live on the same grid as headings — the browser default 1em
+   collapses into ragged gaps the scale never declared */
+p {
+  margin: calc(var(--space)*2) 0;
+}
+
 .note {
   color: var(--muted);
-  margin: var(--space) 0;
   border-left: 3px solid var(--line);
   padding-left: var(--space);
 }
@@ -158,6 +161,12 @@ a {
   gap: calc(var(--space)*2);
 }
 
+/* grid-item margins never collapse — a cell heading's top margin would stack
+   on the gap and read one step wider than the same heading in flow */
+.grid h4 {
+  margin-top: 0;
+}
+
 article {
   display: flex;
   flex-direction: column;
@@ -171,6 +180,16 @@ article {
   display: flex;
   flex-direction: column;
   gap: calc(var(--space)*2);
+}
+
+/* the gap owns all spacing — a child margin would stack on top of it and
+   double a step; the day heading keeps one extra so a day break still reads */
+.stack>* {
+  margin: 0;
+}
+
+.stack h2 {
+  margin-top: var(--space);
 }
 
 .side,
@@ -289,9 +308,18 @@ body.venue header {
   padding: calc(var(--space)*2) 0 var(--space);
 }
 
+/* the date line hangs off the title's own margin — its own 2S bottom would
+   escape the header div and double the gap to the venue titles */
+.kiosk-top p {
+  margin: 0;
+}
+
 @keyframes stick {
+
   /* negative spread trims sides/top / blurred — shadow reads as bottom-only */
-  to { box-shadow: 0 3px 3px -3px rgb(0 0 0 / .2); }
+  to {
+    box-shadow: 0 3px 3px -3px rgb(0 0 0 / .2);
+  }
 }
 
 .board {
@@ -337,12 +365,10 @@ article[data-status="next"] {
   border-color: var(--accent);
 }
 
-/* the player header's next-match line speaks in the same state as the card */
 p[data-status="next"] {
   color: var(--accent);
 }
 
-/* a concluded category says so in the done-voice — muted, like done cards */
 p[data-status="finished"] {
   color: var(--muted);
 }
