@@ -7,7 +7,7 @@
 
 const path = require('path');
 const { loadRepo, isRealDate, slotsOverlap } = require('./tools.js');
-const { LOCALE, ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, isDone, poolStandings, resolveSide, isDeadTie, bestOfOf, countWins, schedTime, schedDays, placementLabel } = require('../site/derive.js');
+const { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, isDone, poolStandings, resolveSide, isDeadTie, bestOfOf, countWins, schedTime, schedDays, placementLabel } = require('../site/derive.js');
 
 const RESULTS = ['winner', 'loser'];
 const RESULT_STATUSES = ['played', 'walkover', 'void'];
@@ -58,7 +58,7 @@ function validateRepo(repo) {
     if (!t || typeof t !== 'object') { err(where, 'entry must be an object'); continue; }
     if (typeof t.name !== 'string' || !t.name.trim()) err(where, 'name must be a non-empty string');
     if (typeof t.location !== 'string' || !t.location.trim()) err(where, 'location must be a non-empty string');
-    if (t.dates !== undefined && (!Array.isArray(t.dates) || !t.dates.length || !t.dates.every(d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)))) err(where, 'dates must be a non-empty array of YYYY-MM-DD when present');
+    if (t.dates !== undefined && (!Array.isArray(t.dates) || !t.dates.length || !t.dates.every(d => typeof d === 'string' && DATE_RE.test(d)))) err(where, 'dates must be a non-empty array of YYYY-MM-DD when present');
     if (typeof t.slug !== 'string' || !ID_RE.test(t.slug)) {
       err(where, `slug ${JSON.stringify(t.slug)} must match ${ID_RE}`);
       continue; // never track or look up a malformed slug

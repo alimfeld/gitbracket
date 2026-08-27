@@ -2,6 +2,7 @@
 
 var ID_RE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/; // var, not const: app.js reads it off globalThis in the browser (script-scope consts are not globalThis properties)
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // The one display dialect: every human-visible string renders in it, so the
 // kiosk and the tests never vary with the viewer's locale. Machine-read
@@ -425,7 +426,7 @@ function schedDays(ms, tz) {
 
 // Human span from ISO day keys (null = nothing scheduled).
 function fmtRange(keys) {
-  const ks = (Array.isArray(keys) ? keys : []).filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k));
+  const ks = (Array.isArray(keys) ? keys : []).filter(k => DATE_RE.test(k));
   if (!ks.length) return null;
   if (ks.length === 1) return dayLabel(ks[0]);
   // epoch day from UTC midnight — exact; tz-local midnight math drifts across DST
@@ -675,5 +676,5 @@ function playerStatus(ctx, pid) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { LOCALE, ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, countWins, sideIdx, sideLetter, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, placementLabel, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dateRange, dayShort, dayLabel, fmtDiff, kioskStatus, currentRowIndex, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, playerStatus };
+  module.exports = { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, countWins, sideIdx, sideLetter, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, placementLabel, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dateRange, dayShort, dayLabel, fmtDiff, kioskStatus, currentRowIndex, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, playerStatus };
 }

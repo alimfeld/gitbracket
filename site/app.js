@@ -265,8 +265,7 @@ function renderVenue(route, data, now = Date.now()) {
     }
   }
   rows.sort((a, b) => a.t - b.t);
-  // courts with no matches are simply absent; names come straight from the tournament
-  const venueNames = new Map((data.tjson.venues || []).map(v => [v.id, v.name]));
+  // courts with no matches are simply absent; the cat contexts already derived the venue names from this tjson
   const shown = v ? rows.filter(r => r.m.venue === v) : rows;
   const tz = data.tjson.timezone || 'UTC';
   const today = dayKey(now, tz); // one day per screen — an overnight board must not list yesterday
@@ -280,7 +279,7 @@ function renderVenue(route, data, now = Date.now()) {
   const header = `<header><div><h1>${esc(data.t.name)}</h1><p>${shownDay === today ? 'Today' : dayLabel(shownDay)}</p></div><time id="clock"></time></header>`;
   // header and venue titles stick as one block — the titles ride the running
   // clock, aligned to the board by the shared --cols track
-  const top = `<div class="kiosk-top" style="--cols: ${cols.length}">${header}${cols.map(id => `<h2>${esc(venueNames.get(id) || id)}</h2>`).join('')}</div>`;
+  const top = `<div class="kiosk-top" style="--cols: ${cols.length}">${header}${cols.map(id => `<h2>${esc((ctxs[0] && ctxs[0].venues.get(id)) || id)}</h2>`).join('')}</div>`;
   if (!cols.length) return top + '<p>Nothing scheduled.</p>';
   // columns are venues, rows are start times — every column holds the same
   // cells, so the cards of one wave line up; holes stay empty cells. ponytail:

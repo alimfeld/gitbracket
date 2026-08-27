@@ -17,7 +17,7 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const { spawnSync } = require('child_process');
-const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, fmtTime, matchLabel, poolStandings, poolRanks, fmtDiff, bestOfOf, countWins, sideLetter, winnerIdx, dayKey } = require('../site/derive.js');
+const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, fmtTime, matchLabel, poolStandings, poolRanks, fmtDiff, bestOfOf, countWins, sideLetter, winnerIdx, dayKey, DATE_RE } = require('../site/derive.js');
 const { loadRepo, writeTournament } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 const { ship } = require('./publish.js');
@@ -74,7 +74,7 @@ function buildScheduled(hhmm, tz, date) {
   if (!/^\d{1,2}:\d{2}$/.test(hhmm)) return null;
   const [h, m] = hhmm.split(':');
   if (+h > 23 || +m > 59) return null;
-  if (date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  if (date !== undefined && !DATE_RE.test(date)) return null;
   // an impossible date (2026-02-30) passes this regex — the validator gate rejects it on write, like applyVenue's unknown venues
   return `${date || dayKey(Date.now(), tz)}T${h.padStart(2,'0')}:${m}:00`; // wall time — the tournament tz interprets it
 }
@@ -505,7 +505,7 @@ function editCmd(state, kind, cat, matchId, rest) {
   if (kind === 'time') {
     // args: [YYYY-MM-DD] hh:mm — a bare '-' unschedules the match back to TBD
     const a = rest[0], b = rest[1];
-    const date = b !== undefined && /^\d{4}-\d{2}-\d{2}$/.test(a) ? a : undefined;
+    const date = b !== undefined && DATE_RE.test(a) ? a : undefined;
     const arg = date !== undefined ? b : a;
     if (!arg) return C.yellow('usage: /time <category> <match> [date] <hh:mm>  (or - to unschedule)');
     if (arg === '-') return applyAndCommit(state, 'time', cat, matchId, c => applyTime(c, matchId, undefined));

@@ -381,7 +381,7 @@ function generate(spec) {
   // ---- skeleton ----
   const catById = new Map(categories.map((c) => [c.id, c]));
   const VENUES = Object.entries(venues).map(([id, vn]) => ({ id, name: vn })); // spec order = court-assignment priority
-  const PLAYERS = Object.entries(players).map(([id, pn]) => ({ id, name: pn })).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const PLAYERS = Object.entries(players).map(([id, pn]) => ({ id, name: pn })).sort((a, b) => a.id.localeCompare(b.id));
   const CATS = categories.map((c) => ({
     id: c.id,
     name: c.name,
