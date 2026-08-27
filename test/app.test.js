@@ -587,7 +587,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(ppage.includes('class="ph"'), 'player match cards render unplayed score slots too');
   assert(ppage.includes('Ada Lovelace'), 'player page finds the player');
   assert(ppage.includes('<nav class="segments" aria-label="Views"><a href="#sample?player=p1">Tournament</a><a href="#sample/schedule?player=p1" aria-current="true">My Schedule</a></nav>'), 'player page: segment switch, My Schedule current, pick preserved in links');
-  assert(ppage.includes('<p><strong>Men&#39;s Doubles 40+</strong>: In the final · <strong>Mixed Doubles</strong>: Out in groups</p><p data-status="next"><a data-jump="next" href="#sample/schedule?player=p1">Next: Men&#39;s Doubles 40+ · Final · <time datetime="2025-07-14T16:15:00.000Z">12:15</time> · Court 1</a></p>'), 'player page: standing and next each on their own line — next is a real link to the next card so its accent is honest');
+  assert(ppage.includes('<p><strong>Men&#39;s Doubles 40+</strong>: In the final · <strong>Mixed Doubles</strong>: Out in groups</p><p data-status="next"><a data-jump="next" href="#sample/schedule?player=p1">Next: <time datetime="2025-07-14T16:15:00.000Z">12:15</time> · Court 1</a></p>'), 'player page: standing and next each on their own line — next is a real link to the next card so its accent is honest');
   assert(ppage.includes('#sample'), 'player page links the tournament name to the tournament page');
   const picker = renderPlayer({ slug: 'sample', view: 'schedule' }, data);
   assert(picker.includes('<nav class="segments" aria-label="Views"><a href="#sample">Tournament</a><a href="#sample/schedule" aria-current="true">My Schedule</a></nav>'), 'picker: segment switch, My Schedule current');

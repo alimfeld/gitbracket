@@ -374,7 +374,7 @@ function renderPlayer(route, data) {
   if (nextRow) {
     const m = nextRow.m, nctx = nextRow.ctx;
     const t = schedTime(m, nctx.tz);
-    next = `<a data-jump="next" href="${esc(href(data.t.slug, 'schedule', route))}">Next: ${esc(nctx.name)} · ${esc(matchLabel(m, nctx))}${t !== null ? ` · ${timeEl(t, nctx.tz, multi)}` : ' · TBD'} · ${m.venue ? esc(nctx.venues.get(m.venue) || m.venue) : 'TBD'}</a>`;
+    next = `<a data-jump="next" href="${esc(href(data.t.slug, 'schedule', route))}">Next: ${t !== null ? timeEl(t, nctx.tz, multi) : 'TBD'}${m.venue ? ` · ${esc(nctx.venues.get(m.venue) || m.venue)}` : ' · TBD'}</a>`;
   }
   const parts = [segmentBar(route), `<header><h1>${esc(p.name)}<a href="${esc(href(data.t.slug, 'schedule', { cat: route.cat }))}">Not you?</a></h1>${statuses.length ? `<p>${statuses.join(' · ')}</p>` : ''}${next ? `<p data-status="next">${next}</p>` : ''}</header>`];
   // one flat timeline under date headings — the day owns the context, so cards
