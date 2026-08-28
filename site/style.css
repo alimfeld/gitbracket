@@ -67,14 +67,13 @@ h4 {
   color: var(--muted);
 }
 
-/* data-jump targets land below the sticky nav bars — one bar on the player
-   page, segments + cats on the tournament page */
+/* jump targets clear the sticky bars — 2 on the tournament page, 1 on the player page */
 :is(h3, h4)[id] {
-  scroll-margin-top: calc(var(--bar-h)*2);
+  scroll-margin-top: calc(var(--bar-h)*2 + var(--space));
 }
 
 article[id] {
-  scroll-margin-top: var(--bar-h);
+  scroll-margin-top: calc(var(--bar-h) + var(--space)*2);
 }
 
 header {
