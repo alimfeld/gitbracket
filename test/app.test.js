@@ -558,6 +558,11 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(mid.includes('<tr><td class="num">1</td><td>Ada Lovelace / Grace Hopper</td>'), 'ranks return once a pool has a decided match');
   assert(mid.includes('</div><h4 id="group-matches">Group matches</h4><div class="grid">'), 'running groups: pools, then the Matches h4, then the cards — the status lives in the category subline');
   assert(!mid.includes('data-stage') && !mid.includes('toggle'), 'no disclosure machinery ships — nothing hides, nothing toggles');
+  // the subline's stage link and the accent agree: unscored cards of the linked
+  // wave carry the next highlight — done cards and other waves don't
+  assert.equal((standings.match(/data-status="next"/g) || []).length, 1, 'ko in play: only the one unscored semifinal card carries the accent (the played SF1 and the unplayed final do not)');
+  assert(standings.includes('<article data-status="next">') && standings.slice(standings.indexOf('data-status="next"')).includes('SF2'), 'the highlighted card is the unresolved semifinal, not a done or other-round card');
+  assert.equal((mid.match(/data-status="next"/g) || []).length, 1, 'groups in play: only the one unscored group match carries the accent');
   const { data: rdata } = dataOf('result');
   const res = renderTournament({ slug: 'result', view: 'tournament' }, rdata);
   assert(!res.includes('advance'), 'partial draw: no advance note on pool headings');
@@ -571,6 +576,8 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(pre.includes('<p>Starts '), 'pre-start status line');
   assert(!pre.includes('class="num">1</td>'), 'no phantom rank 1s before any result');
   assert(pre.includes('<td class="num"></td>'), 'rank cells stay blank until a pool has a decided match');
+  assert(!pre.includes('data-status="next"'), 'pre-start category: no stage link yet, no highlight');
+  assert(!xd.includes('data-status="next"'), 'finished category: no stage link, no highlight');
   const ppage = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p1' }, data);
   assert(ppage.includes('<h1>Ada Lovelace<a href="#sample/schedule">Not you?</a></h1>'), 'player page: the pick-correcting link rides the name in the title, separated by space not punctuation');
   const nextCard = ppage.indexOf('<article id="next"');

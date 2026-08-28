@@ -84,7 +84,7 @@ const segmentBar = r => {
 const MISSING = '<p>No tournament data yet — check back soon.</p>';
 
 
-const matchGrid = (ms, ctx, day) => `<div class="grid">${ms.map(m => matchCard(m, ctx, { meta: ['label', 'court', 'time'], day })).join('')}</div>`;
+const matchGrid = (ms, ctx, day, next) => `<div class="grid">${ms.map(m => matchCard(m, ctx, { meta: ['label', 'court', 'time'], day, status: next && next(m) ? 'next' : undefined })).join('')}</div>`;
 
 // Date leads, undated entries defer to the end, ties hold index order (stable sort).
 function renderIndex(route, data) {
@@ -157,6 +157,9 @@ function catSection(ctx, opts) {
   // one category subline: the date span on multi-day pages only — a single-day
   // heading already states the date once — then the status sentence or podium
   const st = catStatus(ctx);
+  // the subline's stage link names the wave in play — its unscored cards carry
+  // the player page's next accent, so the link and the play always agree
+  const next = m => st && !isDone(m) && (st.kind === 'groups' ? m.pool !== undefined : st.kind === 'ko' && koColumn(m, ctx) === st.col);
   const lines = [];
   if (opts.multi) lines.push(`<p>${esc(dateRange(ctx.matches, ctx.tz))}</p>`);
   if (st) lines.push(statusLine(st, ctx, opts.href));
@@ -181,9 +184,9 @@ function catSection(ctx, opts) {
       }
       parts.push('</div>');
     }
-    parts.push(`<h4 id="group-matches">Group matches</h4>`, matchGrid(grp, ctx, opts.multi), '</section>');
+    parts.push(`<h4 id="group-matches">Group matches</h4>`, matchGrid(grp, ctx, opts.multi, next), '</section>');
   }
-  if (ko.length) parts.push(bracketHtml(ctx, ko, opts.multi));
+  if (ko.length) parts.push(bracketHtml(ctx, ko, opts.multi, next));
   parts.push('</section>');
   return parts.join('');
 }
@@ -195,7 +198,7 @@ const koOrder = (ms, ctx) => [...ms].sort((a, b) =>
   (koOrdinal(a, ctx) || Infinity) - (koOrdinal(b, ctx) || Infinity) ||
   (schedTime(a, ctx.tz) ?? 0) - (schedTime(b, ctx.tz) ?? 0));
 
-function bracketHtml(ctx, ko, multi) {
+function bracketHtml(ctx, ko, multi, next) {
   const maxR = ko.reduce((mx, m) => Math.max(mx, koColumn(m, ctx)), 0);
   const cols = [];
   for (const m of ko) {
@@ -207,7 +210,7 @@ function bracketHtml(ctx, ko, multi) {
   for (let r = 0; r <= maxR; r++) { // index by depth, skip holes — labels stay aligned if a column is empty
     const ms = cols[r];
     if (!ms || !ms.length) continue;
-    parts.push(`<h4 id="ko-${maxR - r}">${roundName(maxR - r)}</h4>`, matchGrid(koOrder(ms, ctx), ctx, multi));
+    parts.push(`<h4 id="ko-${maxR - r}">${roundName(maxR - r)}</h4>`, matchGrid(koOrder(ms, ctx), ctx, multi, next));
   }
   parts.push('</section>');
   return parts.join('');
