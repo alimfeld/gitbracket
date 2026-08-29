@@ -328,47 +328,145 @@ const ordRules = new Intl.PluralRules(LOCALE, { type: 'ordinal' });
 const ordinal = n => n + ({ one: 'st', two: 'nd', few: 'rd' }[ordRules.select(n)] || 'th');
 
 // Placement label (3rd/5th/7th place, classification semis), null for main-
-// bracket matches. Memo rides ctx._plMemo — rebuilt each render, so a polled
-// page picks up new results.
+// bracket matches. Memo rides ctx._pl — rebuilt each render, so a polled page
+// picks up new results.
 function placementLabel(m, ctx) {
-  if (!ctx._plMemo) ctx._plMemo = new Map();
-  const r = plRange(m, ctx, ctx._plMemo);
+  if (!ctx._pl) ctx._pl = plBuild(ctx);
+  const r = ctx._pl.get(m.id);
   if (!r) return null;
-  const terminal = !ctx.matches.some(X => Array.isArray(X.sides) && X.sides.some(s => s && s.kind === 'match' && s.match === m.id && s.result === 'loser'));
-  return terminal ? `${ordinal(r.lo)} place` : `${ordinal(r.lo)}–${ordinal(r.hi)} semi`;
+  return r.win ? `${ordinal(r.lo)} place` : `${ordinal(r.lo)}–${ordinal(r.hi)} semi`;
 }
 
-// Half of a feeder's range: winner edges take the top, loser edges the bottom.
-const half = (r, top) => { const w = (r.hi - r.lo + 1) / 2; return top ? { lo: r.lo, hi: r.lo + w - 1 } : { lo: r.lo + w, hi: r.hi }; };
-
-// Loser range of a main-bracket round at winner-edge depth d: [2^d + 1, 2^(d+1)].
-const loserRange = (X, ctx) => { const d = wdOf(ctx, X.id); return { lo: 2 ** d + 1, hi: 2 ** (d + 1) }; };
-
-// Possible rank range; null for main-bracket matches. Memoized per category.
-function plRange(m, ctx, memo) {
-  if (!Array.isArray(m.sides)) return null; // malformed: report, never throw
-  if (memo.has(m.id)) return memo.get(m.id);
-  memo.set(m.id, null); // in-progress = cycle guard
-  let lo = Infinity, hi = -Infinity;
-  for (const s of m.sides) {
-    if (!s || s.kind !== 'match') continue;
-    const X = ctx.byId.get(s.match);
-    if (!X) continue;
-    const inner = plRange(X, ctx, memo);
-    const r = inner ? half(inner, s.result === 'winner')
-      : s.result === 'loser' ? loserRange(X, ctx) : null;
-    if (r) { lo = Math.min(lo, r.lo); hi = Math.max(hi, r.hi); }
+// Possible-rank range of every classification match, exact for bye-thinned
+// pools. One rule: a slot reaches the range of whichever match consumes that
+// edge (winner edges climb the better ranks, loser edges the worse); an edge
+// nothing consumes holds a fixed rank, stepped out from the pool's champion
+// in bracket order. So the middle loser of a 5-loser pool reaches [A, A+2],
+// not the pool's bottom, because its chain stops there — no nominal round
+// ranges, no caps, no odd-size arithmetic. Built once per category; memo
+// ctx._pl, discarded each render like _wd/_koCol (toCats makes fresh contexts).
+function plBuild(ctx) {
+  const pl = new Map(); // id -> { lo, hi, win } (win: winner edge unconsumed)
+  const byId = ctx.byId;
+  const winParent = new Map(), losParent = new Map(); // id -> the match consuming its winner/loser edge
+  const adj = new Map(); // undirected match-edge links for the reachability walk
+  const addLink = (a, b) => {
+    if (!adj.has(a)) adj.set(a, []);
+    adj.get(a).push(b);
+  };
+  for (const m of ctx.matches) {
+    if (!Array.isArray(m.sides)) continue;
+    for (const s of m.sides) {
+      if (!s || s.kind !== 'match' || !byId.has(s.match)) continue;
+      (s.result === 'winner' ? winParent : losParent).set(s.match, m);
+      addLink(m.id, s.match);
+      addLink(s.match, m.id);
+    }
   }
-  const out = hi === -Infinity ? null : { lo, hi };
-  memo.set(m.id, out);
-  return out;
+  // Classification match: a loser edge as a slot (main-bracket matches carry
+  // only winner and player sides), or a slot from a classified match.
+  const memMemo = new Map();
+  const member = (m) => {
+    if (memMemo.has(m.id)) return memMemo.get(m.id);
+    memMemo.set(m.id, false); // in-progress = cycle guard; the gate rejects cycles first
+    let yes = false;
+    for (const s of m.sides) {
+      if (!s || s.kind !== 'match') continue;
+      if (s.result === 'loser') { yes = true; break; }
+      const X = byId.get(s.match);
+      if (X && member(X)) { yes = true; break; }
+    }
+    memMemo.set(m.id, yes);
+    return yes;
+  };
+  // Pool champion: a match nothing winner-consumes whose all-winner chain
+  // bottoms out at a main-round loser edge. The first loser edge on that chain
+  // must be the anchor — a sub-bracket final's chain passes through another
+  // classification match first, so only the pool's champion qualifies, and the
+  // walk returns the anchor round's winner depth d.
+  const champAnchor = (m, seen) => {
+    if (seen.has(m.id) || !Array.isArray(m.sides)) return null;
+    seen.add(m.id);
+    for (const s of m.sides) {
+      if (!s || s.kind !== 'match' || s.result !== 'loser') continue;
+      const X = byId.get(s.match);
+      if (X && !member(X)) return wdOf(ctx, X.id); // the anchor: a main-round loser edge
+      return null; // a sub-bracket final's chain passes through the classification — not the champion
+    }
+    for (const s of m.sides) {
+      if (!s || s.kind !== 'match' || s.result !== 'winner') continue;
+      const r = champAnchor(byId.get(s.match), seen);
+      if (r !== null) return r;
+    }
+    return null;
+  };
+  const pools = []; // [champion, anchor depth]
+  for (const m of ctx.matches) {
+    if (!Array.isArray(m.sides) || winParent.has(m.id)) continue;
+    if (!m.sides.some(s => s && s.kind === 'match')) continue;
+    const d = champAnchor(m, new Set());
+    if (d !== null) pools.push([m, d]);
+  }
+  for (const [champ, d] of pools) {
+    const A = 2 ** d + 1; // the pool's best rank
+    let next = A + 2;
+    // Reachability from the champion over classification matches only — main-
+    // bracket neighbors (pools, semifinals) fail member() and stay out. Winner-
+    // edge links before loser- links so tied terminals rank in winner order.
+    const seen = new Set([champ.id]);
+    const queue = [champ];
+    const candsOf = (N) => (adj.get(N.id) || [])
+      .filter(x => !seen.has(x) && member(byId.get(x)))
+      .sort((a, b) => winnerLink(byId.get(b), N) - winnerLink(byId.get(a), N));
+    const spec = new Map(); // id -> [winner edge, loser edge]: a rank, or the consuming match's id
+    for (let qi = 0; qi < queue.length; qi++) {
+      const N = queue[qi];
+      const pw = winParent.get(N.id), lp = losParent.get(N.id);
+      const w = pw ? ['r', pw.id] : N === champ ? ['n', A] : ['n', next++];
+      const l = lp ? ['r', lp.id] : N === champ ? ['n', A + 1] : ['n', next++];
+      spec.set(N.id, [w, l]);
+      for (const x of candsOf(N)) { seen.add(x); queue.push(byId.get(x)); }
+    }
+    // Ranges resolve on demand: a slot takes the range of the match consuming
+    // that edge. Consumers sit on both sides of the discovery order (the
+    // champion is early, deeper loser-bracket finals late), so no single pass
+    // covers it — the memo just fills whatever order the refs demand.
+    const resolve = (id) => {
+      if (pl.has(id)) return pl.get(id);
+      pl.set(id, null); // in-progress: cycle guard (malformed data — the gate reports it)
+      const [w, l] = spec.get(id) || [];
+      const val = (x) => x && (x[0] === 'n' ? { lo: x[1], hi: x[1] } : resolve(x[1])) || null;
+      const wv = val(w), lv = val(l);
+      const out = wv && lv
+        ? { lo: Math.min(wv.lo, lv.lo), hi: Math.max(wv.hi, lv.hi), win: !winParent.has(id) }
+        : null;
+      pl.set(id, out);
+      return out;
+    };
+    for (const m of queue) resolve(m.id);
+  }
+  return pl;
+}
+
+// Winner-edge links first: when a node's consumers tie on the same layer, the
+// one whose slot comes from the winner edge ranks higher.
+function winnerLink(m, N) {
+  if (!Array.isArray(m.sides)) return 0;
+  return m.sides.some(s => s && s.kind === 'match' && s.match === N.id && s.result === 'winner') ? 1 : 0;
+}
+
+// Range of a classification match, null for main-bracket matches. The bronze
+// finder (winners) reads lo here — same structure the labels use.
+function plRange(m, ctx) {
+  if (!ctx._pl) ctx._pl = plBuild(ctx);
+  return ctx._pl.get(m.id);
 }
 
 // Winner-edge distance to the final (0 = the final itself): the round a loser
 // edge branches from. koColumn's memo can't serve it either: this is read while
 // koColumn's build is mid-flight, so it gets its own category memo, fully
 // built before any consumer reads it (in-progress values never escape). Same
-// discard-per-render contract as _koCol/_plMemo: toCats rebuilds contexts
+// discard-per-render contract as _koCol/_pl: toCats rebuilds contexts
 // every render.
 function wdOf(ctx, id) {
   if (!ctx._wd) {
@@ -491,7 +589,7 @@ const mainFinal = (ctx, parented) =>
 // kids (parent id -> feeder ids in side order), loserFed (loser-edge fed ids).
 // Every bracket consumer (koColumn, koOrdinal, winners, mainFinal) reads this
 // one map — one edge classification, no drift. Memo rides ctx._parents: same
-// discard-per-render contract as _koCol/_plMemo (toCats rebuilds contexts).
+// discard-per-render contract as _koCol/_pl (toCats rebuilds contexts).
 function parentsOf(ctx) {
   if (!ctx._parents) {
     const winnerParent = new Map();
@@ -543,7 +641,7 @@ function koColumn(m, ctx) {
 // by side, and so on down. Reads bracket structure, never `scheduled`, so
 // editing times can't renumber anything; only rewiring the bracket does (and
 // then the label should change). 0 = off the championship tree (classification
-// rounds — placementLabel names those). Memo rides ctx._koOrd: same discard- per- render contract as _koCol/_plMemo.
+// rounds — placementLabel names those). Memo rides ctx._koOrd: same discard- per- render contract as _koCol/_pl.
 function koOrdinal(m, ctx) {
   if (!ctx._koOrd) {
     const { kids, winnerParent } = parentsOf(ctx);
@@ -609,11 +707,10 @@ function winners(ctx) {
   // the bronze is the terminal match whose possible range starts at 3rd place —
   // loserFed keeps a mid-bracket '3rd–4th semi' (range lo 3, loser edge to a
   // decider) from being read as the decider itself
-  const pMemo = new Map(); // plRange's default memo is per-call — one memo across the scan
   let bronze = null;
   for (const X of ctx.matches) {
     if (!X || X.pool !== undefined || loserFed.has(X.id)) continue;
-    const r = plRange(X, ctx, pMemo);
+    const r = plRange(X, ctx);
     if (r && r.lo === 3) { bronze = X; break; }
   }
   if (bronze && bronze.result && winnerIdx(bronze) !== null && Array.isArray(bronze.sides)) {

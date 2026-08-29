@@ -473,6 +473,53 @@ test('placementLabel: depth-3 classification (16 teams, placements 16) labels ev
   for (const l of ['9th place', '11th place', '13th place', '15th place']) assert.equal(count(l), 1, l);
 });
 
+test('placementLabel: odd classification (7 teams, placements 8) spans the true range, one claim per rank', () => {
+  // A 7-team bracket's first round is partial (1 bye): its 3 losers classify as
+  // ranks 5-7. The middle loser waits for the winner of (l0,l2), so the semi
+  // must not be read as a terminal 5th-place decider — no ghost 8th, and no
+  // two matches claiming the same rank.
+  const teams = Array.from({ length: 7 }, (_, i) => [`p${i}`]);
+  const tourney = generate({
+    slug: 'odd', name: 'Odd', location: 'Geneva', timezone: 'UTC', date: '2026-05-02', poolSize: 7,
+    blocks: { t: '09:00' }, venues: { 'court-1': 'Court 1' },
+    players: Object.fromEntries(teams.map(([id]) => [id, id])),
+    categories: [{ id: 't', name: 'Single', bestOf: 1, slotMinutes: 30, knockout: true, placements: 8 }],
+    teams: { t: teams },
+  });
+  const ctx = makeCat({ meta: tourney.categories[0], matches: tourney.matches.t }, tourney);
+  const labels = ctx.matches.filter(m => m.pool === undefined).map(m => matchLabel(m, ctx));
+  const count = l => labels.filter(x => x === l).length;
+  assert.equal(count('3rd place'), 1, 'bronze');
+  assert.equal(count('5th–7th semi'), 1, 'losers of the partial first round');
+  assert.equal(count('5th place'), 1, 'classification decider');
+  assert.equal(count('5th–8th semi'), 0, 'no ghost 8th — the field has 7 teams');
+});
+
+test('placementLabel: depth-3 odd classification (13 teams, placements 16) exact to the middle loser', () => {
+  // R1 loser pool of 5 spans ranks 9-13. The middle loser waits for the winner
+  // of (l0,l4) — it can only reach 9th-11th, so its join must not be ranged to
+  // the pool's bottom ("9th–13th"), and the sawtooth bottom (12th/13th) stays
+  // a fixed place with no ghost ranks above the field.
+  const teams = Array.from({ length: 13 }, (_, i) => [`p${i}`]);
+  const tourney = generate({
+    slug: 'odd13', name: 'Odd13', location: 'Geneva', timezone: 'UTC', date: '2026-05-02', poolSize: 13,
+    blocks: { t: '09:00' }, venues: { 'court-1': 'Court 1' },
+    players: Object.fromEntries(teams.map(([id]) => [id, id])),
+    categories: [{ id: 't', name: 'Single', bestOf: 1, slotMinutes: 30, knockout: true, placements: 16 }],
+    teams: { t: teams },
+  });
+  const ctx = makeCat({ meta: tourney.categories[0], matches: tourney.matches.t }, tourney);
+  const labels = ctx.matches.filter(m => m.pool === undefined).map(m => matchLabel(m, ctx));
+  const count = l => labels.filter(x => x === l).length;
+  assert.equal(count('9th–11th semi'), 1, 'middle loser joins at its true ceiling');
+  assert.equal(count('9th–13th semi'), 2, 'the paired extremes genuinely span the pool');
+  assert.equal(count('12th place'), 1, 'true bottom of the odd pool');
+  assert.equal(count('13th place'), 0, 'no ghost 13th place match — it is the 12th/13th sawtooth');
+  const maxRank = Math.max(...labels.filter(l => l.includes('–') || l.endsWith('place'))
+    .flatMap(l => (l.match(/\d+/g) || []).map(Number)));
+  assert.ok(maxRank <= 13, 'no ranks above the 13-team field');
+});
+
 test('place8: 8-team classification bracket labels resolve from a committed fixture', () => {
   const p8 = catOf('place8', 't');
   const L = id => placementLabel(p8.byId.get(id), p8);
