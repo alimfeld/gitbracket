@@ -50,21 +50,26 @@ function splitPools(teams, poolSize) {
 // bronze match only — deeper placement matches use the default knockout config.
 function buildPlacement(losers, mid, fin) {
   const n = losers.length;
+  if (n < 2) return []; // single loser: rank is implied by bracket position, no match possible
   if (n === 2) {
     const m = { id: mid(), sides: [losers[0], losers[1]] };
     if (fin.bestOf !== undefined) m.bestOf = fin.bestOf; // fin is always {} or the spec's final object — all callers pass one
     if (fin.slotMinutes !== undefined) m.slotMinutes = fin.slotMinutes;
     return [m];
   }
-  // n >= 4: pair best vs worst, then recurse winners (top half) and losers (bottom half)
+  // n >= 3: pair best vs worst, then recurse winners (top half) and losers (bottom half)
   const r1 = [];
   const winners = [], losers2 = [];
-  for (let i = 0; i < n / 2; i++) {
+  const half = n >> 1;
+  for (let i = 0; i < half; i++) {
     const m = { id: mid(), sides: [losers[i], losers[n - 1 - i]] };
     r1.push(m);
     winners.push({ kind: 'match', match: m.id, result: 'winner' });
     losers2.push({ kind: 'match', match: m.id, result: 'loser' });
   }
+  // odd count: the middle loser waits for the top half's winner — its rank
+  // decided on court, not implied
+  if (n % 2 === 1) winners.push(losers[half]);
   return [...r1, ...buildPlacement(winners, mid, fin), ...buildPlacement(losers2, mid, fin)];
 }
 

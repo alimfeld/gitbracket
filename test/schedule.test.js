@@ -164,6 +164,32 @@ test('placements: 8 builds 5th-8th classification', () => {
   assert.ok(loserEdges.length > 1, 'multiple placement matches with loser edges');
 });
 
+test('knockout with byes: odd loser pools build no self-matches (R1 losers from a partial round)', () => {
+  // Single-pool knockout where total < next power of two: round 1 has byes, so
+  // its loser pool is not a power of two (3 teams: 1 loser; 7 teams: 3 losers).
+  // Used to recurse forever pairing a lone loser against itself — the bracket
+  // must degrade gracefully: rank implied for a single loser, and a proper
+  // 2-match classification for three.
+  const mk = (n, extra) => ({
+    ...MINI,
+    poolSize: n,
+    players: Object.fromEntries(Array.from({ length: n }, (_, i) => ['t' + (i + 1), 'T' + (i + 1)])),
+    teams: { md: Array.from({ length: n }, (_, i) => ['t' + (i + 1)]) },
+    categories: [{ ...MINI.categories[0], knockout: true, ...extra }],
+  });
+  for (const [n, extra, koCount] of [[3, {}, 2], [7, { placements: 8 }, 9]]) {
+    const tourney = generate(mk(n, extra));
+    const { errs } = validateRepo(repoOf(tourney));
+    assert.deepEqual(errs, []);
+    const ko = tourney.matches.md.filter((m) => m.pool === undefined);
+    assert.equal(ko.length, koCount, `${n} teams: knockout match count`);
+    // no match may reference itself as a side — the old self-pair bug
+    for (const m of ko) for (const s of m.sides) {
+      assert.ok(!(s.kind === 'match' && s.match === m.id), `${m.id} references itself`);
+    }
+  }
+});
+
 test('knockout false + placements silently ignores placements', () => {
   const spec = {
     ...MINI,
