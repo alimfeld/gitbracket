@@ -110,9 +110,23 @@ function buildKnockout(pools, names, mid, fin, placements) {
     }
   }
   const order = sCurve(0, M - 1); // seed indices in bracket position order
-  // ponytail: with 3+ pools the rank-major interleave can pair two same-pool
-  // sides in round 1 (4/3/3 -> A3 vs A4). Fine for v1 events; offset the seed
-  // interleave per pool if a seeding-quality pass is ever needed.
+  // Round-1 pairs are mirror positions (p, M-1-p); the rank-major interleave
+  // can land two same-pool sides on one pair (4/3/3 -> A3 vs A4). Swap the
+  // second side with the last seed that keeps both its pair and the target
+  // pair split. A pool holding more than half the field can't be split at all
+  // (5/2: every other mirror pair needs a non-pool side) — those stay as built.
+  for (let j = 0; j < order.length; j += 2) {
+    const a = order[j], b = order[j + 1];
+    if (b >= total || seed[a].pool !== seed[b].pool) continue;
+    for (let x = total - 1; x >= 0; x--) {
+      if (x === b) continue;
+      const y = M - 1 - x;
+      if (seed[x].pool === seed[a].pool) continue;
+      if (y < total && seed[b].pool === seed[y].pool) continue;
+      [seed[b], seed[x]] = [seed[x], seed[b]];
+      break;
+    }
+  }
 
   const matches = [];
   const rounds = []; // track every round for placement construction

@@ -255,6 +255,22 @@ test('knockout cross-pairs pool winners: they can only meet deep in the bracket'
   }
 });
 
+test('knockout round 1 never pairs two teams from the same pool', () => {
+  // 11 teams at poolSize 4 split 4/4/3 — the rank-major interleave used to put
+  // the big pool's ranks 3 and 4 across a mirror pair (A3 vs A4 in round 1).
+  const players = {};
+  const md = [];
+  for (let i = 1; i <= 11; i++) { players['p' + i] = 'P' + i; md.push(['p' + i]); }
+  const tourney = generate({ ...MINI, players, teams: { md } });
+  const { errs } = validateRepo(repoOf(tourney));
+  assert.deepEqual(errs, []);
+  // direct-pool matches: true round 1 plus the round-2 match where two byed
+  // seeds must meet (11 teams, 3 byes) — every one must be cross-pool
+  const r1 = tourney.matches.md.filter((m) => m.pool === undefined && m.sides.every((s) => s && s.kind === 'pool'));
+  assert.ok(r1.length >= 3, 'an 11-team bracket has round-1 matches');
+  for (const m of r1) assert.notEqual(m.sides[0].pool, m.sides[1].pool, `${m.sides[0].pool}${m.sides[0].rank} meets ${m.sides[1].pool}${m.sides[1].rank} in round 1`);
+});
+
 test('group stage: an even pool packs tight and hands every team the same back-to-back burden', () => {
   // a 4-team pool on 2 courts: 6 matches, 2 per round — every team plays at
   // the same consecutive waves; no team can get more or less rest than another
