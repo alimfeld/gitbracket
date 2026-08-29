@@ -119,7 +119,7 @@ function renderTournament(route, data) {
   const multi = multiDay(ctxs);
   const parts = [segmentBar(route), `<header><h1>${esc(data.t.name)}</h1>`];
   // the heading states the span and the location once — single-day cards never repeat the date
-  const range = dateRange(ctxs.flatMap(c => c.matches), tz);
+  const range = fmtRange(schedDays(ctxs.flatMap(c => c.matches), tz));
   parts.push(`<p>${[range, esc(data.tjson.location)].filter(Boolean).join(' · ')}</p></header>`);
   parts.push(`<nav class="cats" aria-label="Categories">${catNav(data.t.slug, ctxs, route)}</nav>`);
   parts.push(catSection(show, { multi, href: href(data.t.slug, 'tournament', route) }));
@@ -161,7 +161,7 @@ function catSection(ctx, opts) {
   // the player page's next accent, so the link and the play always agree
   const next = m => st && !isDone(m) && (st.kind === 'groups' ? m.pool !== undefined : st.kind === 'ko' && koColumn(m, ctx) === st.col);
   const lines = [];
-  if (opts.multi) lines.push(`<p>${esc(dateRange(ctx.matches, ctx.tz))}</p>`);
+  if (opts.multi) lines.push(`<p>${esc(fmtRange(schedDays(ctx.matches, ctx.tz)))}</p>`);
   if (st) lines.push(statusLine(st, ctx, opts.href));
   parts.push(`<section><h2>${esc(ctx.name)}</h2>${lines.join('')}`);
   if (grp.length) {
@@ -254,7 +254,7 @@ function sideRow(m, ctx, i) {
   return `<div class="side"${w === i ? ' data-win' : ''}><span>${esc(sideLabel(m.sides[i], ctx))}</span><span class="score">${score}</span></div>`;
 }
 
-function renderVenue(route, data, now = Date.now()) {
+function renderVenue(route, data, now) {
   if (!data.tjson) return MISSING;
   const v = route.venue;
   const rows = [];
@@ -406,7 +406,7 @@ function renderPlayer(route, data) {
 function boot() {
   const app = document.querySelector('main');
 
-  const renderers = { index: renderIndex, tournament: renderTournament, venues: renderVenue, schedule: renderPlayer };
+  const renderers = { index: renderIndex, tournament: renderTournament, venues: (r, d) => renderVenue(r, d, Date.now()), schedule: renderPlayer };
   const pageTitle = (r, d) => {
     if (r.view === 'index' || !d.t) return 'Bracket';
     if (r.view === 'schedule') {
