@@ -348,7 +348,7 @@ function placementLabel(m, ctx) {
 function plBuild(ctx) {
   const pl = new Map(); // id -> { lo, hi, win } (win: winner edge unconsumed)
   const byId = ctx.byId;
-  const winParent = new Map(), losParent = new Map(); // id -> the match consuming its winner/loser edge
+  const { winnerParent, loserParent } = parentsOf(ctx); // same edge classification the bracket consumers read — no drift
   const adj = new Map(); // undirected match-edge links for the reachability walk
   const addLink = (a, b) => {
     if (!adj.has(a)) adj.set(a, []);
@@ -357,8 +357,7 @@ function plBuild(ctx) {
   for (const m of ctx.matches) {
     if (!Array.isArray(m.sides)) continue;
     for (const s of m.sides) {
-      if (!s || s.kind !== 'match' || !byId.has(s.match)) continue;
-      (s.result === 'winner' ? winParent : losParent).set(s.match, m);
+      if (!s || s.kind !== 'match' || !byId.has(s.match)) continue; // dangling refs stay off the walk
       addLink(m.id, s.match);
       addLink(s.match, m.id);
     }
@@ -402,7 +401,7 @@ function plBuild(ctx) {
   };
   const pools = []; // [champion, anchor depth]
   for (const m of ctx.matches) {
-    if (!Array.isArray(m.sides) || winParent.has(m.id)) continue;
+    if (!Array.isArray(m.sides) || winnerParent.has(m.id)) continue;
     if (!m.sides.some(s => s && s.kind === 'match')) continue;
     const d = champAnchor(m, new Set());
     if (d !== null) pools.push([m, d]);
@@ -417,11 +416,11 @@ function plBuild(ctx) {
     const queue = [champ];
     const candsOf = (N) => (adj.get(N.id) || [])
       .filter(x => !seen.has(x) && member(byId.get(x)))
-      .sort((a, b) => winnerLink(byId.get(b), N) - winnerLink(byId.get(a), N));
+      .sort((a, b) => (winnerParent.get(N.id) === byId.get(b)) - (winnerParent.get(N.id) === byId.get(a)));
     const spec = new Map(); // id -> [winner edge, loser edge]: a rank, or the consuming match's id
     for (let qi = 0; qi < queue.length; qi++) {
       const N = queue[qi];
-      const pw = winParent.get(N.id), lp = losParent.get(N.id);
+      const pw = winnerParent.get(N.id), lp = loserParent.get(N.id);
       const w = pw ? ['r', pw.id] : N === champ ? ['n', A] : ['n', next++];
       const l = lp ? ['r', lp.id] : N === champ ? ['n', A + 1] : ['n', next++];
       spec.set(N.id, [w, l]);
@@ -438,7 +437,7 @@ function plBuild(ctx) {
       const val = (x) => x && (x[0] === 'n' ? { lo: x[1], hi: x[1] } : resolve(x[1])) || null;
       const wv = val(w), lv = val(l);
       const out = wv && lv
-        ? { lo: Math.min(wv.lo, lv.lo), hi: Math.max(wv.hi, lv.hi), win: !winParent.has(id) }
+        ? { lo: Math.min(wv.lo, lv.lo), hi: Math.max(wv.hi, lv.hi), win: !winnerParent.has(id) }
         : null;
       pl.set(id, out);
       return out;
@@ -446,13 +445,6 @@ function plBuild(ctx) {
     for (const m of queue) resolve(m.id);
   }
   return pl;
-}
-
-// Winner-edge links first: when a node's consumers tie on the same layer, the
-// one whose slot comes from the winner edge ranks higher.
-function winnerLink(m, N) {
-  if (!Array.isArray(m.sides)) return 0;
-  return m.sides.some(s => s && s.kind === 'match' && s.match === N.id && s.result === 'winner') ? 1 : 0;
 }
 
 // Range of a classification match, null for main-bracket matches. The bronze
@@ -586,15 +578,18 @@ const mainFinal = (ctx, parented) =>
   ctx.matches.find(X => X.pool === undefined && !parented.has(X.id) && placementLabel(X, ctx) === null);
 
 // Bracket parent-adjacency in one scan: winnerParent (fed id -> parent match),
-// kids (parent id -> feeder ids in side order), loserFed (loser-edge fed ids).
-// Every bracket consumer (koColumn, koOrdinal, winners, mainFinal) reads this
-// one map — one edge classification, no drift. Memo rides ctx._parents: same
-// discard-per-render contract as _koCol/_pl (toCats rebuilds contexts).
+// kids (parent id -> feeder ids in side order), loserFed (loser-edge fed ids),
+// loserParent (fed id -> the match consuming its loser edge — plBuild's ranges).
+// Every bracket consumer (koColumn, koOrdinal, winners, mainFinal, plBuild)
+// reads this one map — one edge classification, no drift. Memo rides
+// ctx._parents: same discard-per-render contract as _koCol/_pl (toCats
+// rebuilds contexts).
 function parentsOf(ctx) {
   if (!ctx._parents) {
     const winnerParent = new Map();
     const kids = new Map();
     const loserFed = new Set();
+    const loserParent = new Map();
     for (const X of ctx.matches) {
       if (!Array.isArray(X.sides)) continue; // malformed: report, never throw
       for (const s of X.sides) {
@@ -603,10 +598,13 @@ function parentsOf(ctx) {
           winnerParent.set(s.match, X);
           if (!kids.has(X.id)) kids.set(X.id, []);
           kids.get(X.id).push(s.match);
-        } else loserFed.add(s.match);
+        } else {
+          loserFed.add(s.match);
+          loserParent.set(s.match, X);
+        }
       }
     }
-    ctx._parents = { winnerParent, kids, loserFed };
+    ctx._parents = { winnerParent, kids, loserFed, loserParent };
   }
   return ctx._parents;
 }
