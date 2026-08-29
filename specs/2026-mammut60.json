@@ -52,7 +52,8 @@
       "final": {
         "bestOf": 3,
         "slotMinutes": 60
-      }
+      },
+      "knockout": true
     },
     {
       "id": "wd",
@@ -140,16 +141,20 @@
         "kurt"
       ],
       [
-        "patrick",
-        "nelly"
+        "nelly",
+        "patrick"
       ],
       [
-        "otto",
-        "elke"
+        "elke",
+        "otto"
       ],
       [
         "eveline",
         "hako"
+      ],
+      [
+        "phoebe",
+        "marc"
       ]
     ]
   }

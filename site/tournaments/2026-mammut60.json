@@ -679,15 +679,15 @@
           {
             "kind": "players",
             "ids": [
-              "doris",
-              "matthias"
+              "karin",
+              "hase"
             ]
           },
           {
             "kind": "players",
             "ids": [
-              "eveline",
-              "hako"
+              "phoebe",
+              "marc"
             ]
           }
         ],
@@ -701,15 +701,15 @@
           {
             "kind": "players",
             "ids": [
-              "karin",
-              "hase"
+              "nicole",
+              "kurt"
             ]
           },
           {
             "kind": "players",
             "ids": [
-              "otto",
-              "elke"
+              "eveline",
+              "hako"
             ]
           }
         ],
@@ -723,15 +723,15 @@
           {
             "kind": "players",
             "ids": [
-              "nicole",
-              "kurt"
+              "nelly",
+              "patrick"
             ]
           },
           {
             "kind": "players",
             "ids": [
-              "patrick",
-              "nelly"
+              "elke",
+              "otto"
             ]
           }
         ],
@@ -752,8 +752,8 @@
           {
             "kind": "players",
             "ids": [
-              "otto",
-              "elke"
+              "phoebe",
+              "marc"
             ]
           }
         ],
@@ -767,15 +767,15 @@
           {
             "kind": "players",
             "ids": [
-              "eveline",
-              "hako"
+              "karin",
+              "hase"
             ]
           },
           {
             "kind": "players",
             "ids": [
-              "patrick",
-              "nelly"
+              "elke",
+              "otto"
             ]
           }
         ],
@@ -789,15 +789,15 @@
           {
             "kind": "players",
             "ids": [
-              "karin",
-              "hase"
+              "nicole",
+              "kurt"
             ]
           },
           {
             "kind": "players",
             "ids": [
-              "nicole",
-              "kurt"
+              "nelly",
+              "patrick"
             ]
           }
         ],
@@ -818,8 +818,8 @@
           {
             "kind": "players",
             "ids": [
-              "patrick",
-              "nelly"
+              "eveline",
+              "hako"
             ]
           }
         ],
@@ -833,15 +833,15 @@
           {
             "kind": "players",
             "ids": [
-              "otto",
-              "elke"
+              "phoebe",
+              "marc"
             ]
           },
           {
             "kind": "players",
             "ids": [
-              "nicole",
-              "kurt"
+              "elke",
+              "otto"
             ]
           }
         ],
@@ -855,15 +855,15 @@
           {
             "kind": "players",
             "ids": [
-              "eveline",
-              "hako"
+              "karin",
+              "hase"
             ]
           },
           {
             "kind": "players",
             "ids": [
-              "karin",
-              "hase"
+              "nicole",
+              "kurt"
             ]
           }
         ],
@@ -884,8 +884,8 @@
           {
             "kind": "players",
             "ids": [
-              "nicole",
-              "kurt"
+              "elke",
+              "otto"
             ]
           }
         ],
@@ -899,15 +899,15 @@
           {
             "kind": "players",
             "ids": [
-              "patrick",
-              "nelly"
+              "eveline",
+              "hako"
             ]
           },
           {
             "kind": "players",
             "ids": [
-              "karin",
-              "hase"
+              "nelly",
+              "patrick"
             ]
           }
         ],
@@ -921,15 +921,15 @@
           {
             "kind": "players",
             "ids": [
-              "otto",
-              "elke"
+              "phoebe",
+              "marc"
             ]
           },
           {
             "kind": "players",
             "ids": [
-              "eveline",
-              "hako"
+              "nicole",
+              "kurt"
             ]
           }
         ],
@@ -950,8 +950,8 @@
           {
             "kind": "players",
             "ids": [
-              "karin",
-              "hase"
+              "nelly",
+              "patrick"
             ]
           }
         ],
@@ -965,15 +965,15 @@
           {
             "kind": "players",
             "ids": [
-              "nicole",
-              "kurt"
+              "elke",
+              "otto"
             ]
           },
           {
             "kind": "players",
             "ids": [
-              "eveline",
-              "hako"
+              "nicole",
+              "kurt"
             ]
           }
         ],
@@ -987,15 +987,15 @@
           {
             "kind": "players",
             "ids": [
-              "patrick",
-              "nelly"
+              "eveline",
+              "hako"
             ]
           },
           {
             "kind": "players",
             "ids": [
-              "otto",
-              "elke"
+              "karin",
+              "hase"
             ]
           }
         ],
@@ -1004,6 +1004,138 @@
       },
       {
         "id": 16,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "doris",
+              "matthias"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "nicole",
+              "kurt"
+            ]
+          }
+        ],
+        "venue": "court-1",
+        "scheduled": "2026-10-03T15:30:00"
+      },
+      {
+        "id": 17,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "nelly",
+              "patrick"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "karin",
+              "hase"
+            ]
+          }
+        ],
+        "venue": "court-2",
+        "scheduled": "2026-10-03T15:30:00"
+      },
+      {
+        "id": 18,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "eveline",
+              "hako"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "phoebe",
+              "marc"
+            ]
+          }
+        ],
+        "venue": "court-3",
+        "scheduled": "2026-10-03T15:30:00"
+      },
+      {
+        "id": 19,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "doris",
+              "matthias"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "karin",
+              "hase"
+            ]
+          }
+        ],
+        "venue": "court-1",
+        "scheduled": "2026-10-03T16:00:00"
+      },
+      {
+        "id": 20,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "nelly",
+              "patrick"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "phoebe",
+              "marc"
+            ]
+          }
+        ],
+        "venue": "court-2",
+        "scheduled": "2026-10-03T16:00:00"
+      },
+      {
+        "id": 21,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "elke",
+              "otto"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "eveline",
+              "hako"
+            ]
+          }
+        ],
+        "venue": "court-3",
+        "scheduled": "2026-10-03T16:00:00"
+      },
+      {
+        "id": 22,
         "sides": [
           {
             "kind": "pool",
@@ -1017,10 +1149,27 @@
           }
         ],
         "venue": "court-1",
-        "scheduled": "2026-10-03T15:30:00"
+        "scheduled": "2026-10-03T16:30:00"
       },
       {
-        "id": 17,
+        "id": 23,
+        "sides": [
+          {
+            "kind": "pool",
+            "pool": "A",
+            "rank": 2
+          },
+          {
+            "kind": "pool",
+            "pool": "A",
+            "rank": 7
+          }
+        ],
+        "venue": "court-2",
+        "scheduled": "2026-10-03T16:30:00"
+      },
+      {
+        "id": 24,
         "sides": [
           {
             "kind": "pool",
@@ -1033,11 +1182,11 @@
             "rank": 6
           }
         ],
-        "venue": "court-2",
-        "scheduled": "2026-10-03T15:30:00"
+        "venue": "court-3",
+        "scheduled": "2026-10-03T16:30:00"
       },
       {
-        "id": 18,
+        "id": 25,
         "sides": [
           {
             "kind": "pool",
@@ -1046,67 +1195,67 @@
           },
           {
             "kind": "match",
-            "match": 16,
+            "match": 22,
             "result": "winner"
           }
         ],
         "venue": "court-1",
-        "scheduled": "2026-10-03T16:00:00"
+        "scheduled": "2026-10-03T17:00:00"
       },
       {
-        "id": 19,
+        "id": 26,
         "sides": [
           {
-            "kind": "pool",
-            "pool": "A",
-            "rank": 2
+            "kind": "match",
+            "match": 23,
+            "result": "winner"
           },
           {
             "kind": "match",
-            "match": 17,
+            "match": 24,
             "result": "winner"
           }
         ],
         "venue": "court-2",
-        "scheduled": "2026-10-03T16:00:00"
+        "scheduled": "2026-10-03T17:00:00"
       },
       {
-        "id": 20,
+        "id": 27,
         "sides": [
           {
             "kind": "match",
-            "match": 18,
+            "match": 25,
             "result": "winner"
           },
           {
             "kind": "match",
-            "match": 19,
+            "match": 26,
             "result": "winner"
           }
         ],
         "bestOf": 3,
         "slotMinutes": 60,
         "venue": "court-1",
-        "scheduled": "2026-10-03T16:30:00"
+        "scheduled": "2026-10-03T17:30:00"
       },
       {
-        "id": 21,
+        "id": 28,
         "sides": [
           {
             "kind": "match",
-            "match": 18,
+            "match": 25,
             "result": "loser"
           },
           {
             "kind": "match",
-            "match": 19,
+            "match": 26,
             "result": "loser"
           }
         ],
         "bestOf": 3,
         "slotMinutes": 60,
         "venue": "court-2",
-        "scheduled": "2026-10-03T16:30:00"
+        "scheduled": "2026-10-03T17:30:00"
       }
     ]
   }
