@@ -90,11 +90,7 @@ p {
   margin: calc(var(--space)*2) 0;
 }
 
-.note {
-  color: var(--muted);
-  border-left: 3px solid var(--line);
-  padding-left: var(--space);
-}
+
 
 :is(.segments, .cats, .kiosk-top) {
   background: var(--page);
@@ -370,4 +366,21 @@ p[data-status="next"] {
 
 p[data-status="finished"] {
   color: var(--muted);
+}
+
+/* possible stages: a dashed, muted card that reads "not a match yet"; the
+   time survives in full ink — the TBD bits and the condition chip carry the
+   uncertainty that is left */
+article[data-status="possible"] {
+  border-style: dashed;
+  color: var(--muted);
+}
+
+article[data-status="possible"] .head {
+  color: var(--ink);
+}
+
+.tbd {
+  color: var(--muted);
+  text-decoration: underline dotted;
 }

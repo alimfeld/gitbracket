@@ -337,12 +337,14 @@ function renderVenue(route, data, now) {
 const multiDay = ctxs => schedDays(ctxs.flatMap(c => c.matches), (ctxs[0] && ctxs[0].tz) || 'UTC').length > 1;
 
 
-function possibleLine(b, day) {
-  const noun = b.count === 1 ? 'match' : 'matches';
-  const when = b.min === b.max
-    ? `at ${timeEl(b.min, b.ctx.tz, day)}`
-    : `— earliest ${timeEl(b.min, b.ctx.tz, day)}, latest ${timeEl(b.max, b.ctx.tz, day)}`;
-  return `<p class="note">${b.count} more ${noun} possible in ${esc(b.ctx.name)} ${when}</p>`;
+// A possible stage: the round the player could reach once the pools decide —
+// the certain bits (label, count, uniform time/court) inline, the chip
+// carrying the rank or outcome that gets in.
+function possibleCard(st, ctx, opts) {
+  const when = st.time !== null ? timeEl(st.time, ctx.tz, opts.day) : '<span class="tbd">TBD</span>';
+  const where = st.court !== null ? esc(ctx.venues.get(st.court) || st.court) : '<span class="tbd">TBD</span>';
+  const label = esc(st.label);
+  return `<article${opts.id ? ` id="${opts.id}"` : ''} data-status="possible"><div class="head"><span>${when}</span><span>${where}</span></div><div class="meta">${esc(ctx.name)} · ${label}${st.chip ? ` — ${esc(st.chip)}` : ''}</div></article>`;
 }
 
 function renderPlayer(route, data) {
@@ -368,53 +370,61 @@ function renderPlayer(route, data) {
   }
   const rows = [];
   const ctxs = data.cats;
-  const multi = multiDay(ctxs); // the possible-line times need their date on multi-day pages
+  const multi = multiDay(ctxs); // the stage times need their date on multi-day pages
   for (const ctx of ctxs) {
     for (const pm of playerMatches(ctx, pid)) rows.push({ m: pm.m, i: pm.i, ctx });
   }
   rows.sort((a, b) => (schedTime(a.m, a.ctx.tz) ?? Infinity) - (schedTime(b.m, b.ctx.tz) ?? Infinity));
-  // one flat timeline under date headings — the day owns the context, so cards
-  // never repeat it; the heading swaps with each new day
-  const blocks = [];
+  // One flat timeline under date headings — the day owns the context, so cards
+  // never repeat it; the heading swaps with each new day. Possible stages merge
+  // into it at their own time: an undecided pool leaves the knockout open, so
+  // the stage cards sit where those rounds would be, next to the match cards.
+  const events = [];
   for (const ctx of ctxs) {
-    const span = possibleSpan(ctx, pid);
-    if (span) blocks.push({ ctx, ...span });
+    for (const st of possibleStages(ctx, pid)) events.push({ t: st.time ?? Infinity, st, ctx });
   }
-  blocks.sort((a, b) => a.min - b.min);
+  for (const r of rows) events.push({ t: schedTime(r.m, r.ctx.tz) ?? Infinity, r, ctx: r.ctx });
+  // times ascending; a confirmed row wins an exact tie against a possible stage
+  events.sort((a, b) => a.t - b.t || (a.r ? 0 : 1) - (b.r ? 0 : 1));
   const statuses = [];
   for (const ctx of ctxs) {
     const s = playerStatus(ctx, pid);
     if (s) statuses.push(`<strong>${esc(ctx.name || ctx.id)}</strong>: ${esc(s)}`);
   }
-  // two short lines: the standing answers "where am I", the next match answers
-  // "what's next" — one detail line each, nothing else makes the header
-  const nextRow = rows.find(r => !isDone(r.m));
+  // the "what's next" line names the earliest playable event — a confirmed
+  // match, or the earliest possible stage, with its condition said out loud
+  const nextEv = events.find(e => e.r ? !isDone(e.r.m) : true);
   let next = null;
-  if (nextRow) {
-    const m = nextRow.m, nctx = nextRow.ctx;
-    const t = schedTime(m, nctx.tz);
-    next = `<a data-jump="next" href="${esc(href(data.t.slug, 'schedule', route))}">Next: ${t !== null ? timeEl(t, nctx.tz, multi) : 'TBD'}${m.venue ? ` · ${esc(nctx.venues.get(m.venue) || m.venue)}` : ' · TBD'}</a>`;
+  if (nextEv) {
+    const link = `<a data-jump="next" href="${esc(href(data.t.slug, 'schedule', route))}">`;
+    if (nextEv.r) {
+      const m = nextEv.r.m, nctx = nextEv.r.ctx;
+      const t = schedTime(m, nctx.tz);
+      next = `${link}Next: ${t !== null ? timeEl(t, nctx.tz, multi) : 'TBD'}${m.venue ? ` · ${esc(nctx.venues.get(m.venue) || m.venue)}` : ' · TBD'}</a>`;
+    } else {
+      const st = nextEv.st, nctx = nextEv.ctx;
+      next = `${link}Next: ${esc(st.label)}${st.time !== null ? ' · ' + timeEl(st.time, nctx.tz, multi) : ''}${st.chip ? ` (${esc(st.chip)})` : ''}</a>`;
+    }
   }
   const parts = [segmentBar(route), `<header><h1>${esc(p.name)}<a href="${esc(href(data.t.slug, 'schedule', { cat: route.cat }))}">Not you?</a></h1>${statuses.length ? `<p>${statuses.join(' · ')}</p>` : ''}${next ? `<p data-status="next">${next}</p>` : ''}</header>`];
-  // one flat timeline under date headings — the day owns the context, so cards
-  // never repeat it; the heading swaps with each new day
   const out = [];
-  let bi = 0;
   let curDay = null;
-  for (const r of rows) {
-    const t = schedTime(r.m, r.ctx.tz), m = r.m, ctx = r.ctx;
-    // the row itself, not the match id — ids are per-category, two cats can share one
-    const isNext = r === nextRow;
-    while (bi < blocks.length && blocks[bi].min < t) out.push(possibleLine(blocks[bi++], multi));
-    const day = t !== null ? dayKey(t, ctx.tz) : null;
+  for (const e of events) {
+    const t = e.t;
+    const day = Number.isFinite(t) ? dayKey(t, e.ctx.tz) : null;
     if (day !== curDay) {
       curDay = day;
       out.push(`<h2>${esc(day === null ? 'Unscheduled' : dayLabel(day))}</h2>`);
     }
-    out.push(matchCard(m, ctx, { meta: ['catName', 'label'], head: [{ key: 'time' }, { key: 'court' }], status: isNext ? 'next' : undefined, id: isNext ? 'next' : undefined }));
+    // the row itself, not the match id — ids are per-category, two cats can share one
+    const isNext = e === nextEv;
+    if (e.r) {
+      out.push(matchCard(e.r.m, e.ctx, { meta: ['catName', 'label'], head: [{ key: 'time' }, { key: 'court' }], status: isNext ? 'next' : undefined, id: isNext ? 'next' : undefined }));
+    } else {
+      out.push(possibleCard(e.st, e.ctx, { day: multi, id: isNext ? 'next' : undefined }));
+    }
   }
-  while (bi < blocks.length) out.push(possibleLine(blocks[bi++], multi));
-  parts.push(`<section>${rows.length ? `<div class="stack">${out.join('')}</div>` : '<p>No matches.</p>'}</section>`);
+  parts.push(`<section>${events.length ? `<div class="stack">${out.join('')}</div>` : '<p>No matches.</p>'}</section>`);
   return parts.join('');
 }
 

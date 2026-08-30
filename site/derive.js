@@ -257,43 +257,91 @@ function playerMatches(ctx, pid) {
   return rows;
 }
 
-// Open knockout seats from confirmed matches through undecided slots; a decided
-// feeder only forwards the branch the player got (confirmed ones render as cards).
-// possibleSpan passes its playerMatches rows as starts — same filter, one scan.
-function reachableKo(ctx, pid, starts) {
-  if (!starts) starts = playerMatches(ctx, pid).filter(r => r.m.pool === undefined);
-  const sideOf = new Map(starts.map(r => [r.m.id, r.i]));
-  const open = new Set();
-  const seen = new Set(sideOf.keys());
-  const queue = [...sideOf.keys()];
-  while (queue.length) {
-    const id = queue.shift();
-    const w = winnerIdx(ctx.byId.get(id)); // null until the feeder is decided
-    for (const m of ctx.matches) {
-      if (m.pool !== undefined || !Array.isArray(m.sides) || seen.has(m.id)) continue;
+// The matches consuming a match's result edges — the seats a player advancing
+// from it could land in. Winner and loser edges both count: a loss drops the
+// player into the placement tree.
+function koConsumers(ctx, id) {
+  const out = [];
+  for (const X of ctx.matches) {
+    if (!X || X.pool !== undefined || !Array.isArray(X.sides)) continue;
+    for (const s of X.sides) {
+      if (s && s.kind === 'match' && s.match === id) { out.push(X); break; }
+    }
+  }
+  return out;
+}
+
+// Knockout-entry facts per pool, from stored sides only — standings never gate
+// the pool view. sigs: the pool's side count (every slot rank must be ≤ it);
+// slots: rank -> the match consuming that rank.
+function poolFacts(ctx) {
+  const out = new Map();
+  for (const m of ctx.matches) {
+    if (!m || !Array.isArray(m.sides)) continue;
+    if (m.pool !== undefined) {
       for (const s of m.sides) {
-        if (!s || s.kind !== 'match' || s.match !== id) continue;
-        const pSide = sideOf.get(id); // only starts can be decided — a result forces its feeder chain decided (the validator's resolveSide rule), so candidates stay undecided
-        if (w !== null && pSide !== undefined && (s.result === 'winner') !== (pSide === w)) continue;
-        seen.add(m.id);
-        open.add(m.id);
-        queue.push(m.id);
+        if (s && s.kind === 'players' && Array.isArray(s.ids)) {
+          if (!out.has(m.pool)) out.set(m.pool, { sigs: new Set(), slots: new Map() });
+          out.get(m.pool).sigs.add(pairSig(s.ids));
+        }
+      }
+    } else {
+      for (const s of m.sides) {
+        if (s && s.kind === 'pool' && typeof s.rank === 'number' && s.rank >= 1) {
+          if (!out.has(s.pool)) out.set(s.pool, { sigs: new Set(), slots: new Map() });
+          out.get(s.pool).slots.set(s.rank, m);
+        }
       }
     }
   }
-  return open;
+  return out;
 }
+
+// Ranks of one pool the player could still hold: every rank while any pool
+// match is out, the dead-tie cluster once it is decided. A resolved slot is a
+// confirmed seat (handled elsewhere) and an unslotted rank is eliminated —
+// neither leaves anything possible here, so both return [].
+function playerRanks(ctx, pool, pid, roster) {
+  const st = poolStandings(ctx, pool);
+  if (!st) {
+    const out = [];
+    for (let r = 1; r <= roster; r++) out.push(r);
+    return out;
+  }
+  const i = st.findIndex(x => x.ids.has(pid));
+  if (i < 0 || !isDeadTie(st, i + 1)) return [];
+  const out = [];
+  let a = i; while (a > 0 && st[a - 1].tie === st[i].tie) a--;
+  let b = i; while (b < st.length - 1 && st[b + 1].tie === st[i].tie) b++;
+  for (let r = a + 1; r <= b + 1; r++) out.push(r);
+  return out;
+}
+
+// '3rd–6th' / '2nd, 7th' — collapsed runs of a sorted rank list, in ordinals.
+function rankRange(ranks) {
+  const runs = [];
+  for (const n of [...ranks].sort((a, b) => a - b)) {
+    const last = runs[runs.length - 1];
+    if (last && n === last[1] + 1) last[1] = n;
+    else runs.push([n, n]);
+  }
+  return runs.map(([a, b]) => a === b ? ordinal(a) : `${ordinal(a)}–${ordinal(b)}`).join(', ');
+}
+
+// 'the SF' / 'the final' — a stage's name when a chip references it as the
+// gate into a deeper stage; placement labels and Round-of-N keep the article.
+const chipRef = label => ({ Final: 'the final', Semifinals: 'the SF', Quarterfinals: 'the QF' }[label] || `the ${label}`);
 
 const matchEdge = s => s && s.kind === 'match';
 const winnerEdge = s => matchEdge(s) && s.result === 'winner'; // the only edge that feeds the final
 
 // Longest knockout chain feeding id — 0 when nothing feeds it. The edge filter
-// picks the measure: all match-kind edges (possibleSpan, +1 for the slot
-// itself: the max a team can still play from there) or winner edges only
-// (wdOf: round distance from the final — matchRound can't do it, it walks the
-// other way). Shared memo across ids — sibling paths share it, not just one
-// chain. ponytail: O(N²) worst case — fine while brackets are tiny; a
-// reverse-edge index is the upgrade if they ever grow.
+// picks the measure: all match-kind edges (+1 for the slot itself: the max a
+// team can still play from there) or winner edges only (wdOf: round distance
+// from the final — matchRound can't do it, it walks the other way). Shared
+// memo across ids — sibling paths share it, not just one chain. ponytail:
+// O(N²) worst case — fine while brackets are tiny; a reverse-edge index is the
+// upgrade if they ever grow.
 function chainDepth(ctx, id, edge, memo) {
   if (memo.has(id)) return memo.get(id);
   memo.set(id, 0); // in-progress = cycle guard; the validator rejects cycles first
@@ -308,21 +356,127 @@ function chainDepth(ctx, id, edge, memo) {
   return d;
 }
 
-// Day-span of this player's open knockout slots (null when none); count = the
-// longest single path. ponytail: fallback assumes everyone advances; gate it on
-// pool completion if a format with a knockout cutoff ever appears.
-function possibleSpan(ctx, pid) {
+// Possible stages: one entry per knockout round a player could still reach, in
+// bracket order — the certain bits (label, uniform time/court) and the
+// uncertain one (chip: the ranks or outcomes that get in). Two seat modes: a
+// confirmed knockout seat follows only the branches the outcome leaves open; a
+// group-stage player sees their pool's slots at every rank they could still
+// hold — standings never narrow a live draw, and a decided pool keeps only the
+// dead-tie ranks (resolution and elimination both leave nothing). The chip is
+// the entry gates in one phrase; one pool per category is the model (the
+// validator pins a player to one pair), so chips never need to disambiguate
+// two pools.
+function possibleStages(ctx, pid) {
   const rows = playerMatches(ctx, pid);
-  const ko = rows.filter(r => r.m.pool === undefined);
-  let open = [...reachableKo(ctx, pid, ko)];
-  if (!open.length && rows.some(r => r.m.pool !== undefined) && !ko.length) {
-    open = ctx.matches.filter(m => m.pool === undefined).map(m => m.id);
+  const koRows = rows.filter(r => r.m.pool === undefined);
+  const confIds = new Set(koRows.map(r => r.m.id));
+  // One pool per category — the validator pins the player to one pair, so the
+  // seats and chips below need no pool disambiguation.
+  const poolRow = rows.find(r => r.m.pool !== undefined);
+  const pool = poolRow === undefined ? null : String(poolRow.m.pool);
+  const facts = koRows.length || pool === null ? null : poolFacts(ctx).get(pool);
+
+  // ---- seats and the reachable bracket -------------------------------------
+  // Seats are recorded separately from the reach BFS: one match can seat the
+  // player via several pool ranks or edges (a QF drawing two of their pool's
+  // ranks), and the seen-guard must not drop the second record.
+  const poolSeatsOf = new Map(); // match id -> [rank]
+  const edgeSeatsOf = new Map(); // match id -> [{ kind, parent }]
+  const gate = new Map();        // confirmed seat id -> opened result edges
+  const seen = new Set();
+  const queue = [];
+  const add = m => {
+    if (seen.has(m.id)) return;
+    seen.add(m.id);
+    queue.push(m.id);
+  };
+  if (koRows.length) {
+    // A decided seat opens only the branch the player finished on; an undone
+    // (or void) one keeps both — the player could still win or lose.
+    for (const r of koRows) {
+      const w = winnerIdx(r.m);
+      gate.set(r.m.id, w === null ? 'either' : w === r.i ? 'winner' : 'loser');
+      add(r.m); // confirmed seats render as cards — no stage entry
+    }
+  } else if (facts) {
+    for (const r of playerRanks(ctx, pool, pid, facts.sigs.size)) {
+      const m = facts.slots.get(r);
+      if (!m) continue; // that rank has no seat — nothing to play
+      if (!poolSeatsOf.has(m.id)) poolSeatsOf.set(m.id, []);
+      poolSeatsOf.get(m.id).push(r);
+      add(m);
+    }
   }
-  const memo = new Map(); // one memo across open ids — sibling paths share it, not just one chain
-  const ts = open.map(id => schedTime(ctx.byId.get(id), ctx.tz)).filter(t => t !== null);
-  if (!ts.length) return null;
-  return { min: Math.min(...ts), max: Math.max(...ts), count: Math.max(...open.map(id => 1 + chainDepth(ctx, id, matchEdge, memo))) };
+  while (queue.length) {
+    const id = queue.shift();
+    const g = gate.get(id);
+    for (const X of koConsumers(ctx, id)) {
+      for (const s of X.sides) {
+        if (!s || s.kind !== 'match' || s.match !== id) continue;
+        if (g === 'winner' && s.result !== 'winner') continue;
+        if (g === 'loser' && s.result !== 'loser') continue;
+        if (!edgeSeatsOf.has(X.id)) edgeSeatsOf.set(X.id, []);
+        edgeSeatsOf.get(X.id).push({ kind: s.result, parent: id });
+        add(X);
+      }
+    }
+  }
+
+  // ---- group reached matches into stages -----------------------------------
+  const stages = new Map();
+  for (const id of seen) {
+    if (confIds.has(id)) continue;
+    const m = ctx.byId.get(id);
+    if (!m || !Array.isArray(m.sides)) continue;
+    const pl = placementLabel(m, ctx);
+    const col = pl === null ? koColumn(m, ctx) : null;
+    const label = pl || roundName(col);
+    let st = stages.get(label);
+    if (!st) { st = { label, col, ranks: new Set(), edges: [], times: [], courts: [], ids: [] }; stages.set(label, st); }
+    st.ids.push(m);
+    for (const rank of poolSeatsOf.get(id) || []) st.ranks.add(rank);
+    for (const e of edgeSeatsOf.get(id) || []) st.edges.push(e);
+    const t = schedTime(m, ctx.tz);
+    if (t !== null) st.times.push(t);
+    if (typeof m.venue === 'string') st.courts.push(m.venue);
+  }
+
+  // ---- finalize: uniform bits, chips, byes ---------------------------------
+  const out = [];
+  for (const st of stages.values()) {
+    const n = st.ids.length;
+    const time = n > 0 && st.times.length === n && st.times.every(t => t === st.times[0]) ? st.times[0] : null;
+    const court = n > 0 && st.courts.length === n && st.courts.every(c => c === st.courts[0]) ? st.courts[0] : null;
+    // The chip is the entry gates in one phrase: the direct slot ranks, then
+    // the result edges — "as 1st in Pool A or winner of the QF" names both
+    // ways in, so a rank-1 bye can't read as "everyone gets here". Only a
+    // stage every pool rank has a slot in (no gates at all) shortens to
+    // "all ranks".
+    const chips = [];
+    if (facts) {
+      const universe = playerRanks(ctx, pool, pid, facts.sigs.size);
+      const direct = [...st.ranks];
+      if (direct.length === universe.length && !st.edges.length) chips.push(`all ranks in Pool ${pool}`);
+      else if (direct.length) chips.push(`as ${rankRange(direct)} in Pool ${pool}`);
+    }
+    if (st.edges.length) {
+      const parts = new Set();
+      for (const e of st.edges) {
+        const parent = ctx.byId.get(e.parent);
+        if (!parent || !Array.isArray(parent.sides)) continue;
+        const pl = placementLabel(parent, ctx);
+        const label = pl || roundName(pl === null ? koColumn(parent, ctx) : 0);
+        parts.add(`as ${e.kind} of ${chipRef(label)}`);
+      }
+      for (const p of [...parts].sort()) chips.push(p);
+    }
+    out.push({ label: st.label, col: st.col, time, court, chip: chips.join(' or ') });
+  }
+  // Champions deepest-first (QF -> SF -> Final), placement stages after.
+  out.sort((a, b) => (b.col ?? -1) - (a.col ?? -1));
+  return out;
 }
+
 
 const ordRules = new Intl.PluralRules(LOCALE, { type: 'ordinal' });
 const ordinal = n => n + ({ one: 'st', two: 'nd', few: 'rd' }[ordRules.select(n)] || 'th');
@@ -772,5 +926,5 @@ function playerStatus(ctx, pid) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, countWins, sideIdx, sideLetter, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, reachableKo, possibleSpan, placementLabel, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dayShort, dayLabel, fmtDiff, kioskStatus, currentRowIndex, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, playerStatus };
+  module.exports = { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, countWins, sideIdx, sideLetter, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, possibleStages, placementLabel, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dayShort, dayLabel, fmtDiff, kioskStatus, currentRowIndex, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, playerStatus };
 }

@@ -7,7 +7,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, reachableKo, possibleSpan, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, koOrdinal, kioskStatus, currentRowIndex, matchLabel, schedTime, toCats, isDeadTie, winners, catStatus, playerStatus, teamLabel } = require('../site/derive.js');
+const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, possibleStages, matchSlotMs, slotLabel, roundName, placementLabel, koColumn, koOrdinal, kioskStatus, currentRowIndex, matchLabel, schedTime, toCats, isDeadTie, winners, catStatus, playerStatus, teamLabel } = require('../site/derive.js');
 const { parseRoute, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer } = require('../site/app.js');
 const { generate } = require('../src/schedule.js');
 const { FIX, catOf } = require('./helpers.js');
@@ -251,22 +251,55 @@ test('playerStatus: per-category standing — the live wave, the podium, elimina
   assert(html.includes(podium), 'a finished bracket renders the podium as its subline');
 });
 
-test('reachableKo: undecided feeder keeps both branches; decided feeder gates the closed one', () => {
-  const md = catOf('sample', 'md40');
-  const ids = pid => [...reachableKo(md, pid)].sort().join(',');
-  assert(ids('p5') === '10,9', 'p5: final and bronze both open while m8 is undecided');
-  assert(ids('p1') === '' && ids('p7') === '', 'p1/p7: decided feeders close the losing/winning branch');
+test('possibleStages: a group-stage player sees the whole structural bracket, byes footnoted', () => {
+  const byes = catOf('byes', 't');
+  const st1 = possibleStages(byes, 'p1');
+  const qf = st1.find(x => x.label === 'Quarterfinals');
+  const sf = st1.find(x => x.label === 'Semifinals');
+  const fin = st1.find(x => x.label === 'Final');
+  const br = st1.find(x => x.label === '3rd place');
+  assert(st1.map(x => x.label).join(',') === 'Quarterfinals,Semifinals,Final,3rd place', 'bracket order: deepest round first, placement last');
+  assert(qf.time === Date.parse('2026-07-12T10:30:00Z') && qf.court === null, 'QF: the pool-fed quarterfinals, uniform time, two courts -> court TBD');
+  assert(qf.chip === 'as 3rd–6th in Pool A', 'QF chip: the ranks that feed it, pool named');
+  assert(sf.chip === 'as 1st–2nd in Pool A or as winner of the QF', 'semis: the byed ranks enter direct, the rest must win their QF — both gates named');
+  assert(fin.time === Date.parse('2026-07-12T11:30:00Z') && fin.court === 'court-1' && fin.chip === 'as winner of the SF', 'final: uniform bits, winner-edge gate');
+  assert(br.court === 'court-2' && br.chip === 'as loser of the SF', 'bronze: loser-edge gate, its own court');
 });
 
-test('possibleSpan: open knockout span, and pre-knockout fallback to the bracket block', () => {
+test('possibleStages: a decided pool collapses to the open stages; eliminated players get nothing', () => {
+  const tjson = JSON.parse(JSON.stringify(require(FIX('byes', 'tournaments', 'byes.json'))));
+  const r = (id, w) => { tjson.matches.t.find(m => m.id === id).result = { status: 'walkover', winner: w }; };
+  // strict ladder p1 > p2 > p3 > p4 > p5 > p6 (side orders per the fixture pairing)
+  for (const id of [1, 4, 7, 10, 13]) r(id, 'a'); // p1 beats all
+  for (const id of [2, 6]) r(id, 'a');            // p2 beats p5, p3
+  for (const id of [9, 11]) r(id, 'b');           // p2 beats p6, p4
+  for (const id of [3, 14]) r(id, 'a');           // p3 beats p4, p6
+  r(8, 'b');                                      // p3 beats p5
+  r(5, 'b');                                      // p4 beats p6
+  r(15, 'a');                                     // p4 beats p5
+  r(12, 'a');                                     // p5 beats p6
+  r(16, 'a'); r(17, 'a');                         // QFs: p4 (rank 4) and p3 (rank 3) win
+  const ctx = makeCat({ meta: tjson.categories[0], matches: tjson.matches.t }, tjson);
+  const labels = pid => possibleStages(ctx, pid).map(s => s.label).join(',');
+  assert(labels('p1') === 'Final,3rd place' && labels('p2') === 'Final,3rd place', 'a confirmed semifinal seat keeps the final and bronze open');
+  assert(labels('p3') === 'Final,3rd place' && labels('p4') === 'Final,3rd place', 'QF winners join the same open stages');
+  assert(labels('p5') === '' && labels('p6') === '', 'a decided loss with no placement leaves nothing possible');
+  const chips = pid => possibleStages(ctx, pid).map(s => s.chip).join('|');
+  assert(chips('p1') === 'as winner of the SF|as loser of the SF', 'gates name the stage the player sits in');
+});
+
+test('possibleStages: sample — a decided pool hands seats to the bracket; pre-event the pool view covers every rank', () => {
   const md = catOf('sample', 'md40');
-  const s = possibleSpan(md, 'p5');
-  assert(s && s.count === 1 && s.min === Date.parse('2025-07-14T12:15:00-04:00') && s.max === s.min, 'p5: final or bronze at 12:15 — one more match, not both');
-  assert(possibleSpan(md, 'p1') === null && possibleSpan(md, 'p7') === null, 'confirmed knockout seat (final/bronze) leaves no open span');
+  const j = pid => possibleStages(md, pid).map(s => s.label).join(',');
+  const p5 = possibleStages(md, 'p5');
+  assert(j('p5') === 'Final,3rd place' && p5[0].chip === 'as winner of the SF' && p5[1].chip === 'as loser of the SF', 'p5: an undecided semifinal seat keeps both branches, named by stage');
+  assert(j('p1') === '' && j('p7') === '', 'decided feeders close the losing/winning branch — the final and bronze render as cards instead');
   const tjson = require(FIX('sample', 'tournaments', 'sample.json'));
   const pre = makeCat({ meta: tjson.categories[0], matches: md.matches.map(m => ({ ...m, games: [], result: undefined })) }, tjson);
-  const s0 = possibleSpan(pre, 'p1');
-  assert(s0 && s0.count === 2 && s0.min === Date.parse('2025-07-14T11:15:00-04:00') && s0.max === Date.parse('2025-07-14T12:15:00-04:00'), 'pre-event: up to 2 matches along one bracket path (m7 -> final/bronze, 11:15 to 12:15)');
+  const s0 = possibleStages(pre, 'p1');
+  const sem = s0.find(x => x.label === 'Semifinals');
+  assert(s0.length === 3 && sem.time === Date.parse('2025-07-14T11:15:00-04:00') && sem.chip === 'all ranks in Pool A', 'pre-event: the pool view covers every rank — one semis stage, at 11:15');
+  assert(s0.find(x => x.label === 'Final').chip === 'as winner of the SF' && s0.find(x => x.label === '3rd place').chip === 'as loser of the SF', 'pre-event: the deeper stages read by their gates');
 });
 
 test('playerMatches: only matches the player is actually in, not potential slots', () => {
@@ -635,7 +668,9 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(ppage.includes('<h2>Mon, Jul 14</h2>'), 'the day section title carries the date — cards stay bare in it');
   assert(!ppage.includes('class="day"') && !ppage.includes('>2025-07-14'), 'no day-divider machinery, no raw ISO payload — the heading is the day');
   const p3 = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p3' }, data);
-  assert(/note">\d+ more match(?:es)? possible in Men&#39;s Doubles 40\+ (— earliest <time datetime="[^"]+">\d\d:\d\d<\/time>, latest <time datetime="[^"]+">\d\d:\d\d<\/time>|at <time datetime="[^"]+">\d\d:\d\d<\/time>)/.test(p3), 'possible note: count + window in semantic <time> elements');
+  assert.equal((p3.match(/data-status="possible"/g) || []).length, 2, 'p3: a confirmed semifinal seat renders the open final and bronze as possible cards');
+  assert(p3.includes('· Final — as winner of the SF') && p3.includes('· 3rd place — as loser of the SF'), 'the gates ride in the meta line, not as a separate row');
+  assert(!p3.includes('more matches possible'), 'the count note is gone — cards replaced it');
   assert(ppage.includes('<div class="head"><span><time datetime=') && ppage.includes('</time></span><span>Court 1</span></div>'), 'player card headline: time left (semantic <time>), court right');
   assert(ppage.includes("Men&#39;s Doubles 40+ · Pool A") && !ppage.includes('Men&#39;s Doubles 40+ · Pool A · '), 'player card meta: long cat name · label, no match id, no court/time');
   assert(ppage.includes('class="ph"'), 'player match cards render unplayed score slots too');
@@ -707,6 +742,27 @@ test('the next card is one card: a second category sharing the match id must not
   assert.equal((ppage.match(/<article id="next" data-status="next"/g) || []).length, 1, 'exactly one next card flag (the header line carries its own data-status)');
 });
 
+test('possible stages render as cards: chips, the bye footnote, and the next header goes conditional', () => {
+  const repo = loadRepo(FIX('byes'));
+  const info = repo.tournaments.get('byes');
+  const data = { index: repo.index, t: { slug: 'byes', name: info.tjson.name }, tjson: info.tjson, cats: toCats(info.tjson) };
+  const page = renderPlayer({ slug: 'byes', view: 'schedule', player: 'p4' }, data);
+  assert.equal((page.match(/data-status="possible"/g) || []).length, 4, 'p4 (pool open): four possible stages — QF, SF, final, bronze');
+  assert(page.includes('Quarterfinals — as 3rd–6th in Pool A'), 'the stage label carries no count');
+  assert(page.includes('· Quarterfinals — as 3rd–6th in Pool A</div>') && page.includes('· Semifinals — as 1st–2nd in Pool A or as winner of the QF</div>'), 'the rank gates ride in the meta line, not as a separate row');
+  assert(!page.includes('skip the Quarterfinals'), 'the bye is implicit in the chip — no footnote');
+  assert(page.includes('<span class="tbd">TBD</span>'), 'a non-uniform bit (the QF court) renders marked TBD');
+  assert(page.includes('Singles · Final — as winner of the SF</div>') && page.includes('Singles · 3rd place — as loser of the SF</div>'), 'single-match stages drop the count, placement keeps its label, chips ride in the meta');
+  assert(!page.includes('more matches possible'), 'the count note is gone');
+  // next points at the earliest possible stage when no confirmed match is left
+  const tjson = JSON.parse(JSON.stringify(info.tjson));
+  for (const id of [1, 4, 7, 10, 13]) tjson.matches.t.find(m => m.id === id).result = { status: 'walkover', winner: 'a' };
+  const page2 = renderPlayer({ slug: 'byes', view: 'schedule', player: 'p1' }, { ...data, tjson, cats: toCats(tjson) });
+  assert(page2.includes('Next: Quarterfinals · <time datetime="2026-07-12T10:30:00.000Z">10:30</time> (as 3rd–6th in Pool A)'), 'next names the earliest possible stage with its condition');
+  assert(page2.includes('<article id="next" data-status="possible">'), 'the earliest possible card is the jump target, never carrying the confirmed accent');
+  assert.equal((page2.match(/data-status="next"/g) || []).length, 1, 'only the header line carries the green accent — possible cards never do');
+});
+
 
 test('multi-day: cards carry their full date; single-day cards just the time; the kiosk shows one day at a time, previewing day one early', () => {
   const repo = loadRepo(FIX('multiday'));
@@ -723,8 +779,9 @@ test('multi-day: cards carry their full date; single-day cards just the time; th
   // the player page groups under date headings — the day owns the context, and
   // the possible line names its own day on multi-day pages
   const ppage = renderPlayer({ slug: 'multiday', view: 'schedule', player: 'p1' }, data);
-  assert(ppage.includes('<h2>Sat, Jul 11</h2>') && !ppage.includes('<h2>Sun, Jul 12</h2>') && !ppage.includes('day: true'), 'the player page headers its days; p1 has Saturday cards only, so no Sunday section');
-  assert(ppage.includes('earliest <time datetime="2026-07-12T13:00:00.000Z">Sun, Jul 12, 09:00</time>'), 'the possible line carries its own date on multi-day pages');
+  assert(ppage.includes('<h2>Sat, Jul 11</h2>') && !ppage.includes('day: true'), 'the player page headers its days');
+  assert(ppage.includes('<h2>Sun, Jul 12</h2>'), 'the possible stages sit under their own day heading');
+  assert(ppage.includes('>Sun, Jul 12, 09:00</time>'), 'a possible stage card carries its own date on multi-day pages');
   // moving a match to another day just re-dates its card — no divider machinery
   const split = JSON.parse(JSON.stringify(info.tjson));
   split.matches.md40[5].scheduled = '2026-07-12T15:00:00'; // m6 (pool) -> Sunday

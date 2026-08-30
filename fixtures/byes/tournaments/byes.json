@@ -1,0 +1,461 @@
+{
+  "name": "Byes Open",
+  "location": "Test Hall",
+  "timezone": "UTC",
+  "venues": [
+    {
+      "id": "court-1",
+      "name": "Court 1"
+    },
+    {
+      "id": "court-2",
+      "name": "Court 2"
+    }
+  ],
+  "categories": [
+    {
+      "id": "t",
+      "name": "Singles",
+      "bestOf": {
+        "groups": 1,
+        "knockout": 1
+      },
+      "slotMinutes": {
+        "groups": 10,
+        "knockout": 30
+      }
+    }
+  ],
+  "players": [
+    {
+      "id": "p1",
+      "name": "P1"
+    },
+    {
+      "id": "p2",
+      "name": "P2"
+    },
+    {
+      "id": "p3",
+      "name": "P3"
+    },
+    {
+      "id": "p4",
+      "name": "P4"
+    },
+    {
+      "id": "p5",
+      "name": "P5"
+    },
+    {
+      "id": "p6",
+      "name": "P6"
+    }
+  ],
+  "matches": {
+    "t": [
+      {
+        "id": 1,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p1"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p6"
+            ]
+          }
+        ],
+        "venue": "court-1",
+        "scheduled": "2026-07-12T09:00:00"
+      },
+      {
+        "id": 2,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p2"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p5"
+            ]
+          }
+        ],
+        "venue": "court-2",
+        "scheduled": "2026-07-12T09:00:00"
+      },
+      {
+        "id": 3,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p3"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p4"
+            ]
+          }
+        ],
+        "venue": "court-1",
+        "scheduled": "2026-07-12T09:10:00"
+      },
+      {
+        "id": 4,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p1"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p5"
+            ]
+          }
+        ],
+        "venue": "court-2",
+        "scheduled": "2026-07-12T09:10:00"
+      },
+      {
+        "id": 5,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p6"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p4"
+            ]
+          }
+        ],
+        "venue": "court-1",
+        "scheduled": "2026-07-12T09:20:00"
+      },
+      {
+        "id": 6,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p2"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p3"
+            ]
+          }
+        ],
+        "venue": "court-2",
+        "scheduled": "2026-07-12T09:20:00"
+      },
+      {
+        "id": 7,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p1"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p4"
+            ]
+          }
+        ],
+        "venue": "court-1",
+        "scheduled": "2026-07-12T09:30:00"
+      },
+      {
+        "id": 8,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p5"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p3"
+            ]
+          }
+        ],
+        "venue": "court-2",
+        "scheduled": "2026-07-12T09:30:00"
+      },
+      {
+        "id": 9,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p6"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p2"
+            ]
+          }
+        ],
+        "venue": "court-1",
+        "scheduled": "2026-07-12T09:40:00"
+      },
+      {
+        "id": 10,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p1"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p3"
+            ]
+          }
+        ],
+        "venue": "court-2",
+        "scheduled": "2026-07-12T09:40:00"
+      },
+      {
+        "id": 11,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p4"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p2"
+            ]
+          }
+        ],
+        "venue": "court-1",
+        "scheduled": "2026-07-12T09:50:00"
+      },
+      {
+        "id": 12,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p5"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p6"
+            ]
+          }
+        ],
+        "venue": "court-2",
+        "scheduled": "2026-07-12T09:50:00"
+      },
+      {
+        "id": 13,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p1"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p2"
+            ]
+          }
+        ],
+        "venue": "court-1",
+        "scheduled": "2026-07-12T10:00:00"
+      },
+      {
+        "id": 14,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p3"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p6"
+            ]
+          }
+        ],
+        "venue": "court-2",
+        "scheduled": "2026-07-12T10:00:00"
+      },
+      {
+        "id": 15,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p4"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p5"
+            ]
+          }
+        ],
+        "venue": "court-1",
+        "scheduled": "2026-07-12T10:10:00"
+      },
+      {
+        "id": 16,
+        "sides": [
+          {
+            "kind": "pool",
+            "pool": "A",
+            "rank": 4
+          },
+          {
+            "kind": "pool",
+            "pool": "A",
+            "rank": 5
+          }
+        ],
+        "venue": "court-1",
+        "scheduled": "2026-07-12T10:30:00"
+      },
+      {
+        "id": 17,
+        "sides": [
+          {
+            "kind": "pool",
+            "pool": "A",
+            "rank": 3
+          },
+          {
+            "kind": "pool",
+            "pool": "A",
+            "rank": 6
+          }
+        ],
+        "venue": "court-2",
+        "scheduled": "2026-07-12T10:30:00"
+      },
+      {
+        "id": 18,
+        "sides": [
+          {
+            "kind": "pool",
+            "pool": "A",
+            "rank": 1
+          },
+          {
+            "kind": "match",
+            "match": 16,
+            "result": "winner"
+          }
+        ],
+        "venue": "court-1",
+        "scheduled": "2026-07-12T11:00:00"
+      },
+      {
+        "id": 19,
+        "sides": [
+          {
+            "kind": "pool",
+            "pool": "A",
+            "rank": 2
+          },
+          {
+            "kind": "match",
+            "match": 17,
+            "result": "winner"
+          }
+        ],
+        "venue": "court-2",
+        "scheduled": "2026-07-12T11:00:00"
+      },
+      {
+        "id": 20,
+        "sides": [
+          {
+            "kind": "match",
+            "match": 18,
+            "result": "winner"
+          },
+          {
+            "kind": "match",
+            "match": 19,
+            "result": "winner"
+          }
+        ],
+        "venue": "court-1",
+        "scheduled": "2026-07-12T11:30:00"
+      },
+      {
+        "id": 21,
+        "sides": [
+          {
+            "kind": "match",
+            "match": 18,
+            "result": "loser"
+          },
+          {
+            "kind": "match",
+            "match": 19,
+            "result": "loser"
+          }
+        ],
+        "venue": "court-2",
+        "scheduled": "2026-07-12T11:30:00"
+      }
+    ]
+  }
+}
