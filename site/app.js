@@ -133,7 +133,7 @@ const statusLine = (st, ctx, href) => {
   if (st.kind === 'starts') return `<p>Starts ${st.time !== null ? timeEl(st.time, ctx.tz) : 'soon'}</p>`;
   if (st.kind === 'groups') return `<p>${jump('Group stage', 'group-matches')} · ${st.played} of ${st.count} played</p>`;
   if (st.kind === 'ko') return st.col === null
-    ? '<p>Knockout stage</p>'
+    ? `<p>Knockout stage · ${jump('Placement', 'ko-placement')}</p>`
     : `<p>Knockout stage · ${jump(roundName(st.col), `ko-${st.col}`)}</p>`;
   if (st.kind === 'finished') return '<p data-status="finished">Finished</p>';
   // winners: the podium is one line, third only when a bronze match decided it;
@@ -163,8 +163,13 @@ function catSection(ctx, opts) {
   // the player page's next accent, so the link and the play always agree
   const next = m => st && !isDone(m) && (st.kind === 'groups'
     ? m.pool !== undefined
-    // Placement matches resolve as the championship above them resolves, so they are never the wave.
-    : st.kind === 'ko' && m.pool === undefined && placementLabel(m, ctx) === null && koColumn(m, ctx) === st.col);
+    // main bracket: the wave column. Placement: ready as soon as its feeder results
+    // decide it — the bronze lights up with the final, a 5th–8th semi with the QFs.
+    : st.kind === 'ko' && m.pool === undefined && (
+      placementLabel(m, ctx) === null
+        ? koColumn(m, ctx) === st.col
+        : Array.isArray(m.sides) && m.sides.length === 2 &&
+          !!resolveSide(m.sides[0], ctx) && !!resolveSide(m.sides[1], ctx)));
   const lines = [];
   if (opts.multi) lines.push(`<p>${esc(fmtRange(schedDays(ctx.matches, ctx.tz)))}</p>`);
   if (st) lines.push(statusLine(st, ctx, opts.href));

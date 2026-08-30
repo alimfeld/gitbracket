@@ -814,7 +814,31 @@ test('knockout wave link is championship-only: placement never names the round o
     m.result = { status: 'played', winner: 'a' }; delete m.games;
   }
   const sub = subline(render(done));
-  assert(sub.includes('Knockout stage') && !sub.includes('data-jump'), 'placement-pending: stage shown with no jump (no false Final link)');
+  assert(sub.includes('Knockout stage') && sub.includes('data-jump="ko-placement"') && !sub.includes('data-jump="ko-0"'), 'placement-pending links to the Placement section, not a round');
+  // and the open placement card carries the next accent, so the link has its highlight partner
+  const doneHtml = render(done);
+  const placeBlock = doneHtml.slice(doneHtml.indexOf('ko-placement'));
+  assert((doneHtml.match(/data-status="next"/g) || []).length === 1, 'only the open bronze is flagged');
+  assert(placeBlock.includes('<article data-status="next">') && placeBlock.includes('3rd place'), 'the accent lands on the open placement card');
+});
+
+test('ko wave accent also flags playable placement matches — the bronze lights up with the final', () => {
+  const base = () => JSON.parse(JSON.stringify(require(FIX('sample', 'tournaments', 'sample.json'))));
+  const render = tjson => {
+    const data = { index: [{ slug: 'sample', name: tjson.name, location: tjson.location }], t: { slug: 'sample', name: tjson.name }, tjson, cats: toCats(tjson) };
+    return renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' }, data);
+  };
+  // both semis decided, final + bronze open: the Final wave flags both — they are both playable
+  const tjson = base();
+  for (const id of [7, 8]) { const m = tjson.matches.md40.find(x => x.id === id); m.result = { status: 'played', winner: 'a' }; delete m.games; }
+  const html = render(tjson);
+  assert(html.slice(html.indexOf('<h2>Men'), html.indexOf('Group stage')).includes('data-jump="ko-0"'), 'the wave is the Final');
+  assert.equal((html.match(/data-status="next"/g) || []).length, 2, 'the final and the playable bronze both carry the accent');
+  const placement = html.slice(html.indexOf('<h4 id="ko-placement">'));
+  assert(placement.includes('<article data-status="next">') && placement.includes('3rd place'), 'the accent reaches into the Placement section');
+  // a bronze fed by an undecided semi stays unaccented (sample as-is: only the open semi is flagged)
+  const oh = render(base());
+  assert.equal((oh.match(/data-status="next"/g) || []).length, 1, 'a placement match whose feeder is undecided is not flagged');
 });
 
 test('playerStatus: a player with only a placement match left reads "In placement", not "In the final"', () => {
