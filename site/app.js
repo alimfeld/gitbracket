@@ -132,7 +132,9 @@ const statusLine = (st, ctx, href) => {
   const jump = (text, id) => `<a data-jump="${id}" href="${esc(href)}">${text}</a>`;
   if (st.kind === 'starts') return `<p>Starts ${st.time !== null ? timeEl(st.time, ctx.tz) : 'soon'}</p>`;
   if (st.kind === 'groups') return `<p>${jump('Group stage', 'group-matches')} · ${st.played} of ${st.count} played</p>`;
-  if (st.kind === 'ko') return `<p>Knockout stage · ${jump(roundName(st.col), `ko-${st.col}`)}</p>`;
+  if (st.kind === 'ko') return st.col === null
+    ? '<p>Knockout stage</p>'
+    : `<p>Knockout stage · ${jump(roundName(st.col), `ko-${st.col}`)}</p>`;
   if (st.kind === 'finished') return '<p data-status="finished">Finished</p>';
   // winners: the podium is one line, third only when a bronze match decided it;
   // the names carry the weight, Finished dims — the podium stays full
@@ -159,7 +161,10 @@ function catSection(ctx, opts) {
   const st = catStatus(ctx);
   // the subline's stage link names the wave in play — its unscored cards carry
   // the player page's next accent, so the link and the play always agree
-  const next = m => st && !isDone(m) && (st.kind === 'groups' ? m.pool !== undefined : st.kind === 'ko' && koColumn(m, ctx) === st.col);
+  const next = m => st && !isDone(m) && (st.kind === 'groups'
+    ? m.pool !== undefined
+    // Placement matches resolve as the championship above them resolves, so they are never the wave.
+    : st.kind === 'ko' && m.pool === undefined && placementLabel(m, ctx) === null && koColumn(m, ctx) === st.col);
   const lines = [];
   if (opts.multi) lines.push(`<p>${esc(fmtRange(schedDays(ctx.matches, ctx.tz)))}</p>`);
   if (st) lines.push(statusLine(st, ctx, opts.href));
@@ -199,9 +204,11 @@ const koOrder = (ms, ctx) => [...ms].sort((a, b) =>
   (schedTime(a, ctx.tz) ?? 0) - (schedTime(b, ctx.tz) ?? 0));
 
 function bracketHtml(ctx, ko, multi, next) {
-  const maxR = ko.reduce((mx, m) => Math.max(mx, koColumn(m, ctx)), 0);
+  const main = ko.filter(m => placementLabel(m, ctx) === null);
+  const placement = ko.filter(m => placementLabel(m, ctx) !== null);
+  const maxR = main.reduce((mx, m) => Math.max(mx, koColumn(m, ctx)), 0);
   const cols = [];
-  for (const m of ko) {
+  for (const m of main) {
     const r = maxR - koColumn(m, ctx); // koColumn is distance from the final; render that column rightmost
     (cols[r] = cols[r] || []).push(m);
   }
@@ -211,6 +218,10 @@ function bracketHtml(ctx, ko, multi, next) {
     const ms = cols[r];
     if (!ms || !ms.length) continue;
     parts.push(`<h4 id="ko-${maxR - r}">${roundName(maxR - r)}</h4>`, matchGrid(koOrder(ms, ctx), ctx, multi, next));
+  }
+  // Classification (bronze / 5th / 7th …) is its own tree, not a championship round — keep it off the round headings.
+  if (placement.length) {
+    parts.push(`<h4 id="ko-placement">Placement</h4>`, matchGrid(koOrder(placement, ctx), ctx, multi, next));
   }
   parts.push('</section>');
   return parts.join('');

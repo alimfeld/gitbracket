@@ -784,3 +784,50 @@ test('routing: cat and player ride along between tournament and schedule — app
   const picker = renderPlayer({ slug: 'sample', view: 'schedule', cat: 'md40' }, data);
   assert(picker.includes('#sample/schedule?cat=md40&amp;player='), 'picker picks carry the cat and the pick');
 });
+
+test('knockout: placement matches render under their own "Placement" heading, not a championship round', () => {
+  const repo = loadRepo(FIX('sample'));
+  const info = repo.tournaments.get('sample');
+  const data = { index: repo.index, t: repo.index[0], tjson: info.tjson, cats: toCats(info.tjson) };
+  const html = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' }, data);
+  assert(html.includes('<h4 id="ko-placement">Placement</h4>'), 'a Placement heading exists');
+  const finalBlock = html.slice(html.indexOf('<h4 id="ko-0">'), html.indexOf('<h4 id="ko-placement">'));
+  assert(!finalBlock.includes('3rd place'), 'the bronze is not grouped under the Final heading');
+  const placeBlock = html.slice(html.indexOf('<h4 id="ko-placement">'));
+  assert(placeBlock.includes('3rd place'), 'the bronze sits under Placement');
+});
+
+test('knockout wave link is championship-only: placement never names the round or the jump', () => {
+  const base = () => JSON.parse(JSON.stringify(require(FIX('sample', 'tournaments', 'sample.json'))));
+  const render = tjson => {
+    const data = { index: [{ slug: 'sample', name: tjson.name, location: tjson.location }], t: { slug: 'sample', name: tjson.name }, tjson, cats: toCats(tjson) };
+    return renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' }, data);
+  };
+  const subline = html => html.slice(html.indexOf('<h2>Men'), html.indexOf('Group stage'));
+  // as-is: semis (m8) and final (m9) open, bronze (m10) open — wave is the Semifinals, not the bronze
+  const a = render(base());
+  assert(subline(a).includes('data-jump="ko-1"') && !subline(a).includes('data-jump="ko-0"'), 'jump lands on Semifinals, never on Final for a placement match');
+  // championship finished, only the bronze left open: no championship round to jump to
+  const done = base();
+  for (const id of [7, 8, 9]) {
+    const m = done.matches.md40.find(x => x.id === id);
+    m.result = { status: 'played', winner: 'a' }; delete m.games;
+  }
+  const sub = subline(render(done));
+  assert(sub.includes('Knockout stage') && !sub.includes('data-jump'), 'placement-pending: stage shown with no jump (no false Final link)');
+});
+
+test('playerStatus: a player with only a placement match left reads "In placement", not "In the final"', () => {
+  const tjson = JSON.parse(JSON.stringify(require(FIX('sample', 'tournaments', 'sample.json'))));
+  for (const id of [7, 8, 9]) {
+    const m = tjson.matches.md40.find(x => x.id === id);
+    m.result = { status: 'played', winner: 'a' }; delete m.games;
+  }
+  const ctx = makeCat({ meta: tjson.categories.find(c => c.id === 'md40'), matches: tjson.matches.md40 }, tjson);
+  assert.equal(playerStatus(ctx, 'p7'), 'In placement', 'p7 only has the open bronze left — not a championship round');
+  // a player still in a live semi is named by that round, ignoring the open bronze
+  const open = JSON.parse(JSON.stringify(require(FIX('sample', 'tournaments', 'sample.json'))));
+  const c2 = makeCat({ meta: open.categories.find(c => c.id === 'md40'), matches: open.matches.md40 }, open);
+  assert.equal(playerStatus(c2, 'p5'), 'In Semifinals', 'live semi names the wave, open bronze does not drag it to Final');
+});
+

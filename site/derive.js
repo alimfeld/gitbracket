@@ -672,7 +672,10 @@ function matchLabel(m, ctx) {
 // scheduled final doesn't claim the status while its semifinals still decide
 // it. Falls back to all undone matches on malformed sides.
 function nextKoWave(ctx) {
-  const undone = ctx.matches.filter(m => m.pool === undefined && !m.result);
+  // Championship-only: a placement (classification) match resolves as a consequence
+  // of the bracket above it, so it is never "the wave in play" — excluding it
+  // keeps the round label and the kiosk's jump link on the real championship round.
+  const undone = ctx.matches.filter(m => m.pool === undefined && !m.result && placementLabel(m, ctx) === null);
   if (!undone.length) return null;
   const playable = undone.filter(m => !Array.isArray(m.sides) || m.sides.every(s => resolveSide(s, ctx)));
   // ponytail: an unsettled dead tie blocks every wave — this falls back to the
@@ -744,8 +747,11 @@ function playerStatus(ctx, pid) {
   if (!rows.length) return null;
   const undone = rows.filter(r => !isDone(r.m));
   if (undone.length) {
-    const koRows = undone.filter(r => r.m.pool === undefined);
-    if (!koRows.length) return 'In groups';
+    const koRows = undone.filter(r => r.m.pool === undefined && placementLabel(r.m, ctx) === null);
+    if (!koRows.length) {
+      // only placement matches left to play (e.g. a bronze not yet scored) — not a championship round
+      return undone.some(r => r.m.pool === undefined) ? 'In placement' : 'In groups';
+    }
     return inWord(Math.max(...koRows.map(r => koColumn(r.m, ctx))));
   }
   // every match they're in is decided below
@@ -759,7 +765,7 @@ function playerStatus(ctx, pid) {
     }
   }
   const lost = rows.filter(r => { const w = winnerIdx(r.m); return w !== null && w !== r.i; }); // void settles, counts nothing
-  const koLost = lost.filter(r => r.m.pool === undefined);
+  const koLost = lost.filter(r => r.m.pool === undefined && placementLabel(r.m, ctx) === null);
   if (koLost.length) return elimWord(Math.max(...koLost.map(r => koColumn(r.m, ctx))));
   const poolsDone = ctx.matches.filter(m => m.pool !== undefined).every(isDone);
   return poolsDone ? 'Out in groups' : 'In groups';
