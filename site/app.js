@@ -104,8 +104,9 @@ function renderIndex(route, data) {
       return `<div class="tcard-wrap"><a class="tcard" aria-label="${name}" href="#${esc(e.slug)}"><h2>${name}</h2>${meta ? `<p>${meta}</p>` : ''}</a><a class="board-link" href="#${esc(e.slug)}/venues">Venue board</a></div>`;
     });
   if (!items.length) return `<header><h1>Tournaments</h1><p>No tournaments yet.</p></header>`;
-  // the home-screen tip lives in the header once — the cards carry only the two paths
-  return `<header><h1>Tournaments</h1><p>Tip: add a tournament to your home screen for easy access to live results and your match schedule.</p></header><section class="stack">${items.join('')}</section>`;
+  // the home-screen tip lives muted in the header once — the cards carry only the two paths;
+  // .meta is the existing de-emphasis (small, muted), a new class or italics needn't exist
+  return `<header><h1>Tournaments</h1><p class="meta">Tip: open a tournament and add it to your home screen for easy access to live results and your match schedule.</p></header><section class="stack">${items.join('')}</section>`;
 }
 
 // One category per page; the switcher is the navigation — the first category

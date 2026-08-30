@@ -698,7 +698,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
     { slug: 'wide', name: 'Wide', dates: ['2026-07-11', '2026-07-12'] },
     { slug: 'sample', name: 'Sample', location: 'New York', dates: ['2025-07-14'] },
   ] });
-  assert(idx.includes('<h1>Tournaments</h1><p>Tip: add a tournament to your home screen for easy access to live results and your match schedule.</p>'), 'one add-to-home-screen tip in the header');
+  assert(idx.includes('<h1>Tournaments</h1><p class="meta">Tip: open a tournament and add it to your home screen for easy access to live results and your match schedule.</p>'), 'one muted add-to-home-screen tip in the header');
   assert((idx.match(/to your home screen/g) || []).length === 1, 'the tip lives once in the header, never per card');
   assert(idx.indexOf('>Wide<') < idx.indexOf('>Sample<') && idx.indexOf('>Sample<') < idx.indexOf('>Later<'), 'sorted by start date descending, undated last');
   assert(idx.includes('Mon, Jul 14') && idx.includes('New York') && idx.includes('Sat–Sun, Jul 11–12'), 'a card carries its date span and location');
