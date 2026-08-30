@@ -1,6 +1,6 @@
 'use strict';
 
-const POLL_MS = 10000;
+const POLL_MS = 30000;
 const FOLLOW_MS = 60000; // the kiosk re-follows the play on this cadence, data change or not
 
 // Browser: derive.js loads first (script tag) and its top-level names are
