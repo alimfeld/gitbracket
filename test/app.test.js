@@ -742,7 +742,7 @@ test('the next card is one card: a second category sharing the match id must not
   assert.equal((ppage.match(/<article id="next" data-status="next"/g) || []).length, 1, 'exactly one next card flag (the header line carries its own data-status)');
 });
 
-test('possible stages render as cards: chips, the bye footnote, and the next header goes conditional', () => {
+test('possible stages render as cards: gates in the meta, and the next header goes conditional', () => {
   const repo = loadRepo(FIX('byes'));
   const info = repo.tournaments.get('byes');
   const data = { index: repo.index, t: { slug: 'byes', name: info.tjson.name }, tjson: info.tjson, cats: toCats(info.tjson) };
