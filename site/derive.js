@@ -1,6 +1,6 @@
 'use strict';
 
-var ID_RE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/; // var, not const: app.js reads it off globalThis in the browser (script-scope consts are not globalThis properties)
+const ID_RE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
