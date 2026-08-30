@@ -95,6 +95,8 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
   }
 
   // the index copy must match the file's days — mirrors the name check above
+  // mjson: matches as a plain object, or null when malformed (reported above)
+  const mjson = tjson.matches && typeof tjson.matches === 'object' && !Array.isArray(tjson.matches) ? tjson.matches : null;
   let tzOk = false;
   if (typeof tjson.timezone !== 'string' || !tjson.timezone) {
     err(tFile, 'timezone required');
@@ -173,12 +175,12 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
     err(tFile, 'matches must be an object map of category id → match array');
   }
 
-  for (const cid of info.matches.keys()) {
+  for (const cid of Object.keys(mjson || {})) {
     if (!categories.has(cid)) err(`${tFile} matches.${cid}`, `maps to undeclared category ${JSON.stringify(cid)} — a key typo would silently render an empty category`);
   }
 
   for (const cat of categories.values()) {
-    const ms = info.matches.get(cat.id);
+    const ms = mjson ? mjson[cat.id] : undefined;
     if (ms === undefined) continue; // category with no matches entry is valid
     validateCategory(`${tFile} matches.${cat.id}`, ms, cat, players, venues, tjson, errs, warns);
   }
@@ -191,7 +193,7 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
   const sched = [];
   const noSlot = new Set(); // categories whose scheduled matches resolve to no slot length
   for (const cat of categories.values()) {
-    const ms = info.matches.get(cat.id);
+    const ms = mjson ? mjson[cat.id] : undefined;
     if (!Array.isArray(ms)) continue;
     const ctx = makeCat({ meta: cat, matches: ms }, tjson);
     for (const m of ms) {
@@ -458,10 +460,10 @@ function validateGames(games, target, where, err) {
 
 // validate <slug>: errors touching that tournament's file or index entry.
 // Exact matches only — a bare substring would leak tie3 errors into `validate tie`.
+// slug is id-regex-gated upstream, so it is safe inside the regex.
 function filterErrs(errs, slug) {
-  return errs.filter(e => e.includes(`tournaments/${slug}.json`)
-    || e.includes(`"${slug}"`)                        // slug "x" must match …
-    || new RegExp(`slug ${slug}(\\s|$)`).test(e));     // duplicate slug x
+  const re = new RegExp(`(?:tournaments/${slug}\.json|"${slug}"|slug ${slug}(?:\\s|$))`);
+  return errs.filter(e => re.test(e));
 }
 
 function main(root, slug) {

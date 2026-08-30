@@ -14,10 +14,7 @@ function repoOf(tourney) {
   return {
     readErrs: [],
     index: [{ slug: 'mini', name: 'Mini Open', location: tourney.location, dates: schedDays(Object.values(tourney.matches).flat(), tourney.timezone) }],
-    tournaments: new Map([['mini', {
-      tjson: tourney,
-      matches: new Map(Object.entries(tourney.matches)),
-    }]]),
+    tournaments: new Map([['mini', { tjson: tourney }]]),
   };
 }
 
@@ -77,8 +74,8 @@ test('spec guards reject bad input fast', () => {
   assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], placements: -2 }] }), /placements/);
   // a missing slotMinutes used to pile every match on the first court at the
   // block start, and pass the gate on a warning
-  assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], bestOf: 2 }] }), /bestOf/);
-  assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], bestOf: undefined }] }), /bestOf/);
+  assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], bestOf: 2 }, MINI.categories[1]] }), /bestOf/);
+  assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], bestOf: undefined }, MINI.categories[1]] }), /bestOf/);
   assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], slotMinutes: 0 }] }), /slotMinutes/);
   assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], slotMinutes: '30' }] }), /slotMinutes/);
   assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], slotMinutes: undefined }] }), /slotMinutes/);
@@ -90,7 +87,7 @@ test('spec guards reject bad input fast', () => {
   assert.throws(() => generate({ ...MINI, categories: 'oops' }), /categories must be an array/);
   assert.throws(() => generate({ ...MINI, name: undefined }), /name must be a non-empty string/);
   assert.throws(() => generate({ ...MINI, location: '' }), /location must be a non-empty string/);
-  assert.throws(() => generate({ ...MINI, timezone: undefined }), /timezone must be a non-empty string/);
+  assert.throws(() => generate({ ...MINI, timezone: undefined }), /timezone required/);
 });
 
 test('knockout: false skips the knockout phase for a multi-pool category', () => {
@@ -201,7 +198,7 @@ test('knockout false + placements silently ignores placements', () => {
   const { errs } = validateRepo({
     readErrs: [],
     index: [idx],
-    tournaments: new Map([['mini', { tjson: tourney, matches: new Map([['md', tourney.matches.md]]) }]]),
+    tournaments: new Map([['mini', { tjson: tourney }]]),
   });
   assert.deepEqual(errs, []);
   // No knockout — placements is irrelevant

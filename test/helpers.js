@@ -42,7 +42,7 @@ const validateFixture = name => validateRepo(loadRepo(FIX(name)));
 // the same loadRepo as real checkouts, per AGENTS.md
 function catOf(name, catId) {
   const info = loadRepo(FIX(name)).tournaments.get(name);
-  return makeCat({ meta: info.tjson.categories.find(c => c.id === catId), matches: info.matches.get(catId) || [] }, info.tjson);
+  return makeCat({ meta: info.tjson.categories.find(c => c.id === catId), matches: (info.tjson.matches || {})[catId] || [] }, info.tjson);
 }
 
 module.exports = { FIX, MINI, hasErr, hasWarn, validateFixture, catOf };

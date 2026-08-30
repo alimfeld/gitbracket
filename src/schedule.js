@@ -9,6 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const { matchSlotMs, pairSig, dayKey, tzOffset, schedTime, fmtTime, ID_RE, schedDays } = require('../site/derive.js');
 const { writeTournament, writeTournamentIndex, slotsOverlap, isRealDate } = require('./tools.js');
+const { validateRepo } = require('./validate.js');
 
 // Round-robin pairings, circle method: array of rounds, each a list of pairs.
 function roundRobin(teams) {
@@ -354,11 +355,8 @@ function generate(spec) {
   // ---- spec surface (fail fast; the gate below would catch most of these too) ----
   if (typeof slug !== 'string' || !ID_RE.test(slug)) throw new Error(`spec: slug ${JSON.stringify(slug)} must match ${ID_RE}`);
   if (!Number.isInteger(poolSize) || poolSize < 2) throw new Error(`spec: poolSize must be an integer >= 2, got ${JSON.stringify(poolSize)}`);
-  // A missing/mistyped field used to crash as a raw TypeError (Object.entries
-  // on undefined) instead of a named spec error — same gate, named message.
-  if (typeof name !== 'string' || !name) throw new Error(`spec: name must be a non-empty string, got ${JSON.stringify(name)}`);
-  if (typeof location !== 'string' || !location.trim()) throw new Error(`spec: location must be a non-empty string, got ${JSON.stringify(location)}`);
-  if (typeof timezone !== 'string' || !timezone) throw new Error(`spec: timezone must be a non-empty string, got ${JSON.stringify(timezone)}`);
+  // name/location/timezone and bestOf are checked on the produced file by the
+  // validator gate at the end — one source for those messages, no mirrors here.
   const objMap = (v, field) => {
     if (typeof v !== 'object' || v === null || Array.isArray(v)) throw new Error(`spec: ${field} must be an id -> value map, got ${JSON.stringify(v)}`);
   };
@@ -389,9 +387,7 @@ function generate(spec) {
     }
     // A missing slotMinutes is only a validator warning, yet NaNs every slot
     // window and piles every match on the first court — fail fast instead.
-    if (typeof c.bestOf !== 'number' || c.bestOf < 1 || c.bestOf % 2 !== 1) {
-      throw new Error(`spec: category ${c.id}: bestOf must be an odd positive integer, got ${JSON.stringify(c.bestOf)}`);
-    }
+    // (bestOf odds are the gate's job — the validator on the produced file.)
     if (typeof c.slotMinutes !== 'number' || !Number.isInteger(c.slotMinutes) || c.slotMinutes < 1) {
       throw new Error(`spec: category ${c.id}: slotMinutes must be a positive integer, got ${JSON.stringify(c.slotMinutes)}`);
     }
@@ -430,15 +426,29 @@ function generate(spec) {
   scheduleMatches(results, VENUES.map((v) => v.id), timezone, slotCfgOf, eventDate, blockStart);
   assertSchedule(results, slotCfgOf, timezone);
 
-  const out = {};
+  const out = { name, location, timezone, venues: VENUES, categories: CATS, players: PLAYERS, matches: {} };
   for (const [cat, teamList, ms] of results) {
     assertPoolCoverage(teamList, ms, poolSize);
     renumberByTime(ms, timezone);
-    out[cat] = ms;
+    out.matches[cat] = ms;
     console.log(`${cat}: ${ms.length} matches`);
   }
 
-  return { name, location, timezone, venues: VENUES, categories: CATS, players: PLAYERS, matches: out };
+  // The one validator gate: the produced file's shape is checked against the
+  // real validateRepo before anything is written, so schedule.main never emits
+  // a file the gate would reject (name/location/timezone and bestOf odds live
+  // here, not in guarded mirrors up top). The spec-only guards above stay:
+  // poolSize, placements, knockout, final, and the id->value maps the output
+  // never carries; slotMinutes stays a spec guard because a zero-length window
+  // never terminates the greedy.
+  const g = validateRepo({
+    readErrs: [],
+    index: [{ slug, name, location, dates: schedDays(Object.values(out.matches).flat(), timezone) }],
+    tournaments: new Map([[slug, { tjson: out }]]),
+  });
+  if (g.errs.length) throw new Error('spec: output fails validation:\n' + g.errs.join('\n'));
+
+  return out;
 }
 
 // CLI entry (dispatched from gb.js): root is the repo root, specPath is

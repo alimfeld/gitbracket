@@ -17,7 +17,7 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const { spawnSync } = require('child_process');
-const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, fmtTime, matchLabel, poolStandings, poolRanks, fmtDiff, bestOfOf, countWins, sideLetter, winnerIdx, dayKey, DATE_RE } = require('../site/derive.js');
+const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, fmtTime, matchLabel, poolStandings, poolRanks, poolDecided, fmtDiff, bestOfOf, countWins, sideLetter, winnerIdx, dayKey, DATE_RE } = require('../site/derive.js');
 const { loadRepo, writeTournament } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 const { ship } = require('./publish.js');
@@ -92,37 +92,26 @@ function applyTime(matches, matchId, isoString) {
 function writeEdit(siteRoot, repo, slug, catId, apply) {
   const info = repo.tournaments.get(slug);
   if (!info || !info.tjson) return { err: `unknown tournament ${slug}` };
-  const cats = (info.tjson.categories || []).map(c => c.id);
+  const tjson = info.tjson;
+  const cats = (tjson.categories || []).map(c => c.id);
   if (!cats.includes(catId)) return { err: `unknown category ${catId} — have: ${cats.join(', ')}` };
-  const ms = info.matches.get(catId);
+  const ms = tjson.matches && typeof tjson.matches === 'object' && !Array.isArray(tjson.matches) ? tjson.matches[catId] : undefined;
   if (!ms) return { err: `no matches for category ${catId}` };
-  // Tripwire, not data validation: tjson.matches and info.matches must hold the
-  // SAME arrays — the snapshot below and the rollback splice depend on identity,
-  // so an edit that copies instead of mutating fails here loudly, never as a
-  // silent divergence between the validator's snapshot and the live arrays.
-  for (const [cid, arr] of info.matches) {
-    if (!info.tjson.matches || info.tjson.matches[cid] !== arr) {
-      throw new Error(`writeEdit invariant: info.tjson.matches.${cid} is not the info.matches array`);
-    }
-  }
-  const meta = info.tjson.categories.find(c => c.id === catId);
-  const ctx = makeCat({ meta, matches: ms }, info.tjson);
+  const meta = tjson.categories.find(c => c.id === catId);
+  const ctx = makeCat({ meta, matches: ms }, tjson);
   const file = path.join(siteRoot, 'tournaments', `${slug}.json`);
   const before = fs.readFileSync(file, 'utf8');
   const aerr = apply(ms, ctx);
   if (aerr) return { err: aerr };
-  // validate the snapshot the file will get: the dates-vs-index check reads
-  // info.tjson.matches, pass B reads info.matches — keep them the same arrays
-  const matches = {};
-  for (const [cid, arr] of info.matches) matches[cid] = arr;
-  info.tjson.matches = matches; // the arrays are info.matches' own, so a rollback splice restores this too
+  // tjson is the single view of the data, so the validator sees exactly what
+  // writeTournament will write — the dates-vs-index and pass-B checks agree.
   const { errs } = validateRepo(repo);
   if (errs.length) {
     ms.splice(0, ms.length, ...((JSON.parse(before).matches || {})[catId] || [])); // undo the in-memory edit too — a same-process retry must start from the original
     fs.writeFileSync(file, before);
     return { errs };
   }
-  writeTournament(siteRoot, slug, { ...info.tjson, matches });
+  writeTournament(siteRoot, slug, tjson);
   return { file };
 }
 
@@ -209,7 +198,7 @@ function listText(repo, slug, cats, needle) {
   const { g, add } = widthBag();
   for (const cid of cats) {
     const meta = tjson.categories.find(c => c.id === cid);
-    const matches = info.matches.get(cid) || [];
+    const matches = (info.tjson.matches || {})[cid] || [];
     const ctx = makeCat({ meta, matches }, tjson);
     const tables = [];
     const poolIds = [...new Set(matches.filter(m => m.pool).map(m => m.pool))].sort();
@@ -217,12 +206,12 @@ function listText(repo, slug, cats, needle) {
       const st = poolStandings(ctx, pid, true);
       if (!st) continue;
       // ranks come from the full ladder (dead-tie members share it), before the player filter drops rows
-      const ranks = poolRanks(st);
+      const ranks = poolDecided(st) ? poolRanks(st) : null;
       const rows = [];
       for (let i = 0; i < st.length; i++) {
         const r = st[i];
         if (playerHit && !playerHit(r.ids)) continue; // ls <name>: the player's rows only
-        rows.push([String(ranks[i]), teamLabel(r.ids, ctx), String(r.wins), String(r.losses), fmtDiff(r.gd), fmtDiff(r.pd)]);
+        rows.push([String(ranks ? ranks[i] : ''), teamLabel(r.ids, ctx), String(r.wins), String(r.losses), fmtDiff(r.gd), fmtDiff(r.pd)]);
       }
       if (rows.length) tables.push({ pid, rows });
     }
@@ -352,7 +341,7 @@ function completer(state) {
         cands = plist.flatMap(p => [p.id, p.name]);
       } else if (MUT.includes(verb) && verb !== 'publish' && parts.length === 2) cands = cats;
       else if (MUT.includes(verb) && verb !== 'publish' && parts.length === 3) {
-        const arr = cats.includes(parts[1]) ? info.matches.get(parts[1]) : null;
+        const arr = cats.includes(parts[1]) ? (info.tjson.matches || {})[parts[1]] : null;
         cands = arr ? arr.map(m => String(m.id)) : []; // ids are numbers; startsWith needs strings
       } else if (verb === 'venue' && parts.length === 4) {
         cands = ((info && info.tjson.venues) || []).map(v => v.id);
@@ -464,7 +453,7 @@ function applyAndCommit(state, kind, cat, matchId, apply) {
   if (res.err) return C.red(res.err);
   if (res.errs) return C.red(res.errs.join('\n') + '\nnot written — validation error(s), file rolled back');
   const info = repo.tournaments.get(slug);
-  const matches = info.matches.get(cat);
+  const matches = (info.tjson.matches || {})[cat];
   const ctx = makeCat({ meta: info.tjson.categories.find(c => c.id === cat), matches }, info.tjson);
   const m = ctx.byId.get(Number(matchId));
   const detail = editDetail(kind, m);

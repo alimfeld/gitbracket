@@ -15,7 +15,7 @@ const { FIX, hasErr } = require('./helpers.js');
 
 function md40Ctx(repo) {
   const tjson = repo.tournaments.get('sample').tjson;
-  const matches = repo.tournaments.get('sample').matches.get('md40');
+  const matches = repo.tournaments.get('sample').tjson.matches.md40;
   return { tjson, matches, ctx: makeCat({ meta: tjson.categories.find(c => c.id === 'md40'), matches }, tjson) };
 }
 
@@ -72,12 +72,12 @@ test('repl applyResult: walkover records a winner, void settles, games cleared',
 
 test('repl applyVenue: moves a match; unknown venue is rejected by the validator', () => {
   const repo = loadRepo(FIX('sample'));
-  const matches = repo.tournaments.get('sample').matches.get('md40');
+  const matches = repo.tournaments.get('sample').tjson.matches.md40;
   assert(repl.applyVenue(matches, '2', 'court-2') === null, 'applyVenue reports no error');
   assert(matches.find(m => m.id === 2).venue === 'court-2', 'venue moved');
   assert(repl.applyVenue(matches, 'nope', 'court-2') === 'unknown match nope', 'unknown match reported');
   const repo2 = loadRepo(FIX('sample'));
-  repl.applyVenue(repo2.tournaments.get('sample').matches.get('md40'), '2', 'bogus-court');
+  repl.applyVenue(repo2.tournaments.get('sample').tjson.matches.md40, '2', 'bogus-court');
   assert(hasErr(validateRepo(repo2), /unknown venue "bogus-court"/), 'undeclared venue rejected');
 });
 
@@ -93,7 +93,7 @@ test('repl buildScheduled: builds local ISO-8601 wall time from hh:mm and timezo
 
 test('repl applyTime: sets scheduled field, repo validates', () => {
   const repo = loadRepo(FIX('sample'));
-  const matches = repo.tournaments.get('sample').matches.get('md40');
+  const matches = repo.tournaments.get('sample').tjson.matches.md40;
   assert(repl.applyTime(matches, '2', '2025-07-14T16:00:00') === null, 'applyTime reports no error');
   assert(matches.find(m => m.id === 2).scheduled === '2025-07-14T16:00:00', 'scheduled set');
   assert(repl.applyTime(matches, 'nope', '2025-07-14T16:00:00') === 'unknown match nope', 'unknown match reported');
@@ -112,7 +112,7 @@ test('repl rejects edits the validator would refuse', () => {
   const { errs } = validateRepo(repo);
   assert(hasErr({ errs }, /after a side already reached the target/), 'game past the target is rejected');
   const repo2 = loadRepo(FIX('sample'));
-  repl.applyResult(repo2.tournaments.get('sample').matches.get('md40'), '9', 'walkover', 'b'); // m8 unresolved
+  repl.applyResult(repo2.tournaments.get('sample').tjson.matches.md40, '9', 'walkover', 'b'); // m8 unresolved
   const r2 = validateRepo(repo2);
   assert(hasErr(r2, /scored match must have both sides resolved/), 'scoring a match with an unresolved side is rejected');
 });
@@ -256,25 +256,8 @@ test('repl writeEdit: the gate sees schedule edits — a date the index lacks is
     const res = repl.writeEdit(dataRoot, repo, 'sample', 'md40', (c) => repl.applyTime(c, '2', '2025-07-15T09:00:00'));
     assert(res.errs && res.errs.some(e => /dates/.test(e)), 'index dates must mismatch the edited schedule — the edit cannot silently pass');
     assert(fs.readFileSync(file, 'utf8') === before, 'rejected edit rolls the file back byte-identical');
-    const m2 = repo.tournaments.get('sample').matches.get('md40').find(m => m.id === 2);
+    const m2 = repo.tournaments.get('sample').tjson.matches.md40.find(m => m.id === 2);
     assert.equal(m2.scheduled, '2025-07-14T09:00:00', 'in-memory match restored for a same-process retry');
-  } finally {
-    fs.rmSync(tmp, { recursive: true, force: true });
-  }
-});
-
-test('repl writeEdit: the identity tripwire fires when tjson.matches diverges from info.matches', () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gitbracket-'));
-  try {
-    const dataRoot = path.join(tmp, 'site');
-    fs.mkdirSync(dataRoot, { recursive: true });
-    fs.cpSync(FIX('sample'), dataRoot, { recursive: true });
-    const repo = loadRepo(dataRoot);
-    const info = repo.tournaments.get('sample');
-    info.tjson.matches = { ...info.tjson.matches, md40: [...info.tjson.matches.md40] }; // a copy, not info.matches' own array
-    assert.throws(() => repl.writeEdit(dataRoot, repo, 'sample', 'md40', () => null), /invariant/);
-    info.tjson.matches.md40 = info.matches.get('md40'); // restore identity — the real path keeps it
-    assert.doesNotThrow(() => repl.writeEdit(dataRoot, repo, 'sample', 'md40', () => 'unknown match x'), 'a healthy repo passes the tripwire');
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
@@ -292,13 +275,13 @@ test('repl writeEdit: rollback on validation failure, write on success (real dis
     const bad = repl.writeEdit(dataRoot, repo, 'sample', 'md40', (c, ctx) => repl.applyScore(c, '7', [{ a: 11, b: 5 }, { a: 11, b: 3 }], ctx));
     assert(bad.errs && bad.errs.length > 0 && !bad.file, 'bad edit reports validation errors');
     assert(fs.readFileSync(file, 'utf8') === before, 'rejected edit rolls the file back byte-identical');
-    const m7mem = repo.tournaments.get('sample').matches.get('md40').find(m => m.id === 7);
+    const m7mem = repo.tournaments.get('sample').tjson.matches.md40.find(m => m.id === 7);
     assert(m7mem.result.status === 'walkover' && m7mem.games === undefined, 'rejected edit restores the in-memory match too');
     const good = repl.writeEdit(dataRoot, repo, 'sample', 'md40', (c, ctx) => repl.applyScore(c, '7', [{ a: 11, b: 5 }], ctx));
     assert(!good.errs && good.file, 'good edit writes the file');
     const reread = loadRepo(dataRoot);
     assert(validateRepo(reread).errs.length === 0, 'written repo validates');
-    const m7 = reread.tournaments.get('sample').matches.get('md40').find(m => m.id === 7);
+    const m7 = reread.tournaments.get('sample').tjson.matches.md40.find(m => m.id === 7);
     assert(m7.games.length === 1 && m7.result.status === 'played' && m7.result.winner === 'a', 'games applied with a played result');
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });

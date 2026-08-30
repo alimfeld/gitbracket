@@ -47,7 +47,7 @@ test('a play-through ends complete and validates clean', () => {
   const repo = {
     readErrs: [],
     index: [{ slug: 'mini', name: 'Mini Open', location: 'Zurich', dates: schedDays(Object.values(tourney.matches).flat(), tz) }],
-    tournaments: new Map([['mini', { tjson: tourney, matches: new Map(Object.entries(tourney.matches)) }]]),
+    tournaments: new Map([['mini', { tjson: tourney }]]),
   };
   const { errs } = validateRepo(repo);
   assert.deepStrictEqual(errs, []);

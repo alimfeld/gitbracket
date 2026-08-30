@@ -13,18 +13,26 @@ const LOCALE = 'en-US';
 // Shared side identity: sorted '|'-joined ids.
 const pairSig = ids => [...ids].sort().join('|');
 
-function makeCat(c, tjson) {
+// Tournament-level facts (names, venues, tz) are per-file, not per-category —
+// toCats builds them once and hands them to every category's context; the
+// tools' direct makeCat calls (validate, REPL, sim) build fresh ones per call.
+function makeCat(c, tjson, shared) {
   // Never throws on broken shape — the validator calls this while reporting it.
   const matches = (c.matches || []).filter(m => m && typeof m === 'object');
   const arr = x => Array.isArray(x) ? x : [];
+  const s = shared || {
+    names: new Map(arr(tjson && tjson.players).filter(p => p && typeof p === 'object').map(p => [p.id, p.name])),
+    tz: (tjson && tjson.timezone) || 'UTC',
+    venues: new Map(arr(tjson && tjson.venues).filter(v => v && typeof v === 'object').map(v => [v.id, v.name])),
+  };
   return {
     matches,
     byId: new Map(matches.map(m => [m.id, m])),
     bestOf: (c.meta && c.meta.bestOf) || {},
-    names: new Map(arr(tjson && tjson.players).filter(p => p && typeof p === 'object').map(p => [p.id, p.name])),
-    tz: (tjson && tjson.timezone) || 'UTC',
+    names: s.names,
+    tz: s.tz,
     slotMinutes: (c.meta && c.meta.slotMinutes) || {},
-    venues: new Map(arr(tjson && tjson.venues).filter(v => v && typeof v === 'object').map(v => [v.id, v.name])),
+    venues: s.venues,
     name: (c.meta && c.meta.name) || '',
     id: (c.meta && c.meta.id) || ''
   };
@@ -34,7 +42,12 @@ function makeCat(c, tjson) {
 function toCats(tjson) {
   const byCat = (tjson && tjson.matches && typeof tjson.matches === 'object') ? tjson.matches : {};
   const cats = (tjson && Array.isArray(tjson.categories)) ? tjson.categories : [];
-  return cats.map(c => makeCat({ meta: c, matches: Array.isArray(byCat[c.id]) ? byCat[c.id] : [] }, tjson));
+  const shared = {
+    names: new Map((tjson && Array.isArray(tjson.players) ? tjson.players : []).filter(p => p && typeof p === 'object').map(p => [p.id, p.name])),
+    tz: (tjson && tjson.timezone) || 'UTC',
+    venues: new Map((tjson && Array.isArray(tjson.venues) ? tjson.venues : []).filter(v => v && typeof v === 'object').map(v => [v.id, v.name])),
+  };
+  return cats.map(c => makeCat({ meta: c, matches: Array.isArray(byCat[c.id]) ? byCat[c.id] : [] }, tjson, shared));
 }
 
 const stageOf = m => (m && m.pool !== undefined) ? 'groups' : 'knockout';
@@ -98,6 +111,11 @@ function poolRanks(st) {
   }
   return ranks;
 }
+
+// Rank cells stay blank until a pool has a decided match — before that every
+// team ties at zero and a wall of 1s reads as "all ranked first". The site's
+// standings and the REPL's desk sheet share the rule via this one predicate.
+const poolDecided = st => st.some(r => r.wins || r.losses);
 
 function poolStandings(ctx, pool, partial) {
   // partial=true: skip unfinished matches — live standings; strict form TBDs.
@@ -926,5 +944,5 @@ function playerStatus(ctx, pid) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, countWins, sideIdx, sideLetter, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, possibleStages, placementLabel, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dayShort, dayLabel, fmtDiff, kioskStatus, currentRowIndex, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, playerStatus };
+  module.exports = { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, countWins, sideIdx, sideLetter, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, possibleStages, placementLabel, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dayShort, dayLabel, fmtDiff, kioskStatus, currentRowIndex, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, playerStatus };
 }

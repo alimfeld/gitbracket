@@ -83,9 +83,10 @@ agreements; if one doesn't fit, raise it instead of breaking it silently.
   behavior need a committed scenario under `fixtures/` and an assertion in
   `test/`, both loaded via the same `loadRepo` as real checkouts. Tests
   assert domain behavior — ladder order, slot resolution, validation
-  outcomes, escaping, no-throw — not markup shape; renderer decisions may
-  change without touching tests, and tests never mutate data or depend on
-  live `site/tournaments/`.
+  outcomes, escaping, no-throw — and, where shipped behavior is at stake,
+  renderer-output smoke checks (a11y state, status flags, data-jump wiring,
+  escapes); neither layer mutates committed data or depends on live
+  `site/tournaments/`.
 - **Concurrent edits are rebase conflicts, not lost writes.** A rejected push
   means someone pushed first: `git pull --rebase && git push`.
 - **One scorer owns one tournament.**
