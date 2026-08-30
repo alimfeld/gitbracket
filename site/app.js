@@ -97,10 +97,15 @@ function renderIndex(route, data) {
     })
     .map(e => {
       const dates = fmtRange(e.dates); // stored ISO days -> span
-      return `<tr><td>${dates ? esc(dates) : ''}</td><td><a href="#${esc(e.slug)}">${esc(e.name || e.slug)}</a> · <a href="#${esc(e.slug)}/venues">Venue board</a></td><td>${esc(e.location)}</td></tr>`;
+      const meta = [dates, e.location].filter(Boolean).map(esc).join(' · ');
+      const name = esc(e.name || e.slug);
+      // the card link opens the tournament (the installable, player view); the
+      // venue board is a sibling chip pinned to the corner — a link can't nest a link
+      return `<div class="tcard-wrap"><a class="tcard" aria-label="${name}" href="#${esc(e.slug)}"><h2>${name}</h2>${meta ? `<p>${meta}</p>` : ''}</a><a class="board-link" href="#${esc(e.slug)}/venues">Venue board</a></div>`;
     });
   if (!items.length) return `<header><h1>Tournaments</h1><p>No tournaments yet.</p></header>`;
-  return `<header><h1>Tournaments</h1></header><table><thead><tr><th scope="col">Date</th><th scope="col">Tournament</th><th scope="col">Location</th></tr></thead><tbody>${items.join('')}</tbody></table>`;
+  // the home-screen tip lives in the header once — the cards carry only the two paths
+  return `<header><h1>Tournaments</h1><p>Tip: add a tournament to your home screen for easy access to live results and your match schedule.</p></header><section class="stack">${items.join('')}</section>`;
 }
 
 // One category per page; the switcher is the navigation — the first category

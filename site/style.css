@@ -156,6 +156,60 @@ p {
   gap: calc(var(--space)*2);
 }
 
+/* the index: one card per tournament — the card itself opens the tournament, the
+   venue board is a sibling chip pinned to the corner (a link can't nest a link) */
+.tcard-wrap {
+  position: relative;
+}
+
+a.tcard,
+.board-link {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+a.tcard {
+  display: block;
+  padding: calc(var(--space)*2);
+}
+
+a.tcard:hover,
+a.tcard:focus-visible,
+.board-link:hover {
+  border-color: var(--accent);
+}
+
+a.tcard:hover,
+a.tcard:focus-visible {
+  background: var(--hover);
+}
+
+.board-link {
+  position: absolute;
+  top: var(--space);
+  right: var(--space);
+  padding: calc(var(--space)/2) var(--space);
+  background: var(--page);
+  font-size: .875em;
+}
+
+.board-link:hover {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+a.tcard h2 {
+  margin: 0;
+  /* the corner chip overlaps the title row — long names must not run under it */
+  padding-right: calc(var(--space)*6);
+}
+
+.tcard p {
+  margin: var(--space) 0 0;
+}
+
 /* grid-item margins never collapse — a cell heading's top margin would stack
    on the gap and read one step wider than the same heading in flow */
 .grid h4 {

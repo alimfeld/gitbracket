@@ -698,11 +698,14 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
     { slug: 'wide', name: 'Wide', dates: ['2026-07-11', '2026-07-12'] },
     { slug: 'sample', name: 'Sample', location: 'New York', dates: ['2025-07-14'] },
   ] });
-  assert(idx.includes('<table>') && idx.includes('<th scope="col">Date</th>') && idx.includes('<th scope="col">Tournament</th>') && idx.includes('<th scope="col">Location</th>'), 'index is a dated table with a location column');
-  assert(idx.indexOf('>Wide</a>') < idx.indexOf('>Sample</a>') && idx.indexOf('>Sample</a>') < idx.indexOf('>Later</a>'), 'sorted by start date descending, undated last');
-  assert(idx.includes('<td>Mon, Jul 14</td><td><a href="#sample">Sample</a> · <a href="#sample/venues">Venue board</a></td><td>New York</td>'), 'columns: date, tournament (venue-board link rides along), location');
-  assert(idx.includes('<td>Sat–Sun, Jul 11–12</td>'), 'multi-day spans collapse in the date cell');
-  assert(idx.includes('<td></td><td><a href="#soon">Later</a>'), 'an undated tournament keeps an empty date cell');
+  assert(idx.includes('<h1>Tournaments</h1><p>Tip: add a tournament to your home screen for easy access to live results and your match schedule.</p>'), 'one add-to-home-screen tip in the header');
+  assert((idx.match(/to your home screen/g) || []).length === 1, 'the tip lives once in the header, never per card');
+  assert(idx.indexOf('>Wide<') < idx.indexOf('>Sample<') && idx.indexOf('>Sample<') < idx.indexOf('>Later<'), 'sorted by start date descending, undated last');
+  assert(idx.includes('Mon, Jul 14') && idx.includes('New York') && idx.includes('Sat–Sun, Jul 11–12'), 'a card carries its date span and location');
+  assert(idx.includes('<a class="tcard" aria-label="Sample" href="#sample"><h2>Sample</h2>'), 'the whole card opens the tournament');
+  assert(idx.includes('</a><a class="board-link" href="#sample/venues">Venue board</a>'), 'the venue board is a sibling of the card link, never nested in it');
+  assert((idx.match(/#sample\/venues/g) || []).length === 1, 'venue board appears once per tournament');
+  assert(idx.includes('<a class="tcard" aria-label="Later" href="#soon"><h2>Later</h2>'), 'an undated tournament keeps its card');
   assert(!idx.includes('undefined') && !idx.includes('null'), 'no date renders clean, no null payload');
   // a registered player with no match anywhere is not pickable — the pick must always render a schedule
   const sparse = JSON.parse(JSON.stringify(data.tjson));
