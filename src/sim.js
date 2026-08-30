@@ -239,7 +239,7 @@ function main(root, args) {
     if (!process.stdin.isTTY) { console.error('sim: needs a terminal for keypresses'); process.exit(0); }
     const url = `http://127.0.0.1:${server.address().port}/`;
     state.banner = `${C.bold(tjson.name)} — simulated day in ${C.cyan('.sim/site')} (never committed)\n` +
-      `${C.cyan(url)} — opening your browser; the kiosk goes live each poll, the other views refresh on reload`;
+      `${C.cyan(url)} — opening your browser; every view goes live on each poll`;
     openBrowser(url);
     repMain(state, server);
   });

@@ -24,7 +24,7 @@ python3 -m http.server 8000 --directory site   # same files surge serves
 
 # ── iterate ──
 node gb.js               # edits commit locally; nothing ships off main
-# reload — the kiosk poll picks changes up by itself
+# no reload — a visible view polls the change up by itself
 
 # ── cleanup ──
 git checkout main && git branch -d test

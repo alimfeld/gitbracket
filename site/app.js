@@ -433,7 +433,8 @@ function renderPlayer(route, data) {
   return parts.join('');
 }
 
-// Read-once views load once and recover via manual reload; the kiosk polls.
+// The index loads once; every tournament view polls while the tab is visible,
+// so results land on their own — no reload, no manual refresh.
 function boot() {
   const app = document.querySelector('main');
 
@@ -449,17 +450,25 @@ function boot() {
     }
     return d.t.name;
   };
-  let route = null;    // current fragment route — the kiosk poll reads it each tick
+  let route = null;    // current fragment route — the poll reads it each tick
   let data = null;     // last good snapshot — a failed poll keeps the board up
   let lastHtml = '';   // skip re-render when nothing changed — keeps selection/focus on the player page
   let lastKey = '';    // view|cat — what the page shows; a change is new content, start at the top
   let lastFollow = 0;     // last minute-tick re-follow — the kiosk tracks the play even when data never changes
   let pollTimer = null, clockTimer = null;
+  let pollOn = false;  // view whose timers should run: 'tournament' | 'schedule' | 'venues'; false on the index
 
-  // Auto-refresh only on the kiosk; the other views are read-on-load.
-  const setKiosk = on => {
-    if (on && !pollTimer) {
-      pollTimer = setInterval(tick, POLL_MS + Math.random() * 5000); // jitter: no lockstep across a hall of screens
+  // Every view but the index auto-refreshes while the tab is visible; a return
+  // to the tab fetches immediately, so results land the moment a spectator
+  // looks. The kiosk's running clock is a view, not a mode.
+  const stopPoll = () => {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    if (clockTimer) { clearInterval(clockTimer); clockTimer = null; }
+  };
+  const startPoll = () => {
+    stopPoll();
+    pollTimer = setInterval(tick, POLL_MS + Math.random() * 5000); // jitter: no lockstep across a hall of screens
+    if (pollOn === 'venues') {
       // Clock lives in an element the change-guard never re-renders; look it up
       // fresh each tick (the poll re-renders).
       clockTimer = setInterval(() => {
@@ -477,16 +486,16 @@ function boot() {
           render(route, data);
         }
       }, 1000);
-    } else if (!on && pollTimer) {
-      clearInterval(pollTimer); pollTimer = null;
-      clearInterval(clockTimer); clockTimer = null;
     }
   };
 
   const load = r => {
     loadAll(r).then(d => {
       if (route !== r) return; // superseded by a newer navigation
-      if (r.view !== 'index' && !d.tjson) { // fetch failed or unknown slug — the kiosk retries next tick
+      // ponytail: an unknown slug 404s and then polls forever while visible — fetchJson can't
+      // tell a 404 from a network error; stop-on-404 needs fetchJson to report the status,
+      // add it if bad deep links ever matter.
+      if (r.view !== 'index' && !d.tjson) { // fetch failed or unknown slug — the poll retries next tick
         if (!data) app.innerHTML = MISSING + '<p>Reload the page to try again.</p>';
         return;
       }
@@ -529,12 +538,13 @@ function boot() {
     const r = parseRoute();
     if (!r) {
       route = null;
-      setKiosk(false);
+      pollOn = false; stopPoll();
       app.innerHTML = '<p>This link doesn\'t look right.</p><p><a href="#">All tournaments</a></p>';
       return;
     }
     route = r;
-    setKiosk(r.view === 'venues');
+    pollOn = r.view === 'index' ? false : r.view;
+    if (pollOn && !document.hidden) startPoll(); else stopPoll();
     if (r.view === 'index' || !(data && data.t && data.t.slug === r.slug)) { // index has no t — always reloads; a snapshot's t carries its slug
       data = null;
       lastHtml = '';
@@ -559,6 +569,12 @@ function boot() {
 
   navigate();
   window.addEventListener('hashchange', navigate);
+  // a hidden tab stops polling entirely; a return fetches immediately, so the
+  // fresh data is there the moment the spectator looks
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopPoll();
+    else if (pollOn) { tick(); startPoll(); }
+  });
 }
 
 if (typeof document !== 'undefined') boot();
