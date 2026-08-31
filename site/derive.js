@@ -460,22 +460,69 @@ function possibleStages(ctx, pid) {
   }
 
   // ---- finalize: uniform bits, chips, byes ---------------------------------
-  const out = [];
+  const present = [];
   for (const st of stages.values()) {
     const n = st.ids.length;
-    const time = n > 0 && st.times.length === n && st.times.every(t => t === st.times[0]) ? st.times[0] : null;
-    const court = n > 0 && st.courts.length === n && st.courts.every(c => c === st.courts[0]) ? st.courts[0] : null;
-    // The chip is the entry gates in one phrase: the direct slot ranks, then
-    // the result edges — "as 1st in Pool A or winner of the QF" names both
-    // ways in, so a rank-1 bye can't read as "everyone gets here". Only a
-    // stage every pool rank has a slot in (no gates at all) shortens to
-    // "all ranks".
+    present.push({
+      label: st.label, col: st.col, ranks: st.ranks, edges: st.edges,
+      times: st.times, courts: st.courts, ids: st.ids,
+      time: n > 0 && st.times.length === n && st.times.every(t => t === st.times[0]) ? st.times[0] : null,
+      court: n > 0 && st.courts.length === n && st.courts.every(c => c === st.courts[0]) ? st.courts[0] : null,
+    });
+  }
+  // Mutually exclusive outcomes of one seat read as one stage: the winner- and
+  // the loser-fed entry of the same feeder matches merge ("Final / 3rd place —
+  // reached via the SF"). Bits that differ read TBD, like any stage whose
+  // cards disagree. Rank-fed stages and ambiguous gates stay separate — two
+  // deciders fed by different semis are not one player's alternatives.
+  const merged = new Set();
+  const byGate = new Map();
+  for (const st of present) {
+    const parentSig = [...new Set(st.edges.map(e => e.parent))].sort().join('|');
+    if (!parentSig) continue;
+    const kind = st.edges.every(e => e.kind === 'winner') ? 'w' : st.edges.every(e => e.kind === 'loser') ? 'l' : null;
+    if (!kind) continue;
+    const key = `${parentSig}|${kind}`;
+    if (!byGate.has(key)) byGate.set(key, []);
+    byGate.get(key).push(st);
+  }
+  const twin = key => byGate.get(key.endsWith('|w') ? key.replace(/\|w$/, '|l') : key.replace(/\|l$/, '|w'));
+  for (const [key, list] of byGate) {
+    if (key.endsWith('|l') || list.length !== 1) continue;
+    const other = twin(key);
+    if (!other || other.length !== 1 || merged.has(list[0]) || merged.has(other[0])) continue;
+    const [x, y] = [list[0], other[0]];
+    const isPlace = l => / (place|semi)$/.test(l);
+    const placeL = [x, y].filter(s => isPlace(s.label)).map(s => s.label);
+    const roundL = [x, y].filter(s => !isPlace(s.label)).map(s => s.label);
+    // "5th / 7th place" joins a decider pair's labels; a round with its
+    // placement companion names the band like the bracket headings do.
+    const label = roundL.length ? stageGroupName(roundL[0], placeL)
+      : placeL.map(l => l.replace(/ place$/, '')).join(' / ') + ' place';
+    merged.add(x); merged.add(y);
+    const n = x.ids.length + y.ids.length;
+    const times = [...x.times, ...y.times];
+    const courts = [...x.courts, ...y.courts];
+    present.push({
+      label, col: Math.max(x.col ?? -1, y.col ?? -1), merged: true,
+      ranks: new Set([...x.ranks, ...y.ranks]), edges: [...x.edges, ...y.edges],
+      times, courts, ids: [...x.ids, ...y.ids],
+      time: n > 0 && times.length === n && times.every(t => t === times[0]) ? times[0] : null,
+      court: n > 0 && courts.length === n && courts.every(c => c === courts[0]) ? courts[0] : null,
+    });
+  }
+  // The chip is the entry gates in one phrase: the direct slot ranks, then
+  // the result edges — "as 1st in Pool A or winner of the QF" names both ways
+  // in, so a rank-1 bye can't read as "everyone gets here". Only a stage every
+  // pool rank has a slot in (no gates at all) shortens to "all ranks". A
+  // merged stage's edges read once, as the seat: "via the SF".
+  const chipOf = st => {
     const chips = [];
-    if (facts) {
+    if (facts && st.ranks.size) {
       const universe = playerRanks(ctx, pool, pid, facts.sigs.size);
       const direct = [...st.ranks];
       if (direct.length === universe.length && !st.edges.length) chips.push(`all ranks in Pool ${pool}`);
-      else if (direct.length) chips.push(`as ${rankRange(direct)} in Pool ${pool}`);
+      else chips.push(`as ${rankRange(direct)} in Pool ${pool}`);
     }
     if (st.edges.length) {
       const parts = new Set();
@@ -484,13 +531,18 @@ function possibleStages(ctx, pid) {
         if (!parent || !Array.isArray(parent.sides)) continue;
         const pl = placementLabel(parent, ctx);
         const label = pl || roundName(pl === null ? koColumn(parent, ctx) : 0);
-        parts.add(`as ${e.kind} of ${chipRef(label)}`);
+        parts.add(st.merged ? `via ${chipRef(label)}` : `as ${e.kind} of ${chipRef(label)}`);
       }
       for (const p of [...parts].sort()) chips.push(p);
     }
-    out.push({ label: st.label, col: st.col, time, court, chip: chips.join(' or ') });
+    return chips.join(' or ');
+  };
+  const out = [];
+  for (const st of present) {
+    if (merged.has(st)) continue; // the pair's originals — the merged entry carries them
+    out.push({ label: st.label, col: st.col, time: st.time, court: st.court, chip: chipOf(st) });
   }
-  // Champions deepest-first (QF -> SF -> Final), placement stages after.
+  // Deepest-first (QF -> SF -> Final); a merged pair keeps its deeper column.
   out.sort((a, b) => (b.col ?? -1) - (a.col ?? -1));
   return out;
 }
@@ -624,6 +676,88 @@ function plBuild(ctx) {
 function plRange(m, ctx) {
   if (!ctx._pl) ctx._pl = plBuild(ctx);
   return ctx._pl.get(m.id);
+}
+
+// Depth band of every classification match: the column one below its anchor's,
+// minus further loser-chain edges — a 5th/7th decider (fed by the 5th–8th
+// semis) sits one band deeper than its feeder, next to the final. Pairing by
+// edge count in and one pass records each band's distinct placement labels for
+// the merged headings. Byes can't skew it: the anchor is the main match whose
+// loser edge starts the chain, so a bye'd semi still anchors its column.
+function plBands(ctx) {
+  if (!ctx._plBand) {
+    const col = new Map();    // placement match id -> band column
+    const labels = new Map(); // band column -> placement labels
+    const bandOf = (m) => {
+      const got = col.get(m.id);
+      if (got !== undefined) return got;
+      col.set(m.id, null); // in-progress = cycle guard; the gate rejects cycles first
+      let cur = m;
+      let hops = 0; // placement-tree edges between the anchor's loser slot and m
+      const seen = new Set();
+      for (;;) {
+        seen.add(cur.id);
+        const feed = (cur.sides || []).find(s => s && s.kind === 'match' && ctx.byId.has(s.match));
+        if (!feed) { cur = null; break; }
+        cur = ctx.byId.get(feed.match);
+        if (seen.has(cur.id)) { cur = null; break; } // malformed loop — report, never hang
+        if (placementLabel(cur, ctx) === null) break; // the anchor: a main match
+        hops++;
+      }
+      const c = cur === null ? null : Math.max(0, koColumn(cur, ctx) - 1 - hops);
+      col.set(m.id, c);
+      if (c !== null) {
+        if (!labels.has(c)) labels.set(c, new Set());
+        labels.get(c).add(placementLabel(m, ctx));
+      }
+      return c;
+    };
+    for (const m of ctx.matches) {
+      if (!m || m.pool !== undefined || placementLabel(m, ctx) === null) continue;
+      bandOf(m);
+    }
+    ctx._plBand = { col, labels };
+  }
+  return ctx._plBand;
+}
+
+// The band column a classification match renders in; a main match never
+// appears in the band map, so `?? null` covers it.
+function placementColumn(m, ctx) {
+  return plBands(ctx).col.get(m && m.id) ?? null;
+}
+
+// Distinct placement labels of one band — the headings' companion. Order is
+// free: stageGroupName dedupes by content.
+function bandLabels(ctx, col) {
+  return [...(plBands(ctx).labels.get(col) || [])];
+}
+
+// "5th–8th semi" -> "5th–8th": the band a placement label names.
+const bandShort = l => l.replace(/ semi$/, '');
+
+// Merged heading of a band: the round name plus its placement companions. One
+// distinct label names it exactly ("Final / 3rd place", "Semifinals / 5th–8th");
+// several fall back to the generic "Final / Placement". A band with no
+// placement companion keeps the plain round name.
+function stageGroupName(round, labels) {
+  const uniq = [...new Set(labels.map(bandShort))];
+  return uniq.length === 1 ? `${round} / ${uniq[0]}` : uniq.length > 1 ? `${round} / Placement` : round;
+}
+
+// The placement wave: the deepest band with a playable card (both feeders
+// decided) — nextKoWave's counterpart for the classification tree. An undecided
+// semi never drags the wave to a bronze that can't fill yet.
+function placeWave(ctx) {
+  let best = null;
+  for (const X of ctx.matches) {
+    if (!X || X.pool !== undefined || isDone(X) || placementLabel(X, ctx) === null) continue;
+    if (!Array.isArray(X.sides) || X.sides.length !== 2) continue;
+    if (!resolveSide(X.sides[0], ctx) || !resolveSide(X.sides[1], ctx)) continue;
+    const c = placementColumn(X, ctx);
+    if (c !== null) best = best === null ? c : Math.min(best, c);
+  }
+  return best;
 }
 
 // Winner-edge distance to the final (0 = the final itself): the round a loser
@@ -905,7 +1039,9 @@ function catStatus(ctx) {
   const grp = ms.filter(m => m.pool !== undefined);
   if (grp.some(m => !isDone(m))) return { kind: 'groups', played: grp.filter(isDone).length, count: grp.length };
   const col = nextKoWave(ctx);
-  return { kind: 'ko', col };
+  // place: the classification wave — the main wave may be spent while a bronze
+  // or decider still reads ready; the subline links whichever is deeper.
+  return { kind: 'ko', col, place: placeWave(ctx) };
 }
 
 const inWord = col => col === 0 ? 'In the final' : `In ${roundName(col)}`;
@@ -944,5 +1080,5 @@ function playerStatus(ctx, pid) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, countWins, sideIdx, sideLetter, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, possibleStages, placementLabel, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dayShort, dayLabel, fmtDiff, kioskStatus, currentRowIndex, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, playerStatus };
+  module.exports = { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, countWins, sideIdx, sideLetter, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, possibleStages, placementLabel, plRange, placementColumn, bandLabels, stageGroupName, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dayShort, dayLabel, fmtDiff, kioskStatus, currentRowIndex, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, playerStatus };
 }

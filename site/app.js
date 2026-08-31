@@ -133,14 +133,19 @@ function renderTournament(route, data) {
 }
 
 // data-only: played/unplayed + scheduled times, never the device clock —
-// the stage word links to its section (data-jump) when one exists.
+// the stage word links to its section (data-jump) when one exists. The wave is
+// the deepest band with a playable card: the main column, or the placement
+// wave once the championship is spent — the link names the merged group
+// ("Final / 3rd place") either way.
 const statusLine = (st, ctx, href) => {
   const jump = (text, id) => `<a data-jump="${id}" href="${esc(href)}">${text}</a>`;
   if (st.kind === 'starts') return `<p>Starts ${st.time !== null ? timeEl(st.time, ctx.tz) : 'soon'}</p>`;
   if (st.kind === 'groups') return `<p>${jump('Group stage', 'group-matches')} · ${st.played} of ${st.count} played</p>`;
-  if (st.kind === 'ko') return st.col === null
-    ? `<p>Knockout stage · ${jump('Placement', 'ko-placement')}</p>`
-    : `<p>Knockout stage · ${jump(roundName(st.col), `ko-${st.col}`)}</p>`;
+  if (st.kind === 'ko') {
+    const col = st.col !== null ? st.col : st.place !== null ? st.place : null;
+    if (col === null) return '<p>Knockout stage · Placement</p>';
+    return `<p>Knockout stage · ${jump(stageGroupName(roundName(col), bandLabels(ctx, col)), `ko-${col}`)}</p>`;
+  }
   if (st.kind === 'finished') return '<p data-status="finished">Finished</p>';
   // winners: the podium is one line, third only when a bronze match decided it;
   // the names carry the weight, Finished dims — the podium stays full
@@ -214,25 +219,39 @@ const koOrder = (ms, ctx) => [...ms].sort((a, b) =>
   (koOrdinal(a, ctx) || Infinity) - (koOrdinal(b, ctx) || Infinity) ||
   (schedTime(a, ctx.tz) ?? 0) - (schedTime(b, ctx.tz) ?? 0));
 
+// Placement cards order by prize (3rd before 5th) then time — rank is
+// structural, view-stable; koOrdinal numbers only the championship tree.
+const placeOrder = ctx => (a, b) =>
+  ((plRange(a, ctx) || {}).lo ?? Infinity) - ((plRange(b, ctx) || {}).lo ?? Infinity) ||
+  (schedTime(a, ctx.tz) ?? 0) - (schedTime(b, ctx.tz) ?? 0);
+
+// Brackets merged by depth band: each column holds the round's matches and the
+// classification matches at the same edge count from the entry round — the
+// bronze under the Final's heading ("Final / 3rd place"), the 5th–8th semis
+// under the Semifinals' ("Semifinals / 5th–8th"), deciders one band deeper.
 function bracketHtml(ctx, ko, multi, next) {
   const main = ko.filter(m => placementLabel(m, ctx) === null);
   const placement = ko.filter(m => placementLabel(m, ctx) !== null);
   const maxR = main.reduce((mx, m) => Math.max(mx, koColumn(m, ctx)), 0);
   const cols = [];
   for (const m of main) {
-    const r = maxR - koColumn(m, ctx); // koColumn is distance from the final; render that column rightmost
-    (cols[r] = cols[r] || []).push(m);
+    const r = maxR - koColumn(m, ctx);
+    (cols[r] = cols[r] || { main: [], place: [] }).main.push(m);
+  }
+  for (const m of placement) {
+    const c = placementColumn(m, ctx);
+    if (c === null) continue; // malformed — the gate reports it
+    (cols[maxR - c] = cols[maxR - c] || { main: [], place: [] }).place.push(m);
   }
   const parts = [];
   parts.push(`<section><h3>Knockout stage</h3>`);
-  for (let r = 0; r <= maxR; r++) { // index by depth, skip holes — labels stay aligned if a column is empty
-    const ms = cols[r];
-    if (!ms || !ms.length) continue;
-    parts.push(`<h4 id="ko-${maxR - r}">${roundName(maxR - r)}</h4>`, matchGrid(koOrder(ms, ctx), ctx, multi, next));
-  }
-  // Classification (bronze / 5th / 7th …) is its own tree, not a championship round — keep it off the round headings.
-  if (placement.length) {
-    parts.push(`<h4 id="ko-placement">Placement</h4>`, matchGrid(koOrder(placement, ctx), ctx, multi, next));
+  for (let r = 0; r <= maxR; r++) {
+    const g = cols[r];
+    if (!g || (!g.main.length && !g.place.length)) continue;
+    const col = maxR - r; // koColumn is distance from the final; render that column rightmost
+    // winner path first in bracket order, then its classification companions by prize
+    const ms = [...koOrder(g.main, ctx), ...g.place.sort(placeOrder(ctx))];
+    parts.push(`<h4 id="ko-${col}">${stageGroupName(roundName(col), bandLabels(ctx, col))}</h4>`, matchGrid(ms, ctx, multi, next));
   }
   parts.push('</section>');
   return parts.join('');

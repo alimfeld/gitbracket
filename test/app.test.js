@@ -256,14 +256,12 @@ test('possibleStages: a group-stage player sees the whole structural bracket, by
   const st1 = possibleStages(byes, 'p1');
   const qf = st1.find(x => x.label === 'Quarterfinals');
   const sf = st1.find(x => x.label === 'Semifinals');
-  const fin = st1.find(x => x.label === 'Final');
-  const br = st1.find(x => x.label === '3rd place');
-  assert(st1.map(x => x.label).join(',') === 'Quarterfinals,Semifinals,Final,3rd place', 'bracket order: deepest round first, placement last');
+  const fb = st1.find(x => x.label === 'Final / 3rd place');
+  assert(st1.map(x => x.label).join(',') === 'Quarterfinals,Semifinals,Final / 3rd place', 'bracket order: deepest round first, its loser-path companion merged with it');
   assert(qf.time === Date.parse('2026-07-12T10:30:00Z') && qf.court === null, 'QF: the pool-fed quarterfinals, uniform time, two courts -> court TBD');
   assert(qf.chip === 'as 3rd–6th in Pool A', 'QF chip: the ranks that feed it, pool named');
   assert(sf.chip === 'as 1st–2nd in Pool A or as winner of the QF', 'semis: the byed ranks enter direct, the rest must win their QF — both gates named');
-  assert(fin.time === Date.parse('2026-07-12T11:30:00Z') && fin.court === 'court-1' && fin.chip === 'as winner of the SF', 'final: uniform bits, winner-edge gate');
-  assert(br.court === 'court-2' && br.chip === 'as loser of the SF', 'bronze: loser-edge gate, its own court');
+  assert(fb.time === Date.parse('2026-07-12T11:30:00Z') && fb.court === null && fb.chip === 'via the SF', 'merged final/bronze: shared time kept, split courts read TBD, one seat gate');
 });
 
 test('possibleStages: a decided pool collapses to the open stages; eliminated players get nothing', () => {
@@ -281,25 +279,25 @@ test('possibleStages: a decided pool collapses to the open stages; eliminated pl
   r(16, 'a'); r(17, 'a');                         // QFs: p4 (rank 4) and p3 (rank 3) win
   const ctx = makeCat({ meta: tjson.categories[0], matches: tjson.matches.t }, tjson);
   const labels = pid => possibleStages(ctx, pid).map(s => s.label).join(',');
-  assert(labels('p1') === 'Final,3rd place' && labels('p2') === 'Final,3rd place', 'a confirmed semifinal seat keeps the final and bronze open');
-  assert(labels('p3') === 'Final,3rd place' && labels('p4') === 'Final,3rd place', 'QF winners join the same open stages');
+  assert(labels('p1') === 'Final / 3rd place' && labels('p2') === 'Final / 3rd place', 'a confirmed semifinal seat keeps the final and bronze open, merged');
+  assert(labels('p3') === 'Final / 3rd place' && labels('p4') === 'Final / 3rd place', 'QF winners join the same open stages');
   assert(labels('p5') === '' && labels('p6') === '', 'a decided loss with no placement leaves nothing possible');
   const chips = pid => possibleStages(ctx, pid).map(s => s.chip).join('|');
-  assert(chips('p1') === 'as winner of the SF|as loser of the SF', 'gates name the stage the player sits in');
+  assert(chips('p1') === 'via the SF', 'the merged gate names the seat once, branch implied');
 });
 
 test('possibleStages: sample — a decided pool hands seats to the bracket; pre-event the pool view covers every rank', () => {
   const md = catOf('sample', 'md40');
   const j = pid => possibleStages(md, pid).map(s => s.label).join(',');
   const p5 = possibleStages(md, 'p5');
-  assert(j('p5') === 'Final,3rd place' && p5[0].chip === 'as winner of the SF' && p5[1].chip === 'as loser of the SF', 'p5: an undecided semifinal seat keeps both branches, named by stage');
+  assert(j('p5') === 'Final / 3rd place' && p5[0].chip === 'via the SF', 'p5: an undecided semifinal seat keeps both branches, merged under one gate');
   assert(j('p1') === '' && j('p7') === '', 'decided feeders close the losing/winning branch — the final and bronze render as cards instead');
   const tjson = require(FIX('sample', 'tournaments', 'sample.json'));
   const pre = makeCat({ meta: tjson.categories[0], matches: md.matches.map(m => ({ ...m, games: [], result: undefined })) }, tjson);
   const s0 = possibleStages(pre, 'p1');
   const sem = s0.find(x => x.label === 'Semifinals');
-  assert(s0.length === 3 && sem.time === Date.parse('2025-07-14T11:15:00-04:00') && sem.chip === 'all ranks in Pool A', 'pre-event: the pool view covers every rank — one semis stage, at 11:15');
-  assert(s0.find(x => x.label === 'Final').chip === 'as winner of the SF' && s0.find(x => x.label === '3rd place').chip === 'as loser of the SF', 'pre-event: the deeper stages read by their gates');
+  assert(s0.length === 2 && sem.time === Date.parse('2025-07-14T11:15:00-04:00') && sem.chip === 'all ranks in Pool A', 'pre-event: the pool view covers every rank — one semis stage, at 11:15');
+  assert(s0.find(x => x.label === 'Final / 3rd place').chip === 'via the SF', 'pre-event: the deeper stage reads by its seat');
 });
 
 test('playerMatches: only matches the player is actually in, not potential slots', () => {
@@ -668,8 +666,8 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(ppage.includes('<h2>Mon, Jul 14</h2>'), 'the day section title carries the date — cards stay bare in it');
   assert(!ppage.includes('class="day"') && !ppage.includes('>2025-07-14'), 'no day-divider machinery, no raw ISO payload — the heading is the day');
   const p3 = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p3' }, data);
-  assert.equal((p3.match(/data-status="possible"/g) || []).length, 2, 'p3: a confirmed semifinal seat renders the open final and bronze as possible cards');
-  assert(p3.includes('· Final — as winner of the SF') && p3.includes('· 3rd place — as loser of the SF'), 'the gates ride in the meta line, not as a separate row');
+  assert.equal((p3.match(/data-status="possible"/g) || []).length, 1, 'p3: a confirmed semifinal seat renders the open final and bronze as one merged possible card');
+  assert(p3.includes('· Final / 3rd place — via the SF'), 'the merged gate rides in the meta line, not as a separate row');
   assert(!p3.includes('more matches possible'), 'the count note is gone — cards replaced it');
   assert(ppage.includes('<div class="head"><span><time datetime=') && ppage.includes('</time></span><span>Court 1</span></div>'), 'player card headline: time left (semantic <time>), court right');
   assert(ppage.includes("Men&#39;s Doubles 40+ · Pool A") && !ppage.includes('Men&#39;s Doubles 40+ · Pool A · '), 'player card meta: long cat name · label, no match id, no court/time');
@@ -750,12 +748,12 @@ test('possible stages render as cards: gates in the meta, and the next header go
   const info = repo.tournaments.get('byes');
   const data = { index: repo.index, t: { slug: 'byes', name: info.tjson.name }, tjson: info.tjson, cats: toCats(info.tjson) };
   const page = renderPlayer({ slug: 'byes', view: 'schedule', player: 'p4' }, data);
-  assert.equal((page.match(/data-status="possible"/g) || []).length, 4, 'p4 (pool open): four possible stages — QF, SF, final, bronze');
+  assert.equal((page.match(/data-status="possible"/g) || []).length, 3, 'p4 (pool open): three possible stages — QF, SF, and the merged final/bronze');
   assert(page.includes('Quarterfinals — as 3rd–6th in Pool A'), 'the stage label carries no count');
   assert(page.includes('· Quarterfinals — as 3rd–6th in Pool A</div>') && page.includes('· Semifinals — as 1st–2nd in Pool A or as winner of the QF</div>'), 'the rank gates ride in the meta line, not as a separate row');
   assert(!page.includes('skip the Quarterfinals'), 'the bye is implicit in the chip — no footnote');
   assert(page.includes('<span class="tbd">TBD</span>'), 'a non-uniform bit (the QF court) renders marked TBD');
-  assert(page.includes('Singles · Final — as winner of the SF</div>') && page.includes('Singles · 3rd place — as loser of the SF</div>'), 'single-match stages drop the count, placement keeps its label, chips ride in the meta');
+  assert(page.includes('Singles · Final / 3rd place — via the SF</div>'), 'the merged final/bronze keeps its label and the seat gate in the meta');
   assert(!page.includes('more matches possible'), 'the count note is gone');
   // next points at the earliest possible stage when no confirmed match is left
   const tjson = JSON.parse(JSON.stringify(info.tjson));
@@ -845,19 +843,21 @@ test('routing: cat and player ride along between tournament and schedule — app
   assert(picker.includes('#sample/schedule?cat=md40&amp;player='), 'picker picks carry the cat and the pick');
 });
 
-test('knockout: placement matches render under their own "Placement" heading, not a championship round', () => {
+test('knockout: placement matches merge into their depth band — the bronze under the Final heading', () => {
   const repo = loadRepo(FIX('sample'));
   const info = repo.tournaments.get('sample');
   const data = { index: repo.index, t: repo.index[0], tjson: info.tjson, cats: toCats(info.tjson) };
   const html = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' }, data);
-  assert(html.includes('<h4 id="ko-placement">Placement</h4>'), 'a Placement heading exists');
-  const finalBlock = html.slice(html.indexOf('<h4 id="ko-0">'), html.indexOf('<h4 id="ko-placement">'));
-  assert(!finalBlock.includes('3rd place'), 'the bronze is not grouped under the Final heading');
-  const placeBlock = html.slice(html.indexOf('<h4 id="ko-placement">'));
-  assert(placeBlock.includes('3rd place'), 'the bronze sits under Placement');
+  assert(html.includes('<h4 id="ko-0">Final / 3rd place</h4>'), 'the Final band names its placement companion');
+  const from = html.indexOf('<h4 id="ko-0">');
+  const to = html.indexOf('<h4 id="ko-1">');
+  const finalBlock = html.slice(from, to > from ? to : undefined);
+  assert(finalBlock.includes('3rd place'), 'the bronze sits under the Final heading');
+  assert(!html.includes('ko-placement'), 'no separate Placement section survives');
+  assert(html.includes('<h4 id="ko-1">Semifinals</h4>'), 'a band with no placement companion keeps the plain round name');
 });
 
-test('knockout wave link is championship-only: placement never names the round or the jump', () => {
+test('knockout wave link names the merged band: the main wave, and the placement wave once the championship is spent', () => {
   const base = () => JSON.parse(JSON.stringify(require(FIX('sample', 'tournaments', 'sample.json'))));
   const render = tjson => {
     const data = { index: [{ slug: 'sample', name: tjson.name, location: tjson.location }], t: { slug: 'sample', name: tjson.name }, tjson, cats: toCats(tjson) };
@@ -866,20 +866,20 @@ test('knockout wave link is championship-only: placement never names the round o
   const subline = html => html.slice(html.indexOf('<h2>Men'), html.indexOf('Group stage'));
   // as-is: semis (m8) and final (m9) open, bronze (m10) open — wave is the Semifinals, not the bronze
   const a = render(base());
-  assert(subline(a).includes('data-jump="ko-1"') && !subline(a).includes('data-jump="ko-0"'), 'jump lands on Semifinals, never on Final for a placement match');
-  // championship finished, only the bronze left open: no championship round to jump to
+  assert(subline(a).includes('data-jump="ko-1"') && subline(a).includes('Semifinals') && !subline(a).includes('data-jump="ko-0"'), 'jump lands on Semifinals, never on Final for a placement match');
+  // championship finished, only the bronze left open: the wave is the placement band — Final / 3rd place
   const done = base();
   for (const id of [7, 8, 9]) {
     const m = done.matches.md40.find(x => x.id === id);
     m.result = { status: 'played', winner: 'a' }; delete m.games;
   }
   const sub = subline(render(done));
-  assert(sub.includes('Knockout stage') && sub.includes('data-jump="ko-placement"') && !sub.includes('data-jump="ko-0"'), 'placement-pending links to the Placement section, not a round');
+  assert(sub.includes('Knockout stage') && sub.includes('data-jump="ko-0"') && sub.includes('Final / 3rd place'), 'placement-pending links to the merged band, not a round or a Placement section');
   // and the open placement card carries the next accent, so the link has its highlight partner
   const doneHtml = render(done);
-  const placeBlock = doneHtml.slice(doneHtml.indexOf('ko-placement'));
+  const finalBlock = doneHtml.slice(doneHtml.indexOf('<h4 id="ko-0">'));
   assert((doneHtml.match(/data-status="next"/g) || []).length === 1, 'only the open bronze is flagged');
-  assert(placeBlock.includes('<article data-status="next">') && placeBlock.includes('3rd place'), 'the accent lands on the open placement card');
+  assert(finalBlock.includes('<article data-status="next">') && finalBlock.includes('3rd place'), 'the accent lands on the open placement card in the band');
 });
 
 test('ko wave accent also flags playable placement matches — the bronze lights up with the final', () => {
@@ -894,8 +894,8 @@ test('ko wave accent also flags playable placement matches — the bronze lights
   const html = render(tjson);
   assert(html.slice(html.indexOf('<h2>Men'), html.indexOf('Group stage')).includes('data-jump="ko-0"'), 'the wave is the Final');
   assert.equal((html.match(/data-status="next"/g) || []).length, 2, 'the final and the playable bronze both carry the accent');
-  const placement = html.slice(html.indexOf('<h4 id="ko-placement">'));
-  assert(placement.includes('<article data-status="next">') && placement.includes('3rd place'), 'the accent reaches into the Placement section');
+  const band = html.slice(html.indexOf('<h4 id="ko-0">'));
+  assert(band.includes('<article data-status="next">') && band.includes('3rd place'), 'the accent reaches the bronze inside the merged band');
   // a bronze fed by an undecided semi stays unaccented (sample as-is: only the open semi is flagged)
   const oh = render(base());
   assert.equal((oh.match(/data-status="next"/g) || []).length, 1, 'a placement match whose feeder is undecided is not flagged');
