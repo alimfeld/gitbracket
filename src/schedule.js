@@ -7,7 +7,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { matchSlotMs, pairSig, dayKey, tzOffset, schedTime, fmtTime, ID_RE, schedDays } = require('../site/derive.js');
+const { matchSlotMs, pairSig, dayKey, tzOffset, schedTime, fmtTime, ID_RE, schedDays, LOCALE } = require('../site/derive.js');
 const { writeTournament, writeTournamentIndex, slotsOverlap, isRealDate } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 
@@ -369,6 +369,10 @@ function generate(spec) {
   if (!isRealDate(yy, mm, dd)) {
     throw new Error(`spec: date ${JSON.stringify(eventDate)} is not a real calendar date`);
   }
+  // tzOffset (via scheduleMatches) returns null on a bad timezone since the
+  // derive guard; name the real cause here instead of a "no blocks entry" error.
+  try { new Intl.DateTimeFormat(LOCALE, { timeZone: timezone }); }
+  catch { throw new Error(`spec: timezone ${JSON.stringify(timezone)} is not a valid IANA timezone`); }
   // The one silent failure the gate can't see: a non-object final (bestOf on a number
   // is undefined) drops the override and still validates. Everything else (bestOf,
   // slotMinutes, final values) lands in the file where validate.js rejects it by name.

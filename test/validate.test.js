@@ -53,6 +53,7 @@ const V = [
   ['string side ids rejected, not char-split', 'bad-string-ids', r => r.errs.length > 0, /ids must be a non-empty array of strings/],
   ['game with no winner (a equals b)', 'bad-tie-game', r => r.errs.length > 0, /no winner/],
   ['invalid timezone', 'bad-invalid-tz', r => r.errs.length > 0, /not a valid IANA timezone/],
+  ['invalid timezone with scheduled matches reported, never a crash', 'bad-tz-sched', r => r.errs.length > 0, /not a valid IANA timezone/],
   ['tournament file missing its name', 'bad-no-name', r => r.errs.length > 0, /name must be a non-empty string/],
   ['tournament file missing its location', 'bad-no-location', r => r.errs.length > 0, /location must be a non-empty string/],
   ['location mismatches the index entry', 'bad-location-mismatch', r => r.errs.length > 0, /does not match the index entry/],

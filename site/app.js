@@ -128,7 +128,8 @@ function renderTournament(route, data) {
   const range = fmtRange(schedDays(ctxs.flatMap(c => c.matches), tz));
   parts.push(`<p>${[range, esc(data.tjson.location)].filter(Boolean).join(' · ')}</p></header>`);
   parts.push(`<nav class="cats" aria-label="Categories">${catNav(data.t.slug, ctxs, route)}</nav>`);
-  parts.push(catSection(show, { multi, href: href(data.t.slug, 'tournament', route) }));
+  // a tournament with no categories (hand-edited or staged) renders the shell — "missing data renders empty", never a throw
+  if (show) parts.push(catSection(show, { multi, href: href(data.t.slug, 'tournament', route) }));
   return parts.join('');
 }
 

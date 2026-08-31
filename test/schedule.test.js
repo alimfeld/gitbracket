@@ -88,6 +88,7 @@ test('spec guards reject bad input fast', () => {
   assert.throws(() => generate({ ...MINI, name: undefined }), /name must be a non-empty string/);
   assert.throws(() => generate({ ...MINI, location: '' }), /location must be a non-empty string/);
   assert.throws(() => generate({ ...MINI, timezone: undefined }), /timezone required/);
+  assert.throws(() => generate({ ...MINI, timezone: 'Mars/Olympus' }), /not a valid IANA timezone/);
 });
 
 test('knockout: false skips the knockout phase for a multi-pool category', () => {

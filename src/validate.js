@@ -182,7 +182,7 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
   for (const cat of categories.values()) {
     const ms = mjson ? mjson[cat.id] : undefined;
     if (ms === undefined) continue; // category with no matches entry is valid
-    validateCategory(`${tFile} matches.${cat.id}`, ms, cat, players, venues, tjson, errs, warns);
+    validateCategory(`${tFile} matches.${cat.id}`, ms, cat, players, venues, tjson, errs, warns, tzOk);
   }
 
   // ---- venue overlap on unplayed scheduled matches, across ALL categories ----
@@ -220,7 +220,7 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
   }
 }
 
-function validateCategory(cFile, matches, cat, players, venues, tjson, errs, warns) {
+function validateCategory(cFile, matches, cat, players, venues, tjson, errs, warns, tzOk) {
   const err = (f, m) => errs.push(`${f}: ${m}`);
   const warn = (f, m) => warns.push(`${f}: ${m}`);
   if (!Array.isArray(matches)) { err(cFile, 'matches must be an array'); return; }
@@ -346,7 +346,9 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
       return;
     }
     // Anchor in the tournament tz via schedTime — the one derivation, same as the site.
-    if (schedTime({ scheduled: s }, tjson.timezone) === null) err(where, `scheduled ${s} does not parse as an instant`);
+    // With a bad timezone the tz error is already reported above; don't also blame
+    // every scheduled string for not parsing.
+    if (tzOk && schedTime({ scheduled: s }, tjson.timezone) === null) err(where, `scheduled ${s} does not parse as an instant`);
     const hh = Number(s.slice(11, 13)); // Date.parse rolls 24:00 over to the next day; catch it
     if (hh > 23) err(where, `scheduled ${s} has hour ${hh} — hours run 00-23`);
     // Date.parse rolls over impossible calendar dates (2025-02-30 -> Mar 2); catch them.

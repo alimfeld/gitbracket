@@ -15,6 +15,29 @@ const { loadRepo } = require('../src/tools.js');
 
 const sameRecord = (a, b) => a.wins === b.wins && a.gd === b.gd && a.pd === b.pd; // test-only — derive.js doesn't ship it
 
+test('schedTime: an invalid timezone reads as unparseable — never throws', () => {
+  assert.equal(schedTime({ scheduled: '2026-05-02T09:00:00' }, 'Mars/Olympus'), null, 'a bad tz is a parse failure, not a crash');
+  assert(schedTime({ scheduled: '2026-05-02T09:00:00' }, 'UTC') > 0, 'a good tz still anchors the wall time');
+});
+
+test('renderers: a tournament with no categories renders empty — never throws', () => {
+  const tjson = { name: 'Empty', location: 'Hall', timezone: 'UTC', venues: [], players: [], categories: [], matches: {} };
+  const data = { index: [], t: { slug: 'empty', name: 'Empty' }, tjson, cats: toCats(tjson) };
+  const html = renderTournament({ slug: 'empty', view: 'tournament' }, data);
+  assert(typeof html === 'string' && html.includes('<h1>Empty</h1>'), 'the tournament shell still renders');
+  assert(!html.includes('<h2'), 'no category section when none exist');
+  assert.doesNotThrow(() => renderVenue({ slug: 'empty', view: 'venues' }, data, Date.now()), 'venue view too');
+  assert.doesNotThrow(() => renderPlayer({ slug: 'empty', view: 'schedule' }, data), 'player picker too');
+});
+
+test('renderers: an invalid timezone renders TBD, never throws', () => {
+  const bad = { name: 'Bad', location: 'Hall', timezone: 'Mars/Olympus', venues: [{ id: 'c1', name: 'Court 1' }], players: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }], categories: [{ id: 't', name: 'T', bestOf: { groups: 1, knockout: 1 }, slotMinutes: { groups: 30, knockout: 30 } }], matches: { t: [{ id: 1, pool: 'A', scheduled: '2026-05-02T09:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p1'] }, { kind: 'players', ids: ['p2'] }] }] } };
+  const data = { index: [], t: { slug: 'bad', name: 'Bad' }, tjson: bad, cats: toCats(bad) };
+  assert.doesNotThrow(() => renderTournament({ slug: 'bad', view: 'tournament' }, data), 'tournament page');
+  assert.doesNotThrow(() => renderVenue({ slug: 'bad', view: 'venues' }, data, Date.now()), 'venue board');
+  assert.doesNotThrow(() => renderPlayer({ slug: 'bad', view: 'schedule', player: 'p1' }, data), 'player page');
+});
+
 test('parseRoute: fragment routing — bare slug is the tournament page, params id-gated, unknown input ignored', () => {
   assert.deepEqual(parseRoute(''), { view: 'index' }, 'no fragment: tournament list');
   assert.deepEqual(parseRoute('#'), { view: 'index' });

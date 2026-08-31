@@ -777,20 +777,36 @@ function wdOf(ctx, id) {
 // the post-transition offset, off by one hour — exact per-minute offsets only
 // if a tournament ever opens on a changeover day.
 function tzOffset(tz, date) {
-  const p = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'longOffset' })
-    .formatToParts(new Date(date + 'T12:00:00Z')).find((x) => x.type === 'timeZoneName');
+  // Intl throws on a bad timezone; a guarded null keeps a malformed file from
+  // crashing the gate or a render — the validator rejects bad tz first, like the cycle guards.
+  let parts;
+  try {
+    parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'longOffset' })
+      .formatToParts(new Date(date + 'T12:00:00Z'));
+  } catch {
+    return null;
+  }
+  const p = parts.find((x) => x.type === 'timeZoneName');
   return p && p.value !== 'GMT' ? p.value.replace('GMT', '') : '+00:00';
 }
 
 // Midnight is 00, never 24: hourCycle pins the day to 0-23 under any dialect.
+// The try/catch is the tzOffset guard's sibling — Intl throws on a bad timezone,
+// and the validator rejects those first; this only keeps a malformed file from
+// crashing a render or the board clock.
 function fmtTime(t, tz) {
-  return new Intl.DateTimeFormat(LOCALE, { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(t);
+  try {
+    return new Intl.DateTimeFormat(LOCALE, { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(t);
+  } catch { return ''; }
 }
 
 // Y-M-D assembled from typed parts: the ISO shape is stated here, not borrowed
 // from a locale whose canonical form happens to match (en-CA's).
 function dayKey(t, tz) {
-  const p = Object.fromEntries(new Intl.DateTimeFormat(undefined, { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(t).map(x => [x.type, x.value]));
+  let p = null;
+  try {
+    p = Object.fromEntries(new Intl.DateTimeFormat(undefined, { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(t).map(x => [x.type, x.value]));
+  } catch { return null; } // bad tz: no day key — callers' null paths render empty
   return `${p.year}-${p.month}-${p.day}`;
 }
 
@@ -798,11 +814,17 @@ function dayKey(t, tz) {
 function schedTime(m, tz) {
   const s = (m && m.scheduled) || '';
   if (!ISO_RE.test(s)) return null;
-  const t = Date.parse(s + tzOffset(tz, s.slice(0, 10)));
+  const off = tzOffset(tz, s.slice(0, 10));
+  if (off === null) return null; // a bad timezone reads as unparseable, never a throw
+  const t = Date.parse(s + off);
   return Number.isNaN(t) ? null : t;
 }
 
-const dayShort = (t, tz) => new Intl.DateTimeFormat(LOCALE, { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).format(t);
+const dayShort = (t, tz) => {
+  try {
+    return new Intl.DateTimeFormat(LOCALE, { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).format(t);
+  } catch { return ''; } // as fmtTime: a bad tz renders an empty label, never a throw
+};
 
 // A calendar-day label needs no timezone — the weekday/month/day of a Y-M-D key are absolute.
 const dayLabel = k => new Intl.DateTimeFormat(LOCALE, { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(k + 'T00:00:00Z'));
