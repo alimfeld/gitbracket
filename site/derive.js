@@ -13,18 +13,22 @@ const LOCALE = 'en-US';
 // Shared side identity: sorted '|'-joined ids.
 const pairSig = ids => [...ids].sort().join('|');
 
-// Tournament-level facts (names, venues, tz) are per-file, not per-category —
-// toCats builds them once and hands them to every category's context; the
-// tools' direct makeCat calls (validate, REPL, sim) build fresh ones per call.
-function makeCat(c, tjson, shared) {
-  // Never throws on broken shape — the validator calls this while reporting it.
-  const matches = (c.matches || []).filter(m => m && typeof m === 'object');
+// Tournament-level facts (names, venues, tz) per file — toCats builds them
+// once and hands them to every category's context; standalone makeCat calls
+// (validate, REPL, sim) build a fresh map per call.
+function sharedFacts(tjson) {
   const arr = x => Array.isArray(x) ? x : [];
-  const s = shared || {
+  return {
     names: new Map(arr(tjson && tjson.players).filter(p => p && typeof p === 'object').map(p => [p.id, p.name])),
     tz: (tjson && tjson.timezone) || 'UTC',
     venues: new Map(arr(tjson && tjson.venues).filter(v => v && typeof v === 'object').map(v => [v.id, v.name])),
   };
+}
+
+function makeCat(c, tjson, shared) {
+  // Never throws on broken shape — the validator calls this while reporting it.
+  const matches = (c.matches || []).filter(m => m && typeof m === 'object');
+  const s = shared || sharedFacts(tjson);
   return {
     matches,
     byId: new Map(matches.map(m => [m.id, m])),
@@ -42,12 +46,7 @@ function makeCat(c, tjson, shared) {
 function toCats(tjson) {
   const byCat = (tjson && tjson.matches && typeof tjson.matches === 'object') ? tjson.matches : {};
   const cats = (tjson && Array.isArray(tjson.categories)) ? tjson.categories : [];
-  const shared = {
-    names: new Map((tjson && Array.isArray(tjson.players) ? tjson.players : []).filter(p => p && typeof p === 'object').map(p => [p.id, p.name])),
-    tz: (tjson && tjson.timezone) || 'UTC',
-    venues: new Map((tjson && Array.isArray(tjson.venues) ? tjson.venues : []).filter(v => v && typeof v === 'object').map(v => [v.id, v.name])),
-  };
-  return cats.map(c => makeCat({ meta: c, matches: Array.isArray(byCat[c.id]) ? byCat[c.id] : [] }, tjson, shared));
+  return cats.map(c => makeCat({ meta: c, matches: Array.isArray(byCat[c.id]) ? byCat[c.id] : [] }, tjson, sharedFacts(tjson)));
 }
 
 const stageOf = m => (m && m.pool !== undefined) ? 'groups' : 'knockout';
@@ -353,21 +352,19 @@ const chipRef = label => ({ Final: 'the final', Semifinals: 'the SF', Quarterfin
 const matchEdge = s => s && s.kind === 'match';
 const winnerEdge = s => matchEdge(s) && s.result === 'winner'; // the only edge that feeds the final
 
-// Longest knockout chain feeding id — 0 when nothing feeds it. The edge filter
-// picks the measure: all match-kind edges (+1 for the slot itself: the max a
-// team can still play from there) or winner edges only (wdOf: round distance
-// from the final — matchRound can't do it, it walks the other way). Shared
-// memo across ids — sibling paths share it, not just one chain. ponytail:
-// O(N²) worst case — fine while brackets are tiny; a reverse-edge index is the
-// upgrade if they ever grow.
-function chainDepth(ctx, id, edge, memo) {
+// Longest winner-edge chain feeding id — 0 when nothing feeds it (wdOf's
+// round distance from the final; koColumn walks the other way and can't
+// serve it). Shared memo across ids — sibling paths share it, not just one
+// chain. ponytail: O(N²) worst case — fine while brackets are tiny; a
+// reverse-edge index is the upgrade if they ever grow.
+function chainDepth(ctx, id, memo) {
   if (memo.has(id)) return memo.get(id);
   memo.set(id, 0); // in-progress = cycle guard; the validator rejects cycles first
   let d = 0;
   for (const m of ctx.matches) {
     if (!m || !Array.isArray(m.sides)) continue; // malformed: the gate reports it, never a throw
     for (const s of m.sides) {
-      if (edge(s) && s.match === id) d = Math.max(d, 1 + chainDepth(ctx, m.id, edge, memo));
+      if (winnerEdge(s) && s.match === id) d = Math.max(d, 1 + chainDepth(ctx, m.id, memo));
     }
   }
   memo.set(id, d);
@@ -769,7 +766,7 @@ function placeWave(ctx) {
 function wdOf(ctx, id) {
   if (!ctx._wd) {
     const memo = ctx._wd = new Map();
-    for (const m of ctx.matches) chainDepth(ctx, m.id, winnerEdge, memo);
+    for (const m of ctx.matches) chainDepth(ctx, m.id, memo);
   }
   return ctx._wd.get(id);
 }

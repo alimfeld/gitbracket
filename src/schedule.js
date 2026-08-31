@@ -297,12 +297,11 @@ function assertSchedule(categories, slotCfgOf, tz) {
       });
     }
   }
+  // venue overlap needs no check here — generate() ends by running validateRepo
+  // on this same output, whose venue rule uses the same slotsOverlap predicate
   for (let i = 0; i < sched.length; i++) {
     for (let j = i + 1; j < sched.length; j++) {
       const a = sched[i], b = sched[j];
-      if (a.m.venue === b.m.venue && slotsOverlap(a.t, a.t + a.slotMs, b.t, b.t + b.slotMs)) {
-        throw new Error(`${a.m.id} and ${b.m.id} overlap at ${a.m.venue}`);
-      }
       if (a.players && b.players && slotsOverlap(a.t, a.t + a.slotMs, b.t, b.t + b.slotMs)) {
         for (const p of a.players) {
           if (b.players.has(p)) throw new Error(`player ${p} double-booked (${a.m.id} ${a.m.scheduled}, ${b.m.id} ${b.m.scheduled})`);
