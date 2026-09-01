@@ -138,14 +138,16 @@ function renderTournament(route, data) {
 // the deepest band with a playable card: the main column, or the placement
 // wave once the championship is spent — the link names the merged group
 // ("Final / 3rd place") either way.
-const statusLine = (status, ctx, href) => {
-  const jump = (text, id) => `<a data-jump="${id}" href="${esc(href)}">${text}</a>`;
-  if (status.kind === 'starts') return `<p>Starts ${status.time !== null ? timeEl(status.time, ctx.tz) : 'soon'}</p>`;
-  if (status.kind === 'groups') return `<p>${jump('Group stage', 'group-matches')} · ${status.played} of ${status.count} played</p>`;
+// status line: progress only, plain — the page's one link lives in the
+// anticipation (Next) line. 'starts' is anticipation, not progress, so no
+// status line until a match resolves; the anticipation line carries the start.
+const statusLine = (status, ctx) => {
+  if (!status || status.kind === 'starts') return '';
+  if (status.kind === 'groups') return `<p>Group stage: ${status.played} of ${status.count} played</p>`;
   if (status.kind === 'ko') {
     const col = status.col !== null ? status.col : status.place !== null ? status.place : null;
     if (col === null) return '<p>Knockout stage · Placement</p>';
-    return `<p>Knockout stage · ${jump(stageGroupName(roundName(col), bandLabels(ctx, col)), `ko-${col}`)}</p>`;
+    return `<p>Knockout stage: ${esc(stageGroupName(roundName(col), bandLabels(ctx, col)))}</p>`;
   }
   if (status.kind === 'finished') return '<p data-status="finished">Finished</p>';
   // winners: the podium is one line, third only when a bronze match decided it;
@@ -153,6 +155,60 @@ const statusLine = (status, ctx, href) => {
   const names = [status.first, status.second, status.third].filter(Boolean).map(ids => teamLabel(ids, ctx));
   const ranks = ['Champion', 'Runner-up', '3rd'];
   return `<p>${names.map((n, i) => `${ranks[i]} <strong>${esc(n)}</strong>`).join(' · ')}</p>`;
+};
+
+// The next wave's courts, compact: several matches start at once across courts
+// (a round plays simultaneously), so "next" is a block, not a card. Consecutive
+// numbered courts collapse ("Courts 1–5"); anything else just lists.
+const fmtCourts = names => {
+  const ns = [...new Set(names)];
+  if (ns.length === 1) return ns[0];
+  const m = ns.map(n => /^(.*?)\s*(\d+)$/.exec(n));
+  if (m.every(x => x && x[1] === m[0][1])) {
+    const head = m[0][1];
+    const nums = m.map(x => +x[2]).sort((a, b) => a - b);
+    if (new Set(nums).size === nums.length &&
+        nums[nums.length - 1] - nums[0] === nums.length - 1) {
+      return `${head}s ${nums[0]}–${nums[nums.length - 1]}`;
+    }
+  }
+  return ns.join(' · ');
+};
+
+// The current playable wave: unplayed matches whose sides are both resolved,
+// at the earliest scheduled time — a round plays simultaneously across courts,
+// so "now" is a block, not a card. One predicate drives both the card
+// highlight and the Next line, so they can never disagree (the schedule's rule).
+const currentWave = (ctx, status) => {
+  if (!status || status.kind === 'starts' || status.kind === 'finished' || status.kind === 'winners') return [];
+  const ready = ctx.matches.filter(m => !isDone(m) &&
+    Array.isArray(m.sides) && m.sides.length === 2 &&
+    !!resolveSide(m.sides[0], ctx) && !!resolveSide(m.sides[1], ctx));
+  const ts = ready.map(m => schedTime(m, ctx.tz)).filter(Number.isFinite);
+  if (!ts.length) return [];
+  const t = Math.min(...ts);
+  return ready.filter(m => schedTime(m, ctx.tz) === t);
+};
+
+// The anticipation line: the current playable wave and its courts. "Starts"
+// before anything (no wave to link), "Next:" once a match has gone in — the
+// trailing link jumps to the wave's section (group-matches, or the knockout
+// column). data-only: scheduled times, never the clock (the page's 30s poll
+// keeps it current).
+const anticipationLine = (ctx, status, href, day, wave) => {
+  if (!status || status.kind === 'finished' || status.kind === 'winners') return '';
+  if (status.kind === 'starts') {
+    if (status.time == null) return '';
+    return `<p>Starts ${timeEl(status.time, ctx.tz, day)}</p>`;
+  }
+  if (!wave.length) return '';
+  const courts = [...new Set(wave.map(m => m.venue ? (ctx.venues.get(m.venue) || m.venue) : null).filter(Boolean))];
+  const where = courts.length ? ` · ${fmtCourts(courts)}` : '';
+  const col = status.kind === 'groups' ? null : (status.col !== null ? status.col : status.place !== null ? status.place : null);
+  const section = status.kind === 'groups' ? 'group-matches' : col !== null ? `ko-${col}` : '';
+  const body = `Next: ${timeEl(schedTime(wave[0], ctx.tz), ctx.tz, day)}${where}`;
+  // the whole line is the link — a full-size tap target, same as the schedule page
+  return section ? `<p><a data-jump="${section}" href="${esc(href)}">${body}</a></p>` : `<p>${body}</p>`;
 };
 
 function catSection(ctx, opts) {
@@ -171,20 +227,14 @@ function catSection(ctx, opts) {
   // one category subline: the date span on multi-day pages only — a single-day
   // heading already states the date once — then the status sentence or podium
   const status = catStatus(ctx);
-  // the subline's stage link names the wave in play — its unscored cards carry
-  // the player page's next accent, so the link and the play always agree
-  const next = m => status && !isDone(m) && (status.kind === 'groups'
-    ? m.pool !== undefined
-    // main bracket: the wave column. Placement: ready as soon as its feeder results
-    // decide it — the bronze lights up with the final, a 5th–8th semi with the QFs.
-    : status.kind === 'ko' && m.pool === undefined && (
-      placementLabel(m, ctx) === null
-        ? koColumn(m, ctx) === status.col
-        : Array.isArray(m.sides) && m.sides.length === 2 &&
-          !!resolveSide(m.sides[0], ctx) && !!resolveSide(m.sides[1], ctx)));
+  // one current-wave predicate drives both the card highlight and the Next
+  // line — what's lit is exactly what Next points at (the schedule's rule)
+  const wave = currentWave(ctx, status);
+  const next = m => wave.includes(m);
   const lines = [];
   if (opts.multi) lines.push(`<p>${esc(fmtRange(schedDays(ctx.matches, ctx.tz)))}</p>`);
-  if (status) lines.push(statusLine(status, ctx, opts.href));
+  if (status) lines.push(statusLine(status, ctx));
+  lines.push(anticipationLine(ctx, status, opts.href, opts.multi, wave));
   parts.push(`<section><h2>${esc(ctx.name)}</h2>${lines.join('')}`);
   if (grp.length) {
     parts.push(`<section><h3>Group stage</h3>`);
@@ -415,13 +465,16 @@ function renderPlayer(route, data) {
   const statuses = [];
   for (const ctx of ctxs) {
     const s = playerStatus(ctx, pid);
-    if (s) statuses.push(`<strong>${esc(ctx.name || ctx.id)}</strong>: ${esc(s)}`);
+    if (s) statuses.push(`${esc(ctx.name || ctx.id)}: ${esc(s)}`);
   }
   // the "what's next" line names the earliest playable event — a confirmed
   // match, or the earliest possible stage, with its condition said out loud
   const nextEv = events.find(e => e.r ? !isDone(e.r.m) : true);
   let next = null;
   if (nextEv) {
+    // the whole "Next:" line is the link — a full-size tap target, and the
+    // accent color already reads as clickable, so the affordance and the
+    // emphasis agree
     const link = `<a data-jump="next" href="${esc(href(data.t.slug, 'schedule', route))}">`;
     if (nextEv.r) {
       const m = nextEv.r.m, nctx = nextEv.r.ctx;
