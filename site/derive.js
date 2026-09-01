@@ -553,9 +553,7 @@ const ordinal = n => n + ({ one: 'st', two: 'nd', few: 'rd' }[ordRules.select(n)
 // Placement label (3rd/5th/7th place, classification semis), null for main-
 // bracket matches.
 function placementLabel(m, ctx) {
-  const memo = ctxMemo(ctx);
-  if (!memo.pl) memo.pl = plBuild(ctx);
-  const r = memo.pl.get(m.id);
+  const r = plRange(m, ctx);
   if (!r) return null;
   return r.win ? `${ordinal(r.lo)} place` : `${ordinal(r.lo)}–${ordinal(r.hi)} semi`;
 }
