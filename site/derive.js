@@ -849,6 +849,10 @@ function schedDays(ms, tz) {
 }
 
 // Human span from ISO day keys (null = nothing scheduled).
+// en-US month abbreviations for the spread span — pinned to LOCALE like
+// dayLabel, but keyed off the ISO digits, never the formatted label's position.
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
 function fmtRange(keys) {
   const ks = (Array.isArray(keys) ? keys : []).filter(k => DATE_RE.test(k));
   if (!ks.length) return null;
@@ -859,11 +863,12 @@ function fmtRange(keys) {
   let out;
   if (!consec) out = ks.map(dayLabel).join(', ');
   else {
-    const a = dayLabel(ks[0]), b = dayLabel(ks.at(-1));
-    const wd = x => x.slice(0, 3); // dayLabel "Sat, Jul 11" -> "Sat"
-    out = `${wd(a)}–${wd(b)}, ` + (a.slice(5, 8) === b.slice(5, 8)
-      ? `${a.slice(5)}–${b.slice(9)}` // same month, month repeated once: "Sat–Sun, Jul 11–12"
-      : `${a.slice(5)} – ${b.slice(5)}`); // month boundary keeps both: "Wed–Sat, Dec 30 – Jan 2"
+    const [, m0, d0] = ks[0].split('-');
+    const [, m1, d1] = ks.at(-1).split('-');
+    const wd = x => x.slice(0, 3); // dayLabel "Sat, Jul 11" -> "Sat": the weekday slot is stable; month/day come from the key
+    out = `${wd(dayLabel(ks[0]))}–${wd(dayLabel(ks.at(-1)))}, ` + (m0 === m1
+      ? `${MONTHS[+m0 - 1]} ${+d0}–${+d1}` // same month, month repeated once: "Sat–Sun, Jul 11–12"
+      : `${MONTHS[+m0 - 1]} ${+d0} – ${MONTHS[+m1 - 1]} ${+d1}`); // month boundary keeps both: "Wed–Sat, Dec 30 – Jan 2"
   }
   return ks[0].slice(0, 4) !== ks.at(-1).slice(0, 4) ? `${out}, ${ks.at(-1).slice(0, 4)}` : out;
 }
