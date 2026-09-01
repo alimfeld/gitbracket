@@ -77,6 +77,9 @@ test('spec guards reject bad input fast', () => {
   assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], bestOf: 2 }, MINI.categories[1]] }), /bestOf/);
   assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], bestOf: undefined }, MINI.categories[1]] }), /bestOf/);
   assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], slotMinutes: 0 }] }), /slotMinutes/);
+  // a field that splits into a 1-team pool (3 teams at poolSize 2 -> 2+1)
+  // used to reach the gate with a cryptic "unknown pool B" error
+  assert.throws(() => generate({ ...MINI, poolSize: 2 }), /lone-team pool/);
   assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], slotMinutes: '30' }] }), /slotMinutes/);
   assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], slotMinutes: undefined }] }), /slotMinutes/);
   // missing/mistyped spec surface fails as a named spec error, not a TypeError
@@ -267,6 +270,27 @@ test('knockout round 1 never pairs two teams from the same pool', () => {
   const r1 = tourney.matches.md.filter((m) => m.pool === undefined && m.sides.every((s) => s && s.kind === 'pool'));
   assert.ok(r1.length >= 3, 'an 11-team bracket has round-1 matches');
   for (const m of r1) assert.notEqual(m.sides[0].pool, m.sides[1].pool, `${m.sides[0].pool}${m.sides[0].rank} meets ${m.sides[1].pool}${m.sides[1].rank} in round 1`);
+});
+
+test('no two byed seeds of one pool pair in any round (the C1-vs-C2 class)', () => {
+  // The round-1 seed swap only guards round 1: fields whose byes land two
+  // same-pool seeds adjacent in a later round (9/10/17/21/33/37 teams) used to
+  // pair them — the pool's 1st and 2nd seeds meeting in the QF. Every round's
+  // pairing must stay cross-pool wherever the field allows a split.
+  for (const [n, ps] of [[9, 3], [9, 4], [10, 4], [17, 4], [18, 4], [21, 5], [33, 4], [34, 4], [37, 3]]) {
+    const players = {}; const md = [];
+    for (let i = 1; i <= n; i++) { players['p' + i] = 'P' + i; md.push(['p' + i]); }
+    const tourney = generate({ ...MINI, players, teams: { md }, poolSize: ps });
+    const { errs } = validateRepo(repoOf(tourney));
+    assert.deepEqual(errs, []);
+    for (const m of tourney.matches.md.filter((x) => x.pool === undefined)) {
+      const slots = m.sides.filter((s) => s && s.kind === 'pool');
+      if (slots.length === 2) {
+        assert.notEqual(slots[0].pool, slots[1].pool,
+          `${n} teams ps${ps}: ${slots[0].pool}${slots[0].rank} meets ${slots[1].pool}${slots[1].rank} in match ${m.id}`);
+      }
+    }
+  }
 });
 
 test('group stage: an even pool packs tight and hands every team the same back-to-back burden', () => {

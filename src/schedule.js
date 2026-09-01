@@ -132,6 +132,7 @@ function buildKnockout(pools, names, mid, fin, placements) {
   const matches = [];
   const rounds = []; // track every round for placement construction
   const ms1 = [];
+  const reachOf = new Map(); // match id -> pools that could feed its winner
   let round = [];
   // Pairs emit in position order, so round 2's adjacent pairing keeps top
   // seeds in opposite halves; the low seed of every pair is real (a low-half
@@ -140,6 +141,7 @@ function buildKnockout(pools, names, mid, fin, placements) {
     const a = order[j], b = order[j + 1];
     if (b < total) {
       const m = { id: mid(), sides: [seed[a], seed[b]] };
+      reachOf.set(m.id, new Set([seed[a].pool, seed[b].pool]));
       ms1.push(m);
       matches.push(m);
       round.push({ kind: 'match', match: m.id, result: 'winner' });
@@ -148,6 +150,36 @@ function buildKnockout(pools, names, mid, fin, placements) {
     }
   }
   rounds.push(ms1);
+  // Same-pool separation beyond round 1: the seed swap above only guards the
+  // first round, so two byed seeds of one pool can still sit adjacent in a
+  // mid round (9/10/17-team fields -> C1 vs C2 in the QF). Split every round's
+  // array before pairing, the way round 1's swap does: move the second side to
+  // a later slot that keeps both its outgoing and incoming pairs cross-pool —
+  // without ever pairing two pool winners early (the S-curve depth rule the
+  // cross-pair test pins). Entries are pool slots (pools/ranks known) or
+  // winner edges (reachOf). A field with more pool slots than cross-pool
+  // partners can't be split — those stay as built, like round 1's.
+  const poolsOf = e => e && e.kind === 'pool' ? [{ pool: e.pool, rank: e.rank }]
+    : [...(reachOf.get(e && e.match) || [])].map(p => ({ pool: p, rank: -1 }));
+  const splitRound = (arr) => {
+    for (let i = 0; i + 1 < arr.length; i += 2) {
+      const a = poolsOf(arr[i]), b = poolsOf(arr[i + 1]);
+      if (!a.some(x => b.some(y => x.pool === y.pool))) continue;
+      for (let j = arr.length - 1; j >= 0; j--) {
+        if (j === i || j === i + 1) continue; // a stays; b may move either way (the last pair has no later slot)
+        const c = poolsOf(arr[j]);
+        if (c.some(x => a.some(y => x.pool === y.pool))) continue; // y cross-pool with a
+        if (a.some(x => x.rank === 1) && c.some(x => x.rank === 1)) continue; // no early winner-vs-winner
+        const partner = poolsOf(arr[j % 2 ? j - 1 : j + 1]);
+        if (b.some(x => x.rank === 1) && partner.some(x => x.rank === 1)) continue;
+        if (b.some(x => partner.some(y => x.pool === y.pool))) continue; // x cross-pool at its new slot
+        [arr[i + 1], arr[j]] = [arr[j], arr[i + 1]];
+        break;
+      }
+    }
+    return arr;
+  };
+  splitRound(round);
   // When byes exceed round-1 matches (5/9/10/11-team fields) two byed seeds
   // must meet in round 2 — structurally forced, nothing crashes. Ids come out
   // in chronological order regardless of build order — renumberByTime sorts them.
@@ -156,12 +188,18 @@ function buildKnockout(pools, names, mid, fin, placements) {
     const ms = [];
     for (let i = 0; i < round.length; i += 2) {
       const m = { id: mid(), sides: [round[i], round[i + 1]] };
+      const set = new Set();
+      for (const e of m.sides) {
+        if (e.kind === 'pool') set.add(e.pool);
+        else for (const p of reachOf.get(e.match) || []) set.add(p);
+      }
+      reachOf.set(m.id, set);
       ms.push(m);
       next.push({ kind: 'match', match: m.id, result: 'winner' });
     }
     matches.push(...ms);
     rounds.push(ms);
-    round = next;
+    round = splitRound(next);
   }
 
   const finalM = matches[matches.length - 1];
@@ -188,6 +226,12 @@ function buildKnockout(pools, names, mid, fin, placements) {
 
 function buildCategory(teams, cat, poolSize) {
   const pools = splitPools(teams, poolSize);
+  if (pools.some(p => p.length < 2)) {
+    // A 1-team pool plays no matches, yet the knockout draws pool slots from it
+    // — the produced file then fails its own gate with a "unknown pool" error.
+    // Name the split here, like the other spec guards do.
+    throw new Error(`spec: category ${cat.id}: ${teams.length} teams at poolSize ${poolSize} split into a lone-team pool — every pool needs at least 2 teams`);
+  }
   const names = pools.map((_, i) => String.fromCharCode(65 + i));
   const matches = [];
   let next = 1;

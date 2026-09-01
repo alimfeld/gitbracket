@@ -530,9 +530,17 @@ function mergeTwinStages(present) {
     const placeL = [x, y].filter(s => isPlace(s.label)).map(s => s.label);
     const roundL = [x, y].filter(s => !isPlace(s.label)).map(s => s.label);
     // "5th / 7th place" joins a decider pair's labels; a round with its
-    // placement companion names the band like the bracket headings do.
+    // placement companion names the band like the bracket headings do. Two
+    // same-parent semis (the winner- and loser-fed halves of an open
+    // classification seat) name their full band: "9th–12th + 13th–16th" ->
+    // "9th–16th semi" — appending ' place' would mangle a semi label.
     const label = roundL.length ? stageGroupName(roundL[0], placeL)
-      : placeL.map(l => l.replace(/ place$/, '')).join(' / ') + ' place';
+      : placeL.every(l => / semi$/.test(l))
+        ? (() => {
+            const rs = placeL.flatMap(l => (l.match(/\d+/g) || []).map(Number));
+            return `${ordinal(Math.min(...rs))}–${ordinal(Math.max(...rs))} semi`;
+          })()
+        : placeL.map(l => l.replace(/ place$/, '')).join(' / ') + ' place';
     merged.add(x); merged.add(y);
     const times = [...x.times, ...y.times];
     const courts = [...x.courts, ...y.courts];

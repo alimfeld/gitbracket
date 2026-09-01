@@ -324,6 +324,40 @@ test('possibleStages: sample — a decided pool hands seats to the bracket; pre-
   assert(s0.find(x => x.label === 'Final / 3rd place').chip === 'via the Semifinals', 'pre-event: the deeper stage reads by its seat');
 });
 
+test('possibleStages: an open classification semi merges its two branches into one band', () => {
+  // A player who lost their round-1 match sits in an undecided 9th–16th semi:
+  // the winner-fed 9th–12th semi and loser-fed 13th–16th semi share its two
+  // parents, so twin-merge pairs them. The merged label must name the band
+  // ("9th–16th semi"), never append ' place' to a semi name.
+  const teams = Array.from({ length: 16 }, (_, i) => [`p${i}`]);
+  const tourney = generate({
+    slug: 'deep', name: 'Deep', location: 'Geneva', timezone: 'UTC', date: '2026-05-02', poolSize: 4,
+    blocks: { t: '09:00' }, venues: { 'court-1': 'Court 1' },
+    players: Object.fromEntries(teams.map(([id]) => [id, id])),
+    categories: [{ id: 't', name: 'Single', bestOf: 1, slotMinutes: 30, placements: 16 }],
+    teams: { t: teams },
+  });
+  const ms = tourney.matches.t;
+  const poolMs = ms.filter(m => m.pool !== undefined);
+  const koMs = ms.filter(m => m.pool === undefined);
+  const idx = id => +id.slice(1);
+  for (const m of poolMs) { // decided pools: strict rank order by player index
+    const a = idx(m.sides[0].ids[0]), b = idx(m.sides[1].ids[0]);
+    m.result = { status: 'played', winner: a < b ? 'a' : 'b' }; m.games = [{ a: 11, b: 9 }];
+  }
+  for (let i = 0; i < 8; i++) { // decided round 1: the loser advances into the classification
+    const m = koMs[i];
+    m.result = { status: 'played', winner: i % 2 ? 'b' : 'a' }; m.games = [{ a: 11, b: 9 }];
+  }
+  const ctx = makeCat({ meta: tourney.categories[0], matches: ms }, tourney);
+  const lost = resolveSide(koMs[0].sides[1], ctx);
+  const stages = possibleStages(ctx, [...lost][0]);
+  const merged = stages.find(s => s.label === '9th–16th semi');
+  assert(merged && merged.chip === 'via the 9th–16th semi', 'the open classification semi reads as one band with its seat gate');
+  assert(!stages.some(s => /semi place$/.test(s.label)), 'no mangled semi label gained a place suffix');
+  assert(stages.some(s => s.label === '9th / 11th place') && stages.some(s => s.label === '13th / 15th place'), 'the decider pairs below still merge by name');
+});
+
 test('playerMatches: only matches the player is actually in, not potential slots', () => {
   const md = catOf('sample', 'md40');
   const ids = pid => playerMatches(md, pid).map(r => r.m.id).sort();
