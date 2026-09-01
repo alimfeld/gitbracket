@@ -5,9 +5,7 @@ const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // The one display dialect: every human-visible string renders in it, so the
-// kiosk and the tests never vary with the viewer's locale. Machine-read
-// tokens don't follow it — dayKey assembles ISO from typed parts, tzOffset
-// parses the offset name and stays pinned (see its comment).
+// kiosk and the tests never vary with the viewer's locale.
 const LOCALE = 'en-US';
 
 // Shared side identity: sorted '|'-joined ids.
@@ -47,23 +45,21 @@ function makeCat(c, tjson, shared) {
   };
 }
 
-// Category contexts (makeCat ready). A category without a matches array renders empty.
 function toCats(tjson) {
   const byCat = (tjson && tjson.matches && typeof tjson.matches === 'object') ? tjson.matches : {};
   const cats = (tjson && Array.isArray(tjson.categories)) ? tjson.categories : [];
   return cats.map(c => makeCat({ meta: c, matches: Array.isArray(byCat[c.id]) ? byCat[c.id] : [] }, tjson, sharedFacts(tjson)));
 }
 
-const stageOf = m => (m && m.pool !== undefined) ? 'groups' : 'knockout';
+const stageOf = m => m?.pool !== undefined ? 'groups' : 'knockout';
 
 function matchSlotMs(m, ctx) {
   const cfg = (ctx && ctx.slotMinutes) || {};
-  return ((m && m.slotMinutes) ?? cfg[stageOf(m)]) * 60 * 1000;
+  return (m?.slotMinutes ?? cfg[stageOf(m)]) * 60 * 1000;
 }
 
 
-// Raw game wins per side, target not applied — the played-consistency base.
-// Malformed entries are skipped: the gate calls this while reporting them.
+// Raw game wins per side, target not applied.
 function countWins(games) {
   const w = [0, 0];
   for (const g of games) {
@@ -80,8 +76,8 @@ const sideLetter = i => i === 0 ? 'a' : 'b';
 function gameDiff(games) {
   let gd = 0, pd = 0;
   if (Array.isArray(games)) for (const g of games) {
-    if (!g || typeof g !== 'object') continue; // as countWins: report, never throw
-    gd += g.a > g.b ? 1 : -1;
+    if (!g || typeof g !== 'object') continue;
+    gd += (g.a > g.b) - (g.a < g.b);
     pd += g.a - g.b;
   }
   return { gd, pd };
@@ -134,9 +130,8 @@ function poolStandings(ctx, pool, partial) {
     return r;
   };
   for (const m of ms) {
-    if (!Array.isArray(m.sides)) continue; // malformed match: the validator reports it, never a crash
-    // rec() creates both side records on first sight (creation order kept), so
-    // a single pass builds the roster and the ladder at once.
+    if (!Array.isArray(m.sides)) continue;
+    // rec() builds both records on first sight — Map insertion order is the tie display order.
     const s0 = m.sides[0], s1 = m.sides[1];
     const r0 = rec(s0), r1 = rec(s1);
     if (!r0 || !r1) continue;
@@ -161,13 +156,13 @@ function poolStandings(ctx, pool, partial) {
 function mutualKeys(list, ms, ctx) {
   const h = new Map(list.map(r => [r.sig, { hw: 0, hg: 0, hp: 0 }]));
   for (const m of ms) {
-    if (!Array.isArray(m.sides)) continue; // as poolStandings: report, never throw
+    if (!Array.isArray(m.sides)) continue;
     const [s0, s1] = m.sides;
     if (!s0 || !s1 || s0.kind !== 'players' || s1.kind !== 'players') continue;
     const a = pairSig(s0.ids), b = pairSig(s1.ids);
     if (!h.has(a) || !h.has(b)) continue;
     const w = winnerIdx(m);
-    if (w === null) continue; // void contributes nothing, pending stalls nothing here
+    if (w === null) continue;
     const ka = h.get(a), kb = h.get(b);
     (w === 0 ? ka : kb).hw++;
     if (m.result && m.result.status === 'played') {
@@ -218,10 +213,10 @@ function poolLadder(list, ms, ctx) {
 
 function resolveSide(side, ctx, memo = new Map()) {
   if (!side || typeof side !== 'object') return null;
-  if (side.kind === 'players') return Array.isArray(side.ids) ? new Set(side.ids) : null; // a string ids would char-split in Set — malformed sides TBD, never a wrong team
+  if (side.kind === 'players') return Array.isArray(side.ids) ? new Set(side.ids) : null; // a string ids would char-split in a Set
   if (side.kind === 'match') {
     const m = ctx.byId.get(side.match);
-    if (!m || !Array.isArray(m.sides)) return null; // no sides: malformed -> TBD, never a throw
+    if (!m || !Array.isArray(m.sides)) return null;
     if (memo.has(m.id)) return memo.get(m.id) || null; // in-progress = cycle guard
     memo.set(m.id, undefined);
     const w = winnerIdx(m);
@@ -357,17 +352,16 @@ const chipRef = label => ({ Final: 'the final', Semifinals: 'the SF', Quarterfin
 const matchEdge = s => s && s.kind === 'match';
 const winnerEdge = s => matchEdge(s) && s.result === 'winner'; // the only edge that feeds the final
 
-// Longest winner-edge chain feeding id — 0 when nothing feeds it (wdOf's
-// round distance from the final; koColumn walks the other way and can't
-// serve it). Shared memo across ids — sibling paths share it, not just one
-// chain. ponytail: O(N²) worst case — fine while brackets are tiny; a
-// reverse-edge index is the upgrade if they ever grow.
+// Longest winner-edge chain feeding id — 0 when nothing feeds it; koColumn
+// walks the other way, so its memo can't serve this. ponytail: O(N²) worst
+// case — fine while brackets are tiny; a reverse-edge index is the upgrade if
+// they ever grow.
 function chainDepth(ctx, id, memo) {
   if (memo.has(id)) return memo.get(id);
-  memo.set(id, 0); // in-progress = cycle guard; the validator rejects cycles first
+  memo.set(id, 0);
   let d = 0;
   for (const m of ctx.matches) {
-    if (!m || !Array.isArray(m.sides)) continue; // malformed: the gate reports it, never a throw
+    if (!m || !Array.isArray(m.sides)) continue;
     for (const s of m.sides) {
       if (winnerEdge(s) && s.match === id) d = Math.max(d, 1 + chainDepth(ctx, m.id, memo));
     }
@@ -376,25 +370,21 @@ function chainDepth(ctx, id, memo) {
   return d;
 }
 
-// Possible stages: one entry per knockout round a player could still reach, in
-// bracket order — the certain bits (label, uniform time/court) and the
-// uncertain one (chip: the ranks or outcomes that get in). Two seat modes: a
-// confirmed knockout seat follows only the branches the outcome leaves open; a
-// group-stage player sees their pool's slots at every rank they could still
-// hold — standings never narrow a live draw, and a decided pool keeps only the
-// dead-tie ranks (resolution and elimination both leave nothing). The chip is
-// the entry gates in one phrase; one pool per category is the model (the
-// validator pins a pair to exactly one pool), so chips never need to
-// disambiguate two pools.
+// Possible stages: one entry per knockout round a player could still reach —
+// the certain bits (label, uniform time/court) and the uncertain one (chip:
+// the ranks or outcomes that get in). Two seat modes: a confirmed knockout
+// seat follows only the branches the outcome leaves open; a group-stage player
+// sees their pool's slots at every rank they could still hold — standings
+// never narrow a live draw, and a decided pool keeps only the dead-tie ranks.
+// One pool per category (the validator pins a pair to one), so the chips below
+// never disambiguate two pools.
 function possibleStages(ctx, pid) {
   const rows = playerMatches(ctx, pid);
   const koRows = rows.filter(r => r.m.pool === undefined);
   const confIds = new Set(koRows.map(r => r.m.id));
-  // One pool per category — the validator pins a pair to one pool, so the
-  // seats and chips below need no pool disambiguation.
   const poolRow = rows.find(r => r.m.pool !== undefined);
-  const pool = poolRow === undefined ? null : String(poolRow.m.pool);
-  const facts = koRows.length || pool === null ? null : poolFacts(ctx).get(pool);
+  const pool = poolRow === undefined ? null : poolRow.m.pool;
+  const facts = (koRows.length || pool === null) ? null : poolFacts(ctx).get(pool);
 
   // ---- seats and the reachable bracket -------------------------------------
   // Seats are recorded separately from the reach BFS: one match can seat the
@@ -421,7 +411,7 @@ function possibleStages(ctx, pid) {
   } else if (facts) {
     for (const r of playerRanks(ctx, pool, pid, facts.sigs.size)) {
       const m = facts.slots.get(r);
-      if (!m) continue; // that rank has no seat — nothing to play
+      if (!m) continue;
       if (!poolSeatsOf.has(m.id)) poolSeatsOf.set(m.id, []);
       poolSeatsOf.get(m.id).push(r);
       add(m);
@@ -461,22 +451,64 @@ function possibleStages(ctx, pid) {
     if (typeof m.venue === 'string') stage.courts.push(m.venue);
   }
 
-  // ---- finalize: uniform bits, chips, byes ---------------------------------
+  // ---- finalize: uniform bits, chips ---------------------------------------
   const present = [];
   for (const stage of stages.values()) {
-    const n = stage.ids.length;
     present.push({
       label: stage.label, col: stage.col, ranks: stage.ranks, edges: stage.edges,
       times: stage.times, courts: stage.courts, ids: stage.ids,
-      time: n > 0 && stage.times.length === n && stage.times.every(t => t === stage.times[0]) ? stage.times[0] : null,
-      court: n > 0 && stage.courts.length === n && stage.courts.every(c => c === stage.courts[0]) ? stage.courts[0] : null,
+      ...uniformBits(stage.ids.length, stage.times, stage.courts),
     });
   }
-  // Mutually exclusive outcomes of one seat read as one stage: the winner- and
-  // the loser-fed entry of the same feeder matches merge ("Final / 3rd place —
-  // reached via the SF"). Bits that differ read TBD, like any stage whose
-  // cards disagree. Rank-fed stages and ambiguous gates stay separate — two
-  // deciders fed by different semis are not one player's alternatives.
+  const merged = mergeTwinStages(present);
+  // The chip is the entry gates in one phrase: the direct slot ranks, then
+  // the result edges — "as 1st in Pool A or winner of the QF" names both ways
+  // in, so a rank-1 bye can't read as "everyone gets here". Only a stage every
+  // pool rank has a slot in (no gates at all) shortens to "all ranks". A
+  // merged stage's edges read once, as the seat: "via the SF".
+  const chipOf = stage => {
+    const chips = [];
+    if (facts && stage.ranks.size) {
+      const universe = playerRanks(ctx, pool, pid, facts.sigs.size);
+      const direct = [...stage.ranks];
+      if (direct.length === universe.length && !stage.edges.length) chips.push(`all ranks in Pool ${pool}`);
+      else chips.push(`as ${rankRange(direct)} in Pool ${pool}`);
+    }
+    if (stage.edges.length) {
+      const parts = new Set();
+      for (const e of stage.edges) {
+        const parent = ctx.byId.get(e.parent);
+        if (!parent || !Array.isArray(parent.sides)) continue;
+        const pl = placementLabel(parent, ctx);
+        const label = pl || roundName(koColumn(parent, ctx));
+        parts.add(stage.merged ? `via ${chipRef(label)}` : `as ${e.kind} of ${chipRef(label)}`);
+      }
+      for (const p of [...parts].sort()) chips.push(p);
+    }
+    return chips.join(' or ');
+  };
+  const out = [];
+  for (const stage of present) {
+    if (merged.has(stage)) continue; // the pair's originals — the merged entry carries them
+    out.push({ label: stage.label, col: stage.col, time: stage.time, court: stage.court, chip: chipOf(stage) });
+  }
+  // Deepest-first (QF -> SF -> Final); a merged pair keeps its deeper column.
+  out.sort((a, b) => (b.col ?? -1) - (a.col ?? -1));
+  return out;
+}
+
+// A stage's time/court reads uniform only when every card agrees — a mixed
+// time or court renders TBD, like any stage whose cards disagree.
+const uniformBits = (n, times, courts) => ({
+  time: n > 0 && times.length === n && times.every(t => t === times[0]) ? times[0] : null,
+  court: n > 0 && courts.length === n && courts.every(c => c === courts[0]) ? courts[0] : null,
+});
+
+// Mutually exclusive outcomes of one seat read as one stage: the winner- and
+// loser-fed entries of the same feeder matches merge ("Final / 3rd place —
+// reached via the SF"). Rank-fed stages and ambiguous gates stay separate —
+// two deciders fed by different semis are not one player's alternatives.
+function mergeTwinStages(present) {
   const merged = new Set();
   const byGate = new Map();
   for (const stage of present) {
@@ -502,51 +534,16 @@ function possibleStages(ctx, pid) {
     const label = roundL.length ? stageGroupName(roundL[0], placeL)
       : placeL.map(l => l.replace(/ place$/, '')).join(' / ') + ' place';
     merged.add(x); merged.add(y);
-    const n = x.ids.length + y.ids.length;
     const times = [...x.times, ...y.times];
     const courts = [...x.courts, ...y.courts];
     present.push({
       label, col: Math.max(x.col ?? -1, y.col ?? -1), merged: true,
       ranks: new Set([...x.ranks, ...y.ranks]), edges: [...x.edges, ...y.edges],
       times, courts, ids: [...x.ids, ...y.ids],
-      time: n > 0 && times.length === n && times.every(t => t === times[0]) ? times[0] : null,
-      court: n > 0 && courts.length === n && courts.every(c => c === courts[0]) ? courts[0] : null,
+      ...uniformBits(x.ids.length + y.ids.length, times, courts),
     });
   }
-  // The chip is the entry gates in one phrase: the direct slot ranks, then
-  // the result edges — "as 1st in Pool A or winner of the QF" names both ways
-  // in, so a rank-1 bye can't read as "everyone gets here". Only a stage every
-  // pool rank has a slot in (no gates at all) shortens to "all ranks". A
-  // merged stage's edges read once, as the seat: "via the SF".
-  const chipOf = stage => {
-    const chips = [];
-    if (facts && stage.ranks.size) {
-      const universe = playerRanks(ctx, pool, pid, facts.sigs.size);
-      const direct = [...stage.ranks];
-      if (direct.length === universe.length && !stage.edges.length) chips.push(`all ranks in Pool ${pool}`);
-      else chips.push(`as ${rankRange(direct)} in Pool ${pool}`);
-    }
-    if (stage.edges.length) {
-      const parts = new Set();
-      for (const e of stage.edges) {
-        const parent = ctx.byId.get(e.parent);
-        if (!parent || !Array.isArray(parent.sides)) continue;
-        const pl = placementLabel(parent, ctx);
-        const label = pl || roundName(pl === null ? koColumn(parent, ctx) : 0);
-        parts.add(stage.merged ? `via ${chipRef(label)}` : `as ${e.kind} of ${chipRef(label)}`);
-      }
-      for (const p of [...parts].sort()) chips.push(p);
-    }
-    return chips.join(' or ');
-  };
-  const out = [];
-  for (const stage of present) {
-    if (merged.has(stage)) continue; // the pair's originals — the merged entry carries them
-    out.push({ label: stage.label, col: stage.col, time: stage.time, court: stage.court, chip: chipOf(stage) });
-  }
-  // Deepest-first (QF -> SF -> Final); a merged pair keeps its deeper column.
-  out.sort((a, b) => (b.col ?? -1) - (a.col ?? -1));
-  return out;
+  return merged;
 }
 
 
@@ -554,8 +551,7 @@ const ordRules = new Intl.PluralRules(LOCALE, { type: 'ordinal' });
 const ordinal = n => n + ({ one: 'st', two: 'nd', few: 'rd' }[ordRules.select(n)] || 'th');
 
 // Placement label (3rd/5th/7th place, classification semis), null for main-
-// bracket matches. Cached in ctx._memo — rebuilt each render, so a polled page
-// picks up new results.
+// bracket matches.
 function placementLabel(m, ctx) {
   const memo = ctxMemo(ctx);
   if (!memo.pl) memo.pl = plBuild(ctx);
@@ -570,8 +566,7 @@ function placementLabel(m, ctx) {
 // nothing consumes holds a fixed rank, stepped out from the pool's champion
 // in bracket order. So the middle loser of a 5-loser pool reaches [A, A+2],
 // not the pool's bottom, because its chain stops there — no nominal round
-// ranges, no caps, no odd-size arithmetic. Built once per category; cached in
-// ctx._memo, discarded each render (toCats makes fresh contexts).
+// ranges, no caps, no odd-size arithmetic.
 function plBuild(ctx) {
   const pl = new Map(); // id -> { lo, hi, win } (win: winner edge unconsumed)
   const byId = ctx.byId;
@@ -594,7 +589,7 @@ function plBuild(ctx) {
   const memMemo = new Map();
   const member = (m) => {
     if (memMemo.has(m.id)) return memMemo.get(m.id);
-    memMemo.set(m.id, false); // in-progress = cycle guard; the gate rejects cycles first
+    memMemo.set(m.id, false);
     let yes = false;
     for (const s of m.sides) {
       if (!s || s.kind !== 'match') continue;
@@ -653,13 +648,9 @@ function plBuild(ctx) {
       spec.set(N.id, [w, l]);
       for (const x of candsOf(N)) { seen.add(x); queue.push(byId.get(x)); }
     }
-    // Ranges resolve on demand: a slot takes the range of the match consuming
-    // that edge. Consumers sit on both sides of the discovery order (the
-    // champion is early, deeper loser-bracket finals late), so no single pass
-    // covers it — the memo just fills whatever order the refs demand.
     const resolve = (id) => {
       if (pl.has(id)) return pl.get(id);
-      pl.set(id, null); // in-progress: cycle guard (malformed data — the gate reports it)
+      pl.set(id, null);
       const [w, l] = spec.get(id) || [];
       const val = (x) => x && (x[0] === 'n' ? { lo: x[1], hi: x[1] } : resolve(x[1])) || null;
       const wv = val(w), lv = val(l);
@@ -696,7 +687,7 @@ function plBands(ctx) {
     const bandOf = (m) => {
       const got = col.get(m.id);
       if (got !== undefined) return got;
-      col.set(m.id, null); // in-progress = cycle guard; the gate rejects cycles first
+      col.set(m.id, null);
       let cur = m;
       let hops = 0; // placement-tree edges between the anchor's loser slot and m
       const seen = new Set();
@@ -705,7 +696,7 @@ function plBands(ctx) {
         const feed = (cur.sides || []).find(s => s && s.kind === 'match' && ctx.byId.has(s.match));
         if (!feed) { cur = null; break; }
         cur = ctx.byId.get(feed.match);
-        if (seen.has(cur.id)) { cur = null; break; } // malformed loop — report, never hang
+        if (seen.has(cur.id)) { cur = null; break; }
         if (placementLabel(cur, ctx) === null) break; // the anchor: a main match
         hops++;
       }
@@ -766,11 +757,8 @@ function placeWave(ctx) {
 }
 
 // Winner-edge distance to the final (0 = the final itself): the round a loser
-// edge branches from. koColumn's memo can't serve it either: this is read while
-// koColumn's build is mid-flight, so it gets its own category memo, fully
-// built before any consumer reads it (in-progress values never escape). Same
-// discard-per-render contract as the other ctx._memo caches: toCats rebuilds
-// contexts every render.
+// edge branches from. Its own memo, not koColumn's — this is read while
+// koColumn's build is mid-flight.
 function wdOf(ctx, id) {
   const memo = ctxMemo(ctx);
   if (!memo.wd) {
@@ -786,8 +774,8 @@ function wdOf(ctx, id) {
 // the post-transition offset, off by one hour — exact per-minute offsets only
 // if a tournament ever opens on a changeover day.
 function tzOffset(tz, date) {
-  // Intl throws on a bad timezone; a guarded null keeps a malformed file from
-  // crashing the gate or a render — the validator rejects bad tz first, like the cycle guards.
+  // Intl throws on a bad timezone — a guarded null keeps a malformed file from
+  // crashing a render.
   let parts;
   try {
     parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'longOffset' })
@@ -800,21 +788,18 @@ function tzOffset(tz, date) {
 }
 
 // Midnight is 00, never 24: hourCycle pins the day to 0-23 under any dialect.
-// The try/catch is the tzOffset guard's sibling — Intl throws on a bad timezone,
-// and the validator rejects those first; this only keeps a malformed file from
-// crashing a render or the board clock.
 function fmtTime(t, tz) {
   try {
     return new Intl.DateTimeFormat(LOCALE, { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(t);
   } catch { return ''; }
 }
 
-// Y-M-D assembled from typed parts: the ISO shape is stated here, not borrowed
-// from a locale whose canonical form happens to match (en-CA's).
+// Y-M-D from typed parts, calendar pinned to gregory — a non-Gregorian default
+// locale (Buddhist, Hijri) would otherwise key days by a foreign year.
 function dayKey(t, tz) {
   let p = null;
   try {
-    p = Object.fromEntries(new Intl.DateTimeFormat(undefined, { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(t).map(x => [x.type, x.value]));
+    p = Object.fromEntries(new Intl.DateTimeFormat(LOCALE, { timeZone: tz, calendar: 'gregory', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(t).map(x => [x.type, x.value]));
   } catch { return null; } // bad tz: no day key — callers' null paths render empty
   return `${p.year}-${p.month}-${p.day}`;
 }
@@ -824,7 +809,7 @@ function schedTime(m, tz) {
   const s = (m && m.scheduled) || '';
   if (!ISO_RE.test(s)) return null;
   const off = tzOffset(tz, s.slice(0, 10));
-  if (off === null) return null; // a bad timezone reads as unparseable, never a throw
+  if (off === null) return null;
   const t = Date.parse(s + off);
   return Number.isNaN(t) ? null : t;
 }
@@ -832,7 +817,7 @@ function schedTime(m, tz) {
 const dayShort = (t, tz) => {
   try {
     return new Intl.DateTimeFormat(LOCALE, { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).format(t);
-  } catch { return ''; } // as fmtTime: a bad tz renders an empty label, never a throw
+  } catch { return ''; }
 };
 
 // A calendar-day label needs no timezone — the weekday/month/day of a Y-M-D key are absolute.
@@ -865,7 +850,7 @@ function fmtRange(keys) {
   else {
     const [, m0, d0] = ks[0].split('-');
     const [, m1, d1] = ks.at(-1).split('-');
-    const wd = x => x.slice(0, 3); // dayLabel "Sat, Jul 11" -> "Sat": the weekday slot is stable; month/day come from the key
+    const wd = x => x.slice(0, 3); // the weekday is dayLabel's leading token in this dialect
     out = `${wd(dayLabel(ks[0]))}–${wd(dayLabel(ks.at(-1)))}, ` + (m0 === m1
       ? `${MONTHS[+m0 - 1]} ${+d0}–${+d1}` // same month, month repeated once: "Sat–Sun, Jul 11–12"
       : `${MONTHS[+m0 - 1]} ${+d0} – ${MONTHS[+m1 - 1]} ${+d1}`); // month boundary keeps both: "Wed–Sat, Dec 30 – Jan 2"
@@ -904,10 +889,8 @@ function roundName(depthFromEnd) {
 // Column: 0 is the final, one back per winner edge. Depth-from-leaves can't
 // place a bye'd semi. Main-tree columns read ctx._memo.wd (built before this,
 // so no interleaved in-progress values); the fallback sizes classification
-// rounds and the final anchors 0. Cached in ctx._memo — safe because toCats
-// discards the context (memo included) every render, so each poll starts a
-// fresh bracket. The championship final, shared with koOrdinal: a knockout
-// match no winner feeds, outside the classification tree.
+// rounds and the final anchors 0. The championship final, shared with
+// koOrdinal: a knockout match no winner feeds, outside the classification tree.
 const mainFinal = (ctx, parented) =>
   ctx.matches.find(X => X.pool === undefined && !parented.has(X.id) && placementLabel(X, ctx) === null);
 
@@ -915,9 +898,7 @@ const mainFinal = (ctx, parented) =>
 // kids (parent id -> feeder ids in side order), loserFed (loser-edge fed ids),
 // loserParent (fed id -> the match consuming its loser edge — plBuild's ranges).
 // Every bracket consumer (koColumn, koOrdinal, winners, mainFinal, plBuild)
-// reads this one map — one edge classification, no drift. Cached in
-// ctx._memo: same discard-per-render contract as the other caches (toCats
-// rebuilds contexts).
+// reads this one map — one edge classification, no drift.
 function parentsOf(ctx) {
   const memo = ctxMemo(ctx);
   if (!memo.parents) {
@@ -953,14 +934,13 @@ function koColumn(m, ctx) {
     const col = (X) => {
       const got = koColMap.get(X.id);
       if (got !== undefined) return got;
-      koColMap.set(X.id, -1); // in-progress = cycle guard
+      koColMap.set(X.id, -1);
       const p = winnerParent.get(X.id);
       let r;
       if (p && placementLabel(p, ctx) === null) r = wdOf(ctx, X.id);
       else if (X === final) r = 0;
       else {
         const feeders = Array.isArray(X.sides) ? X.sides.filter(s => s && s.kind === 'match' && ctx.byId.has(s.match)).map(s => col(ctx.byId.get(s.match))) : [];
-        // feeders empty = no match-kind refs = a leaf; depth from leaves is 0
         r = feeders.length ? Math.max(...feeders) - 1 : 0;
       }
       koColMap.set(X.id, r);
@@ -975,7 +955,7 @@ function koColumn(m, ctx) {
 // by side, and so on down. Reads bracket structure, never `scheduled`, so
 // editing times can't renumber anything; only rewiring the bracket does (and
 // then the label should change). 0 = off the championship tree (classification
-// rounds — placementLabel names those). Cached in ctx._memo: same discard-per-render contract as the other caches.
+// rounds — placementLabel names those).
 function koOrdinal(m, ctx) {
   const memo = ctxMemo(ctx);
   if (!memo.koOrd) {
@@ -984,7 +964,7 @@ function koOrdinal(m, ctx) {
     const final = mainFinal(ctx, winnerParent);
     if (final) {
       ord.set(final.id, 1);
-      for (const stack = [final.id]; stack.length;) { // visited check keeps a cyclic bracket from hanging
+      for (const stack = [final.id]; stack.length;) {
         const p = stack.pop();
         const o = ord.get(p);
         for (const [k, id] of (kids.get(p) || []).entries()) {
@@ -1000,10 +980,9 @@ function matchLabel(m, ctx) {
   if (m.pool !== undefined) return `Pool ${m.pool}`;
   const pl = placementLabel(m, ctx);
   if (pl) return pl;
-  // cards abbreviate roundName's names — one vocabulary, two lengths; QF/SF
-  // carry their bracket ordinal, so slot references name a visible card
   const full = roundName(koColumn(m, ctx));
   const abbr = full.replace('Semifinals', 'SF').replace('Quarterfinals', 'QF');
+  // QF/SF carry their bracket ordinal so slot references name a visible card.
   // ponytail: only QF/SF get numbered — deeper rounds number when one needs cross-refs there
   return abbr === full ? full : abbr + (koOrdinal(m, ctx) || '');
 }
@@ -1098,7 +1077,6 @@ function playerStatus(ctx, pid) {
     }
     return inWord(Math.max(...koRows.map(r => koColumn(r.m, ctx))));
   }
-  // every match they're in is decided below
   if (ctx.matches.every(isDone)) {
     const w = winners(ctx);
     if (w) {
