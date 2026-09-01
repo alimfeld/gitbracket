@@ -13,6 +13,11 @@ const LOCALE = 'en-US';
 // Shared side identity: sorted '|'-joined ids.
 const pairSig = ids => [...ids].sort().join('|');
 
+// Per-category render cache: one bag on the context, so the freshness contract
+// (toCats rebuilds contexts every render, discarding the bag) is one boundary
+// to know, not six underscore props. Every *_build/Column memo hangs its data here.
+const ctxMemo = ctx => ctx._memo || (ctx._memo = {});
+
 // Tournament-level facts (names, venues, tz) per file — toCats builds them
 // once and hands them to every category's context; standalone makeCat calls
 // (validate, REPL, sim) build a fresh map per call.
@@ -549,11 +554,12 @@ const ordRules = new Intl.PluralRules(LOCALE, { type: 'ordinal' });
 const ordinal = n => n + ({ one: 'st', two: 'nd', few: 'rd' }[ordRules.select(n)] || 'th');
 
 // Placement label (3rd/5th/7th place, classification semis), null for main-
-// bracket matches. Memo rides ctx._pl — rebuilt each render, so a polled page
+// bracket matches. Cached in ctx._memo — rebuilt each render, so a polled page
 // picks up new results.
 function placementLabel(m, ctx) {
-  if (!ctx._pl) ctx._pl = plBuild(ctx);
-  const r = ctx._pl.get(m.id);
+  const memo = ctxMemo(ctx);
+  if (!memo.pl) memo.pl = plBuild(ctx);
+  const r = memo.pl.get(m.id);
   if (!r) return null;
   return r.win ? `${ordinal(r.lo)} place` : `${ordinal(r.lo)}–${ordinal(r.hi)} semi`;
 }
@@ -564,8 +570,8 @@ function placementLabel(m, ctx) {
 // nothing consumes holds a fixed rank, stepped out from the pool's champion
 // in bracket order. So the middle loser of a 5-loser pool reaches [A, A+2],
 // not the pool's bottom, because its chain stops there — no nominal round
-// ranges, no caps, no odd-size arithmetic. Built once per category; memo
-// ctx._pl, discarded each render like _wd/_koCol (toCats makes fresh contexts).
+// ranges, no caps, no odd-size arithmetic. Built once per category; cached in
+// ctx._memo, discarded each render (toCats makes fresh contexts).
 function plBuild(ctx) {
   const pl = new Map(); // id -> { lo, hi, win } (win: winner edge unconsumed)
   const byId = ctx.byId;
@@ -671,8 +677,9 @@ function plBuild(ctx) {
 // Range of a classification match, null for main-bracket matches. The bronze
 // finder (winners) reads lo here — same structure the labels use.
 function plRange(m, ctx) {
-  if (!ctx._pl) ctx._pl = plBuild(ctx);
-  return ctx._pl.get(m.id);
+  const memo = ctxMemo(ctx);
+  if (!memo.pl) memo.pl = plBuild(ctx);
+  return memo.pl.get(m.id);
 }
 
 // Depth band of every classification match: the column one below its anchor's,
@@ -682,7 +689,8 @@ function plRange(m, ctx) {
 // the merged headings. Byes can't skew it: the anchor is the main match whose
 // loser edge starts the chain, so a bye'd semi still anchors its column.
 function plBands(ctx) {
-  if (!ctx._plBand) {
+  const memo = ctxMemo(ctx);
+  if (!memo.plBand) {
     const col = new Map();    // placement match id -> band column
     const labels = new Map(); // band column -> placement labels
     const bandOf = (m) => {
@@ -713,9 +721,9 @@ function plBands(ctx) {
       if (!m || m.pool !== undefined || placementLabel(m, ctx) === null) continue;
       bandOf(m);
     }
-    ctx._plBand = { col, labels };
+    memo.plBand = { col, labels };
   }
-  return ctx._plBand;
+  return memo.plBand;
 }
 
 // The band column a classification match renders in; a main match never
@@ -761,14 +769,15 @@ function placeWave(ctx) {
 // edge branches from. koColumn's memo can't serve it either: this is read while
 // koColumn's build is mid-flight, so it gets its own category memo, fully
 // built before any consumer reads it (in-progress values never escape). Same
-// discard-per-render contract as _koCol/_pl: toCats rebuilds contexts
-// every render.
+// discard-per-render contract as the other ctx._memo caches: toCats rebuilds
+// contexts every render.
 function wdOf(ctx, id) {
-  if (!ctx._wd) {
-    const memo = ctx._wd = new Map();
-    for (const m of ctx.matches) chainDepth(ctx, m.id, memo);
+  const memo = ctxMemo(ctx);
+  if (!memo.wd) {
+    const wdMap = memo.wd = new Map();
+    for (const m of ctx.matches) chainDepth(ctx, m.id, wdMap);
   }
-  return ctx._wd.get(id);
+  return memo.wd.get(id);
 }
 
 // "+02:00"-style offset for a date, noon-UTC anchor. This parses the
@@ -888,9 +897,9 @@ function roundName(depthFromEnd) {
 }
 
 // Column: 0 is the final, one back per winner edge. Depth-from-leaves can't
-// place a bye'd semi. Main-tree columns read ctx._wd (built before this, so no
-// interleaved in-progress values); the fallback sizes classification rounds
-// and the final anchors 0. Memo rides ctx._koCol — safe because toCats
+// place a bye'd semi. Main-tree columns read ctx._memo.wd (built before this,
+// so no interleaved in-progress values); the fallback sizes classification
+// rounds and the final anchors 0. Cached in ctx._memo — safe because toCats
 // discards the context (memo included) every render, so each poll starts a
 // fresh bracket. The championship final, shared with koOrdinal: a knockout
 // match no winner feeds, outside the classification tree.
@@ -901,11 +910,12 @@ const mainFinal = (ctx, parented) =>
 // kids (parent id -> feeder ids in side order), loserFed (loser-edge fed ids),
 // loserParent (fed id -> the match consuming its loser edge — plBuild's ranges).
 // Every bracket consumer (koColumn, koOrdinal, winners, mainFinal, plBuild)
-// reads this one map — one edge classification, no drift. Memo rides
-// ctx._parents: same discard-per-render contract as _koCol/_pl (toCats
+// reads this one map — one edge classification, no drift. Cached in
+// ctx._memo: same discard-per-render contract as the other caches (toCats
 // rebuilds contexts).
 function parentsOf(ctx) {
-  if (!ctx._parents) {
+  const memo = ctxMemo(ctx);
+  if (!memo.parents) {
     const winnerParent = new Map();
     const kids = new Map();
     const loserFed = new Set();
@@ -924,20 +934,21 @@ function parentsOf(ctx) {
         }
       }
     }
-    ctx._parents = { winnerParent, kids, loserFed, loserParent };
+    memo.parents = { winnerParent, kids, loserFed, loserParent };
   }
-  return ctx._parents;
+  return memo.parents;
 }
 
 function koColumn(m, ctx) {
-  if (!ctx._koCol) {
-    const memo = ctx._koCol = new Map();
+  const memo = ctxMemo(ctx);
+  if (!memo.koCol) {
+    const koColMap = memo.koCol = new Map();
     const { winnerParent } = parentsOf(ctx);
     const final = mainFinal(ctx, winnerParent);
     const col = (X) => {
-      const got = memo.get(X.id);
+      const got = koColMap.get(X.id);
       if (got !== undefined) return got;
-      memo.set(X.id, -1); // in-progress = cycle guard
+      koColMap.set(X.id, -1); // in-progress = cycle guard
       const p = winnerParent.get(X.id);
       let r;
       if (p && placementLabel(p, ctx) === null) r = wdOf(ctx, X.id);
@@ -947,23 +958,24 @@ function koColumn(m, ctx) {
         // feeders empty = no match-kind refs = a leaf; depth from leaves is 0
         r = feeders.length ? Math.max(...feeders) - 1 : 0;
       }
-      memo.set(X.id, r);
+      koColMap.set(X.id, r);
       return r;
     };
     for (const X of ctx.matches) col(X);
   }
-  return ctx._koCol.get(m.id);
+  return memo.koCol.get(m.id);
 }
 
 // Ordinal within round from who each winner feeds — Final 1, its feeders 1–2
 // by side, and so on down. Reads bracket structure, never `scheduled`, so
 // editing times can't renumber anything; only rewiring the bracket does (and
 // then the label should change). 0 = off the championship tree (classification
-// rounds — placementLabel names those). Memo rides ctx._koOrd: same discard- per- render contract as _koCol/_pl.
+// rounds — placementLabel names those). Cached in ctx._memo: same discard-per-render contract as the other caches.
 function koOrdinal(m, ctx) {
-  if (!ctx._koOrd) {
+  const memo = ctxMemo(ctx);
+  if (!memo.koOrd) {
     const { kids, winnerParent } = parentsOf(ctx);
-    const ord = ctx._koOrd = new Map();
+    const ord = memo.koOrd = new Map();
     const final = mainFinal(ctx, winnerParent);
     if (final) {
       ord.set(final.id, 1);
@@ -976,7 +988,7 @@ function koOrdinal(m, ctx) {
       }
     }
   }
-  return ctx._koOrd.get(m.id) || 0;
+  return memo.koOrd.get(m.id) || 0;
 }
 
 function matchLabel(m, ctx) {
