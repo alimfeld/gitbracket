@@ -345,9 +345,9 @@ function rankRange(ranks) {
   return runs.map(([a, b]) => a === b ? ordinal(a) : `${ordinal(a)}–${ordinal(b)}`).join(', ');
 }
 
-// 'the SF' / 'the final' — a stage's name when a chip references it as the
-// gate into a deeper stage; placement labels and Round-of-N keep the article.
-const chipRef = label => ({ Final: 'the final', Semifinals: 'the SF', Quarterfinals: 'the QF' }[label] || `the ${label}`);
+// 'the Semifinals' / 'the final' — a stage's name when a chip references it as
+// the gate into a deeper stage; placement labels and Round-of-N keep the article.
+const chipRef = label => ({ Final: 'the final', Semifinals: 'the Semifinals', Quarterfinals: 'the Quarterfinals' }[label] || `the ${label}`);
 
 const matchEdge = s => s && s.kind === 'match';
 const winnerEdge = s => matchEdge(s) && s.result === 'winner'; // the only edge that feeds the final
@@ -462,16 +462,16 @@ function possibleStages(ctx, pid) {
   }
   const merged = mergeTwinStages(present);
   // The chip is the entry gates in one phrase: the direct slot ranks, then
-  // the result edges — "as 1st in Pool A or winner of the QF" names both ways
+  // the result edges — "as 1st in Pool A or winner of the Quarterfinals" names both ways
   // in, so a rank-1 bye can't read as "everyone gets here". Only a stage every
-  // pool rank has a slot in (no gates at all) shortens to "all ranks". A
-  // merged stage's edges read once, as the seat: "via the SF".
+  // pool rank has a slot in (no gates at all) shortens to "any rank". A
+  // merged stage's edges read once, as the seat: "via the Semifinals".
   const chipOf = stage => {
     const chips = [];
     if (facts && stage.ranks.size) {
       const universe = playerRanks(ctx, pool, pid, facts.sigs.size);
       const direct = [...stage.ranks];
-      if (direct.length === universe.length && !stage.edges.length) chips.push(`all ranks in Pool ${pool}`);
+      if (direct.length === universe.length && !stage.edges.length) chips.push(`any rank in Pool ${pool}`);
       else chips.push(`as ${rankRange(direct)} in Pool ${pool}`);
     }
     if (stage.edges.length) {
@@ -506,7 +506,7 @@ const uniformBits = (n, times, courts) => ({
 
 // Mutually exclusive outcomes of one seat read as one stage: the winner- and
 // loser-fed entries of the same feeder matches merge ("Final / 3rd place —
-// reached via the SF"). Rank-fed stages and ambiguous gates stay separate —
+// reached via the Semifinals"). Rank-fed stages and ambiguous gates stay separate —
 // two deciders fed by different semis are not one player's alternatives.
 function mergeTwinStages(present) {
   const merged = new Set();

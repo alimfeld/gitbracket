@@ -55,7 +55,7 @@ function parseRoute(hash) {
 // Fragment URLs with params in fixed order. Each target keeps only the params
 // legal on it: cat and player are symmetric — cat picks the one category on the
 // tournament page, player the schedule, and both ride along across the two views
-// so switching keeps the focus and My Schedule restores the pick. The kiosk
+// so switching keeps the focus and Schedule restores the pick. The kiosk
 // sits on its own path and carries neither.
 const LEGAL = { tournament: ['cat', 'player'], schedule: ['cat', 'player'], venues: ['venue'] };
 const href = (slug, view, p = {}) => {
@@ -77,7 +77,7 @@ async function loadAll(route) {
 
 const segmentBar = r => {
   const t = r.view === 'tournament', m = r.view === 'schedule';
-  return `<nav class="segments" aria-label="Views"><a href="${esc(href(r.slug, 'tournament', r))}"${t ? ' aria-current="true"' : ''}>Tournament</a><a href="${esc(href(r.slug, 'schedule', r))}"${m ? ' aria-current="true"' : ''}>My Schedule</a></nav>`;
+  return `<nav class="segments" aria-label="Views"><a href="${esc(href(r.slug, 'tournament', r))}"${t ? ' aria-current="true"' : ''}>Tournament</a><a href="${esc(href(r.slug, 'schedule', r))}"${m ? ' aria-current="true"' : ''}>Schedule</a></nav>`;
 };
 
 // The one missing-data message, verbatim in every view.
@@ -441,8 +441,8 @@ function renderPlayer(route, data) {
         .join('');
       return items ? `<section><h2>${esc(c.name || c.id)}</h2><ul>${items}</ul></section>` : '';
     }).join('');
-    if (!secs) return `${segmentBar(route)}<header><h1>Pick your player</h1></header><p>No players yet.</p>`;
-    return `${segmentBar(route)}<header><h1>Pick your player</h1></header>${secs}`;
+    if (!secs) return `${segmentBar(route)}<header><h1>Pick a player</h1></header><p>No players yet.</p>`;
+    return `${segmentBar(route)}<header><h1>Pick a player</h1></header>${secs}`;
   }
   const rows = [];
   const ctxs = data.cats;
@@ -485,7 +485,7 @@ function renderPlayer(route, data) {
       next = `${link}Next: ${esc(stage.label)}${stage.time !== null ? ' · ' + timeEl(stage.time, nctx.tz, multi) : ''}${stage.chip ? ` (${esc(stage.chip)})` : ''}</a>`;
     }
   }
-  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}<a href="${esc(href(data.t.slug, 'schedule', { cat: route.cat }))}">Not you?</a></h1>${statuses.length ? `<p>${statuses.join(' · ')}</p>` : ''}${next ? `<p data-status="next">${next}</p>` : ''}</header>`];
+  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}<a href="${esc(href(data.t.slug, 'schedule', { cat: route.cat }))}">Change</a></h1>${statuses.length ? `<p>${statuses.join(' · ')}</p>` : ''}${next ? `<p data-status="next">${next}</p>` : ''}</header>`];
   const out = [];
   let curDay = null;
   for (const e of events) {
@@ -520,7 +520,7 @@ function boot() {
         const p = ((d.tjson && d.tjson.players) || []).find(x => x && x.id === r.player);
         if (p) return `${d.t.name} — ${p.name || p.id}`;
       }
-      return `${d.t.name} — My Schedule`;
+      return `${d.t.name} — Schedule`;
     }
     return d.t.name;
   };

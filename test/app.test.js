@@ -283,8 +283,8 @@ test('possibleStages: a group-stage player sees the whole structural bracket, by
   assert(st1.map(x => x.label).join(',') === 'Quarterfinals,Semifinals,Final / 3rd place', 'bracket order: deepest round first, its loser-path companion merged with it');
   assert(qf.time === Date.parse('2026-07-12T10:30:00Z') && qf.court === null, 'QF: the pool-fed quarterfinals, uniform time, two courts -> court TBD');
   assert(qf.chip === 'as 3rd–6th in Pool A', 'QF chip: the ranks that feed it, pool named');
-  assert(sf.chip === 'as 1st–2nd in Pool A or as winner of the QF', 'semis: the byed ranks enter direct, the rest must win their QF — both gates named');
-  assert(fb.time === Date.parse('2026-07-12T11:30:00Z') && fb.court === null && fb.chip === 'via the SF', 'merged final/bronze: shared time kept, split courts read TBD, one seat gate');
+  assert(sf.chip === 'as 1st–2nd in Pool A or as winner of the Quarterfinals', 'semis: the byed ranks enter direct, the rest must win their QF — both gates named');
+  assert(fb.time === Date.parse('2026-07-12T11:30:00Z') && fb.court === null && fb.chip === 'via the Semifinals', 'merged final/bronze: shared time kept, split courts read TBD, one seat gate');
 });
 
 test('possibleStages: a decided pool collapses to the open stages; eliminated players get nothing', () => {
@@ -306,21 +306,21 @@ test('possibleStages: a decided pool collapses to the open stages; eliminated pl
   assert(labels('p3') === 'Final / 3rd place' && labels('p4') === 'Final / 3rd place', 'QF winners join the same open stages');
   assert(labels('p5') === '' && labels('p6') === '', 'a decided loss with no placement leaves nothing possible');
   const chips = pid => possibleStages(ctx, pid).map(s => s.chip).join('|');
-  assert(chips('p1') === 'via the SF', 'the merged gate names the seat once, branch implied');
+  assert(chips('p1') === 'via the Semifinals', 'the merged gate names the seat once, branch implied');
 });
 
 test('possibleStages: sample — a decided pool hands seats to the bracket; pre-event the pool view covers every rank', () => {
   const md = catOf('sample', 'md40');
   const j = pid => possibleStages(md, pid).map(s => s.label).join(',');
   const p5 = possibleStages(md, 'p5');
-  assert(j('p5') === 'Final / 3rd place' && p5[0].chip === 'via the SF', 'p5: an undecided semifinal seat keeps both branches, merged under one gate');
+  assert(j('p5') === 'Final / 3rd place' && p5[0].chip === 'via the Semifinals', 'p5: an undecided semifinal seat keeps both branches, merged under one gate');
   assert(j('p1') === '' && j('p7') === '', 'decided feeders close the losing/winning branch — the final and bronze render as cards instead');
   const tjson = require(FIX('sample', 'tournaments', 'sample.json'));
   const pre = makeCat({ meta: tjson.categories[0], matches: md.matches.map(m => ({ ...m, games: [], result: undefined })) }, tjson);
   const s0 = possibleStages(pre, 'p1');
   const sem = s0.find(x => x.label === 'Semifinals');
-  assert(s0.length === 2 && sem.time === Date.parse('2025-07-14T11:15:00-04:00') && sem.chip === 'all ranks in Pool A', 'pre-event: the pool view covers every rank — one semis stage, at 11:15');
-  assert(s0.find(x => x.label === 'Final / 3rd place').chip === 'via the SF', 'pre-event: the deeper stage reads by its seat');
+  assert(s0.length === 2 && sem.time === Date.parse('2025-07-14T11:15:00-04:00') && sem.chip === 'any rank in Pool A', 'pre-event: the pool view covers every rank — one semis stage, at 11:15');
+  assert(s0.find(x => x.label === 'Final / 3rd place').chip === 'via the Semifinals', 'pre-event: the deeper stage reads by its seat');
 });
 
 test('playerMatches: only matches the player is actually in, not potential slots', () => {
@@ -614,7 +614,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(standings.includes('class="ph"'), 'unplayed best-of slots render as placeholders');
   assert(standings.includes('Ada Lovelace'), 'standings renders player names');
   assert(standings.includes('Pool A · Court 1 · <time datetime=') && !standings.includes('md40 · Pool A'), 'standings card meta: label · venue · time element, no match id, no category id');
-  assert(standings.includes('<nav class="segments" aria-label="Views"><a href="#sample" aria-current="true">Tournament</a><a href="#sample/schedule">My Schedule</a></nav>'), 'tournament page: segment switch, Tournament current');
+  assert(standings.includes('<nav class="segments" aria-label="Views"><a href="#sample" aria-current="true">Tournament</a><a href="#sample/schedule">Schedule</a></nav>'), 'tournament page: segment switch, Tournament current');
   assert((standings.match(/<h2\b/g) || []).length === 1 && standings.includes('Pool A'), 'one category per page — the bare slug shows the first');
   const xd = renderTournament({ slug: 'sample', view: 'tournament', cat: 'xd' }, data);
   assert((xd.match(/<h2\b/g) || []).length === 1 && xd.includes('<h2>Mixed Doubles</h2>'), '?cat= selects the category');
@@ -680,7 +680,7 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(!pre.includes('data-status="next"'), 'pre-start category: no stage link yet, no highlight');
   assert(!xd.includes('data-status="next"'), 'finished category: no stage link, no highlight');
   const ppage = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p1' }, data);
-  assert(ppage.includes('<h1>Ada Lovelace<a href="#sample/schedule">Not you?</a></h1>'), 'player page: the pick-correcting link rides the name in the title, separated by space not punctuation');
+  assert(ppage.includes('<h1>Ada Lovelace<a href="#sample/schedule">Change</a></h1>'), 'player page: the pick-correcting link rides the name in the title, separated by space not punctuation');
   const nextCard = ppage.indexOf('<article id="next"');
   assert(nextCard !== -1 && ppage.indexOf('<article id="next">', nextCard + 1) === -1, 'exactly one next match card, carrying the jump target (the header line links to it)');
   assert(ppage.slice(nextCard).includes("Men&#39;s Doubles 40+ · Final"), 'the next card is the first unscored match — the md40 Final');
@@ -690,18 +690,18 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(!ppage.includes('class="day"') && !ppage.includes('>2025-07-14'), 'no day-divider machinery, no raw ISO payload — the heading is the day');
   const p3 = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p3' }, data);
   assert.equal((p3.match(/data-status="possible"/g) || []).length, 1, 'p3: a confirmed semifinal seat renders the open final and bronze as one merged possible card');
-  assert(p3.includes('· Final / 3rd place — via the SF'), 'the merged gate rides in the meta line, not as a separate row');
+  assert(p3.includes('· Final / 3rd place — via the Semifinals'), 'the merged gate rides in the meta line, not as a separate row');
   assert(!p3.includes('more matches possible'), 'the count note is gone — cards replaced it');
   assert(ppage.includes('<div class="head"><span><time datetime=') && ppage.includes('</time></span><span>Court 1</span></div>'), 'player card headline: time left (semantic <time>), court right');
   assert(ppage.includes("Men&#39;s Doubles 40+ · Pool A") && !ppage.includes('Men&#39;s Doubles 40+ · Pool A · '), 'player card meta: long cat name · label, no match id, no court/time');
   assert(ppage.includes('class="ph"'), 'player match cards render unplayed score slots too');
   assert(ppage.includes('Ada Lovelace'), 'player page finds the player');
-  assert(ppage.includes('<nav class="segments" aria-label="Views"><a href="#sample?player=p1">Tournament</a><a href="#sample/schedule?player=p1" aria-current="true">My Schedule</a></nav>'), 'player page: segment switch, My Schedule current, pick preserved in links');
+  assert(ppage.includes('<nav class="segments" aria-label="Views"><a href="#sample?player=p1">Tournament</a><a href="#sample/schedule?player=p1" aria-current="true">Schedule</a></nav>'), 'player page: segment switch, Schedule current, pick preserved in links');
   assert(ppage.includes('<p>Men&#39;s Doubles 40+: In the final · Mixed Doubles: Out in groups</p><p data-status="next"><a data-jump="next" href="#sample/schedule?player=p1">Next: <time datetime="2025-07-14T16:15:00.000Z">12:15</time> · Court 1</a></p>'), 'player page: standing and next each on their own line — standing is category: progress, plain (no bold), the whole next line is the link');
   assert(ppage.includes('#sample'), 'player page links the tournament name to the tournament page');
   const picker = renderPlayer({ slug: 'sample', view: 'schedule' }, data);
-  assert(picker.includes('<nav class="segments" aria-label="Views"><a href="#sample">Tournament</a><a href="#sample/schedule" aria-current="true">My Schedule</a></nav>'), 'picker: segment switch, My Schedule current');
-  assert(picker.includes('<header><h1>Pick your player</h1></header>'), 'picker: heading invites the pick');
+  assert(picker.includes('<nav class="segments" aria-label="Views"><a href="#sample">Tournament</a><a href="#sample/schedule" aria-current="true">Schedule</a></nav>'), 'picker: segment switch, Schedule current');
+  assert(picker.includes('<header><h1>Pick a player</h1></header>'), 'picker: heading invites the pick');
   assert(!picker.includes('pills') && !picker.includes('cat-label'), 'picker stays minimal: no pills, no category-label classes — category names are real headings');
   assert(picker.includes('<section><h2>Men&#39;s Doubles 40+</h2><ul>') && picker.includes('<section><h2>Mixed Doubles</h2><ul>'), 'picker groups players per category under a heading');
   assert(picker.includes('<li><a href="#sample/schedule?player=p1">Ada Lovelace</a></li>'), 'picker rows: plain name link carrying the player param');
@@ -773,10 +773,10 @@ test('possible stages render as cards: gates in the meta, and the next header go
   const page = renderPlayer({ slug: 'byes', view: 'schedule', player: 'p4' }, data);
   assert.equal((page.match(/data-status="possible"/g) || []).length, 3, 'p4 (pool open): three possible stages — QF, SF, and the merged final/bronze');
   assert(page.includes('Quarterfinals — as 3rd–6th in Pool A'), 'the stage label carries no count');
-  assert(page.includes('· Quarterfinals — as 3rd–6th in Pool A</div>') && page.includes('· Semifinals — as 1st–2nd in Pool A or as winner of the QF</div>'), 'the rank gates ride in the meta line, not as a separate row');
+  assert(page.includes('· Quarterfinals — as 3rd–6th in Pool A</div>') && page.includes('· Semifinals — as 1st–2nd in Pool A or as winner of the Quarterfinals</div>'), 'the rank gates ride in the meta line, not as a separate row');
   assert(!page.includes('skip the Quarterfinals'), 'the bye is implicit in the chip — no footnote');
   assert(page.includes('<span class="tbd">TBD</span>'), 'a non-uniform bit (the QF court) renders marked TBD');
-  assert(page.includes('Singles · Final / 3rd place — via the SF</div>'), 'the merged final/bronze keeps its label and the seat gate in the meta');
+  assert(page.includes('Singles · Final / 3rd place — via the Semifinals</div>'), 'the merged final/bronze keeps its label and the seat gate in the meta');
   assert(!page.includes('more matches possible'), 'the count note is gone');
   // next points at the earliest possible stage when no confirmed match is left
   const tjson = JSON.parse(JSON.stringify(info.tjson));
@@ -854,13 +854,13 @@ test('routing: cat and player ride along between tournament and schedule — app
   const info = repo.tournaments.get('sample');
   const data = { index: repo.index, t: { slug: 'sample', name: info.tjson.name }, tjson: info.tjson, cats: toCats(info.tjson) };
   const t = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' }, data);
-  assert(t.includes('<a href="#sample/schedule?cat=md40">My Schedule</a>'), 'tournament page carries cat onto the schedule link');
+  assert(t.includes('<a href="#sample/schedule?cat=md40">Schedule</a>'), 'tournament page carries cat onto the schedule link');
   assert(t.includes('<a href="#sample?cat=xd">Mixed Doubles</a>'), 'the switcher selects another category, no extra params');
   const s = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p1', cat: 'md40' }, data);
   assert(s.includes('<a href="#sample?cat=md40&amp;player=p1"'), 'schedule page carries cat and player back onto the tournament link');
-  assert(s.includes('href="#sample/schedule?cat=md40">Not you?</a>'), 'Not you? keeps the cat, drops only the player');
+  assert(s.includes('href="#sample/schedule?cat=md40">Change</a>'), 'Change keeps the cat, drops only the player');
   const back = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40', player: 'p1' }, data);
-  assert(back.includes('<a href="#sample/schedule?cat=md40&amp;player=p1">My Schedule</a>'), 'tournament page carries the pick onto My Schedule');
+  assert(back.includes('<a href="#sample/schedule?cat=md40&amp;player=p1">Schedule</a>'), 'tournament page carries the pick onto Schedule');
   assert(back.includes('<a href="#sample?cat=xd&amp;player=p1"'), 'category switch keeps the riding player');
   const picker = renderPlayer({ slug: 'sample', view: 'schedule', cat: 'md40' }, data);
   assert(picker.includes('#sample/schedule?cat=md40&amp;player='), 'picker picks carry the cat and the pick');
