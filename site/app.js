@@ -138,19 +138,19 @@ function renderTournament(route, data) {
 // the deepest band with a playable card: the main column, or the placement
 // wave once the championship is spent — the link names the merged group
 // ("Final / 3rd place") either way.
-const statusLine = (st, ctx, href) => {
+const statusLine = (status, ctx, href) => {
   const jump = (text, id) => `<a data-jump="${id}" href="${esc(href)}">${text}</a>`;
-  if (st.kind === 'starts') return `<p>Starts ${st.time !== null ? timeEl(st.time, ctx.tz) : 'soon'}</p>`;
-  if (st.kind === 'groups') return `<p>${jump('Group stage', 'group-matches')} · ${st.played} of ${st.count} played</p>`;
-  if (st.kind === 'ko') {
-    const col = st.col !== null ? st.col : st.place !== null ? st.place : null;
+  if (status.kind === 'starts') return `<p>Starts ${status.time !== null ? timeEl(status.time, ctx.tz) : 'soon'}</p>`;
+  if (status.kind === 'groups') return `<p>${jump('Group stage', 'group-matches')} · ${status.played} of ${status.count} played</p>`;
+  if (status.kind === 'ko') {
+    const col = status.col !== null ? status.col : status.place !== null ? status.place : null;
     if (col === null) return '<p>Knockout stage · Placement</p>';
     return `<p>Knockout stage · ${jump(stageGroupName(roundName(col), bandLabels(ctx, col)), `ko-${col}`)}</p>`;
   }
-  if (st.kind === 'finished') return '<p data-status="finished">Finished</p>';
+  if (status.kind === 'finished') return '<p data-status="finished">Finished</p>';
   // winners: the podium is one line, third only when a bronze match decided it;
   // the names carry the weight, Finished dims — the podium stays full
-  const names = [st.first, st.second, st.third].filter(Boolean).map(ids => teamLabel(ids, ctx));
+  const names = [status.first, status.second, status.third].filter(Boolean).map(ids => teamLabel(ids, ctx));
   const ranks = ['Champion', 'Runner-up', '3rd'];
   return `<p>${names.map((n, i) => `${ranks[i]} <strong>${esc(n)}</strong>`).join(' · ')}</p>`;
 };
@@ -170,21 +170,21 @@ function catSection(ctx, opts) {
   const grp = [...byPool.values()].flat().sort((a, b) => (schedTime(a, ctx.tz) ?? 0) - (schedTime(b, ctx.tz) ?? 0));
   // one category subline: the date span on multi-day pages only — a single-day
   // heading already states the date once — then the status sentence or podium
-  const st = catStatus(ctx);
+  const status = catStatus(ctx);
   // the subline's stage link names the wave in play — its unscored cards carry
   // the player page's next accent, so the link and the play always agree
-  const next = m => st && !isDone(m) && (st.kind === 'groups'
+  const next = m => status && !isDone(m) && (status.kind === 'groups'
     ? m.pool !== undefined
     // main bracket: the wave column. Placement: ready as soon as its feeder results
     // decide it — the bronze lights up with the final, a 5th–8th semi with the QFs.
-    : st.kind === 'ko' && m.pool === undefined && (
+    : status.kind === 'ko' && m.pool === undefined && (
       placementLabel(m, ctx) === null
-        ? koColumn(m, ctx) === st.col
+        ? koColumn(m, ctx) === status.col
         : Array.isArray(m.sides) && m.sides.length === 2 &&
           !!resolveSide(m.sides[0], ctx) && !!resolveSide(m.sides[1], ctx)));
   const lines = [];
   if (opts.multi) lines.push(`<p>${esc(fmtRange(schedDays(ctx.matches, ctx.tz)))}</p>`);
-  if (st) lines.push(statusLine(st, ctx, opts.href));
+  if (status) lines.push(statusLine(status, ctx, opts.href));
   parts.push(`<section><h2>${esc(ctx.name)}</h2>${lines.join('')}`);
   if (grp.length) {
     parts.push(`<section><h3>Group stage</h3>`);
@@ -195,10 +195,10 @@ function catSection(ctx, opts) {
       for (const [pool] of byPool) {
         parts.push(`<div><h4>Pool ${esc(String(pool))}</h4>`);
         parts.push('<table><thead><tr><th scope="col" class="num">#</th><th scope="col">Team</th><th scope="col" class="num">W</th><th scope="col" class="num">L</th><th scope="col" class="num">GD</th><th scope="col" class="num">PD</th></tr></thead><tbody>');
-        const st = poolStandings(ctx, pool, true); // pools come from matches, so partial standings always resolve
+        const std = poolStandings(ctx, pool, true); // pools come from matches, so partial standings always resolve
         // a rank is a fact only once a match decided a record — before that every team ties at zero and a wall of 1s reads as "all ranked first"
-        const ranks = poolDecided(st) ? poolRanks(st) : null;
-        st.forEach((r, i) => {
+        const ranks = poolDecided(std) ? poolRanks(std) : null;
+        std.forEach((r, i) => {
           const team = teamLabel(r.ids, ctx);
           parts.push(`<tr><td class="num">${ranks ? ranks[i] : ''}</td><td>${esc(team)}</td><td class="num">${r.wins}</td><td class="num">${r.losses}</td><td class="num">${fmtDiff(r.gd)}</td><td class="num">${fmtDiff(r.pd)}</td></tr>`);
         });
@@ -335,11 +335,11 @@ function renderVenue(route, data, now) {
   for (const r of open) byVenue.get(r.m.venue).set(r.t, r);
   const times = [...new Set(open.map(r => r.t))];
   const card = r => {
-    const st = kioskStatus(r, now);
+    const status = kioskStatus(r, now);
     const when = timeEl(r.t, r.ctx.tz);
-    const flag = st === 'due' || st === 'overdue' ? st : ''; // the status word is the flag; done and upcoming cards show none
+    const flag = status === 'due' || status === 'overdue' ? status : ''; // the status word is the flag; done and upcoming cards show none
     return matchCard(r.m, r.ctx, { meta: ['catName', 'label'],
-      head: [{ html: when }, { html: flag }], status: st });
+      head: [{ html: when }, { html: flag }], status });
   };
   const cells = [];
   const anchorTime = times[currentRowIndex(times, now)];
@@ -366,11 +366,11 @@ const multiDay = ctxs => schedDays(ctxs.flatMap(c => c.matches), (ctxs[0] && ctx
 // A possible stage: the round the player could reach once the pools decide —
 // the certain bits (label, count, uniform time/court) inline, the chip
 // carrying the rank or outcome that gets in.
-function possibleCard(st, ctx, opts) {
-  const when = st.time !== null ? timeEl(st.time, ctx.tz, opts.day) : '<span class="tbd">TBD</span>';
-  const where = st.court !== null ? esc(ctx.venues.get(st.court) || st.court) : '<span class="tbd">TBD</span>';
-  const label = esc(st.label);
-  return `<article${opts.id ? ` id="${opts.id}"` : ''} data-status="possible"><div class="head"><span>${when}</span><span>${where}</span></div><div class="meta">${esc(ctx.name)} · ${label}${st.chip ? ` — ${esc(st.chip)}` : ''}</div></article>`;
+function possibleCard(stage, ctx, opts) {
+  const when = stage.time !== null ? timeEl(stage.time, ctx.tz, opts.day) : '<span class="tbd">TBD</span>';
+  const where = stage.court !== null ? esc(ctx.venues.get(stage.court) || stage.court) : '<span class="tbd">TBD</span>';
+  const label = esc(stage.label);
+  return `<article${opts.id ? ` id="${opts.id}"` : ''} data-status="possible"><div class="head"><span>${when}</span><span>${where}</span></div><div class="meta">${esc(ctx.name)} · ${label}${stage.chip ? ` — ${esc(stage.chip)}` : ''}</div></article>`;
 }
 
 function renderPlayer(route, data) {
@@ -407,7 +407,7 @@ function renderPlayer(route, data) {
   // the stage cards sit where those rounds would be, next to the match cards.
   const events = [];
   for (const ctx of ctxs) {
-    for (const st of possibleStages(ctx, pid)) events.push({ t: st.time ?? Infinity, st, ctx });
+    for (const stage of possibleStages(ctx, pid)) events.push({ t: stage.time ?? Infinity, stage, ctx });
   }
   for (const r of rows) events.push({ t: schedTime(r.m, r.ctx.tz) ?? Infinity, r, ctx: r.ctx });
   // times ascending; a confirmed row wins an exact tie against a possible stage
@@ -428,8 +428,8 @@ function renderPlayer(route, data) {
       const t = schedTime(m, nctx.tz);
       next = `${link}Next: ${t !== null ? timeEl(t, nctx.tz, multi) : 'TBD'}${m.venue ? ` · ${esc(nctx.venues.get(m.venue) || m.venue)}` : ' · TBD'}</a>`;
     } else {
-      const st = nextEv.st, nctx = nextEv.ctx;
-      next = `${link}Next: ${esc(st.label)}${st.time !== null ? ' · ' + timeEl(st.time, nctx.tz, multi) : ''}${st.chip ? ` (${esc(st.chip)})` : ''}</a>`;
+      const stage = nextEv.stage, nctx = nextEv.ctx;
+      next = `${link}Next: ${esc(stage.label)}${stage.time !== null ? ' · ' + timeEl(stage.time, nctx.tz, multi) : ''}${stage.chip ? ` (${esc(stage.chip)})` : ''}</a>`;
     }
   }
   const parts = [segmentBar(route), `<header><h1>${esc(p.name)}<a href="${esc(href(data.t.slug, 'schedule', { cat: route.cat }))}">Not you?</a></h1>${statuses.length ? `<p>${statuses.join(' · ')}</p>` : ''}${next ? `<p data-status="next">${next}</p>` : ''}</header>`];
@@ -447,7 +447,7 @@ function renderPlayer(route, data) {
     if (e.r) {
       out.push(matchCard(e.r.m, e.ctx, { meta: ['catName', 'label'], head: [{ key: 'time' }, { key: 'court' }], status: isNext ? 'next' : undefined, id: isNext ? 'next' : undefined }));
     } else {
-      out.push(possibleCard(e.st, e.ctx, { day: multi, id: isNext ? 'next' : undefined }));
+      out.push(possibleCard(e.stage, e.ctx, { day: multi, id: isNext ? 'next' : undefined }));
     }
   }
   parts.push(`<section>${events.length ? `<div class="stack">${out.join('')}</div>` : '<p>No matches.</p>'}</section>`);

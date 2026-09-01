@@ -101,17 +101,17 @@ function isDone(m) {
   return !!m && m.result !== undefined;
 }
 
-function isDeadTie(st, rank) {
-  const rec = st[rank - 1];
+function isDeadTie(std, rank) {
+  const rec = std[rank - 1];
   return !!rec && !!rec.tie; // tie cluster id: the ladder exhausted without separating it
 }
 
 // Competition ranks: a dead-tie cluster shares its first rank (1 1 3 3); the
 // flag carries its cluster id so adjacent ties don't merge.
-function poolRanks(st) {
+function poolRanks(std) {
   const ranks = [];
-  for (let i = 0; i < st.length; i++) {
-    ranks.push((!st[i].tie || i === 0 || st[i - 1].tie !== st[i].tie) ? i + 1 : ranks[i - 1]);
+  for (let i = 0; i < std.length; i++) {
+    ranks.push((!std[i].tie || i === 0 || std[i - 1].tie !== std[i].tie) ? i + 1 : ranks[i - 1]);
   }
   return ranks;
 }
@@ -119,7 +119,7 @@ function poolRanks(st) {
 // Rank cells stay blank until a pool has a decided match — before that every
 // team ties at zero and a wall of 1s reads as "all ranked first". The site's
 // standings and the REPL's desk sheet share the rule via this one predicate.
-const poolDecided = st => st.some(r => r.wins || r.losses);
+const poolDecided = std => std.some(r => r.wins || r.losses);
 
 function poolStandings(ctx, pool, partial) {
   // partial=true: skip unfinished matches — live standings; strict form TBDs.
@@ -232,10 +232,10 @@ function resolveSide(side, ctx, memo = new Map()) {
     return v;
   }
   if (side.kind === 'pool') {
-    const st = poolStandings(ctx, side.pool);
-    if (!st) return null;
-    const rec = st[side.rank - 1];
-    if (!rec || isDeadTie(st, side.rank)) return null; // dead tie -> TBD
+    const std = poolStandings(ctx, side.pool);
+    if (!std) return null;
+    const rec = std[side.rank - 1];
+    if (!rec || isDeadTie(std, side.rank)) return null; // dead tie -> TBD
     return rec.ids;
   }
   return null;
@@ -324,17 +324,17 @@ function poolFacts(ctx) {
 // confirmed seat (handled elsewhere) and an unslotted rank is eliminated —
 // neither leaves anything possible here, so both return [].
 function playerRanks(ctx, pool, pid, roster) {
-  const st = poolStandings(ctx, pool);
-  if (!st) {
+  const std = poolStandings(ctx, pool);
+  if (!std) {
     const out = [];
     for (let r = 1; r <= roster; r++) out.push(r);
     return out;
   }
-  const i = st.findIndex(x => x.ids.has(pid));
-  if (i < 0 || !isDeadTie(st, i + 1)) return [];
+  const i = std.findIndex(x => x.ids.has(pid));
+  if (i < 0 || !isDeadTie(std, i + 1)) return [];
   const out = [];
-  let a = i; while (a > 0 && st[a - 1].tie === st[i].tie) a--;
-  let b = i; while (b < st.length - 1 && st[b + 1].tie === st[i].tie) b++;
+  let a = i; while (a > 0 && std[a - 1].tie === std[i].tie) a--;
+  let b = i; while (b < std.length - 1 && std[b + 1].tie === std[i].tie) b++;
   for (let r = a + 1; r <= b + 1; r++) out.push(r);
   return out;
 }
@@ -451,25 +451,25 @@ function possibleStages(ctx, pid) {
     const pl = placementLabel(m, ctx);
     const col = pl === null ? koColumn(m, ctx) : null;
     const label = pl || roundName(col);
-    let st = stages.get(label);
-    if (!st) { st = { label, col, ranks: new Set(), edges: [], times: [], courts: [], ids: [] }; stages.set(label, st); }
-    st.ids.push(m);
-    for (const rank of poolSeatsOf.get(id) || []) st.ranks.add(rank);
-    for (const e of edgeSeatsOf.get(id) || []) st.edges.push(e);
+    let stage = stages.get(label);
+    if (!stage) { stage = { label, col, ranks: new Set(), edges: [], times: [], courts: [], ids: [] }; stages.set(label, stage); }
+    stage.ids.push(m);
+    for (const rank of poolSeatsOf.get(id) || []) stage.ranks.add(rank);
+    for (const e of edgeSeatsOf.get(id) || []) stage.edges.push(e);
     const t = schedTime(m, ctx.tz);
-    if (t !== null) st.times.push(t);
-    if (typeof m.venue === 'string') st.courts.push(m.venue);
+    if (t !== null) stage.times.push(t);
+    if (typeof m.venue === 'string') stage.courts.push(m.venue);
   }
 
   // ---- finalize: uniform bits, chips, byes ---------------------------------
   const present = [];
-  for (const st of stages.values()) {
-    const n = st.ids.length;
+  for (const stage of stages.values()) {
+    const n = stage.ids.length;
     present.push({
-      label: st.label, col: st.col, ranks: st.ranks, edges: st.edges,
-      times: st.times, courts: st.courts, ids: st.ids,
-      time: n > 0 && st.times.length === n && st.times.every(t => t === st.times[0]) ? st.times[0] : null,
-      court: n > 0 && st.courts.length === n && st.courts.every(c => c === st.courts[0]) ? st.courts[0] : null,
+      label: stage.label, col: stage.col, ranks: stage.ranks, edges: stage.edges,
+      times: stage.times, courts: stage.courts, ids: stage.ids,
+      time: n > 0 && stage.times.length === n && stage.times.every(t => t === stage.times[0]) ? stage.times[0] : null,
+      court: n > 0 && stage.courts.length === n && stage.courts.every(c => c === stage.courts[0]) ? stage.courts[0] : null,
     });
   }
   // Mutually exclusive outcomes of one seat read as one stage: the winner- and
@@ -479,14 +479,14 @@ function possibleStages(ctx, pid) {
   // deciders fed by different semis are not one player's alternatives.
   const merged = new Set();
   const byGate = new Map();
-  for (const st of present) {
-    const parentSig = [...new Set(st.edges.map(e => e.parent))].sort().join('|');
+  for (const stage of present) {
+    const parentSig = [...new Set(stage.edges.map(e => e.parent))].sort().join('|');
     if (!parentSig) continue;
-    const kind = st.edges.every(e => e.kind === 'winner') ? 'w' : st.edges.every(e => e.kind === 'loser') ? 'l' : null;
+    const kind = stage.edges.every(e => e.kind === 'winner') ? 'w' : stage.edges.every(e => e.kind === 'loser') ? 'l' : null;
     if (!kind) continue;
     const key = `${parentSig}|${kind}`;
     if (!byGate.has(key)) byGate.set(key, []);
-    byGate.get(key).push(st);
+    byGate.get(key).push(stage);
   }
   const twin = key => byGate.get(key.endsWith('|w') ? key.replace(/\|w$/, '|l') : key.replace(/\|l$/, '|w'));
   for (const [key, list] of byGate) {
@@ -518,31 +518,31 @@ function possibleStages(ctx, pid) {
   // in, so a rank-1 bye can't read as "everyone gets here". Only a stage every
   // pool rank has a slot in (no gates at all) shortens to "all ranks". A
   // merged stage's edges read once, as the seat: "via the SF".
-  const chipOf = st => {
+  const chipOf = stage => {
     const chips = [];
-    if (facts && st.ranks.size) {
+    if (facts && stage.ranks.size) {
       const universe = playerRanks(ctx, pool, pid, facts.sigs.size);
-      const direct = [...st.ranks];
-      if (direct.length === universe.length && !st.edges.length) chips.push(`all ranks in Pool ${pool}`);
+      const direct = [...stage.ranks];
+      if (direct.length === universe.length && !stage.edges.length) chips.push(`all ranks in Pool ${pool}`);
       else chips.push(`as ${rankRange(direct)} in Pool ${pool}`);
     }
-    if (st.edges.length) {
+    if (stage.edges.length) {
       const parts = new Set();
-      for (const e of st.edges) {
+      for (const e of stage.edges) {
         const parent = ctx.byId.get(e.parent);
         if (!parent || !Array.isArray(parent.sides)) continue;
         const pl = placementLabel(parent, ctx);
         const label = pl || roundName(pl === null ? koColumn(parent, ctx) : 0);
-        parts.add(st.merged ? `via ${chipRef(label)}` : `as ${e.kind} of ${chipRef(label)}`);
+        parts.add(stage.merged ? `via ${chipRef(label)}` : `as ${e.kind} of ${chipRef(label)}`);
       }
       for (const p of [...parts].sort()) chips.push(p);
     }
     return chips.join(' or ');
   };
   const out = [];
-  for (const st of present) {
-    if (merged.has(st)) continue; // the pair's originals — the merged entry carries them
-    out.push({ label: st.label, col: st.col, time: st.time, court: st.court, chip: chipOf(st) });
+  for (const stage of present) {
+    if (merged.has(stage)) continue; // the pair's originals — the merged entry carries them
+    out.push({ label: stage.label, col: stage.col, time: stage.time, court: stage.court, chip: chipOf(stage) });
   }
   // Deepest-first (QF -> SF -> Final); a merged pair keeps its deeper column.
   out.sort((a, b) => (b.col ?? -1) - (a.col ?? -1));

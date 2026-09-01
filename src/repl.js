@@ -203,13 +203,13 @@ function listText(repo, slug, cats, needle) {
     const tables = [];
     const poolIds = [...new Set(matches.filter(m => m.pool).map(m => m.pool))].sort();
     for (const pid of poolIds) {
-      const st = poolStandings(ctx, pid, true);
-      if (!st) continue;
+      const std = poolStandings(ctx, pid, true);
+      if (!std) continue;
       // ranks come from the full ladder (dead-tie members share it), before the player filter drops rows
-      const ranks = poolDecided(st) ? poolRanks(st) : null;
+      const ranks = poolDecided(std) ? poolRanks(std) : null;
       const rows = [];
-      for (let i = 0; i < st.length; i++) {
-        const r = st[i];
+      for (let i = 0; i < std.length; i++) {
+        const r = std[i];
         if (playerHit && !playerHit(r.ids)) continue; // ls <name>: the player's rows only
         rows.push([String(ranks ? ranks[i] : ''), teamLabel(r.ids, ctx), String(r.wins), String(r.losses), fmtDiff(r.gd), fmtDiff(r.pd)]);
       }
