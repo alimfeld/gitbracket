@@ -11,6 +11,9 @@ if (typeof module !== 'undefined') {
   Object.assign(globalThis, require('./derive.js'));
 }
 
+// The venue's display name — a missing id (hand-edited or staged) falls back to the id.
+const venueName = (ctx, id) => ctx.venues.get(id) || id;
+
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -210,7 +213,7 @@ const anticipationLine = (ctx, status, href, day, wave) => {
     return `<p>Starts ${timeEl(status.time, ctx.tz, day)}</p>`;
   }
   if (!wave.length) return '';
-  const courts = [...new Set(wave.map(m => m.venue ? (ctx.venues.get(m.venue) || m.venue) : null).filter(Boolean))];
+  const courts = [...new Set(wave.map(m => m.venue ? venueName(ctx, m.venue) : null).filter(Boolean))];
   const where = courts.length ? ` · ${fmtCourts(courts)}` : '';
   const col = status.kind === 'groups' ? null : status.wave; // the deeper of the two waves, read not recomputed
   const section = status.kind === 'groups' ? 'group-matches' : col !== null ? `ko-${col}` : '';
@@ -327,7 +330,7 @@ function matchCard(m, ctx, opts = {}) {
   const item = {
     catName: esc(ctx.name),
     label: esc(matchLabel(m, ctx)),
-    court: m.venue ? esc(ctx.venues.get(m.venue) || m.venue) : 'TBD',
+    court: m.venue ? esc(venueName(ctx, m.venue)) : 'TBD',
     time: t !== null ? timeEl(t, ctx.tz, opts.day) : 'TBD',
   };
   const meta = opts.meta.map(k => item[k]).join(' · ');
@@ -382,7 +385,7 @@ function renderVenue(route, data, now) {
   const header = `<header><div><h1>${esc(data.t.name)}</h1><p>${shownDay === today ? 'Today' : dayLabel(shownDay)}</p></div><time id="clock"></time></header>`;
   // header and venue titles stick as one block — the titles ride the running
   // clock, aligned to the board by the shared --cols track
-  const top = `<div class="kiosk-top" style="--cols: ${cols.length}">${header}${cols.map(id => `<h2>${esc((ctxs[0] && ctxs[0].venues.get(id)) || id)}</h2>`).join('')}</div>`;
+  const top = `<div class="kiosk-top" style="--cols: ${cols.length}">${header}${cols.map(id => `<h2>${esc((ctxs[0] && venueName(ctxs[0], id)) || id)}</h2>`).join('')}</div>`;
   if (!cols.length) return top + '<p>Nothing scheduled.</p>';
   // columns are venues, rows are start times — every column holds the same
   // cells, so the cards of one wave line up; holes stay empty cells. ponytail:
@@ -426,7 +429,7 @@ const multiDay = ctxs => schedDays(ctxs.flatMap(c => c.matches), (ctxs[0] && ctx
 // carrying the rank or outcome that gets in.
 function possibleCard(stage, ctx, opts) {
   const when = stage.time !== null ? timeEl(stage.time, ctx.tz, opts.day) : '<span class="tbd">TBD</span>';
-  const where = stage.court !== null ? esc(ctx.venues.get(stage.court) || stage.court) : '<span class="tbd">TBD</span>';
+  const where = stage.court !== null ? esc(venueName(ctx, stage.court)) : '<span class="tbd">TBD</span>';
   const label = esc(stage.label);
   return `<article${opts.id ? ` id="${opts.id}"` : ''} data-status="possible"><div class="head"><span>${when}</span><span>${where}</span></div><div class="meta">${esc(ctx.name)} · ${label}${stage.chip ? ` — ${esc(stage.chip)}` : ''}</div></article>`;
 }
@@ -487,7 +490,7 @@ function renderPlayer(route, data) {
     if (nextEv.r) {
       const m = nextEv.r.m, nctx = nextEv.r.ctx;
       const t = schedTime(m, nctx.tz);
-      next = `${link}Next: ${t !== null ? timeEl(t, nctx.tz, multi) : 'TBD'}${m.venue ? ` · ${esc(nctx.venues.get(m.venue) || m.venue)}` : ' · TBD'}</a>`;
+      next = `${link}Next: ${t !== null ? timeEl(t, nctx.tz, multi) : 'TBD'}${m.venue ? ` · ${esc(venueName(nctx, m.venue))}` : ' · TBD'}</a>`;
     } else {
       const stage = nextEv.stage, nctx = nextEv.ctx;
       next = `${link}Next: ${esc(stage.label)}${stage.time !== null ? ' · ' + timeEl(stage.time, nctx.tz, multi) : ''}${stage.chip ? ` (${esc(stage.chip)})` : ''}</a>`;
