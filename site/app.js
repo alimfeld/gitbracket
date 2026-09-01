@@ -16,14 +16,18 @@ function esc(s) {
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+// A dead deep link (the slug's file 404s — permanent, stop polling) versus a
+// transient network failure (null — the poll retries next tick).
+const HTTP_ERR = { httpError: true };
+
 async function fetchJson(url) {
   try {
     // cache: 'no-cache' revalidates — 304s return 0 bytes, changes arrive fresh
     const res = await fetch(url, { cache: 'no-cache' });
-    if (!res.ok) return null; // 404 -> null -> renders empty, never throws
+    if (!res.ok) return HTTP_ERR; // 'not ok' is a dead URL, never a retryable null
     return await res.json();
   } catch (e) {
-    return null;
+    return null; // network failure — the poll retries next tick
   }
 }
 
@@ -71,6 +75,7 @@ async function loadAll(route) {
   }
   // one file per tournament — a poll is a single atomic fetch, no index roundtrip.
   const tjson = await fetchJson(`tournaments/${route.slug}.json`);
+  if (tjson === HTTP_ERR) return { httpError: true };
   const t = tjson ? { slug: route.slug, name: tjson.name } : null;
   return { t, tjson, cats: toCats(tjson) };
 }
@@ -82,6 +87,10 @@ const segmentBar = r => {
 
 // The one missing-data message, verbatim in every view.
 const MISSING = '<p>No tournament data yet — check back soon.</p>';
+
+// The one bad-route message, verbatim wherever a dead link lands: a rejected
+// fragment route, or a slug whose tournament file is a permanent 404.
+const BAD_LINK = '<p>This link doesn\'t look right.</p><p><a href="#">All tournaments</a></p>';
 
 
 const matchGrid = (ms, ctx, day, next) => `<div class="grid">${ms.map(m => matchCard(m, ctx, { meta: ['label', 'court', 'time'], day, status: next && next(m) ? 'next' : undefined })).join('')}</div>`;
@@ -145,9 +154,8 @@ const statusLine = (status, ctx) => {
   if (!status || status.kind === 'starts') return '';
   if (status.kind === 'groups') return `<p>Group stage: ${status.played} of ${status.count} played</p>`;
   if (status.kind === 'ko') {
-    const col = status.col !== null ? status.col : status.place !== null ? status.place : null;
-    if (col === null) return '<p>Knockout stage · Placement</p>';
-    return `<p>Knockout stage: ${esc(stageGroupName(roundName(col), bandLabels(ctx, col)))}</p>`;
+    if (status.wave === null) return '<p>Knockout stage · Placement</p>';
+    return `<p>Knockout stage: ${esc(stageGroupName(roundName(status.wave), bandLabels(ctx, status.wave)))}</p>`;
   }
   if (status.kind === 'finished') return '<p data-status="finished">Finished</p>';
   // winners: the podium is one line, third only when a bronze match decided it;
@@ -204,7 +212,7 @@ const anticipationLine = (ctx, status, href, day, wave) => {
   if (!wave.length) return '';
   const courts = [...new Set(wave.map(m => m.venue ? (ctx.venues.get(m.venue) || m.venue) : null).filter(Boolean))];
   const where = courts.length ? ` · ${fmtCourts(courts)}` : '';
-  const col = status.kind === 'groups' ? null : (status.col !== null ? status.col : status.place !== null ? status.place : null);
+  const col = status.kind === 'groups' ? null : status.wave; // the deeper of the two waves, read not recomputed
   const section = status.kind === 'groups' ? 'group-matches' : col !== null ? `ko-${col}` : '';
   const body = `Next: ${timeEl(schedTime(wave[0], ctx.tz), ctx.tz, day)}${where}`;
   // the whole line is the link — a full-size tap target, same as the schedule page
@@ -566,10 +574,15 @@ function boot() {
   const load = r => {
     loadAll(r).then(d => {
       if (route !== r) return; // superseded by a newer navigation
-      // ponytail: an unknown slug 404s and then polls forever while visible — fetchJson can't
-      // tell a 404 from a network error; stop-on-404 needs fetchJson to report the status,
-      // add it if bad deep links ever matter.
-      if (r.view !== 'index' && !d.tjson) { // fetch failed or unknown slug — the poll retries next tick
+      if (r.view === 'index') return render(r, d); // the index never 404s the tournament file
+      if (d.httpError) {
+        // a dead deep link — the file is gone for good; stop the futile poll, and
+        // keep a live board up rather than wipe it on a one-off server hiccup
+        stopPoll();
+        if (!data) app.innerHTML = BAD_LINK;
+        return;
+      }
+      if (!d.tjson) { // transient fetch failure — the poll retries next tick
         if (!data) app.innerHTML = MISSING + '<p>Reload the page to try again.</p>';
         return;
       }
@@ -613,7 +626,7 @@ function boot() {
     if (!r) {
       route = null;
       pollOn = false; stopPoll();
-      app.innerHTML = '<p>This link doesn\'t look right.</p><p><a href="#">All tournaments</a></p>';
+      app.innerHTML = BAD_LINK;
       return;
     }
     route = r;

@@ -84,8 +84,7 @@ test('loadAll: a slug route fetches only the tournament file; the index view onl
     assert.deepEqual(list.index[0].dates, ['2025-07-14'], 'the stored ISO days ride through untouched — one fetch, no per-file roundtrips');
     assert.equal(list.tjson, undefined, 'index view carries no tournament data');
     const missing = await loadAll({ slug: 'nope', view: 'tournament' });
-    assert.equal(missing.t, null, 'unknown slug: tjson 404s to null');
-    assert.equal(missing.tjson, null, 'no crash on a 404');
+    assert.equal(missing.httpError, true, 'a 404 reports httpError — a dead deep link, stop polling, not a retryable null');
   } finally {
     global.fetch = origFetch;
   }

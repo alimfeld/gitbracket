@@ -1060,9 +1060,11 @@ function catStatus(ctx) {
   const grp = ms.filter(m => m.pool !== undefined);
   if (grp.some(m => !isDone(m))) return { kind: 'groups', played: grp.filter(isDone).length, count: grp.length };
   const col = nextKoWave(ctx);
+  const place = placeWave(ctx);
   // place: the classification wave — the main wave may be spent while a bronze
-  // or decider still reads ready; the subline links whichever is deeper.
-  return { kind: 'ko', col, place: placeWave(ctx) };
+  // or decider still reads ready; the subline links whichever is deeper. wave:
+  // that deeper of the two, the one column statusLine/anticipationLine read.
+  return { kind: 'ko', col, place, wave: col !== null ? col : place !== null ? place : null };
 }
 
 const inWord = col => col === 0 ? 'In the final' : `In ${roundName(col)}`;
