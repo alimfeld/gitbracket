@@ -169,8 +169,8 @@
           {
             "kind": "players",
             "ids": [
-              "charles",
-              "beni"
+              "beni",
+              "charles"
             ]
           },
           {
@@ -198,8 +198,8 @@
           {
             "kind": "players",
             "ids": [
-              "matthias",
-              "hanspeter"
+              "hanspeter",
+              "matthias"
             ]
           }
         ],
@@ -213,8 +213,8 @@
           {
             "kind": "players",
             "ids": [
-              "reto",
-              "charly"
+              "charly",
+              "reto"
             ]
           },
           {
@@ -257,15 +257,15 @@
           {
             "kind": "players",
             "ids": [
-              "charles",
-              "beni"
+              "beni",
+              "charles"
             ]
           },
           {
             "kind": "players",
             "ids": [
-              "matthias",
-              "hanspeter"
+              "hanspeter",
+              "matthias"
             ]
           }
         ],
@@ -301,8 +301,8 @@
           {
             "kind": "players",
             "ids": [
-              "reto",
-              "charly"
+              "charly",
+              "reto"
             ]
           },
           {
@@ -345,8 +345,8 @@
           {
             "kind": "players",
             "ids": [
-              "charles",
-              "beni"
+              "beni",
+              "charles"
             ]
           },
           {
@@ -367,8 +367,8 @@
           {
             "kind": "players",
             "ids": [
-              "matthias",
-              "hanspeter"
+              "hanspeter",
+              "matthias"
             ]
           },
           {
@@ -389,8 +389,8 @@
           {
             "kind": "players",
             "ids": [
-              "reto",
-              "charly"
+              "charly",
+              "reto"
             ]
           },
           {
@@ -575,15 +575,15 @@
           {
             "kind": "players",
             "ids": [
-              "karin",
-              "eveline"
+              "doris",
+              "nicole"
             ]
           },
           {
             "kind": "players",
             "ids": [
-              "elke",
-              "gabi"
+              "nelly",
+              "phoebe"
             ]
           }
         ],
@@ -597,8 +597,8 @@
           {
             "kind": "players",
             "ids": [
-              "doris",
-              "nicole"
+              "eveline",
+              "karin"
             ]
           },
           {
@@ -626,8 +626,8 @@
           {
             "kind": "players",
             "ids": [
-              "karin",
-              "eveline"
+              "elke",
+              "gabi"
             ]
           }
         ],
@@ -636,6 +636,89 @@
       },
       {
         "id": 4,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "nelly",
+              "phoebe"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "eveline",
+              "karin"
+            ]
+          }
+        ],
+        "venue": "court-5",
+        "scheduled": "2026-10-03T10:30:00"
+      },
+      {
+        "id": 5,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "doris",
+              "nicole"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "eveline",
+              "karin"
+            ]
+          }
+        ],
+        "venue": "court-3",
+        "scheduled": "2026-10-03T11:00:00"
+      },
+      {
+        "id": 6,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "elke",
+              "gabi"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "nelly",
+              "phoebe"
+            ]
+          }
+        ],
+        "venue": "court-4",
+        "scheduled": "2026-10-03T11:00:00"
+      },
+      {
+        "id": 7,
+        "sides": [
+          {
+            "kind": "pool",
+            "pool": "A",
+            "rank": 1
+          },
+          {
+            "kind": "pool",
+            "pool": "A",
+            "rank": 4
+          }
+        ],
+        "venue": "court-3",
+        "scheduled": "2026-10-03T11:30:00"
+      },
+      {
+        "id": 8,
         "sides": [
           {
             "kind": "pool",
@@ -648,27 +731,46 @@
             "rank": 3
           }
         ],
-        "venue": "court-5",
-        "scheduled": "2026-10-03T10:30:00"
+        "venue": "court-4",
+        "scheduled": "2026-10-03T11:30:00"
       },
       {
-        "id": 5,
+        "id": 9,
         "sides": [
           {
-            "kind": "pool",
-            "pool": "A",
-            "rank": 1
+            "kind": "match",
+            "match": 7,
+            "result": "winner"
           },
           {
             "kind": "match",
-            "match": 4,
+            "match": 8,
             "result": "winner"
           }
         ],
         "bestOf": 3,
         "slotMinutes": 60,
         "venue": "court-3",
-        "scheduled": "2026-10-03T11:00:00"
+        "scheduled": "2026-10-03T12:00:00"
+      },
+      {
+        "id": 10,
+        "sides": [
+          {
+            "kind": "match",
+            "match": 7,
+            "result": "loser"
+          },
+          {
+            "kind": "match",
+            "match": 8,
+            "result": "loser"
+          }
+        ],
+        "bestOf": 3,
+        "slotMinutes": 60,
+        "venue": "court-4",
+        "scheduled": "2026-10-03T12:00:00"
       }
     ],
     "xd": [
@@ -679,15 +781,15 @@
           {
             "kind": "players",
             "ids": [
-              "karin",
-              "hase"
+              "hase",
+              "karin"
             ]
           },
           {
             "kind": "players",
             "ids": [
-              "phoebe",
-              "marc"
+              "marc",
+              "phoebe"
             ]
           }
         ],
@@ -701,8 +803,8 @@
           {
             "kind": "players",
             "ids": [
-              "nicole",
-              "kurt"
+              "kurt",
+              "nicole"
             ]
           },
           {
@@ -752,8 +854,8 @@
           {
             "kind": "players",
             "ids": [
-              "phoebe",
-              "marc"
+              "marc",
+              "phoebe"
             ]
           }
         ],
@@ -767,8 +869,8 @@
           {
             "kind": "players",
             "ids": [
-              "karin",
-              "hase"
+              "hase",
+              "karin"
             ]
           },
           {
@@ -789,8 +891,8 @@
           {
             "kind": "players",
             "ids": [
-              "nicole",
-              "kurt"
+              "kurt",
+              "nicole"
             ]
           },
           {
@@ -833,8 +935,8 @@
           {
             "kind": "players",
             "ids": [
-              "phoebe",
-              "marc"
+              "marc",
+              "phoebe"
             ]
           },
           {
@@ -855,15 +957,15 @@
           {
             "kind": "players",
             "ids": [
-              "karin",
-              "hase"
+              "hase",
+              "karin"
             ]
           },
           {
             "kind": "players",
             "ids": [
-              "nicole",
-              "kurt"
+              "kurt",
+              "nicole"
             ]
           }
         ],
@@ -921,15 +1023,15 @@
           {
             "kind": "players",
             "ids": [
-              "phoebe",
-              "marc"
+              "marc",
+              "phoebe"
             ]
           },
           {
             "kind": "players",
             "ids": [
-              "nicole",
-              "kurt"
+              "kurt",
+              "nicole"
             ]
           }
         ],
@@ -972,8 +1074,8 @@
           {
             "kind": "players",
             "ids": [
-              "nicole",
-              "kurt"
+              "kurt",
+              "nicole"
             ]
           }
         ],
@@ -994,8 +1096,8 @@
           {
             "kind": "players",
             "ids": [
-              "karin",
-              "hase"
+              "hase",
+              "karin"
             ]
           }
         ],
@@ -1016,8 +1118,8 @@
           {
             "kind": "players",
             "ids": [
-              "nicole",
-              "kurt"
+              "kurt",
+              "nicole"
             ]
           }
         ],
@@ -1038,8 +1140,8 @@
           {
             "kind": "players",
             "ids": [
-              "karin",
-              "hase"
+              "hase",
+              "karin"
             ]
           }
         ],
@@ -1060,8 +1162,8 @@
           {
             "kind": "players",
             "ids": [
-              "phoebe",
-              "marc"
+              "marc",
+              "phoebe"
             ]
           }
         ],
@@ -1082,8 +1184,8 @@
           {
             "kind": "players",
             "ids": [
-              "karin",
-              "hase"
+              "hase",
+              "karin"
             ]
           }
         ],
@@ -1104,8 +1206,8 @@
           {
             "kind": "players",
             "ids": [
-              "phoebe",
-              "marc"
+              "marc",
+              "phoebe"
             ]
           }
         ],

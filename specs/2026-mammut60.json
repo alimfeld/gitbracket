@@ -81,24 +81,24 @@
   "teams": {
     "md": [
       [
-        "charles",
-        "beni"
+        "beni",
+        "charles"
       ],
       [
         "hase",
         "patrick"
       ],
       [
-        "matthias",
-        "hanspeter"
+        "hanspeter",
+        "matthias"
       ],
       [
         "koni",
         "otto"
       ],
       [
-        "reto",
-        "charly"
+        "charly",
+        "reto"
       ],
       [
         "kurt",
@@ -119,12 +119,16 @@
         "nicole"
       ],
       [
-        "karin",
-        "eveline"
+        "eveline",
+        "karin"
       ],
       [
         "elke",
         "gabi"
+      ],
+      [
+        "nelly",
+        "phoebe"
       ]
     ],
     "xd": [
@@ -133,12 +137,12 @@
         "matthias"
       ],
       [
-        "karin",
-        "hase"
+        "hase",
+        "karin"
       ],
       [
-        "nicole",
-        "kurt"
+        "kurt",
+        "nicole"
       ],
       [
         "nelly",
@@ -153,8 +157,8 @@
         "hako"
       ],
       [
-        "phoebe",
-        "marc"
+        "marc",
+        "phoebe"
       ]
     ]
   }
