@@ -9,7 +9,7 @@ const assert = require('node:assert');
 const { generate } = require('../src/schedule.js');
 const { validateRepo } = require('../src/validate.js');
 const { applyScore } = require('../src/repl.js');
-const { makeCat, isDone, countWins, bestOfOf, schedTime, schedDays } = require('../site/derive.js');
+const { makeCat, isDone, countWins, bestOfOf, schedTime, schedDays, resolveSide } = require('../site/derive.js');
 const { makeGames, planScorable, STEP } = require('../src/sim.js');
 const { MINI } = require('./helpers.js');
 
@@ -52,10 +52,19 @@ test('a play-through ends complete and validates clean', () => {
   const { errs } = validateRepo(repo);
   assert.deepStrictEqual(errs, []);
   const all = Object.values(tourney.matches).flat();
-  assert.ok(all.length > 0 && all.every(isDone), 'every match played by the end of the day');
+  assert.ok(all.length > 0, 'the day is not empty');
+  // Random best-of-1 pool scores can end a pool in an outright tie; the model
+  // renders those slots TBD (dead tie), so a tied bracket legitimately stops.
+  // The engine contract: nothing with resolved sides is left unplayed.
   for (const cid of Object.keys(tourney.matches)) {
     const ctx = ctxOf(cid);
     for (const m of tourney.matches[cid]) {
+      if (!isDone(m)) {
+        const resolved = Array.isArray(m.sides) && m.sides.length === 2 &&
+          m.sides.every(s => resolveSide(s, ctx));
+        assert.ok(!resolved, `${cid} ${m.id}: a playable match was left unplayed`);
+        continue;
+      }
       const b = bestOfOf(m, ctx);
       assert.ok(m.games.length >= (b + 1) / 2 && m.games.length <= b, `${cid} ${m.id}: ${m.games.length} games within best of ${b}`);
       assert.ok(Math.max(...countWins(m.games)) === (b + 1) / 2, `${cid} ${m.id}: winner reached the target`);
