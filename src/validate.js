@@ -243,6 +243,7 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
   let hasPool = false;
   let hasKnockout = false;
   const poolUses = new Map(); // pool -> Set<side sig>
+  const poolOfSig = new Map(); // side sig -> pool (one pool per pair per category)
   const pairByPlayer = new Map(); // playerId -> side sig
   const pairSizes = new Set();
 
@@ -276,6 +277,11 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
         if (m.pool !== undefined) {
           if (!poolUses.has(m.pool)) poolUses.set(m.pool, new Set());
           poolUses.get(m.pool).add(sig);
+          // derive.js's possibleStages assumes one pool per pair — a pair in two
+          // pools would read stage seats from whichever pool it finds first.
+          const prevPool = poolOfSig.get(sig);
+          if (prevPool !== undefined && prevPool !== m.pool) err(where, `side ${sig} plays in two pools ${JSON.stringify(prevPool)} and ${JSON.stringify(m.pool)} — one pool per pair per category`);
+          else poolOfSig.set(sig, m.pool);
         }
         pairSizes.add(side.ids.length);
         for (const pid of side.ids) {

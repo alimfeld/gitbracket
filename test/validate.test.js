@@ -32,6 +32,7 @@ const V = [
   ['sides-less pool match reported, never a crash', 'bad-pool-missing-sides', r => r.errs.length > 0, /exactly two sides required/],
   ['null player entry', 'bad-null-player', r => r.errs.length > 0, /must be an object/],
   ['player with two partners', 'bad-two-partners', r => r.errs.length > 0, /has two partners/],
+  ['same pair in two pools', 'bad-two-pools', r => r.errs.length > 0, /plays in two pools/],
   ['duplicate slug in index', 'bad-duplicate-slug', r => r.errs.length > 0, /duplicate slug/],
   ['pool slot rank out of range', 'bad-rank-range', r => r.errs.length > 0, /out of range/],
   ['dead-tie pool slot warns only', 'tie', r => r.errs.length === 0 && r.warns.length > 0, /dead tie/],

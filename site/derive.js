@@ -384,13 +384,13 @@ function chainDepth(ctx, id, memo) {
 // hold — standings never narrow a live draw, and a decided pool keeps only the
 // dead-tie ranks (resolution and elimination both leave nothing). The chip is
 // the entry gates in one phrase; one pool per category is the model (the
-// validator pins a player to one pair), so chips never need to disambiguate
-// two pools.
+// validator pins a pair to exactly one pool), so chips never need to
+// disambiguate two pools.
 function possibleStages(ctx, pid) {
   const rows = playerMatches(ctx, pid);
   const koRows = rows.filter(r => r.m.pool === undefined);
   const confIds = new Set(koRows.map(r => r.m.id));
-  // One pool per category — the validator pins the player to one pair, so the
+  // One pool per category — the validator pins a pair to one pool, so the
   // seats and chips below need no pool disambiguation.
   const poolRow = rows.find(r => r.m.pool !== undefined);
   const pool = poolRow === undefined ? null : String(poolRow.m.pool);
