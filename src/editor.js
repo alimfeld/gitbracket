@@ -506,7 +506,7 @@ function boardText(state, view, info, rows, cols) {
     : '';
   const header = `${C.bold(C.cyan(info.title))} · ${info.mode} ${C.cyan(info.clock)} · ${info.played}/${info.total} played${info.note || ''}${filterNote}`;
   const msg = state.msg ? C[state.msg.color](state.msg.text) : '';
-  const hint = C.dim(hintLine(state, info));
+  const hint = C.dim(hintLine(state));
   // physical rows a rendered line occupies after auto-wrap — ANSI is stripped
   // (formatting, not width) and this board's glyphs are single-width, so plain
   // length / cols; over-reporting wide glyphs only shrinks the window, never
@@ -578,11 +578,11 @@ function inputLine(state, view) {
   return '';
 }
 
-function hintLine(state, info) {
+function hintLine(state) {
+  // sim keys live only in the help screen — the status line stays sparse
   const base = PROMPT_HINT[state.mode];
-  const extra = info.sim ? ' · ] +30m · [ −30m · x scores all due' : '';
-  if (typeof base === 'string') return base + (state.mode === 'browse' ? extra : '');
-  return base[state.verb] + extra;
+  if (typeof base === 'string') return base;
+  return base[state.verb];
 }
 
 // ---------- git + repo I/O (thin shell, not unit-tested) ----------
