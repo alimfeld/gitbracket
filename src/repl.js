@@ -758,7 +758,7 @@ function editorMain(root, siteRoot, repo, opts) {
   };
 
   const quit = () => {
-    process.stdout.write('\x1b[?25h'); // restore the cursor for the shell
+    process.stdout.write('\x1b[?25h\n'); // restore the cursor for the shell on a fresh line — the board ends without one
     if (process.stdin.isTTY) process.stdin.setRawMode(false);
     state.quit = true;
     if (opts.onQuit) opts.onQuit();
