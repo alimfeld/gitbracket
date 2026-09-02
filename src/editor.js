@@ -111,7 +111,9 @@ function buildScheduled(hhmm, tz, date, now) {
   if (date !== undefined && !DATE_RE.test(date)) return null;
   // an impossible date (2026-02-30) passes this regex — the validator gate rejects it on write, like applyVenue's unknown venues
   // the default date is "today" — the sim's clock when the sim passes one, the real clock live (sim and live share this editor)
-  return `${date || dayKey(now ?? Date.now(), tz)}T${h.padStart(2,'0')}:${m}:00`; // wall time — the tournament tz interprets it
+  const d = date || dayKey(now ?? Date.now(), tz);
+  if (!d) return null; // dayKey: null on an unreadable timezone — never emit a "nullT…" scheduled string
+  return `${d}T${h.padStart(2,'0')}:${m}:00`; // wall time — the tournament tz interprets it
 }
 
 function applyTime(matches, matchId, isoString) {
@@ -341,7 +343,16 @@ function parsePayload(kind, tokens, tz, now) {
   const hhmm = date !== undefined ? b : a;
   if (!hhmm) return { err: 'expected hh:mm (optionally preceded by a date), or - to unschedule' };
   const iso = buildScheduled(hhmm, tz, date, now);
-  if (iso === null) return { err: `bad time ${JSON.stringify(hhmm)} — expected hh:mm` };
+  if (iso === null) {
+    // buildScheduled fails on a bad time — or, when the time itself is fine, on
+    // the default day the tz can't compute (an explicit date never fails here:
+    // the regex above ran, and an impossible one is the write gate's job), so
+    // name the timezone, not the time
+    const tm = /^(\d{1,2}):(\d{2})$/.exec(hhmm);
+    return tm && +tm[1] <= 23 && +tm[2] <= 59
+      ? { err: `bad timezone ${JSON.stringify(tz)} — can't compute today's date` }
+      : { err: `bad time ${JSON.stringify(hhmm)} — expected hh:mm` };
+  }
   return { value: iso };
 }
 

@@ -181,6 +181,7 @@ test('editor parsePayload: one grammar for the arm line and the sim', () => {
   assert.match(editor.parsePayload('time', ['10:30'], 'UTC').value, /T10:30:00$/);
   assert.equal(editor.parsePayload('time', ['-'], 'UTC').value, undefined, 'a lone - unschedules');
   assert(editor.parsePayload('time', ['10:99'], 'UTC').err, 'impossible minutes refused');
+  assert.match(editor.parsePayload('time', ['10:30'], 'Not/AZone').err, /bad timezone/, 'a well-formed time failing the default day names the timezone, not the time');
 });
 
 test('editor parsePayload: score accepts dashes and colons alike — the display form leads', () => {
@@ -351,6 +352,7 @@ test('editor buildScheduled: builds local ISO-8601 wall time from hh:mm and time
   assert(editor.buildScheduled('25:00', 'UTC') === null, 'bad hour returns null');
   assert(editor.buildScheduled('09:00', 'UTC', '2026-05-03') === '2026-05-03T09:00:00', 'an explicit date wins over today');
   assert(editor.buildScheduled('09:00', 'UTC', '2026-02-30') === '2026-02-30T09:00:00', 'a format-valid but impossible date passes — the validator gate rejects it on write');
+  assert(editor.buildScheduled('09:00', 'Not/AZone') === null, 'an unreadable timezone can\'t compute the default day — never emit a nullT… scheduled string');
 });
 
 test('editor applyTime: sets scheduled field, repo validates', () => {
