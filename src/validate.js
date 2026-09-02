@@ -202,7 +202,12 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
       const t = schedTime(m, tjson.timezone);
       if (t === null) continue;
       if (Number.isNaN(matchSlotMs(m, ctx))) noSlot.add(cat.id); // NaN slots make the kiosk's due/overdue windows uncomputable
-      sched.push({ f: `${tFile} matches.${cat.id}`, m, t, ctx });
+      // Known-player set only when both sides are fixed players — a match/pool
+      // slot's players resolve only after results, so it can't be checked here
+      // (the generator's invariant, same predicate schedule.js uses).
+      const players = Array.isArray(m.sides) && m.sides.length === 2 && m.sides.every(s => s && s.kind === 'players' && Array.isArray(s.ids))
+        ? new Set(m.sides.flatMap(s => s.ids)) : null;
+      sched.push({ f: `${tFile} matches.${cat.id}`, m, t, ctx, players });
     }
   }
   for (const cid of noSlot) {
@@ -211,10 +216,20 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
   for (let i = 0; i < sched.length; i++) {
     for (let j = i + 1; j < sched.length; j++) {
       const a = sched[i], b = sched[j];
-      if (a.m.venue !== b.m.venue) continue;
       const aMs = matchSlotMs(a.m, a.ctx), bMs = matchSlotMs(b.m, b.ctx);
-      if (slotsOverlap(a.t, a.t + aMs, b.t, b.t + bMs)) {
+      if (!slotsOverlap(a.t, a.t + aMs, b.t, b.t + bMs)) continue;
+      if (a.m.venue === b.m.venue) {
         err(a.f, `${a.m.id} and ${b.m.id} overlap at venue ${a.m.venue} (${aMs / 60000}-minute and ${bMs / 60000}-minute slots) — ${b.f} also schedules ${b.m.id}`);
+      }
+      // player double-book: two undone matches sharing a known player in the same
+      // window, across courts and categories — the generator's invariant, moved
+      // into the gate so a REPL time/venue edit can't reopen it. venue-blind
+      // (a player can't be in two places at once even on different courts).
+      if (a.players && b.players) {
+        const shared = [...a.players].filter(p => b.players.has(p));
+        if (shared.length) {
+          err(a.f, `player ${shared.join(', ')} double-booked — ${a.m.id} (${a.m.scheduled}) and ${b.m.id} (${b.m.scheduled}, ${b.f})`);
+        }
       }
     }
   }

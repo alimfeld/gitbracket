@@ -40,6 +40,7 @@ const V = [
   ['adjacent dead-tie clusters validate clean', 'adjtie', r => r.errs.length === 0 && r.warns.length === 0, null],
   ['tiebreak fixture validates', 'tiebreak', r => r.errs.length === 0 && r.warns.length === 0, null],
   ['cross-category venue overlap', 'bad-cross-overlap', r => r.errs.length > 0, /also schedules/],
+  ['cross-category player double-book', 'bad-player-doublebook', r => r.errs.length > 0, /double-booked/],
   ['undeclared category matches file', 'bad-undeclared-cat', r => r.errs.length > 0, /undeclared category/],
   ['unknown venue reference', 'bad-unknown-venue', r => r.errs.length > 0, /unknown venue/],
   ['null tournament data', 'bad-null-tjson', r => r.errs.length > 0, /must be an object/],
