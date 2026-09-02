@@ -502,7 +502,13 @@ function main(root, specPath) {
     console.error('usage: node gb.js schedule <specs/xxx.json>');
     process.exit(1);
   }
-  const spec = JSON.parse(fs.readFileSync(path.resolve(specPath), 'utf8'));
+  let spec;
+  try {
+    spec = JSON.parse(fs.readFileSync(path.resolve(specPath), 'utf8'));
+  } catch (e) {
+    console.error(`schedule: can't read ${specPath} as JSON (${e.message})`);
+    process.exit(1);
+  }
   const tourney = generate(spec);
   const siteRoot = path.join(root, 'site');
   writeTournament(siteRoot, spec.slug, tourney);
