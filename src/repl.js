@@ -476,7 +476,12 @@ function nextPlayable(view, state, dir) {
 // narrow pane that wraps the wide match lines still keeps the header on screen.
 function boardText(state, view, info, rows, cols) {
   const input = inputLine(state, view);
-  const header = `${C.bold(C.cyan(info.title))} · ${info.mode} ${C.cyan(info.clock)} · ${info.played}/${info.total} played${info.note || ''}`;
+  // an active filter is a view state, so it lives on the status line — the
+  // filter input slot already echoes it while typing, so skip that mode
+  const filterNote = state.mode !== 'filter' && state.query
+    ? ` · ${C.dim('/' + state.query + ' — ' + view.filtered.length + (view.filtered.length === 1 ? ' match' : ' matches'))}`
+    : '';
+  const header = `${C.bold(C.cyan(info.title))} · ${info.mode} ${C.cyan(info.clock)} · ${info.played}/${info.total} played${info.note || ''}${filterNote}`;
   const msg = state.msg ? C[state.msg.color](state.msg.text) : '';
   const hint = C.dim(hintLine(state, info));
   // physical rows a rendered line occupies after auto-wrap — ANSI is stripped

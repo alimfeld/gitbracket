@@ -243,6 +243,16 @@ test('editor boardText: header, ▶ flag, cursor marker, hint bar — one screen
   assert(/\? help · q quit/.test(txt), 'the browse hint bar is on screen');
 });
 
+test('editor boardText: an active filter is echoed on the status line', () => {
+  const repo = loadRepo(FIX('sample'));
+  const view = repl.makeView(repo.tournaments.get('sample').tjson, WAVE, 'ada');
+  const state = { mode: 'browse', cursorId: 'md40 8', msg: null, verb: null, payload: '', query: 'ada', cmdline: '' };
+  const info = { title: 'Sample', mode: 'LIVE', clock: '14:32', played: 11, total: 16, note: '', sim: false };
+  const txt = repl.boardText(state, view, info);
+  assert(/· \/ada — \d+ match/.test(txt.split('\n')[0]), 'the status line carries the active filter and its match count');
+  assert(view.filtered.length > 0, 'the ada filter has matches to count');
+});
+
 test('editor boardText: a narrow pane that wraps matches still keeps the header on screen', () => {
   const repo = loadRepo(FIX('sample'));
   const view = repl.makeView(repo.tournaments.get('sample').tjson, WAVE, null);
