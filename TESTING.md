@@ -1,15 +1,24 @@
-# Testing against a live deployment
+# Testing and rehearsing a tournament day
 
-Test kiosk behaviour, CDN latency, 304 caching, and polling against a real
-deployment — without touching the production live domain.
+## Rehearse a whole day first: the sim (no deployment, no branch)
 
-Two recipes:
-- **Branch + local server** — everything except real CDN answers (latency, 304s, HTTPS).
+`node gb.js sim [slug]` copies `site/` to the gitignored `.sim/`, serves it
+over HTTP with `Date.now` faked to a sim clock, and opens the match-day REPL
+against it — every view (tournament, schedule, kiosk) tracks the rehearsal:
+`]`/`[` move the clock 30 sim-minutes, `x` scores every due match with random
+games through the real validation path, and the normal slash verbs edit
+manually. Nothing is ever committed — `.sim/` is not a repo, and `site/` is
+untouched. Prereqs: Node, a browser, and a terminal (the REPL needs
+keypresses).
+
+For the deployment surface the sim deliberately skips — real commits and a
+real clock, then real CDN answers — there are two recipes, both push-proof by
+construction: `gb.js publish` only ships from `main`; the probe has no git
+remote; and its scratch domain is committed, so git ops can't restore the
+production CNAME.
+
+- **Branch + local server** — real commits and clock, everything except real CDN answers (latency, 304s, HTTPS).
 - **Scratch clone + throwaway surge domain** — real CDN behaviour.
-
-Both are push-proof by construction: `gb.js publish` only ships from `main`;
-the probe has no git remote; and its scratch domain is committed, so git ops
-can't restore the production CNAME.
 
 ## Everything except CDN: a branch and a local server
 
