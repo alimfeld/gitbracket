@@ -401,6 +401,27 @@ test('editor formatMatchLine: a filled width bag keeps time and venue aligned ac
   assert.equal(pos(l1, m1.venue), pos(l9, m9.venue), 'venue column lines up');
 });
 
+test('editor execAction: sim mode refuses :publish — the scratch never ships', () => {
+  const repo = loadRepo(FIX('sample'));
+  const r = editor.execAction({ repo, slug: 'sample', commit: false }, { kind: 'publish' });
+  assert(r.msg && /sim: no publish/.test(r.msg.text), 'the sim answers with the scratch contract, never a deploy');
+  assert.equal(r.slug, undefined, 'the refusal leaves the selection untouched');
+});
+
+test('editor step: a sim time edit defaults to the sim clock day, not the real one', () => {
+  const view = viewOf(loadRepo(FIX('sample')), WAVE, null);
+  let s = { mode: 'browse', cursorId: 'md40 8', msg: null };
+  let r = editor.step(s, key('t'), view);
+  for (const c of '10:30'.split('')) r = editor.step(r.state, key(c), view);
+  r = editor.step(r.state, key(null, 'return'), view, Date.parse('2026-10-03T12:00:00Z'));
+  assert.equal(r.action.value, '2026-10-03T10:30:00', 'an armed time uses the sim clock day (America/New_York), not Date.now');
+  // no clock passed (the live editor): the real today still fills the date
+  r = editor.step(s, key('t'), view);
+  for (const c of '10:30'.split('')) r = editor.step(r.state, key(c), view);
+  r = editor.step(r.state, key(null, 'return'), view);
+  assert.match(r.action.value, /T10:30:00$/, 'the live default keeps building from the real clock');
+});
+
 test('editor commitMessage: conventional types with tournament scope', () => {
   assert.equal(editor.commitMessage('score', '2026-mammut60', 'md40', '1', '11:9 · 11:7'), 'score(2026-mammut60): md40/1 11:9 · 11:7');
   assert.equal(editor.commitMessage('walkover', '2026-mammut60', 'xd', '7', 'side a wins by walkover'), 'walkover(2026-mammut60): xd/7 side a wins by walkover');

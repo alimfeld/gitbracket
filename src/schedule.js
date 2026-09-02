@@ -338,6 +338,8 @@ function assertSchedule(categories, slotCfgOf, tz) {
   }
   // venue overlap needs no check here — generate() ends by running validateRepo
   // on this same output, whose venue rule uses the same slotsOverlap predicate
+  // ponytail: O(n²) double-book scan — schedules are one day; index by time
+  // window per player if a spec ever grows past ~50 matches per category.
   for (let i = 0; i < sched.length; i++) {
     for (let j = i + 1; j < sched.length; j++) {
       const a = sched[i], b = sched[j];

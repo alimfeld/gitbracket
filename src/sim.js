@@ -108,7 +108,7 @@ function serve(siteRoot, clock) {
     try { rel = decodeURIComponent((req.url || '/').split('?')[0]).replace(/^\/+/, ''); }
     catch { res.statusCode = 400; res.end(); return; }
     const file = path.join(siteRoot, rel === '' ? 'index.html' : rel);
-    if (!file.startsWith(siteRoot) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+    if (path.relative(siteRoot, file).startsWith('..') || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
       res.statusCode = 404;
       res.end('not found');
       return;

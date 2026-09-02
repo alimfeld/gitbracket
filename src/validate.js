@@ -209,6 +209,8 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
   for (const cid of noSlot) {
     warns.push(`${tFile} matches.${cid}: scheduled matches resolve to no slot length — set slotMinutes (per stage or per match) or the kiosk can't mark matches overdue`);
   }
+  // ponytail: O(n²) pair scan over one tournament file — small by construction;
+  // a per-venue time index is the upgrade if a file ever grows past ~300 matches.
   for (let i = 0; i < sched.length; i++) {
     for (let j = i + 1; j < sched.length; j++) {
       const a = sched[i], b = sched[j];
@@ -477,7 +479,8 @@ function validateGames(games, target, where, err) {
 
 // validate <slug>: errors touching that tournament's file or index entry.
 // Exact matches only — a bare substring would leak tie3 errors into `validate tie`.
-// slug is id-regex-gated upstream, so it is safe inside the regex.
+// main() gates the slug by repo membership before this runs — loadRepo admits
+// only id-regex keys — so it is safe inside the regex.
 function filterErrs(errs, slug) {
   const re = new RegExp(`(?:tournaments/${slug}\.json|"${slug}"|slug ${slug}(?:\\s|$))`);
   return errs.filter(e => re.test(e));

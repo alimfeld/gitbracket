@@ -86,13 +86,14 @@ function applyVenue(matches, matchId, venueId) {
   });
 }
 
-function buildScheduled(hhmm, tz, date) {
+function buildScheduled(hhmm, tz, date, now) {
   if (!/^\d{1,2}:\d{2}$/.test(hhmm)) return null;
   const [h, m] = hhmm.split(':');
   if (+h > 23 || +m > 59) return null;
   if (date !== undefined && !DATE_RE.test(date)) return null;
   // an impossible date (2026-02-30) passes this regex — the validator gate rejects it on write, like applyVenue's unknown venues
-  return `${date || dayKey(Date.now(), tz)}T${h.padStart(2,'0')}:${m}:00`; // wall time — the tournament tz interprets it
+  // the default date is "today" — the sim's clock when the sim passes one, the real clock live (sim and live share this editor)
+  return `${date || dayKey(now ?? Date.now(), tz)}T${h.padStart(2,'0')}:${m}:00`; // wall time — the tournament tz interprets it
 }
 
 function applyTime(matches, matchId, isoString) {
@@ -185,7 +186,7 @@ const widthBag = () => {
 const C = (() => {
   const tty = process.stdout.isTTY; // colors are no-ops when piped — callers need no guard
   const w = (code, s) => tty ? `\x1b[${code}m${s}\x1b[0m` : s;
-  return { bold: s => w(1, s), dim: s => w(2, s), red: s => w(31, s), yellow: s => w(33, s), green: s => w(32, s), cyan: s => w(36, s), magenta: s => w(35, s), under: s => w(4, s), inv: s => w(7, s) };
+  return { bold: s => w(1, s), dim: s => w(2, s), red: s => w(31, s), yellow: s => w(33, s), green: s => w(32, s), cyan: s => w(36, s), magenta: s => w(35, s) };
 })();
 
 // the cursor row's whole-line invert, re-asserted after every inner reset:
@@ -272,7 +273,7 @@ function cursorIndex(view, state) {
 // Payload grammar per verb — one grammar for the arm line and the sim.
 // Grammar errors are caught here, before any I/O; data errors (unknown venue,
 // impossible date) belong to the validator.
-function parsePayload(kind, tokens, tz) {
+function parsePayload(kind, tokens, tz, now) {
   if (kind === 'score') {
     if (!tokens.length) return { err: 'expected a score, e.g. 21:19' };
     const games = tokens.map(parseGame);
@@ -300,7 +301,7 @@ function parsePayload(kind, tokens, tz) {
   const date = b !== undefined && DATE_RE.test(a) ? a : undefined;
   const hhmm = date !== undefined ? b : a;
   if (!hhmm) return { err: 'expected hh:mm (optionally preceded by a date), or - to unschedule' };
-  const iso = buildScheduled(hhmm, tz, date);
+  const iso = buildScheduled(hhmm, tz, date, now);
   if (iso === null) return { err: `bad time ${JSON.stringify(hhmm)} — expected hh:mm` };
   return { value: iso };
 }
@@ -376,7 +377,7 @@ function helpText(sim) {
     `  ${k('Enter')} commits the armed edit — the only key that ever writes`,
     `  ${k('Esc')} cancels anywhere`, '',
     C.bold('commands'),
-    `  ${k(':publish')} ship site/ to the domain`,
+    ...(sim ? [] : [`  ${k(':publish')} ship site/ to the domain`]),
     `  ${k(':status')} validator + git status`,
     `  ${k(':use <slug>')} switch tournament`,
   ];
@@ -399,7 +400,7 @@ const PROMPT_HINT = {
 // One keypress in. Pure: returns the next state and, when the key completes
 // an edit or a command, the action the shell must execute. The view is fresh
 // (rebuilt before each keypress), so the playable set reflects every edit.
-function step(state, key, view) {
+function step(state, key, view, now) {
   const ch = key.ch;
   const name = key.name;
   const ns = { ...state, msg: null };
@@ -442,7 +443,7 @@ function step(state, key, view) {
     if (name === 'return') {
       if (cur === -1) return { state: { ...ns, msg: { text: 'no match under the cursor', color: 'red' } }, action: null };
       const row = rowAt(cur);
-      const p = parsePayload(ns.verb, ns.payload.trim().split(/\s+/).filter(Boolean), view.tz);
+      const p = parsePayload(ns.verb, ns.payload.trim().split(/\s+/).filter(Boolean), view.tz, now);
       if (p.err) return { state: { ...ns, msg: { text: p.err, color: 'yellow' } }, action: null };
       return { state: { ...ns, mode: 'browse', verb: null, payload: '' }, action: { kind: 'edit', verb: ns.verb, cat: row.cat, matchId: String(row.m.id), value: p.value } };
     }
@@ -673,6 +674,7 @@ function execAction(state, action) {
     return { slug: action.slug };
   }
   if (action.kind === 'publish') {
+    if (!state.commit) return { msg: { text: 'sim: no publish — the scratch never ships, only site/ does (and only on main)', color: 'yellow' } };
     const { errs } = validateRepo(loadRepo(state.siteRoot)); // gate on disk, not memory — publish ships disk
     return errs.length
       ? { msg: { text: errs.join('\n') + '\nnot published — validation error(s)', color: 'red' } }
@@ -777,7 +779,7 @@ function editorMain(root, siteRoot, repo, opts) {
         if (r) { if (typeof r === 'string') state.msg = { text: r, color: 'red' }; render(); return; }
       }
       const view = getView();
-      const { state: ns, action } = step(state, k, view || { rows: [], lines: [], filtered: [], query: null, tz: tz() });
+      const { state: ns, action } = step(state, k, view || { rows: [], lines: [], filtered: [], query: null, tz: tz() }, clock());
       Object.assign(state, ns);
       if (state.quit) { quit(); return; }
       exec(action);

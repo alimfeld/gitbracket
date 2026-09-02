@@ -790,6 +790,14 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   const ph = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' }, pdata);
   assert(!ph.includes('Pool A" onclick='), 'the injected handler never lands in the DOM');
   assert(ph.includes('A&quot; onclick=&quot;alert(1)'), 'the pool string renders entity-encoded');
+  // hostile venue names flow into the anticipation line (fmtCourts) — the same esc contract
+  const evilVenue = JSON.parse(JSON.stringify(require(FIX('sample', 'tournaments', 'sample.json'))));
+  evilVenue.venues.find(v => v.id === 'court-2').name = '<b>Court 2</b>';
+  const evd = { index: [], t: { slug: 'sample', name: evilVenue.name }, tjson: evilVenue,
+    cats: toCats(evilVenue) };
+  const evh = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' }, evd);
+  assert(!evh.includes('<b>Court 2</b>'), 'the anticipation line never lands a raw venue name in the DOM');
+  assert(evh.includes('&lt;b&gt;Court 2&lt;/b&gt;') && text(evh).includes('Court 2'), 'the venue name renders entity-encoded, readable as text');
   // tied teams share the first rank of their group (standard competition ranking: 1 1)
   const { data: tdata } = dataOf('tie');
   const tieHtml = renderTournament({ slug: 'tie', view: 'tournament' }, tdata);

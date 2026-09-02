@@ -200,7 +200,8 @@ const anticipationLine = (ctx, status, href, day, wave) => {
   }
   const m0 = wave[0];
   const courts = [...new Set(wave.map(m => m.venue ? venueName(ctx, m.venue) : null).filter(Boolean))];
-  const where = courts.length ? ` · ${fmtCourts(courts)}` : '';
+  // fmtCourts is repo data — the same esc contract as every other name on the page
+  const where = courts.length ? ` · ${esc(fmtCourts(courts))}` : '';
   const starts = status.kind === 'starts';
   // the jump target is the section the wave lives in: starts derives it from
   // the opening block, groups and ko keep the committed rule
