@@ -188,6 +188,13 @@ const C = (() => {
   return { bold: s => w(1, s), dim: s => w(2, s), red: s => w(31, s), yellow: s => w(33, s), green: s => w(32, s), cyan: s => w(36, s), magenta: s => w(35, s), under: s => w(4, s), inv: s => w(7, s) };
 })();
 
+// the cursor row's whole-line invert, re-asserted after every inner reset:
+// segment colors and dims fight the uniform row and read illegible, so they
+// drop — the bold ref stays — and the invert holds to the line end.
+const rowAttr = (code, s) => s.includes('\x1b[')
+  ? `\x1b[${code}m${s.replace(/\x1b\[2m|\x1b\[3[0-9]m/g, '').replace(/\x1b\[0m/g, `\x1b[0m\x1b[${code}m`)}\x1b[0m`
+  : s;
+
 // ---------- the editor buffer ----------
 
 const rowKey = (cat, m) => `${cat} ${m.id}`;
@@ -522,7 +529,7 @@ function boardText(state, view, info, rows, cols) {
     let total = 0;
     for (let i = 0; i < n; i++) {
       const r = view.rows[view.filtered[i].i];
-      mw[i] = phys((cur === i ? '>' : ' ') + (r.playable ? '▶' : ' ') + ' ' + view.lines[view.filtered[i].i]);
+      mw[i] = phys((r.playable ? '▶' : ' ') + ' ' + view.lines[view.filtered[i].i]);
       total += mw[i];
     }
     // chrome physical rows: header + two blanks + msg + input + hint
@@ -545,11 +552,11 @@ function boardText(state, view, info, rows, cols) {
       const e = view.filtered[i];
       const r = view.rows[e.i];
       const here = i === cur;
-      // the two-char slot: cursor marker, then the playable flag — the cursor
-      // line inverts whole; played lines dim (and keep their slot)
-      let line = (here ? '>' : ' ') + (r.playable ? '▶' : ' ') + ' ' + view.lines[e.i];
-      if (!here && isDone(r.m)) line = C.dim(line);
-      if (here) line = C.inv(line);
+      // the one-char slot: the playable flag — the cursor line inverts
+      // whole, colors and dims dropped under the attribute so the row reads
+      // uniform and legible, the bold ref stays; played lines render as-is
+      let line = (r.playable ? '▶' : ' ') + ' ' + view.lines[e.i];
+      if (here) line = rowAttr(7, line);
       lines.push(line);
     }
   }
@@ -792,4 +799,4 @@ function main(root) {
   editorMain(root, siteRoot, repo, { sim: false, clock: () => Date.now() });
 }
 
-module.exports = { parseGame, parseKeys, buildScheduled, applyScore, applyResult, applyVenue, applyTime, writeEdit, commitMessage, editDetail, echoLine, parseCmd, formatMatchLine, listingSide, widthBag, rowKey, livePlayable, buildRows, renderLines, makeView, cursorIndex, parsePayload, applyFor, step, boardText, helpText, execEdit, execAction, defaultSlug, editorMain, main, C };
+module.exports = { parseGame, parseKeys, buildScheduled, applyScore, applyResult, applyVenue, applyTime, writeEdit, commitMessage, editDetail, echoLine, parseCmd, formatMatchLine, listingSide, widthBag, rowKey, livePlayable, buildRows, renderLines, makeView, cursorIndex, parsePayload, applyFor, step, boardText, helpText, execEdit, execAction, defaultSlug, editorMain, main, C, rowAttr };

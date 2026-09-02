@@ -230,16 +230,19 @@ test('editor execEdit: commit=false writes the scratch copy, validates, echoes t
   }
 });
 
-test('editor boardText: header, ▶ flag, cursor marker, hint bar — one screen', () => {
+test('editor boardText: header, ▶ flag, inverted cursor row, hint bar — one screen', () => {
   const repo = loadRepo(FIX('sample'));
   const view = repl.makeView(repo.tournaments.get('sample').tjson, WAVE, null);
   const state = { mode: 'browse', cursorId: 'md40 8', msg: null, verb: null, payload: '', query: null, cmdline: '' };
   const info = { title: 'Sample', mode: 'LIVE', clock: '14:32', played: 11, total: 16, note: '', sim: false };
   const txt = repl.boardText(state, view, info);
   assert(txt.includes('Sample · LIVE 14:32 · 11/16 played'), 'the header carries mode and tally');
-  assert(/^>▶/.test(txt.split('\n').find(l => l.includes('md40 8') && l.includes(' vs '))), 'the cursor line carries both markers');
+  assert(/^▶/.test(txt.split('\n').find(l => l.includes('md40 8') && l.includes(' vs '))), 'the playable cursor line leads with the ▶ flag');
   const other = txt.split('\n').find(l => l.includes('md40 1') && l.includes(' vs '));
-  assert(!other.startsWith('>'), 'only the cursor line is marked >');
+  assert(!other.includes('\x1b[7m'), 'only the cursor line is inverted');
+  assert(repl.rowAttr(7, '\x1b[1mref\x1b[0m\x1b[36mcyan\x1b[0m\x1b[2mdim\x1b[0m\x1b[32mgreen\x1b[0m')
+    === '\x1b[7m\x1b[1mref\x1b[0m\x1b[7mcyan\x1b[0m\x1b[7mdim\x1b[0m\x1b[7mgreen\x1b[0m\x1b[7m\x1b[0m', 'rowAttr drops colors and dims, keeps bold, re-asserts the invert after each reset');
+  assert(repl.rowAttr(7, 'plain text') === 'plain text', 'plain input stays plain');
   assert(/\? help · q quit/.test(txt), 'the browse hint bar is on screen');
 });
 
