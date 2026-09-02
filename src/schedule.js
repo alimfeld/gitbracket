@@ -29,18 +29,14 @@ function roundRobin(teams) {
   return rounds;
 }
 
-// Even split into k pools (sizes differ by at most one).
+// Snake the strength-ordered team list across k pools (sizes differ by at most
+// one) so every pool gets a spread of seeds and the top k land one-per-pool in
+// order — keeps the bracket's "winner in pool order = top seed" premise while
+// balancing pool strength.
 function splitPools(teams, poolSize) {
   const k = Math.ceil(teams.length / poolSize);
-  const base = Math.floor(teams.length / k);
-  const extra = teams.length % k;
-  const pools = [];
-  let i = 0;
-  for (let p = 0; p < k; p++) {
-    const size = base + (p < extra ? 1 : 0);
-    pools.push(teams.slice(i, i + size));
-    i += size;
-  }
+  const pools = Array.from({ length: k }, () => []);
+  teams.forEach((t, i) => pools[Math.floor(i / k) % 2 ? k - 1 - (i % k) : i % k].push(t));
   return pools;
 }
 

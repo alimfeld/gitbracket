@@ -158,6 +158,10 @@ spec — the single source for the schedule:
   `poolSize` splits the category's `teams` into round-robin pools. Pools play
   each round in the same time window, so every team carries the same
   back-to-back burden — the schedule stays packed tight, no idle slots.
+- Each `teams.<cat>` list is **seed / strength order** (best first): the
+  generator snakes the list across pools so every pool gets a spread of seeds
+  and the top seeds land one per pool, in order — balanced pools whose winners
+  still feed the knockout as the top seeds.
 - `bestOf`/`slotMinutes` are plain numbers applied to both stages;
   `knockout: false` skips the knockout stage; `placements` (a power of 2)
   sizes the classification bracket; `final` overrides the final and bronze
