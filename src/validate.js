@@ -7,7 +7,7 @@
 
 const path = require('path');
 const { loadRepo, fixedPlayers, isRealDate, slotsOverlap } = require('./tools.js');
-const { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, isDone, poolStandings, resolveSide, isDeadTie, bestOfOf, winTarget, reachedWinner, schedTime, schedDays, placementLabel } = require('../site/derive.js');
+const { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, isDone, poolStandings, resolveSide, isDeadTie, bestOfOf, winTarget, reachedWinner, schedTime, schedDays, placementLabel, feederBounds } = require('../site/derive.js');
 
 const RESULTS = ['winner', 'loser'];
 const RESULT_STATUSES = ['played', 'walkover', 'void'];
@@ -436,6 +436,18 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
     }
 
     if (m.scheduled !== undefined) checkScheduled(m.scheduled, where);
+    // Feeder timing: a bracket can't start before its sources' slots end, nor
+    // end after the matches it feeds begin — schedule.js satisfies it by
+    // construction; typed time edits and hand JSON both hit this gate.
+    if (m.scheduled !== undefined && m.pool === undefined) {
+      const fb = feederBounds(m, ctx, tjson.timezone);
+      const t = schedTime(m, tjson.timezone);
+      const ms = matchSlotMs(m, ctx);
+      if (fb && t !== null && !Number.isNaN(ms)) {
+        if (fb.floor !== null && t < fb.floor) err(where, `match ${m.id} starts before its feeders end — a bracket can't start until its sources are done (move this match later or its feeders earlier)`);
+        if (fb.ceiling !== null && t + ms > fb.ceiling) err(where, `match ${m.id} ends after a match it feeds starts — a feeder must finish before its consumer begins (move this match earlier or the consumer later)`);
+      }
+    }
     if (m.venue !== undefined && typeof m.venue !== 'string') {
       err(where, `venue must be a venue id string, got ${JSON.stringify(m.venue)}`);
     } else if (m.venue !== undefined && !venues.has(m.venue)) {

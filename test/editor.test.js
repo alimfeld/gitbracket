@@ -356,9 +356,10 @@ test('editor buildScheduled: builds local ISO-8601 wall time from hh:mm and time
 test('editor applyTime: sets scheduled field, repo validates', () => {
   const repo = loadRepo(FIX('sample'));
   const matches = repo.tournaments.get('sample').tjson.matches.md40;
-  assert(editor.applyTime(matches, '2', '2025-07-14T16:00:00') === null, 'applyTime reports no error');
-  assert(matches.find(m => m.id === 2).scheduled === '2025-07-14T16:00:00', 'scheduled set');
-  assert(editor.applyTime(matches, 'nope', '2025-07-14T16:00:00') === 'unknown match nope', 'unknown match reported');
+  // 09:10 keeps the pool's last match at 11:15 — the feeder-timing gate stays closed
+  assert(editor.applyTime(matches, '2', '2025-07-14T09:10:00') === null, 'applyTime reports no error');
+  assert(matches.find(m => m.id === 2).scheduled === '2025-07-14T09:10:00', 'scheduled set');
+  assert(editor.applyTime(matches, 'nope', '2025-07-14T09:10:00') === 'unknown match nope', 'unknown match reported');
   const { errs } = validateRepo(repo);
   assert(errs.length === 0, 'edited repo still validates: ' + errs.join('; '));
   assert(editor.applyTime(matches, '2', undefined) === null, 'clearing reports no error');
@@ -531,4 +532,76 @@ test('editor writeEdit: rollback on validation failure, write on success (real d
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
+});
+
+test('editor parsePayload: the side op parses all three shapes and rejects the rest', () => {
+  const g = s => editor.parsePayload('side', s.trim().split(/\s+/), 'UTC', 0);
+  assert.deepEqual(g('a players p1 p2'), { value: { si: 0, side: { kind: 'players', ids: ['p1', 'p2'] } } }, 'players side');
+  assert.deepEqual(g('b pool A 2'), { value: { si: 1, side: { kind: 'pool', pool: 'A', rank: 2 } } }, 'pool side');
+  assert.deepEqual(g('a match 7 winner'), { value: { si: 0, side: { kind: 'match', match: 7, result: 'winner' } } }, 'match edge side');
+  assert.match(g('x players p1').err, /side a or b/, 'missing side');
+  assert.match(g('b').err, /players, pool, or match/, 'a valid side without a shape names the shape');
+  assert.match(g('a players').err, /player ids/, 'players needs ids');
+  assert.match(g('a pool A').err, /pool and rank/, 'pool needs a rank');
+  assert.match(g('a pool A x').err, /positive integer/, 'rank must be a number');
+  assert.match(g('a match 7').err, /match id and result/, 'match edge needs a result');
+  assert.match(g('a match x winner').err, /match id/, 'match id must be a number');
+  assert.match(g('a match 7 maybe').err, /winner or loser/, 'result must be winner or loser');
+  assert.match(g('a frobnicate p1').err, /players, pool, or match/, 'unknown shape');
+});
+
+test('editor applySide: rewrites a side in place; the generic domain is the validator', () => {
+  const repo = loadRepo(FIX('sample'));
+  const matches = repo.tournaments.get('sample').tjson.matches.md40;
+  const m7 = matches.find(m => m.id === 7); // QF — pool ranks A1/A4, still feeds 9 and 10
+  editor.applySide(matches, '7', { si: 0, side: { kind: 'players', ids: ['p3', 'p4'] } });
+  assert.deepEqual(m7.sides[0], { kind: 'players', ids: ['p3', 'p4'] }, 'side a rewritten to explicit players');
+  assert.equal(validateRepo(repo).errs.length, 0, 'a direct-entry QF still validates: ' + validateRepo(repo).errs.join('; '));
+  // the gate rejects what the grammar can't see — fresh repo per case
+  const reject = (fn, re) => {
+    const r = loadRepo(FIX('sample'));
+    fn(r.tournaments.get('sample').tjson.matches.md40);
+    assert(hasErr(validateRepo(r), re), `expected rejection: ${re}`);
+  };
+  reject(ms => editor.applySide(ms, '7', { si: 0, side: { kind: 'players', ids: ['nobody'] } }), /unknown player/);
+  reject(ms => editor.applySide(ms, '7', { si: 0, side: { kind: 'match', match: 8, result: 'winner' } }), /consumed twice/);
+  reject(ms => editor.applySide(ms, '7', { si: 0, side: { kind: 'pool', pool: 'A', rank: 99 } }), /out of range/);
+  reject(ms => editor.applySide(ms, '7', { si: 0, side: { kind: 'pool', pool: 'X', rank: 1 } }), /unknown pool/);
+  // re-seating the final orphans the semifinals' winner edges — two unfed roots
+  reject(ms => editor.applySide(ms, '9', { si: 0, side: { kind: 'players', ids: ['p1', 'p2'] } }), /exactly one championship final/);
+});
+
+test('editor applyVenue: - unschedules the court', () => {
+  const repo = loadRepo(FIX('sample'));
+  const matches = repo.tournaments.get('sample').tjson.matches.md40;
+  assert(editor.applyVenue(matches, '2', undefined) === null, 'clearing reports no error');
+  assert(matches.find(m => m.id === 2).venue === undefined, 'venue dropped — the match is courtless');
+  assert(validateRepo(repo).errs.length === 0, 'a courtless match still validates: ' + validateRepo(repo).errs.join('; '));
+});
+
+test('editor feeder timing: a time edit can\'t schedule a bracket before its feeders or past its consumers', () => {
+  const applyAt = (id, hhmm) => {
+    const repo = loadRepo(FIX('sample'));
+    editor.applyTime(repo.tournaments.get('sample').tjson.matches.md40, String(id), `2025-07-14T${hhmm}:00`);
+    return validateRepo(repo);
+  };
+  // m9 (12:15, fed by m7/m8 ending 12:00) moved to 11:00 — before its feeders
+  assert(hasErr(applyAt(9, '11:00'), /starts before its feeders end/), 'a bracket before its feeders is rejected');
+  assert(applyAt(9, '12:00').errs.length === 0, 'exactly at the feeder end is fine: ' + applyAt(9, '12:00').errs.join('; '));
+  // m8 moved to 11:45 — its slot ends 12:30, after m9 starts at 12:15
+  assert(hasErr(applyAt(8, '11:45'), /ends after a match it feeds starts/), 'a feeder past its consumer is rejected');
+  // m8 moved to 11:00 — before its pool (A2/A3) finishes at 11:15
+  assert(hasErr(applyAt(8, '11:00'), /starts before its feeders end/), 'a slot before its pool ends is rejected');
+  assert(applyAt(8, '11:15').errs.length === 0, 'exactly at the pool end is fine: ' + applyAt(8, '11:15').errs.join('; '));
+});
+
+test('editor editDetail: the side op reports the applied slot label; a cleared venue reports TBD', () => {
+  const repo = loadRepo(FIX('sample'));
+  const { ctx } = md40Ctx(repo);
+  const m9 = repo.tournaments.get('sample').tjson.matches.md40.find(m => m.id === 9);
+  const d = editor.editDetail('side', m9, { si: 0, side: { kind: 'match', match: 8, result: 'winner' } }, ctx);
+  assert(/^side a → Winner of /.test(d), `expected the applied slot label, got ${d}`);
+  const m = repo.tournaments.get('sample').tjson.matches.xd.find(x => x.id === 1);
+  assert.equal(editor.editDetail('venue', m), '→ court-1', 'a venue edit on an undecided match reports the court');
+  assert.equal(editor.editDetail('side', m9, { si: 1, side: { kind: 'players', ids: ['p1', 'p2'] } }, ctx), 'side b → Ada Lovelace / Grace Hopper', 'a players side labels the team');
 });

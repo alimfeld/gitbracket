@@ -82,7 +82,21 @@ function applyResult(matches, matchId, status, winner) {
 
 function applyVenue(matches, matchId, venueId) {
   return findMatch(matches, matchId, m => {
-    m.venue = venueId; // unknown venue + court double-booking are caught by validateRepo
+    if (venueId === undefined) delete m.venue; // `v -` unschedules the court — undefined rides the same apply
+    else m.venue = venueId; // unknown venue + court double-booking are caught by validateRepo
+  });
+}
+
+// The generic side op: rewrite one side to any validator-valid slot — players,
+// pool rank, or match edge (winner/loser). All validity is the validator's:
+// unknown ids, pair-fixing, same-set, consumed-twice, rank range, acyclicity,
+// player double-book — writeEdit validates the whole repo and rolls back. A
+// dead-tie break is just `e a players …` over a pool slot that renders TBD.
+function applySide(matches, matchId, value) {
+  return findMatch(matches, matchId, m => {
+    if (!Array.isArray(m.sides) || m.sides.length !== 2) return 'match has no two sides';
+    m.sides[value.si] = value.side;
+    return null;
   });
 }
 
@@ -294,8 +308,33 @@ function parsePayload(kind, tokens, tz, now) {
     return { value: undefined };
   }
   if (kind === 'venue') {
+    if (tokens.length === 1 && tokens[0] === '-') return { value: undefined }; // - unschedules the court
     if (!tokens.length) return { err: 'expected a venue, e.g. court-2' };
     return { value: tokens[0] };
+  }
+  if (kind === 'side') {
+    // the generic side op: players <ids> | pool <pool> <rank> | match <id> winner|loser —
+    // validity is the validator's (unknown ids, consumed-twice, range, cycles, double-books)
+    const si = tokens[0];
+    if (si !== 'a' && si !== 'b') return { err: 'expected side a or b' };
+    const shape = tokens[1];
+    const rest = tokens.slice(2);
+    if (shape === 'players') {
+      if (!rest.length) return { err: 'expected player ids after players' };
+      return { value: { si: si === 'b' ? 1 : 0, side: { kind: 'players', ids: rest } } };
+    }
+    if (shape === 'pool') {
+      if (rest[0] === undefined || rest[1] === undefined) return { err: 'expected pool and rank, e.g. pool A 2' };
+      if (!/^\d+$/.test(rest[1]) || +rest[1] < 1) return { err: `bad rank ${JSON.stringify(rest[1])} — expected a positive integer` };
+      return { value: { si: si === 'b' ? 1 : 0, side: { kind: 'pool', pool: rest[0], rank: +rest[1] } } };
+    }
+    if (shape === 'match') {
+      if (rest[0] === undefined || rest[1] === undefined) return { err: 'expected match id and result, e.g. match 7 winner' };
+      if (!/^\d+$/.test(rest[0])) return { err: `bad match id ${JSON.stringify(rest[0])} — expected a number` };
+      if (rest[1] !== 'winner' && rest[1] !== 'loser') return { err: `result must be winner or loser, got ${JSON.stringify(rest[1])}` };
+      return { value: { si: si === 'b' ? 1 : 0, side: { kind: 'match', match: +rest[0], result: rest[1] } } };
+    }
+    return { err: `expected players, pool, or match — got ${JSON.stringify(shape)}` };
   }
   // time: [YYYY-MM-DD] hh:mm, or - to unschedule
   if (tokens.length === 1 && tokens[0] === '-') return { value: undefined };
@@ -313,11 +352,12 @@ function applyFor(verb, matchId, value) {
   return verb === 'score' ? (ms, ctx) => applyScore(ms, matchId, value, ctx)
     : verb === 'walkover' ? c => applyResult(c, matchId, 'walkover', value)
     : verb === 'void' ? c => applyResult(c, matchId, 'void')
+    : verb === 'side' ? c => applySide(c, matchId, value)
     : verb === 'venue' ? c => applyVenue(c, matchId, value)
     : c => applyTime(c, matchId, value); // time — undefined unschedules
 }
 
-const VERB_KEYS = { s: 'score', v: 'venue', t: 'time', w: 'walkover', o: 'void' };
+const VERB_KEYS = { s: 'score', v: 'venue', t: 'time', w: 'walkover', o: 'void', e: 'side' };
 
 // Conventional-commit messages per edit kind — grep-able match-day history:
 //   git log --grep='^score('
@@ -327,23 +367,23 @@ function commitMessage(kind, slug, cat, matchId, detail) {
 
 // One-line summary of what changed — mirror it in the commit message and the
 // echo. Keyed off the edit kind, never the match state, so a venue or time
-// edit on an already-decided match reports the move, not the result.
-function editDetail(kind, m) {
+// edit on an already-decided match reports the move, not the result. side
+// carries value+ctx: the applied side's label, e.g. "side a → Winner of 8".
+function editDetail(kind, m, value, ctx) {
   const r = m.result;
   return kind === 'score' ? (m.games || []).map(gg => `${gg.a}-${gg.b}`).join(' · ') // dashes — the echo mirrors the board's score column
     : kind === 'time' ? (m.scheduled === undefined ? '→ TBD' : `→ ${m.scheduled}`)
-    : kind === 'venue' ? `→ ${m.venue}`
+    : kind === 'venue' ? `→ ${m.venue === undefined ? 'TBD' : m.venue}`
+    : kind === 'side' ? `side ${value.si === 0 ? 'a' : 'b'} → ${sideLabel(value.side, ctx)}`
     : r.status === 'void' ? 'void' : `side ${r.winner} wins by walkover`;
 }
 
 // The post-edit confirmation: sides first (so you see you touched the right
 // match), then the detail, then the short sha as a dimmed receipt. The git
 // commit message stays machine-facing and unchanged — only the echo is for eyes.
-function echoLine(kind, m, ctx, sha) {
-  const detail = editDetail(kind, m);
-  const s0 = listingSide(m.sides[0], ctx);
-  const s1 = listingSide(m.sides[1], ctx);
-  const sum = `${s0} vs ${s1} → ${detail}${kind === 'score' && isDone(m) ? ' — done' : ''}`;
+function echoLine(kind, m, ctx, sha, value) {
+  const d = editDetail(kind, m, value, ctx);
+  const sum = `${listingSide(m.sides[0], ctx)} vs ${listingSide(m.sides[1], ctx)} → ${d}${kind === 'score' && isDone(m) ? ' — done' : ''}`;
   return `${sum}  ${C.dim(`[${sha}]`)}`;
 }
 
@@ -372,9 +412,10 @@ function helpText(sim) {
     `${C.bold('act')} — the line under the cursor is the target`,
     `  ${k('s')} score → 21-19 [11-9 …]`,
     `  ${k('t')} time → 10:30 [date 10:30], or - to unschedule`,
-    `  ${k('v')} venue → court-2`,
+    `  ${k('v')} venue → court-2, or - to clear`,
     `  ${k('w')} walkover → a or b`,
-    `  ${k('o')} void → Enter confirms`, '',
+    `  ${k('o')} void → Enter confirms`,
+    `  ${k('e')} side → a|b players <ids> · pool <pool> <rank> · match <id> winner|loser`, '',
     C.bold('commit'),
     `  ${k('Enter')} commits the armed edit — the only key that ever writes`,
     `  ${k('Esc')} cancels anywhere`, '',
@@ -394,7 +435,7 @@ function helpText(sim) {
 const PROMPT_HINT = {
   browse: '? help · q quit',
   // expected entries first — the what — enter/esc trail as the how
-  arm: { score: '21-19 11-9 … (or one game per commit) · enter commits · esc cancels', venue: 'a venue id, e.g. court-2 · enter commits · esc cancels', time: 'hh:mm · [date] hh:mm · - unschedules · enter commits · esc cancels', walkover: 'a or b · enter commits · esc cancels', void: 'enter confirms the void · esc cancels' },
+  arm: { score: '21-19 11-9 … (or one game per commit) · enter commits · esc cancels', venue: 'a venue id, e.g. court-2, or - to clear · enter commits · esc cancels', time: 'hh:mm · [date] hh:mm · - unschedules · enter commits · esc cancels', walkover: 'a or b · enter commits · esc cancels', void: 'enter confirms the void · esc cancels', side: 'a or b, then: players <ids> · pool <pool> <rank> · match <id> winner|loser · enter commits · esc cancels' },
   filter: 'type to narrow · enter keeps · esc clears',
   cmd: 'enter runs · esc cancels',
   report: 'esc back',
@@ -650,15 +691,15 @@ function execEdit(state, verb, cat, matchId, value) {
   const m = ctx.byId.get(Number(matchId));
   if (state.commit) {
     const file = res.file; // writeEdit's own byte-identical write target
-    const detail = editDetail(verb, m);
+    const detail = editDetail(verb, m, value, ctx);
     const msg = commitMessage(verb, slug, cat, matchId, detail);
     git(root, ['add', path.relative(root, file)]);
     const c = git(root, ['commit', '-m', msg]);
     if (c.code !== 0) return { text: `${path.relative(root, file)} written but the commit failed:\n${c.err}\n(file staged — commit it manually)`, color: 'red' };
     const sha = git(root, ['rev-parse', '--short', 'HEAD']).out.trim();
-    return { text: echoLine(verb, m, ctx, sha), color: 'green' };
+    return { text: echoLine(verb, m, ctx, sha, value), color: 'green' };
   }
-  return { text: echoLine(verb, m, ctx, 'sim'), color: 'green' }; // sim: written to the scratch copy, never committed
+  return { text: echoLine(verb, m, ctx, 'sim', value), color: 'green' }; // sim: written to the scratch copy, never committed
 }
 
 // Non-rendering command execution — exported so tests can drive :use and
@@ -798,4 +839,4 @@ function main(root) {
   editorMain(root, siteRoot, repo, { sim: false, clock: () => Date.now() });
 }
 
-module.exports = { parseGame, parseKeys, buildScheduled, applyScore, applyResult, applyVenue, applyTime, writeEdit, commitMessage, editDetail, echoLine, parseCmd, formatMatchLine, listingSide, widthBag, rowKey, waveEntries, livePlayable, buildRows, renderLines, makeView, cursorIndex, parsePayload, applyFor, step, boardText, helpText, execEdit, execAction, defaultSlug, editorMain, main, C, rowAttr };
+module.exports = { parseGame, parseKeys, buildScheduled, applyScore, applyResult, applyVenue, applySide, applyTime, writeEdit, commitMessage, editDetail, echoLine, parseCmd, formatMatchLine, listingSide, widthBag, rowKey, waveEntries, livePlayable, buildRows, renderLines, makeView, cursorIndex, parsePayload, applyFor, step, boardText, helpText, execEdit, execAction, defaultSlug, editorMain, main, C, rowAttr };

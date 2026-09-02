@@ -20,6 +20,7 @@ const V = [
   ['games after a side reached the target', 'bad-games-after-target', r => r.errs.length > 0, /already reached/],
   ['games and a walkover together', 'bad-games-walkover', r => r.errs.length > 0, /mutually exclusive/],
   ['scored match fed by an unfinished pool', 'bad-unfinished-feed', r => r.errs.length > 0, /resolved/],
+  ['bracket scheduled before its feeders end', 'bad-feeder-time', r => r.errs.length > 0, /starts before its feeders end/],
   ['even bestOf override', 'bad-even-bestof', r => r.errs.length > 0, /odd/],
   ['bad scheduled string', 'bad-scheduled', r => r.errs.length > 0, /ISO-8601/],
   ['venue overlap', 'bad-venue-overlap', r => r.errs.length > 0, /overlap/],
