@@ -186,38 +186,29 @@ const fmtCourts = names => {
   return ns.join(' · ');
 };
 
-// The current playable wave: unplayed matches whose sides are both resolved,
-// at the earliest scheduled time — a round plays simultaneously across courts,
-// so "now" is a block, not a card. One predicate drives both the card
-// highlight and the Next line, so they can never disagree (the schedule's rule).
-const currentWave = (ctx, status) => {
-  if (!status || status.kind === 'starts' || status.kind === 'finished' || status.kind === 'winners') return [];
-  const ready = ctx.matches.filter(m => !isDone(m) &&
-    Array.isArray(m.sides) && m.sides.length === 2 &&
-    !!resolveSide(m.sides[0], ctx) && !!resolveSide(m.sides[1], ctx));
-  const ts = ready.map(m => schedTime(m, ctx.tz)).filter(Number.isFinite);
-  if (!ts.length) return [];
-  const t = Math.min(...ts);
-  return ready.filter(m => schedTime(m, ctx.tz) === t);
-};
-
 // The anticipation line: the current playable wave and its courts. "Starts"
-// before anything (no wave to link), "Next:" once a match has gone in — the
-// trailing link jumps to the wave's section (group-matches, or the knockout
-// column). data-only: scheduled times, never the clock (the page's 30s poll
-// keeps it current).
+// before anything (the opening block is already a wave), "Next:" once a match
+// has gone in — both lines jump to the wave's section (group-matches, or the
+// knockout column). data-only: scheduled times, never the clock (the page's 30s
+// poll keeps it current).
 const anticipationLine = (ctx, status, href, day, wave) => {
   if (!status || status.kind === 'finished' || status.kind === 'winners') return '';
-  if (status.kind === 'starts') {
-    if (status.time == null) return '';
-    return `<p>Starts ${timeEl(status.time, ctx.tz, day)}</p>`;
+  if (!wave.length) {
+    // nothing ready yet (e.g. a bracket waiting on its feeders): a bare Starts line, no block to jump to
+    if (status.kind === 'starts' && status.time != null) return `<p>Starts ${timeEl(status.time, ctx.tz, day)}</p>`;
+    return '';
   }
-  if (!wave.length) return '';
+  const m0 = wave[0];
   const courts = [...new Set(wave.map(m => m.venue ? venueName(ctx, m.venue) : null).filter(Boolean))];
   const where = courts.length ? ` · ${fmtCourts(courts)}` : '';
-  const col = status.kind === 'groups' ? null : status.wave; // the deeper of the two waves, read not recomputed
-  const section = status.kind === 'groups' ? 'group-matches' : col !== null ? `ko-${col}` : '';
-  const body = `Next: ${timeEl(schedTime(wave[0], ctx.tz), ctx.tz, day)}${where}`;
+  const starts = status.kind === 'starts';
+  // the jump target is the section the wave lives in: starts derives it from
+  // the opening block, groups and ko keep the committed rule
+  const section = starts
+    ? (m0.pool !== undefined ? 'group-matches' : `ko-${koColumn(m0, ctx)}`)
+    : status.kind === 'groups' ? 'group-matches'
+    : status.wave !== null ? `ko-${status.wave}` : '';
+  const body = `${starts ? 'Starts' : 'Next'}: ${timeEl(schedTime(m0, ctx.tz), ctx.tz, day)}${where}`;
   // the whole line is the link — a full-size tap target, same as the schedule page
   return section ? `<p><a data-jump="${section}" href="${esc(href)}">${body}</a></p>` : `<p>${body}</p>`;
 };
@@ -238,8 +229,8 @@ function catSection(ctx, opts) {
   // one category subline: the date span on multi-day pages only — a single-day
   // heading already states the date once — then the status sentence or podium
   const status = catStatus(ctx);
-  // one current-wave predicate drives both the card highlight and the Next
-  // line — what's lit is exactly what Next points at (the schedule's rule)
+  // one current-wave predicate drives the card highlight, the Next line, and
+  // the REPL's next — what's lit is what's playable now, opening block included
   const wave = currentWave(ctx, status);
   const next = m => wave.includes(m);
   const lines = [];

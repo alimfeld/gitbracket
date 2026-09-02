@@ -17,7 +17,7 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const { spawnSync } = require('child_process');
-const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, fmtTime, matchLabel, poolStandings, poolRanks, poolDecided, fmtDiff, bestOfOf, winTarget, reachedWinner, winnerIdx, dayKey, DATE_RE } = require('../site/derive.js');
+const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, fmtTime, matchLabel, poolStandings, poolRanks, poolDecided, fmtDiff, bestOfOf, winTarget, reachedWinner, winnerIdx, dayKey, DATE_RE, catStatus, currentWave } = require('../site/derive.js');
 const { loadRepo, writeTournament } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 const { ship } = require('./publish.js');
@@ -184,7 +184,7 @@ function makePlayerHit(tjson, needle) {
 // Two passes: resolve categories first (a player filter drops categories the
 // player never plays in), collecting global column widths, then render, so
 // sides line up across the whole listing — not just within a category.
-function listText(repo, slug, cats, needle) {
+function listText(repo, slug, cats, needle, matchFilter, matchesOnly) {
   const info = repo.tournaments.get(slug);
   const tjson = info.tjson;
   const tz = tjson.timezone || 'UTC';
@@ -213,8 +213,10 @@ function listText(repo, slug, cats, needle) {
       }
       if (rows.length) tables.push({ pid, rows });
     }
-    // matches — a player filter keeps only matches whose sides resolve to it
+    // matches — a match filter (the current wave) narrows first, then a player
+    // filter keeps only matches whose sides resolve to it
     let all = matches.map(m => ({ m, stage: matchLabel(m, ctx) }));
+    if (matchFilter) all = all.filter(({ m }) => matchFilter(m, cid));
     if (playerHit) all = all.filter(({ m }) => (m.sides || []).some(s => {
       const ids = resolveSide(s, ctx);
       return !!ids && playerHit(ids);
@@ -225,7 +227,7 @@ function listText(repo, slug, cats, needle) {
       all.sort((a, b) => a.m.id - b.m.id);
       for (const { m, stage } of all) add({ cat: cid, m, stage, ctx });
     }
-    if (tables.length || all.length) secs.push({ cid, meta, ctx, tables, all });
+    if (matchesOnly ? all.length : tables.length || all.length) secs.push({ cid, meta, ctx, tables, all });
   }
 
   // pass 2 — render, one blank line between sections; every category gets the
@@ -236,7 +238,7 @@ function listText(repo, slug, cats, needle) {
     const body = [];
     lines.push(''); // a heading is never glued to the prompt line above
     body.push(C.bold(C.under(C.cyan(`${sec.meta ? sec.meta.name : sec.cid} — ${sec.cid}`)))) // name first, id after
-    if (sec.tables.length) {
+    if (!matchesOnly && sec.tables.length) {
       // one padded table per pool; column widths align across a section's pools;
       // the pool id lives in the Team header cell — no separate title line
       const wid = head.map((h, c) => Math.max(h.length,
@@ -267,7 +269,7 @@ function commitMessage(kind, slug, cat, matchId, detail) {
 // Bare commands never mutate data or ship: reading + session are bare,
 // editing must be slashed. The slash only permits a mutator — slashing a bare
 // command (ls, use…) is harmless and accepted.
-const BARE = ['use', 'ls', 'status', 'help', 'quit', 'q'];
+const BARE = ['use', 'ls', 'next', 'status', 'help', 'quit', 'q'];
 const MUT = ['score', 'wo', 'void', 'venue', 'time', 'publish'];
 
 function parseCmd(line) {
@@ -298,6 +300,7 @@ function helpText() {
   use <slug>            select a tournament (bare: list tournaments; tab completes slugs)
   ls [category] [name]  matches — bare: the whole matchday sheet; add a category and/or
                         a player name to narrow (standings keep that player's rows)
+  next                  the current playable wave — matches you can score now (both sides known)
   status                validate errors, git state, and live-domain comparison
   help                  this text
   quit (q)              leave — every edit is already committed
@@ -364,6 +367,27 @@ function listing(state, cat, player) {
   const cats = (info.tjson.categories || []).map(c => c.id);
   if (cat != null && !cats.includes(cat)) return `unknown category ${cat} — have: ${cats.join(', ')}`;
   return listText(state.repo, state.slug, cat === null ? cats : [cat], player || null);
+}
+
+// The `next` surface: every category's current playable wave — the matches an
+// operator can score right now, the same predicate that lights the page's
+// cards. No wave anywhere → one clear line, not the generic no-matches.
+function nextText(state) {
+  if (state.slug === null) return C.yellow('use a tournament first — bare use lists tournaments');
+  const tjson = state.repo.tournaments.get(state.slug).tjson;
+  const cats = (tjson.categories || []).map(c => c.id);
+  const byCat = new Map();
+  let any = false;
+  for (const cid of cats) {
+    const meta = tjson.categories.find(c => c.id === cid);
+    const matches = (tjson.matches || {})[cid] || [];
+    const ctx = makeCat({ meta, matches }, tjson);
+    const wave = currentWave(ctx, catStatus(ctx));
+    if (wave.length) any = true;
+    byCat.set(cid, new Set(wave.map(m => m.id)));
+  }
+  if (!any) return 'no playable matches right now';
+  return listText(state.repo, state.slug, cats, null, (m, cid) => byCat.get(cid).has(m.id), true);
 }
 
 function validateText(repo) {
@@ -443,6 +467,17 @@ function editDetail(kind, m) {
     : r.status === 'void' ? 'void' : `side ${r.winner} wins by walkover`;
 }
 
+// The post-edit confirmation: sides first (so you see you touched the right
+// match), then the detail, then the short sha as a dimmed receipt. The git
+// commit message stays machine-facing and unchanged — only the echo is for eyes.
+function echoLine(kind, m, ctx, sha) {
+  const detail = editDetail(kind, m);
+  const s0 = listingSide(m.sides[0], ctx);
+  const s1 = listingSide(m.sides[1], ctx);
+  const sum = `${s0} vs ${s1} → ${detail}${kind === 'score' && isDone(m) ? ' — done' : ''}`;
+  return `${sum}  ${C.dim(`[${sha}]`)}`;
+}
+
 // Apply + write + commit one edit; every successful edit is a commit, so the
 // tree is never dirty for long and Ctrl-C can't lose anything.
 function applyAndCommit(state, kind, cat, matchId, apply) {
@@ -460,10 +495,7 @@ function applyAndCommit(state, kind, cat, matchId, apply) {
   const c = git(root, ['commit', '-m', msg]);
   if (c.code !== 0) return C.red(`wrote ${path.relative(root, res.file)} but the commit failed:\n${c.err}\n(file staged — commit it manually)`);
   const sha = git(root, ['rev-parse', '--short', 'HEAD']).out.trim();
-  // the echo mirrors the commit message — one dispatch (detail), plus the
-  // score-only "— done" flag, so a completed score can never read as a walkover
-  const sum = `${cat}/${matchId} → ${detail}${kind === 'score' && isDone(m) ? ' — done' : ''}`;
-  return `${C.cyan(sum)}\n${C.green(`committed ${sha}: ${msg}`)}`;
+  return echoLine(kind, m, ctx, sha);
 }
 
 function editCmd(state, kind, cat, matchId, rest) {
@@ -524,6 +556,7 @@ function dispatch(cmd, state) {
   }
   if (kind === 'status') return statusCmd(state);
   if (kind === 'help') return helpText();
+  if (kind === 'next') return nextText(state);
   if (kind === 'publish') return gitPublish(state);
   const [cat, matchId, ...rest] = args;
   if (!cat || matchId === undefined) return C.yellow(`usage: /${kind} <category> <match> … — see help`);
@@ -567,4 +600,4 @@ function main(root) {
   replMain(root, siteRoot, repo);
 }
 
-module.exports = { parseGame, buildScheduled, applyScore, applyResult, applyVenue, applyTime, writeEdit, commitMessage, editDetail, parseCmd, listText, formatMatchLine, listingSide, widthBag, completer, defaultSlug, dispatch, main, C };
+module.exports = { parseGame, buildScheduled, applyScore, applyResult, applyVenue, applyTime, writeEdit, commitMessage, editDetail, echoLine, parseCmd, listText, formatMatchLine, listingSide, widthBag, completer, defaultSlug, dispatch, nextText, main, C };

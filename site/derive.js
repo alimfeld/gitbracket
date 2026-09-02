@@ -1085,6 +1085,20 @@ function catStatus(ctx) {
   return { kind: 'ko', col, place, wave: col !== null ? col : place !== null ? place : null };
 }
 
+// The current playable wave: unplayed matches with both sides resolved, at the
+// earliest scheduled time — starts included, so page and REPL share one
+// "scoreable now" predicate and can never disagree.
+function currentWave(ctx, status) {
+  if (!status || status.kind === 'finished' || status.kind === 'winners') return [];
+  const ready = ctx.matches.filter(m => !isDone(m) &&
+    Array.isArray(m.sides) && m.sides.length === 2 &&
+    !!resolveSide(m.sides[0], ctx) && !!resolveSide(m.sides[1], ctx));
+  const ts = ready.map(m => schedTime(m, ctx.tz)).filter(Number.isFinite);
+  if (!ts.length) return [];
+  const t = Math.min(...ts);
+  return ready.filter(m => schedTime(m, ctx.tz) === t);
+}
+
 const inWord = col => col === 0 ? 'In the final' : `In ${roundName(col)}`;
 const elimWord = col => col === 0 ? 'Eliminated in the final' : `Eliminated in ${roundName(col)}`;
 
@@ -1120,5 +1134,5 @@ function playerStatus(ctx, pid) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, poolBo1, countWins, winTarget, reachedWinner, sideIdx, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, possibleStages, placementLabel, plRange, placementColumn, bandLabels, stageGroupName, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dayShort, dayLabel, fmtDiff, kioskStatus, currentRowIndex, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, playerStatus };
+  module.exports = { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, poolBo1, countWins, winTarget, reachedWinner, sideIdx, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, possibleStages, placementLabel, plRange, placementColumn, bandLabels, stageGroupName, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dayShort, dayLabel, fmtDiff, kioskStatus, currentRowIndex, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, currentWave, playerStatus };
 }

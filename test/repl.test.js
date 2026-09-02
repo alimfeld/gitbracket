@@ -244,6 +244,34 @@ test('repl editDetail: venue/time edits report the move, never the match result'
   assert.equal(repl.editDetail('void', { result: { status: 'void' } }), 'void', 'void detail');
 });
 
+test('repl echoLine: sides first, then the detail and the sha receipt', () => {
+  const repo = loadRepo(FIX('sample'));
+  const { matches, ctx } = md40Ctx(repo);
+  repl.applyScore(matches, '8', [{ a: 11, b: 7 }, { a: 11, b: 3 }], ctx); // fixture bestOf 3, target 2 → done
+  const m8 = matches.find(m => m.id === 8);
+  const line = repl.echoLine('score', m8, ctx, 'abc1234');
+  assert(line.includes(' vs ') && line.includes('11:7'), 'the echo carries both sides and the score');
+  assert(line.includes('— done'), 'a completed score is flagged done');
+  assert(line.includes('[abc1234]'), 'the short sha is the dimmed receipt');
+  const t = repl.echoLine('time', m8, ctx, 'abc1234');
+  assert(t.includes(' vs ') && t.includes('→'), 'a move edit still shows the sides and its target');
+});
+
+test('repl next: the current playable wave, across categories', () => {
+  const repo = loadRepo(FIX('sample'));
+  const out = repl.dispatch({ kind: 'next', args: [] }, { repo, slug: 'sample' });
+  assert(out.includes('md40 8'), 'the wave is the resolved-but-unplayed semifinal (id 8)');
+  assert(!/md40 (9|10)/.test(out), 'matches waiting on an unresolved feeder are not playable yet');
+  assert(!out.includes('Mixed Doubles'), 'a finished category contributes no wave section');
+  const done = repl.dispatch({ kind: 'next', args: [] }, { repo: loadRepo(FIX('full')), slug: 'full' });
+  assert.equal(done, 'no playable matches right now', 'a finished tournament reports no wave');
+  const none = repl.dispatch({ kind: 'next', args: [] }, { repo, slug: null });
+  assert.match(none, /use a tournament first/, 'next needs a selected tournament');
+  const fresh = repl.dispatch({ kind: 'next', args: [] }, { repo: loadRepo(FIX('byes')), slug: 'byes' });
+  assert(fresh.includes('t 1') && fresh.includes('t 2'), 'before the first result the 09:00 pool block is the wave');
+  assert(!fresh.includes('t 3'), 'a later-scheduled match is not in the opening wave');
+});
+
 test('repl writeEdit: the gate sees schedule edits — a date the index lacks is rejected and rolled back', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gitbracket-'));
   try {

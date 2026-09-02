@@ -710,8 +710,12 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
       cats: toCats(preJson) });
   assert(text(pre).includes('Ada Lovelace / Grace Hopper'), 'pools roster (teams) is visible before the first result');
   assert(text(pre).includes('Starts'), 'pre-start anticipation line');
+  const sLink = links(pre).find(l => l.text.startsWith('Starts'));
+  assert(sLink && sLink.jump === 'group-matches' && sLink.href === '#sample', 'the Starts line is a link to the opening block, like the Next line');
+  assert(text(pre).includes('Starts: 09:00') && text(pre).includes('Courts 1–2'), 'the Starts line names the opening time and courts');
   assert(!text(pre).includes('1 Ada Lovelace'), 'no phantom rank 1s before any result');
-  assert(!vals(pre, 'data-status').includes('next'), 'pre-start category: no stage link yet, no highlight');
+  assert(vals(pre, 'data-status').includes('next'), 'pre-start: the opening block is lit — playable before the first result');
+  assert(card(pre, 'data-status', 'next').includes('Ada Lovelace / Grace Hopper'), 'the lit card is the earliest ready pool match, not a later slot');
   assert(!vals(xd, 'data-status').includes('next'), 'finished category: no stage link, no highlight');
   const ppage = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p1' }, data);
   assert(ppage.includes('<h1>') && text(ppage).includes('Ada Lovelace') && links(ppage).some(l => l.text === 'Change' && l.href === '#sample/schedule'), 'semantic title; the pick-correcting link rides the name');
