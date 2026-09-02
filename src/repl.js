@@ -355,17 +355,37 @@ function parseCmd(line) {
 
 // ---------- the editor state machine ----------
 
-function helpText() {
-  return `${C.bold('GitBracket — the match-day editor. Every line is one match.')}
-${C.bold('move')}    j/k (or ↑/↓) · n / N next/previous playable (▶) · g / G top / bottom
-${C.bold('find')}    / type to narrow the day to matching lines — Enter keeps the filter, Esc clears it
-${C.bold('act')}     the line under the cursor is the target:
-  s score  → 21:19 [11:9 …]       v venue → court-2
-  t time   → 10:30 [date 10:30], or - to unschedule
-  w walkover → a|b                 o void → Enter confirms
-${C.bold('commit')}  Enter commits the armed edit — the only key that ever writes; Esc cancels
-${C.bold('commands')} :publish, :status, :use <slug>
-${C.dim('every edit validates, writes, and commits itself — q quits; the sim adds ] +30m, [ -30m, x scores all due')}`;
+function helpText(sim) {
+  const k = s => s.padEnd(12);
+  const lines = [
+    C.bold('GitBracket — the match-day editor. Every line is one match.'), '',
+    C.bold('move'),
+    `  ${k('j / ↓')} down`,
+    `  ${k('k / ↑')} up`,
+    `  ${k('n / N')} next / previous playable (▶)`,
+    `  ${k('g / G')} top / bottom`, '',
+    C.bold('find'),
+    `  ${k('/')} narrow to matching lines — Enter keeps, Esc clears it`, '',
+    `${C.bold('act')} — the line under the cursor is the target`,
+    `  ${k('s')} score → 21:19 [11:9 …]`,
+    `  ${k('t')} time → 10:30 [date 10:30], or - to unschedule`,
+    `  ${k('v')} venue → court-2`,
+    `  ${k('w')} walkover → a or b`,
+    `  ${k('o')} void → Enter confirms`, '',
+    C.bold('commit'),
+    `  ${k('Enter')} commits the armed edit — the only key that ever writes`,
+    `  ${k('Esc')} cancels anywhere`, '',
+    C.bold('commands'),
+    `  ${k(':publish')} ship site/ to the domain`,
+    `  ${k(':status')} validator + git status`,
+    `  ${k(':use <slug>')} switch tournament`,
+  ];
+  if (sim) lines.push('', C.bold('sim'),
+    `  ${k(']')} +30 min`,
+    `  ${k('[')} −30 min`,
+    `  ${k('x')} score all due matches`);
+  lines.push('', C.dim('q quits — every edit validates, writes, and commits itself'));
+  return lines.join('\n');
 }
 
 const PROMPT_HINT = {
@@ -441,7 +461,7 @@ function step(state, key, view) {
   if (ch === 'N') return { state: { ...ns, cursorId: nextPlayable(view, ns, -1) }, action: null };
   if (ch === '/') return { state: { ...ns, mode: 'filter', query: '' }, action: null };
   if (ch === ':') return { state: { ...ns, mode: 'cmd', cmdline: '' }, action: null };
-  if (ch === '?') return { state: { ...ns, mode: 'report', report: helpText(), msg: null }, action: null };
+  if (ch === '?') return { state: { ...ns, mode: 'report', report: helpText(ns.sim), msg: null }, action: null };
   if (ch === 'q') return { state: { ...ns, quit: true }, action: null };
   if (VERB_KEYS[ch]) {
     if (cur === -1) return { state: { ...ns, msg: { text: 'no match under the cursor', color: 'red' } }, action: null };
