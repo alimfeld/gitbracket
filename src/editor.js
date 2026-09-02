@@ -200,16 +200,22 @@ const rowAttr = (code, s) => s.includes('\x1b[')
 
 const rowKey = (cat, m) => `${cat} ${m.id}`;
 
-// The playable set as row keys, computed fresh every render (derive.js's
-// memoization law — a corrected score surfaces on the next poll). Live mode
-// uses the wave predicate; sim feeds planScorable's due list.
-function livePlayable(tjson) {
-  const set = new Set();
+// The current scoreable wave as entries — the one readiness predicate live
+// and sim share, so sim's clock only drives the browser display and sim n/x
+// behave exactly like live. Computed fresh every render, per derive.js's
+// memoization law — a corrected score surfaces on the next poll.
+const waveEntries = tjson => {
+  const out = [];
   for (const cid of Object.keys(tjson.matches || {})) {
     const ctx = catCtx(tjson, cid);
-    for (const m of currentWave(ctx, catStatus(ctx))) set.add(rowKey(cid, m));
+    for (const m of currentWave(ctx, catStatus(ctx))) out.push({ cat: cid, m, ctx });
   }
-  return set;
+  return out;
+};
+
+// The playable set as row keys, for the board's ▶ flag and n/N movement.
+function livePlayable(tjson) {
+  return new Set(waveEntries(tjson).map(e => rowKey(e.cat, e.m)));
 }
 
 // One flat, time-ordered buffer of the whole tournament — the day's running
@@ -379,7 +385,7 @@ function helpText(sim) {
   if (sim) lines.push('', C.bold('sim'),
     `  ${k(']')} +30 min`,
     `  ${k('[')} −30 min`,
-    `  ${k('x')} score all due matches`);
+    `  ${k('x')} score the highlighted matches`);
   lines.push('', C.dim('q quits — every edit validates, writes, and commits itself'));
   return lines.join('\n');
 }
@@ -682,8 +688,8 @@ function defaultSlug(repo) {
 
 // ---------- the editor loop (shared by live and sim) ----------
 
-// opts: { sim, slug, clock, playable, simKey, onQuit } — sim swaps the clock,
-// the playable predicate (planScorable), the commit policy, and adds ]/[x.
+// opts: { sim, slug, clock, simKey, onQuit } — sim swaps the clock and the
+// commit policy, and adds ]/[x; the playable set is the same wave either way.
 function editorMain(root, siteRoot, repo, opts) {
   const state = {
     root, siteRoot, repo,
@@ -785,4 +791,4 @@ function main(root) {
   editorMain(root, siteRoot, repo, { sim: false, clock: () => Date.now() });
 }
 
-module.exports = { parseGame, parseKeys, buildScheduled, applyScore, applyResult, applyVenue, applyTime, writeEdit, commitMessage, editDetail, echoLine, parseCmd, formatMatchLine, listingSide, widthBag, rowKey, livePlayable, buildRows, renderLines, makeView, cursorIndex, parsePayload, applyFor, step, boardText, helpText, execEdit, execAction, defaultSlug, editorMain, main, C, rowAttr };
+module.exports = { parseGame, parseKeys, buildScheduled, applyScore, applyResult, applyVenue, applyTime, writeEdit, commitMessage, editDetail, echoLine, parseCmd, formatMatchLine, listingSide, widthBag, rowKey, waveEntries, livePlayable, buildRows, renderLines, makeView, cursorIndex, parsePayload, applyFor, step, boardText, helpText, execEdit, execAction, defaultSlug, editorMain, main, C, rowAttr };

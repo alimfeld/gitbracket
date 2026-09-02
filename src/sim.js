@@ -6,16 +6,17 @@
 // overrides the page's Date.now to the sim clock (so the kiosk's statuses,
 // auto-centering, and board clock all track the rehearsal — site/ itself is
 // untouched), and the shared editor from editor.js drives the day: same buffer,
-// keys, and verbs, but a fake clock, a planScorable playable set, and never
-// a commit — the scratch copy is not a repo.
+// keys, and verbs, but a fake clock and never a commit — the scratch copy is
+// not a repo. The scoreable set is the same wave live uses, so the clock only
+// drives the browser display, never what's ready to score.
 
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
 const { spawn } = require('child_process');
-const { isDone, resolveSide, schedTime, matchLabel, bestOfOf } = require('../site/derive.js');
-const { loadRepo, catCtx, byMatchOrder } = require('./tools.js');
-const { writeEdit, applyScore, defaultSlug, C, editorMain } = require('./editor.js');
+const { schedTime, bestOfOf } = require('../site/derive.js');
+const { loadRepo } = require('./tools.js');
+const { writeEdit, applyScore, defaultSlug, C, editorMain, waveEntries } = require('./editor.js');
 
 const STEP = 30 * 60 * 1000;  // ]/[ move the clock in 30 sim-minutes
 
@@ -35,45 +36,6 @@ function makeGames(bestOf) {
     games.push(aWins ? { a: ws, b: ls } : { a: ls, b: ws });
   }
   return games;
-}
-
-// Due matches at a moment of sim time, with two un-scorable kinds: a due
-// match whose sides don't resolve yet is blocked by its feeder, and any due
-// match behind an earlier unplayed match on the same venue is blocked by the
-// court — a venue plays one match at a time. Scorable = the earliest pending
-// due match on a venue, with both sides resolved.
-function planScorable(tjson, now) {
-  const tz = tjson.timezone || 'UTC';
-  const list = [];
-  const blocked = [];
-  const byVenue = new Map();
-  for (const cid of Object.keys(tjson.matches || {})) {
-    const ms = tjson.matches[cid] || [];
-    const ctx = catCtx(tjson, cid);
-    for (const m of ms) {
-      if (!m || isDone(m)) continue;
-      const t = schedTime(m, tz);
-      if (t === null || now < t) continue;
-      const e = { cat: cid, m, ctx, stage: matchLabel(m, ctx), t };
-      const s0 = resolveSide(m.sides && m.sides[0], ctx);
-      const s1 = resolveSide(m.sides && m.sides[1], ctx);
-      if (s0 && s1) {
-        const venue = m.venue || 'TBD';
-        if (!byVenue.has(venue)) byVenue.set(venue, []);
-        byVenue.get(venue).push(e);
-      } else {
-        blocked.push({ ...e, wait: m.sides[!s0 ? 0 : 1] });
-      }
-    }
-  }
-  for (const [venue, es] of byVenue) {
-    es.sort(byMatchOrder);
-    for (let i = 1; i < es.length; i++) blocked.push({ ...es[i], venue, first: es[0] });
-    list.push(es[0]);
-  }
-  list.sort(byMatchOrder);
-  blocked.sort(byMatchOrder);
-  return { list, blocked };
 }
 
 // Scratch copy of site/ — the rehearsal's whole world; the repo is untouched.
@@ -162,34 +124,13 @@ function main(root, args) {
       return res.errs ? res.errs.join(' ') : res.err ? res.err : '';
     };
 
-    // Re-plan until a pass scores nothing: a child fed by another match in
-    // the same batch becomes scoreable once its feeder lands, any order.
-    const scoreAll = () => {
-      let errs = '';
-      let progress = true;
-      while (progress) {
-        progress = false;
-        for (const e of planScorable(state.tjson, state.now).list) {
-          const err = score(e);
-          if (err) errs += err + '\n'; else progress = true;
-        }
-      }
-      return errs;
-    };
-
-    const playable = tjson => {
-      const set = new Set();
-      for (const e of planScorable(tjson, state.now).list) set.add(`${e.cat} ${e.m.id}`);
-      return set;
-    };
-
-    // ]/[ nudge the clock, x plays everything due — sim-only keys, hidden
-    // from live's hint bar; a string return is an error for the board's
-    // message line.
+    // ]/[ nudge the kiosk clock (display only — the wave never waits on it),
+    // x scores the highlighted wave — sim-only keys, hidden from live's hint
+    // bar; a string return is an error for the board's message line.
     const simKey = ch => {
       if (ch === ']') { state.now += STEP; return true; }
       if (ch === '[') { state.now -= STEP; return true; }
-      if (ch === 'x') return scoreAll() || true;
+      if (ch === 'x') return waveEntries(state.tjson).map(score).filter(Boolean).join('\n') || true;
       return false;
     };
 
@@ -197,11 +138,10 @@ function main(root, args) {
       sim: true,
       slug: state.slug,
       clock: () => state.now,
-      playable,
       simKey,
       onQuit: () => server.close(),
     });
   });
 }
 
-module.exports = { makeGames, planScorable, STEP, main };
+module.exports = { makeGames, main };

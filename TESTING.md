@@ -5,10 +5,12 @@
 `node gb.js sim [slug]` copies `site/` to the gitignored `.sim/`, serves it
 over HTTP with `Date.now` faked to a sim clock, and opens the match-day editor
 against it — every view (tournament, schedule, kiosk) tracks the rehearsal:
-`]`/`[` move the clock 30 sim-minutes, `x` scores every due match with random
-games through the real validation path, and the normal slash verbs edit
-manually. Nothing is ever committed — `.sim/` is not a repo, and `site/` is
-untouched. Prereqs: Node, a browser, and a terminal (the editor needs
+`]`/`[` move the kiosk clock 30 sim-minutes (display only — it never changes
+what's scoreable), `x` scores the highlighted wave with random games through
+the real validation path, and the normal slash verbs edit manually. The
+scoreable set is the same wave the live editor highlights, so `n`/`N` and `x`
+behave exactly as they do live. Nothing is ever committed — `.sim/` is not a
+repo, and `site/` is untouched. Prereqs: Node, a browser, and a terminal (the editor needs
 keypresses).
 
 For the deployment surface the sim deliberately skips — real commits and a
