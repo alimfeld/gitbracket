@@ -162,7 +162,7 @@ function formatMatchLine(cid, m, ctx, tz, stage, g) {
   const sides = (w === 0 ? C.green(s0) : s0) + ' '.repeat(Math.max(0, g.leftw - s0.length))
     + C.dim(' vs ') + (w === 1 ? C.green(s1) : s1) + ' '.repeat(Math.max(0, g.rightw - s1.length));
   const stagePad = ' '.repeat(Math.max(0, g.stagew - stage.length));
-  // the ref is "<category> <id>" — it copy-pastes straight into a :score line
+  // the ref is "<category> <id>" — the row's identity, echoed back on the arm line
   const ref = `${cid} ${m.id}`;
   return `${C.bold(ref.padEnd(g.idw))}  ${C.dim(stage)}${stagePad}  ${sides}  ${time}  ${venue}  ${score}`;
 }
@@ -269,8 +269,7 @@ function cursorIndex(view, state) {
   return i === -1 && view.filtered.length ? 0 : i;
 }
 
-// Payload grammar per verb — the same tokens the old REPL's /score lines
-// took, so :score md 14 21:19 (and the muscle behind it) keeps working.
+// Payload grammar per verb — one grammar for the arm line and the sim.
 // Grammar errors are caught here, before any I/O; data errors (unknown venue,
 // impossible date) belong to the validator, exactly as before.
 function parsePayload(kind, tokens, tz) {
@@ -316,9 +315,6 @@ function applyFor(verb, matchId, value) {
 }
 
 const VERB_KEYS = { s: 'score', v: 'venue', t: 'time', w: 'walkover', o: 'void' };
-const EDIT = ['score', 'wo', 'void', 'venue', 'time'];
-const MUT = [...EDIT, 'publish'];
-const ROOT = ['use', 'ls', 'next', 'status', 'help', 'quit', 'q'];
 
 // Conventional-commit messages per edit kind — grep-able match-day history:
 //   git log --grep='^score('
@@ -348,17 +344,13 @@ function echoLine(kind, m, ctx, sha) {
   return `${sum}  ${C.dim(`[${sha}]`)}`;
 }
 
-// The old REPL grammar, unchanged: parseCmd is what the : command line runs.
+// The : grammar keeps only what the single keys can't: publish, use, status.
+// step() always prefixes '/', so parseCmd never sees a bare word.
+const CMDS = ['publish', 'use', 'status'];
 function parseCmd(line) {
   const [raw, ...args] = line.trim().split(/\s+/);
-  if (raw === '') return { kind: 'unknown', args: [], needSlash: false };
-  if (raw.startsWith('/')) {
-    const head = raw.slice(1);
-    return { kind: MUT.includes(head) || ROOT.includes(head) ? head : 'unknown', args, needSlash: false };
-  }
-  if (MUT.includes(raw)) return { kind: raw, args, needSlash: true }; // bare mutator → hint, never executed
-  if (ROOT.includes(raw)) return { kind: raw, args, needSlash: false };
-  return { kind: 'unknown', args: [], needSlash: false };
+  const head = raw.startsWith('/') ? raw.slice(1) : raw;
+  return { kind: CMDS.includes(head) ? head : 'unknown', args };
 }
 
 // ---------- the editor state machine ----------
@@ -372,7 +364,7 @@ ${C.bold('act')}     the line under the cursor is the target:
   t time   → 10:30 [date 10:30], or - to unschedule
   w walkover → a|b                 o void → Enter confirms
 ${C.bold('commit')}  Enter commits the armed edit — the only key that ever writes; Esc cancels
-${C.bold('commands')} :score md 14 21:19 (old REPL syntax), :publish, :status, :use <slug>, :help, :q
+${C.bold('commands')} :publish, :status, :use <slug>
 ${C.dim('every edit validates, writes, and commits itself — q quits; the sim adds ] +30m, [ -30m, x scores all due')}`;
 }
 
@@ -405,12 +397,7 @@ function step(state, key, view) {
     if (name === 'escape') return { state: { ...ns, mode: 'browse', query: null }, action: null };
     if (name === 'backspace') return { state: { ...ns, query: ns.query ? ns.query.slice(0, -1) : '' }, action: null };
     if (name === 'return') return { state: { ...ns, mode: 'browse' }, action: null };
-    if (ch && ch.length === 1) {
-      const query = (ns.query || '') + ch;
-      // the old REPL's /score style lands here as a typed prefix — say so before the operator stares at zero matches
-      const hint = /^(score|wo|void|venue|time)\s/.test(query) ? C.yellow('that\'s the old slash grammar — press s then the payload, or : ') + query : null;
-      return { state: { ...ns, query, msg: hint ? { text: hint, color: 'yellow' } : null }, action: null };
-    }
+    if (ch && ch.length === 1) return { state: { ...ns, query: (ns.query || '') + ch }, action: null };
     return { state: ns, action: null };
   }
 
@@ -420,21 +407,10 @@ function step(state, key, view) {
     if (name === 'return') {
       const cmd = parseCmd('/' + ns.cmdline);
       const args = cmd.args;
-      if (cmd.kind === 'unknown') return { state: { ...ns, mode: 'browse', cmdline: '', msg: { text: `unknown command ${ns.cmdline.split(/\s+/)[0]} — :help`, color: 'red' } }, action: null };
+      if (cmd.kind === 'unknown') return { state: { ...ns, mode: 'browse', cmdline: '', msg: { text: `unknown command ${ns.cmdline.split(/\s+/)[0]} — ? for help`, color: 'red' } }, action: null };
       if (cmd.kind === 'publish') return { state: { ...ns, mode: 'browse', cmdline: '' }, action: { kind: 'publish' } };
-      if (EDIT.includes(cmd.kind)) {
-        const verb = cmd.kind === 'wo' ? 'walkover' : cmd.kind; // 'wo' is the old REPL alias for walkover
-        const [cat, matchId, ...tokens] = args;
-        if (!cat || matchId === undefined) return { state: { ...ns, mode: 'browse', cmdline: '', msg: { text: `usage: :${cmd.kind} <category> <match> <payload> — see :help`, color: 'yellow' } }, action: null };
-        const p = parsePayload(verb, tokens, view.tz);
-        if (p.err) return { state: { ...ns, mode: 'browse', cmdline: '', msg: { text: `${p.err} — :${cmd.kind} <category> <match> <payload>`, color: 'yellow' } }, action: null };
-        return { state: { ...ns, mode: 'browse', cmdline: '' }, action: { kind: 'edit', verb, cat, matchId: String(matchId), value: p.value } };
-      }
       if (cmd.kind === 'use') return { state: { ...ns, mode: 'browse', cmdline: '', cursorId: null }, action: { kind: 'use', slug: args[0] } };
       if (cmd.kind === 'status') return { state: { ...ns, mode: 'browse', cmdline: '' }, action: { kind: 'status' } };
-      if (cmd.kind === 'help') return { state: { ...ns, mode: 'report', cmdline: '', report: helpText(), msg: null }, action: null };
-      if (cmd.kind === 'q' || cmd.kind === 'quit') return { state: { ...ns, mode: 'browse', cmdline: '', quit: true }, action: null };
-      if (cmd.kind === 'ls' || cmd.kind === 'next') return { state: { ...ns, mode: 'browse', cmdline: '', msg: { text: cmd.kind === 'ls' ? 'the day IS the screen — every line is a match; / narrows it' : 'press n — the ▶-flagged lines are the playable wave', color: 'yellow' } }, action: null };
     }
     if (ch && ch.length === 1) return { state: { ...ns, cmdline: (ns.cmdline + ch).slice(0, 60) }, action: null };
     return { state: ns, action: null };

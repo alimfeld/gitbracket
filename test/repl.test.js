@@ -96,13 +96,6 @@ test('editor step: / narrows live, Enter keeps it, Esc clears it', () => {
   assert.equal(r.state.query, null, 'Esc in browse clears the applied filter too');
 });
 
-test('editor step: an old /score prefix gets a hint, not silence', () => {
-  const view = viewOf(loadRepo(FIX('sample')), WAVE, null);
-  let r = repl.step({ mode: 'browse', cursorId: null, msg: null }, key('/'), view);
-  for (const c of 'score md40 8 21:19'.split('')) r = repl.step(r.state, key(c), view);
-  assert(r.state.msg && /old slash grammar/.test(r.state.msg.text), 'the operator is pointed at s, not at zero matches');
-});
-
 test('editor step: s arms the cursor line; payload + Enter emits the exact edit', () => {
   const view = viewOf(loadRepo(FIX('sample')), WAVE, null);
   let s = { mode: 'browse', cursorId: 'md40 8', msg: null };
@@ -150,33 +143,32 @@ test('editor step: o void needs no payload — Enter alone emits; a payload is r
   assert(r.state.msg && /no payload/.test(r.state.msg.text), 'void takes nothing');
 });
 
-test('editor step: :score md40 8 11:9 — the old syntax — routes to the same funnel', () => {
+test('editor step: :score is gone — the edit verbs are single keys on the line', () => {
   const view = viewOf(loadRepo(FIX('sample')), WAVE, null);
   let r = repl.step({ mode: 'browse', cursorId: null, msg: null }, key(':'), view);
-  for (const c of 'score md40 8 11:9'.split('')) r = repl.step(r.state, key(c), view);
+  for (const c of 'score md40 8 21:19'.split('')) r = repl.step(r.state, key(c), view);
   r = repl.step(r.state, key(null, 'return'), view);
-  assert.deepEqual(r.action, { kind: 'edit', verb: 'score', cat: 'md40', matchId: '8', value: [{ a: 11, b: 9 }] }, 'the colon command is the old parseCmd grammar');
-  r = repl.step({ mode: 'browse', cursorId: null, msg: null }, key(':'), view);
-  for (const c of 'wo md40 8 b'.split('')) r = repl.step(r.state, key(c), view);
-  r = repl.step(r.state, key(null, 'return'), view);
-  assert.deepEqual(r.action, { kind: 'edit', verb: 'walkover', cat: 'md40', matchId: '8', value: 'b' }, ':wo maps to the same walkover verb as the w key');
+  assert(r.action === null, 'no action — the colon grammar has no edit verbs');
+  assert(r.state.msg && /unknown command/.test(r.state.msg.text), ':score answers unknown, never executes');
+  assert(!/usage/.test(r.state.msg.text), 'and no usage line for a grammar that no longer exists');
 });
 
-test('editor step: bare q and :q quit; typos get a hint, never a write', () => {
+test('editor step: bare q quits; :q and typos get a hint, never a write', () => {
   const view = viewOf(loadRepo(FIX('sample')), WAVE, null);
   let r = repl.step({ mode: 'browse', cursorId: null, msg: null }, key('q'), view);
   assert.equal(r.state.quit, true, 'bare q quits');
   r = repl.step({ mode: 'browse', cursorId: null, msg: null }, key(':'), view);
   r = repl.step(r.state, key('q'), view);
   r = repl.step(r.state, key(null, 'return'), view);
-  assert.equal(r.state.quit, true, ':q quits');
+  assert(!r.state.quit, ':q is not a command — q already quits');
+  assert(r.state.msg && /unknown command/.test(r.state.msg.text), ':q answers unknown, never quits');
   r = repl.step({ mode: 'browse', cursorId: null, msg: null }, key(':'), view);
   for (const c of 'frobnicate'.split('')) r = repl.step(r.state, key(c), view);
   r = repl.step(r.state, key(null, 'return'), view);
-  assert(r.state.msg && /unknown command/.test(r.state.msg.text), 'typos answer with :help');
+  assert(r.state.msg && /unknown command/.test(r.state.msg.text), 'typos answer with ? for help');
 });
 
-test('editor parsePayload: one grammar for the arm line and the : command', () => {
+test('editor parsePayload: one grammar for the arm line and the sim', () => {
   assert.deepEqual(repl.parsePayload('score', ['21:19', '11:9'], 'UTC').value.map(g => `${g.a}:${g.b}`), ['21:19', '11:9']);
   assert(repl.parsePayload('score', ['21x9'], 'UTC').err, 'a malformed game is refused');
   assert(repl.parsePayload('score', [], 'UTC').err, 'no games at all is refused');
@@ -375,30 +367,15 @@ test('repl parseGame', () => {
   assert(repl.parseGame('11x9') === null, 'bad shape is null');
 });
 
-test('repl parseCmd: mutators are slash-gated, reading is bare', () => {
-  const mutators = {
-    '/score md 7 11:9 11:7': ['score', ['md', '7', '11:9', '11:7']],
-    '/wo md 1 b': ['wo', ['md', '1', 'b']],
-    '/void md 1': ['void', ['md', '1']],
-    '/venue md 1 court-2': ['venue', ['md', '1', 'court-2']],
-    '/time md 1 10:30': ['time', ['md', '1', '10:30']],
-  };
-  for (const [line, [kind, args]] of Object.entries(mutators)) {
-    assert.deepEqual(repl.parseCmd(line), { kind, args, needSlash: false }, `slashed ${kind} parses`);
+test('repl parseCmd: the : grammar holds only what single keys cannot', () => {
+  assert.deepEqual(repl.parseCmd('/publish'), { kind: 'publish', args: [] });
+  assert.deepEqual(repl.parseCmd('use sample'), { kind: 'use', args: ['sample'] });
+  assert.deepEqual(repl.parseCmd('status'), { kind: 'status', args: [] });
+  for (const gone of ['score', 'wo', 'void', 'venue', 'time', 'ls', 'next', 'help', 'q', 'quit']) {
+    assert.equal(repl.parseCmd(`/${gone}`).kind, 'unknown', `${gone} has a single-key twin`);
   }
-  assert.deepEqual(repl.parseCmd('/publish'), { kind: 'publish', args: [], needSlash: false });
-  assert.equal(repl.parseCmd('score md 1 11:9').needSlash, true, 'bare mutator is flagged, never executed');
-  assert.equal(repl.parseCmd('publish').needSlash, true, 'bare publish is flagged — publish ships');
-  assert.equal(repl.parseCmd('wo md 1 a').needSlash, true, 'bare wo is flagged');
-  assert.deepEqual(repl.parseCmd('use sample'), { kind: 'use', args: ['sample'], needSlash: false });
-  assert.deepEqual(repl.parseCmd('ls md karin'), { kind: 'ls', args: ['md', 'karin'], needSlash: false });
-  assert.deepEqual(repl.parseCmd('q'), { kind: 'q', args: [], needSlash: false });
-  assert.deepEqual(repl.parseCmd('quit'), { kind: 'quit', args: [], needSlash: false });
-  assert.deepEqual(repl.parseCmd('/ls md'), { kind: 'ls', args: ['md'], needSlash: false }, 'slashing a bare command is harmless');
-  assert.deepEqual(repl.parseCmd('md40'), { kind: 'unknown', args: [], needSlash: false }, 'bare words are not commands');
-  assert.deepEqual(repl.parseCmd('/score md 1'), { kind: 'score', args: ['md', '1'], needSlash: false }, 'a leading slash permits a mutator');
-  assert.deepEqual(repl.parseCmd('cd md40').kind, 'unknown', 'cd is gone — use selects the tournament');
-  assert.deepEqual(repl.parseCmd('pull').kind, 'unknown', 'pull is gone — leave it to the shell');
+  assert.equal(repl.parseCmd('cd md40').kind, 'unknown', 'cd is gone — use selects the tournament');
+  assert.equal(repl.parseCmd('pull').kind, 'unknown', 'pull is gone — leave it to the shell');
 });
 
 test('repl formatMatchLine: a filled width bag keeps time and venue aligned across lines', () => {
