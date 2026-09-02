@@ -467,21 +467,54 @@ function nextPlayable(view, state, dir) {
 
 // ---------- the board (rendering) ----------
 
-// The whole screen as text — pure, so a test can pin layout; the shell slices
-// the window to the terminal. info carries the mode-derived header bits.
-function boardText(state, view, info, maxRows) {
-  const lines = [];
-  lines.push(`${C.bold(C.cyan(info.title))} · ${info.mode} ${C.cyan(info.clock)} · ${info.played}/${info.total} played${info.note || ''}`);
+// The whole screen as text — pure, so a test can pin layout. The match list
+// is windowed to fit `rows` (the terminal pane height) so the header is never
+// cut; the chrome (header, blanks, msg, input, hint) is counted here where it
+// lives, empty msg/input lines are skipped so a spare browse shows one gap not
+// three, and no trailing newline would scroll a full pane. The window is sized
+// in *physical* rows (what the terminal really renders after auto-wrap), so a
+// narrow pane that wraps the wide match lines still keeps the header on screen.
+function boardText(state, view, info, rows, cols) {
+  const input = inputLine(state, view);
+  const header = `${C.bold(C.cyan(info.title))} · ${info.mode} ${C.cyan(info.clock)} · ${info.played}/${info.total} played${info.note || ''}`;
+  const msg = state.msg ? C[state.msg.color](state.msg.text) : '';
+  const hint = C.dim(hintLine(state, info));
+  // physical rows a rendered line occupies after auto-wrap — ANSI is stripped
+  // (formatting, not width) and this board's glyphs are single-width, so plain
+  // length / cols; over-reporting wide glyphs only shrinks the window, never
+  // overflows it.
+  const phys = s => Math.max(1, Math.ceil(strip(s).length / (cols || 80)));
+
+  const lines = [header];
   if (state.mode === 'report') {
     lines.push('', ...(state.report || '').split('\n'));
   } else {
     lines.push('');
     const cur = cursorIndex(view, state);
     const n = view.filtered.length;
+    // physical rows each match line occupies, slot included
+    const mw = [];
+    let total = 0;
+    for (let i = 0; i < n; i++) {
+      const r = view.rows[view.filtered[i].i];
+      mw[i] = phys((cur === i ? '>' : ' ') + (r.playable ? '▶' : ' ') + ' ' + view.lines[view.filtered[i].i]);
+      total += mw[i];
+    }
+    // chrome physical rows: header + two blanks + msg + input + hint
+    const chrome = phys(header) + 2 + (msg ? phys(msg) : 0) + (input ? phys(input) : 0) + phys(hint);
+    const budget = rows ? rows - chrome : 0; // physical rows the list may occupy
     let start = 0, end = n;
-    if (maxRows && n > maxRows) {
-      start = Math.max(0, Math.min(cur, n - maxRows));
-      end = start + maxRows;
+    if (rows && total > budget) {
+      // largest window around the cursor that fits the physical budget, extend
+      // down then up; if even the cursor match alone doesn't fit (a pane too
+      // small for one wrapped line + chrome), show chrome only rather than cut
+      // the header
+      let used = mw[cur], win = mw[cur] <= budget;
+      if (win) {
+        start = cur; end = cur + 1;
+        while (end < n && used + mw[end] <= budget) { used += mw[end]; end++; }
+        while (start > 0 && used + mw[start - 1] <= budget) { start--; used += mw[start]; }
+      } else start = end = 0;
     }
     for (let i = start; i < end; i++) {
       const e = view.filtered[i];
@@ -496,10 +529,10 @@ function boardText(state, view, info, maxRows) {
     }
   }
   lines.push('');
-  lines.push(state.msg ? C[state.msg.color](state.msg.text) : '');
-  lines.push(inputLine(state, view));
-  lines.push(C.dim(hintLine(state, info)));
-  return lines.join('\n') + '\n';
+  if (msg) lines.push(msg);
+  if (input) lines.push(input);
+  lines.push(hint);
+  return lines.join('\n');
 }
 
 function inputLine(state, view) {
@@ -673,8 +706,7 @@ function editorMain(root, siteRoot, repo, opts) {
       note: state.sim ? ' · scratch — never committed' : '',
       sim: state.sim,
     };
-    const avail = (process.stdout.rows || 40) - 4;
-    process.stdout.write('\x1b[2J\x1b[H' + boardText(state, view, header, avail));
+    process.stdout.write('\x1b[2J\x1b[H' + boardText(state, view, header, process.stdout.rows || 40, process.stdout.columns || 80));
   };
 
   const exec = action => {

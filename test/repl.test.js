@@ -243,6 +243,25 @@ test('editor boardText: header, ▶ flag, cursor marker, hint bar — one screen
   assert(/j\/k move/.test(txt), 'the browse hint bar is on screen');
 });
 
+test('editor boardText: a narrow pane that wraps matches still keeps the header on screen', () => {
+  const repo = loadRepo(FIX('sample'));
+  const view = repl.makeView(repo.tournaments.get('sample').tjson, WAVE, null);
+  const state = { mode: 'browse', cursorId: 'md40 8', msg: null, verb: null, payload: '', query: null, cmdline: '' };
+  const info = { title: 'Sample', mode: 'LIVE', clock: '14:32', played: 11, total: 16, note: '', sim: false };
+  const strip = l => l.replace(/\x1b\[[0-9;]*m/g, '');
+  // the wide match lines wrap on a narrow pane — every rendered line must count
+  // its wrapped physical rows so the board never exceeds the pane height
+  for (const cols of [40, 60, 100]) {
+    const rows = 10;
+    const txt = repl.boardText(state, view, info, rows, cols);
+    const lines = txt.split('\n');
+    const phys = lines.reduce((a, l) => a + Math.max(1, Math.ceil(strip(l).length / cols)), 0);
+    assert(phys <= rows, `cols=${cols}: board physically fits the pane`);
+    assert(/^Sample · LIVE/.test(strip(lines[0])), `cols=${cols}: header is the top line, not scrolled off`);
+    assert(lines.some(l => /j\/k move/.test(strip(l))), `cols=${cols}: the hint bar is on screen`);
+  }
+});
+
 test('repl applyScore: games + a played result at the target, repo still validates', () => {
   const repo = loadRepo(FIX('sample'));
   const { matches, ctx } = md40Ctx(repo);
