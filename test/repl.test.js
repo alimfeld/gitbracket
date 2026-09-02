@@ -352,6 +352,20 @@ test('repl rejects edits the validator would refuse', () => {
   assert(hasErr(r2, /scored match must have both sides resolved/), 'scoring a match with an unresolved side is rejected');
 });
 
+test('repl parseKeys: raw bytes to keys — a lone ESC is instant, arrows are one key, chunks split', () => {
+  const cases = [
+    [[27], [{ name: 'escape' }]],
+    [[27, 91, 65], [{ name: 'up' }]],
+    [[27, 91, 66], [{ name: 'down' }]],
+    [[3], [{ name: 'c', ctrl: true }]],
+    [[13], [{ name: 'return' }]],
+    [[127], [{ name: 'backspace' }]],
+    ['ada', [{ ch: 'a' }, { ch: 'd' }, { ch: 'a' }]],
+    ['hello\x1b[A', [{ ch: 'h' }, { ch: 'e' }, { ch: 'l' }, { ch: 'l' }, { ch: 'o' }, { name: 'up' }]],
+  ];
+  for (const [input, expected] of cases) assert.deepEqual(repl.parseKeys(Buffer.from(input)), expected);
+});
+
 test('repl parseGame', () => {
   assert(JSON.stringify(repl.parseGame('11-9')) === JSON.stringify({ a: 11, b: 9 }), 'a-b parses');
   assert(JSON.stringify(repl.parseGame('11:9')) === JSON.stringify({ a: 11, b: 9 }), 'a:b parses');

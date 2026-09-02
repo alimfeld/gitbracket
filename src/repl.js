@@ -13,7 +13,6 @@
 
 const fs = require('fs');
 const path = require('path');
-const readline = require('readline');
 const { spawnSync } = require('child_process');
 const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, fmtTime, matchLabel, bestOfOf, winTarget, reachedWinner, winnerIdx, dayKey, DATE_RE, catStatus, currentWave } = require('../site/derive.js');
 const { loadRepo, writeTournament } = require('./tools.js');
@@ -25,6 +24,27 @@ const { ship } = require('./publish.js');
 function parseGame(s) {
   const mm = /^(\d+)[:-](\d+)$/.exec(s);
   return mm ? { a: +mm[1], b: +mm[2] } : null;
+}
+
+// readline waits its 500ms escapeCodeTimeout on a bare ESC to disambiguate
+// arrow sequences — raw bytes deliver a lone ESC and \x1b[A instantly (real
+// terminals send arrows as one chunk). ponytail: a split arrow sequence
+// misfires an Esc keypress; accept it, the 500ms wait is worse.
+function parseKeys(buf) {
+  const keys = [];
+  for (let i = 0; i < buf.length; i++) {
+    const c = buf[i];
+    if (c === 27) { // CSI arrows are one key; a bare ESC is the escape key
+      if (buf[i + 1] === 91 && (buf[i + 2] === 65 || buf[i + 2] === 66)) {
+        keys.push({ name: buf[i + 2] === 65 ? 'up' : 'down' });
+        i += 2;
+      } else keys.push({ name: 'escape' });
+    } else if (c === 3) keys.push({ name: 'c', ctrl: true });  // ^C
+    else if (c === 13 || c === 10) keys.push({ name: 'return' });
+    else if (c === 127 || c === 8) keys.push({ name: 'backspace' });
+    else if (c >= 32) keys.push({ ch: String.fromCharCode(c) });
+  }
+  return keys;
 }
 
 // Mutate the category's match list in memory; return an error string or null.
@@ -746,21 +766,21 @@ function editorMain(root, siteRoot, repo, opts) {
     console.error('repl: needs a terminal for keypresses');
     process.exit(1);
   }
-  readline.emitKeypressEvents(process.stdin);
   process.stdin.setRawMode(true);
   process.stdout.on('resize', render);
-  process.stdin.on('keypress', (str, key) => {
-    const k = { ch: str && str.length === 1 ? str : null, name: key && key.name, ctrl: key && key.ctrl };
-    if (opts.simKey && k.ch) {
-      const r = opts.simKey(k.ch);
-      if (r) { if (typeof r === 'string') state.msg = { text: r, color: 'red' }; render(); return; }
+  process.stdin.on('data', chunk => {
+    for (const k of parseKeys(chunk)) {
+      if (opts.simKey && k.ch) {
+        const r = opts.simKey(k.ch);
+        if (r) { if (typeof r === 'string') state.msg = { text: r, color: 'red' }; render(); return; }
+      }
+      const view = getView();
+      const { state: ns, action } = step(state, k, view || { rows: [], lines: [], filtered: [], query: null, tz: tz() });
+      Object.assign(state, ns);
+      if (state.quit) { quit(); return; }
+      exec(action);
+      render();
     }
-    const view = getView();
-    const { state: ns, action } = step(state, k, view || { rows: [], lines: [], filtered: [], query: null, tz: tz() });
-    Object.assign(state, ns);
-    if (state.quit) { quit(); return; }
-    exec(action);
-    render();
   });
   render();
 }
@@ -773,4 +793,4 @@ function main(root) {
   editorMain(root, siteRoot, repo, { sim: false, clock: () => Date.now() });
 }
 
-module.exports = { parseGame, buildScheduled, applyScore, applyResult, applyVenue, applyTime, writeEdit, commitMessage, editDetail, echoLine, parseCmd, formatMatchLine, listingSide, widthBag, rowKey, livePlayable, buildRows, renderLines, makeView, cursorIndex, parsePayload, applyFor, step, boardText, helpText, execEdit, execAction, defaultSlug, editorMain, main, C };
+module.exports = { parseGame, parseKeys, buildScheduled, applyScore, applyResult, applyVenue, applyTime, writeEdit, commitMessage, editDetail, echoLine, parseCmd, formatMatchLine, listingSide, widthBag, rowKey, livePlayable, buildRows, renderLines, makeView, cursorIndex, parsePayload, applyFor, step, boardText, helpText, execEdit, execAction, defaultSlug, editorMain, main, C };
