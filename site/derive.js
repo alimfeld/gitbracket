@@ -71,7 +71,17 @@ function countWins(games) {
 }
 
 const sideIdx = w => w === 'a' ? 0 : 1;
-const sideLetter = i => i === 0 ? 'a' : 'b';
+
+// The games needed to decide, or null when the stage has no valid bestOf.
+const winTarget = b => (typeof b === 'number' && b % 2 === 1) ? (b + 1) / 2 : null;
+
+// The side ('a'|'b') the games at target decide, null while undecided — the
+// validator and the REPL derive the winner from the same evidence, one rule.
+function reachedWinner(games, target) {
+  if (target === null) return null;
+  const [w0, w1] = countWins(games);
+  return w0 >= target ? 'a' : w1 >= target ? 'b' : null;
+}
 
 function gameDiff(games) {
   let gd = 0, pd = 0;
@@ -504,6 +514,13 @@ const uniformBits = (n, times, courts) => ({
   court: n > 0 && courts.length === n && courts.every(c => c === courts[0]) ? courts[0] : null,
 });
 
+// Two sibling classification semis of one seat ("5th–8th" + "9th–12th") name
+// their full band: "5th–16th semi" — appending ' place' would mangle a semi label.
+const bandSemiLabel = ls => {
+  const rs = ls.flatMap(l => (l.match(/\d+/g) || []).map(Number));
+  return `${ordinal(Math.min(...rs))}–${ordinal(Math.max(...rs))} semi`;
+};
+
 // Mutually exclusive outcomes of one seat read as one stage: the winner- and
 // loser-fed entries of the same feeder matches merge ("Final / 3rd place —
 // reached via the Semifinals"). Rank-fed stages and ambiguous gates stay separate —
@@ -530,17 +547,10 @@ function mergeTwinStages(present) {
     const placeL = [x, y].filter(s => isPlace(s.label)).map(s => s.label);
     const roundL = [x, y].filter(s => !isPlace(s.label)).map(s => s.label);
     // "5th / 7th place" joins a decider pair's labels; a round with its
-    // placement companion names the band like the bracket headings do. Two
-    // same-parent semis (the winner- and loser-fed halves of an open
-    // classification seat) name their full band: "9th–12th + 13th–16th" ->
-    // "9th–16th semi" — appending ' place' would mangle a semi label.
+    // placement companion names the band like the bracket headings do.
     const label = roundL.length ? stageGroupName(roundL[0], placeL)
-      : placeL.every(l => / semi$/.test(l))
-        ? (() => {
-            const rs = placeL.flatMap(l => (l.match(/\d+/g) || []).map(Number));
-            return `${ordinal(Math.min(...rs))}–${ordinal(Math.max(...rs))} semi`;
-          })()
-        : placeL.map(l => l.replace(/ place$/, '')).join(' / ') + ' place';
+      : placeL.every(l => / semi$/.test(l)) ? bandSemiLabel(placeL)
+      : placeL.map(l => l.replace(/ place$/, '')).join(' / ') + ' place';
     merged.add(x); merged.add(y);
     const times = [...x.times, ...y.times];
     const courts = [...x.courts, ...y.courts];
@@ -1102,5 +1112,5 @@ function playerStatus(ctx, pid) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, countWins, sideIdx, sideLetter, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, possibleStages, placementLabel, plRange, placementColumn, bandLabels, stageGroupName, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dayShort, dayLabel, fmtDiff, kioskStatus, currentRowIndex, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, playerStatus };
+  module.exports = { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, countWins, winTarget, reachedWinner, sideIdx, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, possibleStages, placementLabel, plRange, placementColumn, bandLabels, stageGroupName, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dayShort, dayLabel, fmtDiff, kioskStatus, currentRowIndex, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, playerStatus };
 }

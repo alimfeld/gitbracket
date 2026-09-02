@@ -8,7 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 const { matchSlotMs, pairSig, dayKey, tzOffset, schedTime, fmtTime, ID_RE, schedDays, LOCALE } = require('../site/derive.js');
-const { writeTournament, writeTournamentIndex, slotsOverlap, isRealDate } = require('./tools.js');
+const { writeTournament, writeTournamentIndex, slotsOverlap, fixedPlayers, isRealDate } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 
 // Round-robin pairings, circle method: array of rounds, each a list of pairs.
@@ -288,8 +288,7 @@ function scheduleMatches(categories, venues, tz, slotCfgOf, eventDate, blockStar
     const catSlots = slotCfgOf.get(cat);
     for (const m of matches) {
       const slotMs = matchSlotMs(m, { slotMinutes: catSlots }); // per stage: pools vs knockout
-      const players = m.sides.every((s) => s.kind === 'players')
-        ? new Set(m.sides.flatMap((s) => s.ids)) : null;
+      const players = fixedPlayers(m);
       let t = start;
       for (const s of m.sides) {
         if (s.kind === 'match') t = Math.max(t, endOf.get(s.match) ?? start);
@@ -333,7 +332,7 @@ function assertSchedule(categories, slotCfgOf, tz) {
         m,
         t: schedTime(m, tz),
         slotMs: matchSlotMs(m, { slotMinutes: catSlots }),
-        players: m.sides.every((s) => s.kind === 'players') ? new Set(m.sides.flatMap((s) => s.ids)) : null,
+        players: fixedPlayers(m),
       });
     }
   }

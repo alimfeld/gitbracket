@@ -17,7 +17,7 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const { spawnSync } = require('child_process');
-const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, fmtTime, matchLabel, poolStandings, poolRanks, poolDecided, fmtDiff, bestOfOf, countWins, sideLetter, winnerIdx, dayKey, DATE_RE } = require('../site/derive.js');
+const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, fmtTime, matchLabel, poolStandings, poolRanks, poolDecided, fmtDiff, bestOfOf, winTarget, reachedWinner, winnerIdx, dayKey, DATE_RE } = require('../site/derive.js');
 const { loadRepo, writeTournament } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 const { ship } = require('./publish.js');
@@ -45,12 +45,10 @@ function applyScore(matches, matchId, games, ctx) {
   return findMatch(matches, matchId, m => {
     m.games = games;
     delete m.result; // a correction replaces a result
-    const b = bestOfOf(m, ctx);
-    if (typeof b === 'number' && b % 2 === 1) {
-      const target = (b + 1) / 2;
-      const [w0, w1] = countWins(games);
-      if (w0 >= target || w1 >= target) m.result = { status: 'played', winner: sideLetter(w0 >= target ? 0 : 1) };
-    }
+    // evidence -> outcome, same rule as the validator (reachedWinner)
+    const target = winTarget(bestOfOf(m, ctx));
+    const w = reachedWinner(games, target);
+    if (w !== null) m.result = { status: 'played', winner: w };
     return null;
   });
 }

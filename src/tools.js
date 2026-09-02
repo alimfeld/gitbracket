@@ -16,6 +16,14 @@ const { ID_RE } = require('../site/derive.js');
 // its sibling that sizes a window, stays in derive.js: the site's kiosk uses it.)
 const slotsOverlap = (a0, a1, b0, b1) => a0 < b1 && b0 < a1;
 
+// A match's known players as a Set, null when a side is a slot (match/pool) —
+// such a side resolves only after results. Shared by the validator's player
+// double-book rule and the generator's occupancy scan (same predicate, no drift).
+function fixedPlayers(m) {
+  return Array.isArray(m.sides) && m.sides.length === 2 && m.sides.every(s => s && s.kind === 'players' && Array.isArray(s.ids))
+    ? new Set(m.sides.flatMap(s => s.ids)) : null;
+}
+
 // Impossible calendar dates (2025-02-30) roll over in Date.UTC; check the
 // round-trip. Used by the validator (scheduled) and the generator (spec date).
 function isRealDate(y, m, d) {
@@ -74,4 +82,4 @@ function writeTournamentIndex(siteRoot, entries) {
   fs.writeFileSync(path.join(siteRoot, 'tournaments.json'), '[' + entries.map((t) => `\n  ${JSON.stringify(t)}`).join(',') + '\n]\n');
 }
 
-module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, isRealDate, findRoot };
+module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, fixedPlayers, isRealDate, findRoot };

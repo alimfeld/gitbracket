@@ -6,8 +6,8 @@
 // memory. Never writes — the gate stays pure.
 
 const path = require('path');
-const { loadRepo, isRealDate, slotsOverlap } = require('./tools.js');
-const { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, isDone, poolStandings, resolveSide, isDeadTie, bestOfOf, countWins, schedTime, schedDays, placementLabel } = require('../site/derive.js');
+const { loadRepo, fixedPlayers, isRealDate, slotsOverlap } = require('./tools.js');
+const { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, isDone, poolStandings, resolveSide, isDeadTie, bestOfOf, winTarget, reachedWinner, schedTime, schedDays, placementLabel } = require('../site/derive.js');
 
 const RESULTS = ['winner', 'loser'];
 const RESULT_STATUSES = ['played', 'walkover', 'void'];
@@ -25,12 +25,10 @@ function validateResultShape(r, hasGames, target, m, where, err) {
     if (r.status === 'played') {
       if (!hasGames) err(where, 'a played result records the games it was decided by');
       else if (typeof target === 'number') {
-        const [w0, w1] = countWins(m.games);
-        if (w0 < target && w1 < target) err(where, 'a played result needs games that reach the best-of target');
-        else {
-          const derived = w0 >= target ? 'a' : 'b';
-          if (derived !== r.winner) err(where, `result.winner '${r.winner}' does not match the games — side ${derived} won`);
-        }
+        // derived from the games — the stored winner must agree (and the games reach the target)
+        const derived = reachedWinner(m.games, target);
+        if (derived === null) err(where, 'a played result needs games that reach the best-of target');
+        else if (derived !== r.winner) err(where, `result.winner '${r.winner}' does not match the games — side ${derived} won`);
       }
     } else if (hasGames) {
       err(where, 'games and a walkover result are mutually exclusive');
@@ -203,10 +201,8 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
       if (t === null) continue;
       if (Number.isNaN(matchSlotMs(m, ctx))) noSlot.add(cat.id); // NaN slots make the kiosk's due/overdue windows uncomputable
       // Known-player set only when both sides are fixed players — a match/pool
-      // slot's players resolve only after results, so it can't be checked here
-      // (the generator's invariant, same predicate schedule.js uses).
-      const players = Array.isArray(m.sides) && m.sides.length === 2 && m.sides.every(s => s && s.kind === 'players' && Array.isArray(s.ids))
-        ? new Set(m.sides.flatMap(s => s.ids)) : null;
+      // slot's players resolve only after results, so it can't be checked here.
+      const players = fixedPlayers(m);
       sched.push({ f: `${tFile} matches.${cat.id}`, m, t, ctx, players });
     }
   }
@@ -422,16 +418,14 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
     let target;
     if (hasGames) {
       // override precedence from derive.js (match > stage) — a non-number bestOf
-      // is reported above, so the numeric guard is all this check adds
-      const b = bestOfOf(m, { bestOf });
-      target = (typeof b === 'number' && b % 2 === 1) ? (b + 1) / 2 : undefined;
+      // is reported above, so winTarget's null is all this check adds
+      target = winTarget(bestOfOf(m, { bestOf }));
       validateGames(m.games, target, where, err);
     }
     if (r !== undefined) {
       validateResultShape(r, hasGames, target, m, where, err);
-    } else if (hasGames && typeof target === 'number') {
-      const [w0, w1] = countWins(m.games);
-      if (w0 >= target || w1 >= target) err(where, 'games reach the best-of target — record a result (status + winner)');
+    } else if (hasGames && reachedWinner(m.games, target) !== null) {
+      err(where, 'games reach the best-of target — record a result (status + winner)');
     }
     if ((r !== undefined || hasGames) && Array.isArray(m.sides) && m.sides.length === 2) {
       if (!resolveSide(m.sides[0], ctx) || !resolveSide(m.sides[1], ctx)) {
