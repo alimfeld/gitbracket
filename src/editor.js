@@ -186,19 +186,6 @@ function formatMatchLine(cid, m, ctx, tz, stage, g) {
   return `${C.bold(ref.padEnd(g.idw))}  ${C.dim(stage)}${stagePad}  ${sides}  ${time}  ${venue}  ${score}`;
 }
 
-// Column widths for the shared match-line format — one bag, any row source.
-const widthBag = () => {
-  const g = { idw: 0, stagew: 0, leftw: 0, rightw: 0, venuew: 0 };
-  const add = e => {
-    g.idw = Math.max(g.idw, `${e.cat} ${e.m.id}`.length);
-    g.stagew = Math.max(g.stagew, e.stage.length);
-    g.leftw = Math.max(g.leftw, listingSide(e.m.sides[0], e.ctx).length);
-    g.rightw = Math.max(g.rightw, listingSide(e.m.sides[1], e.ctx).length);
-    g.venuew = Math.max(g.venuew, (e.m.venue || 'TBD').length);
-  };
-  return { g, add };
-};
-
 // ---------- shallow ANSI paint (TTY only — piped output stays plain) ----------
 
 const C = (() => {
@@ -260,8 +247,15 @@ function buildRows(tjson, playable) {
 const strip = l => l.replace(/\x1b\[[0-9;]*m/g, '');
 
 function renderLines(rows, tz) {
-  const { g, add } = widthBag();
-  for (const r of rows) add(r);
+  // column widths for the shared match-line format
+  const g = { idw: 0, stagew: 0, leftw: 0, rightw: 0, venuew: 0 };
+  for (const r of rows) {
+    g.idw = Math.max(g.idw, `${r.cat} ${r.m.id}`.length);
+    g.stagew = Math.max(g.stagew, r.stage.length);
+    g.leftw = Math.max(g.leftw, listingSide(r.m.sides[0], r.ctx).length);
+    g.rightw = Math.max(g.rightw, listingSide(r.m.sides[1], r.ctx).length);
+    g.venuew = Math.max(g.venuew, (r.m.venue || 'TBD').length);
+  }
   return rows.map(r => formatMatchLine(r.cat, r.m, r.ctx, tz, r.stage, g));
 }
 
@@ -853,4 +847,4 @@ function main(root) {
   editorMain(root, siteRoot, repo, { sim: false, clock: () => Date.now() });
 }
 
-module.exports = { parseGame, parseKeys, buildScheduled, applyScore, applyResult, applyVenue, applySide, applyTime, writeEdit, commitMessage, editDetail, echoLine, parseCmd, formatMatchLine, listingSide, widthBag, rowKey, waveEntries, livePlayable, buildRows, renderLines, makeView, cursorIndex, parsePayload, applyFor, step, boardText, helpText, execEdit, execAction, defaultSlug, editorMain, main, C, rowAttr };
+module.exports = { parseGame, parseKeys, buildScheduled, applyScore, applyResult, applyVenue, applySide, applyTime, writeEdit, commitMessage, editDetail, echoLine, parseCmd, formatMatchLine, listingSide, rowKey, waveEntries, buildRows, makeView, parsePayload, step, boardText, execEdit, execAction, defaultSlug, editorMain, main, C, rowAttr };
