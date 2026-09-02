@@ -350,7 +350,7 @@ ${C.dim('every edit validates, writes, and commits itself — q quits; the sim a
 }
 
 const PROMPT_HINT = {
-  browse: 'j/k move · n ▶ · g/G · / narrow · s score · v venue · t time · w wo · o void · : cmd · ? help · q quit',
+  browse: '? help · q quit',
   arm: { score: 'enter commits · esc cancels · a:b a:b … (or one game per commit)', venue: 'enter commits · esc cancels · a venue id, e.g. court-2', time: 'enter commits · esc cancels · hh:mm · [date] hh:mm · - unschedules', walkover: 'enter commits · esc cancels · a or b', void: 'enter confirms the void · esc cancels' },
   filter: 'type to narrow · enter keeps · esc clears',
   cmd: 'enter runs · esc cancels',
@@ -693,7 +693,7 @@ function editorMain(root, siteRoot, repo, opts) {
     const view = getView();
     const t = tjson();
     if (!t) {
-      process.stdout.write('\x1b[2J\x1b[H' + (state.msg ? C.yellow(state.msg.text) : 'no tournament selected') + '\n\n' + C.dim(':use <slug> — ' + [...state.repo.tournaments.keys()].join(', ')) + '\n\n' + C.dim('q quit') + '\n');
+      process.stdout.write('\x1b[?25l\x1b[2J\x1b[H' + (state.msg ? C.yellow(state.msg.text) : 'no tournament selected') + '\n\n' + C.dim(':use <slug> — ' + [...state.repo.tournaments.keys()].join(', ')) + '\n\n' + C.dim('q quit') + '\n');
       return;
     }
     const played = Object.values(t.matches || {}).flat().filter(m => m && isDone(m)).length;
@@ -706,7 +706,7 @@ function editorMain(root, siteRoot, repo, opts) {
       note: state.sim ? ' · scratch — never committed' : '',
       sim: state.sim,
     };
-    process.stdout.write('\x1b[2J\x1b[H' + boardText(state, view, header, process.stdout.rows || 40, process.stdout.columns || 80));
+    process.stdout.write('\x1b[?25l\x1b[2J\x1b[H' + boardText(state, view, header, process.stdout.rows || 40, process.stdout.columns || 80));
   };
 
   const exec = action => {
@@ -726,6 +726,7 @@ function editorMain(root, siteRoot, repo, opts) {
   };
 
   const quit = () => {
+    process.stdout.write('\x1b[?25h'); // restore the cursor for the shell
     if (process.stdin.isTTY) process.stdin.setRawMode(false);
     state.quit = true;
     if (opts.onQuit) opts.onQuit();

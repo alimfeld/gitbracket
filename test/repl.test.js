@@ -240,7 +240,7 @@ test('editor boardText: header, ▶ flag, cursor marker, hint bar — one screen
   assert(/^>▶/.test(txt.split('\n').find(l => l.includes('md40 8') && l.includes(' vs '))), 'the cursor line carries both markers');
   const other = txt.split('\n').find(l => l.includes('md40 1') && l.includes(' vs '));
   assert(!other.startsWith('>'), 'only the cursor line is marked >');
-  assert(/j\/k move/.test(txt), 'the browse hint bar is on screen');
+  assert(/\? help · q quit/.test(txt), 'the browse hint bar is on screen');
 });
 
 test('editor boardText: a narrow pane that wraps matches still keeps the header on screen', () => {
@@ -258,7 +258,7 @@ test('editor boardText: a narrow pane that wraps matches still keeps the header 
     const phys = lines.reduce((a, l) => a + Math.max(1, Math.ceil(strip(l).length / cols)), 0);
     assert(phys <= rows, `cols=${cols}: board physically fits the pane`);
     assert(/^Sample · LIVE/.test(strip(lines[0])), `cols=${cols}: header is the top line, not scrolled off`);
-    assert(lines.some(l => /j\/k move/.test(strip(l))), `cols=${cols}: the hint bar is on screen`);
+    assert(lines.some(l => /\? help · q quit/.test(strip(l))), `cols=${cols}: the hint bar is on screen`);
   }
 });
 
