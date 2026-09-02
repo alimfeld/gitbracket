@@ -531,10 +531,12 @@ function nextRow(view, state, dir, stop) {
 // The whole screen as text — pure, so a test can pin layout. The match list
 // is windowed to fit `rows` (the terminal pane height) so the header is never
 // cut; the chrome (header, blanks, msg, input, hint) is counted here where it
-// lives, empty msg/input lines are skipped so a spare browse shows one gap not
-// three, and no trailing newline would scroll a full pane. The window is sized
-// in *physical* rows (what the terminal really renders after auto-wrap), so a
-// narrow pane that wraps the wide match lines still keeps the header on screen.
+// lives, and the input row is always reserved — drawn blank when idle — so
+// arming a verb, filter, or command never shifts the match window; msg stays
+// dynamic (multi-line error text is worth the reflow). No trailing newline
+// would scroll a full pane. The window is sized in *physical* rows (what the
+// terminal really renders after auto-wrap), so a narrow pane that wraps the
+// wide match lines still keeps the header on screen.
 function boardText(state, view, info, rows, cols) {
   const input = inputLine(state, view);
   // an active filter is a view state, so it lives on the status line — the
@@ -568,8 +570,11 @@ function boardText(state, view, info, rows, cols) {
       mw[i] = phys((r.playable ? '▶' : ' ') + ' ' + view.lines[view.filtered[i].i]);
       total += mw[i];
     }
-    // chrome physical rows: header + two blanks + msg + input + hint
-    const chrome = phys(header) + 2 + (msg ? phys(msg) : 0) + (input ? phys(input) : 0) + phys(hint);
+    // chrome physical rows: header + two blanks + msg + input + hint — the
+    // input row is always reserved (drawn blank when idle), so arming a verb
+    // pushes no match off the window; msg stays dynamic, multi-line error
+    // text is worth the reflow
+    const chrome = phys(header) + 2 + (msg ? phys(msg) : 0) + 1 + phys(hint);
     const budget = rows ? rows - chrome : 0; // physical rows the list may occupy
     let start = 0, end = n;
     if (rows && total > budget) {
@@ -598,7 +603,9 @@ function boardText(state, view, info, rows, cols) {
   }
   lines.push('');
   if (msg) lines.push(msg);
-  if (input) lines.push(state.mode === 'arm' ? `\x1b[1m${input}\x1b[0m` : input); // bold marks the fill-in field — the ref is bold too, so it reads as one system, not two
+  // the input row is always drawn — idle it reads as the reserved blank, so a
+  // filled-in field appears in place and the hint never moves
+  lines.push(input ? (state.mode === 'arm' ? `\x1b[1m${input}\x1b[0m` : input) : ''); // bold marks the fill-in field — the ref is bold too, so it reads as one system, not two
   lines.push(hint);
   return lines.join('\n');
 }

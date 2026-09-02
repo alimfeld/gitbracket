@@ -605,3 +605,17 @@ test('editor editDetail: the side op reports the applied slot label; a cleared v
   assert.equal(editor.editDetail('venue', m), '→ court-1', 'a venue edit on an undecided match reports the court');
   assert.equal(editor.editDetail('side', m9, { si: 1, side: { kind: 'players', ids: ['p1', 'p2'] } }, ctx), 'side b → Ada Lovelace / Grace Hopper', 'a players side labels the team');
 });
+
+test('editor boardText: arming a verb reserves the input row — the match window never shifts', () => {
+  const repo = loadRepo(FIX('sample'));
+  const view = editor.makeView(repo.tournaments.get('sample').tjson, WAVE, null);
+  const base = { cursorId: 'md40 8', msg: null, verb: null, payload: '', query: null, cmdline: '' };
+  const info = { title: 'Sample', mode: 'LIVE', clock: '14:32', played: 11, total: 16, note: '', sim: false };
+  const firstMatch = txt => txt.split('\n').findIndex(l => l.includes(' vs '));
+  const browse = editor.boardText({ mode: 'browse', ...base }, view, info, 20, 80);
+  const armed = editor.boardText({ mode: 'arm', ...base, verb: 'score' }, view, info, 20, 80);
+  assert.equal(firstMatch(armed), firstMatch(browse), 'the arm line appears in its reserved row — matches do not move');
+  const lines = armed.split('\n');
+  const idx = lines.findIndex(l => l.includes('→') && l.includes('▌'));
+  assert(idx > firstMatch(armed), 'the armed input row sits below the match list');
+});
