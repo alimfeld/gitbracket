@@ -15,7 +15,7 @@ function main(root) {
   return ship(root);
 }
 
-// Upload site/ to the domain in site/CNAME. Split from main so the REPL's
+// Upload site/ to the domain in site/CNAME. Split from main so the editor's
 // publish command can ship without validate.main's process.exit.
 // Ships only from main: makes the TESTING.md branch/probe recipes harmless
 // even when the probe goes wrong — a scratch checkout can't reach the live

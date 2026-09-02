@@ -18,7 +18,7 @@ const ctxMemo = ctx => ctx._memo || (ctx._memo = {});
 
 // Tournament-level facts (names, venues, tz) per file — toCats builds them
 // once and hands them to every category's context; standalone makeCat calls
-// (validate, REPL, sim) build a fresh map per call.
+// (validate, editor, sim) build a fresh map per call.
 function sharedFacts(tjson) {
   const arr = x => Array.isArray(x) ? x : [];
   return {
@@ -76,7 +76,7 @@ const sideIdx = w => w === 'a' ? 0 : 1;
 const winTarget = b => (typeof b === 'number' && b % 2 === 1) ? (b + 1) / 2 : null;
 
 // The side ('a'|'b') the games at target decide, null while undecided — the
-// validator and the REPL derive the winner from the same evidence, one rule.
+// validator and the editor derive the winner from the same evidence, one rule.
 function reachedWinner(games, target) {
   if (target === null) return null;
   const [w0, w1] = countWins(games);
@@ -132,7 +132,7 @@ function poolRanks(std) {
 
 // Rank cells stay blank until a pool has a decided match — before that every
 // team ties at zero and a wall of 1s reads as "all ranked first". The site's
-// standings and the REPL's desk sheet share the rule via this one predicate.
+// standings and the editor's desk sheet share the rule via this one predicate.
 const poolDecided = std => std.some(r => r.wins || r.losses);
 
 function poolStandings(ctx, pool, partial) {
@@ -1086,7 +1086,7 @@ function catStatus(ctx) {
 }
 
 // The current playable wave: unplayed matches with both sides resolved, at the
-// earliest scheduled time — starts included, so page and REPL share one
+// earliest scheduled time — starts included, so page and editor share one
 // "scoreable now" predicate and can never disagree.
 function currentWave(ctx, status) {
   if (!status || status.kind === 'finished' || status.kind === 'winners') return [];

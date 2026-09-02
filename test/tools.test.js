@@ -1,7 +1,7 @@
 'use strict';
 
 // tools.js: shared tool logic — repo I/O + tool-only predicates. writeTournament
-// is exercised through repl.js's writeEdit disk test; the readErrs path below is
+// is exercised through editor.js's writeEdit disk test; the readErrs path below is
 // the one loadRepo behavior no other suite touches (every fixture parses cleanly).
 // isRealDate gets a direct check because its all-integer guard is new behavior:
 // the old inline rollover checks let a non-numeric month (2025-xx-01) slip past

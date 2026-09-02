@@ -219,7 +219,7 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
       }
       // player double-book: two undone matches sharing a known player in the same
       // window, across courts and categories — the generator's invariant, moved
-      // into the gate so a REPL time/venue edit can't reopen it. venue-blind
+      // into the gate so an editor time/venue edit can't reopen it. venue-blind
       // (a player can't be in two places at once even on different courts).
       if (a.players && b.players) {
         const shared = [...a.players].filter(p => b.players.has(p));

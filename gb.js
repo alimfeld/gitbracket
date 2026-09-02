@@ -5,7 +5,7 @@
 // Run from anywhere under the repo root (the root is found by walking up).
 
 const { findRoot } = require('./src/tools.js');
-const repl = require('./src/repl.js');
+const editor = require('./src/editor.js');
 const validate = require('./src/validate.js');
 const schedule = require('./src/schedule.js');
 const publish = require('./src/publish.js');
@@ -20,7 +20,7 @@ function main(argv) {
   if (verb === 'schedule') return schedule.main(root, args[0]);
   if (verb === 'publish') return publish.main(root);
   if (verb === 'sim') return sim.main(root, args);
-  if (verb === undefined) return repl.main(root);
+  if (verb === undefined) return editor.main(root);
   console.error(`unknown command ${verb} — ${USAGE}`);
   process.exit(1);
 }

@@ -5,7 +5,7 @@
 // sim clock and the results: it serves .sim/site over HTTP with a script that
 // overrides the page's Date.now to the sim clock (so the kiosk's statuses,
 // auto-centering, and board clock all track the rehearsal — site/ itself is
-// untouched), and the shared editor from repl.js drives the day: same buffer,
+// untouched), and the shared editor from editor.js drives the day: same buffer,
 // keys, and verbs, but a fake clock, a planScorable playable set, and never
 // a commit — the scratch copy is not a repo.
 
@@ -15,7 +15,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { makeCat, isDone, resolveSide, schedTime, matchLabel, bestOfOf } = require('../site/derive.js');
 const { loadRepo } = require('./tools.js');
-const { writeEdit, applyScore, defaultSlug, C, editorMain } = require('./repl.js');
+const { writeEdit, applyScore, defaultSlug, C, editorMain } = require('./editor.js');
 
 const STEP = 30 * 60 * 1000;  // ]/[ move the clock in 30 sim-minutes
 
@@ -96,7 +96,7 @@ const MIME = {
 // page (index.html is every view — fragment routing). The injected script
 // owns the only clock the app reads (Date.now), refreshed from /clock once a
 // second, so the kiosk statuses, auto-centering, and board clock all track
-// the REPL's sim time without a single change to site/.
+// the editor's sim time without a single change to site/.
 function serve(siteRoot, clock) {
   return http.createServer((req, res) => {
     if (req.url === '/clock') {

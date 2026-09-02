@@ -230,7 +230,7 @@ function catSection(ctx, opts) {
   // heading already states the date once — then the status sentence or podium
   const status = catStatus(ctx);
   // one current-wave predicate drives the card highlight, the Next line, and
-  // the REPL's next — what's lit is what's playable now, opening block included
+  // the editor's next — what's lit is what's playable now, opening block included
   const wave = currentWave(ctx, status);
   const next = m => wave.includes(m);
   const lines = [];

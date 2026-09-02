@@ -3,12 +3,12 @@
 ## Rehearse a whole day first: the sim (no deployment, no branch)
 
 `node gb.js sim [slug]` copies `site/` to the gitignored `.sim/`, serves it
-over HTTP with `Date.now` faked to a sim clock, and opens the match-day REPL
+over HTTP with `Date.now` faked to a sim clock, and opens the match-day editor
 against it — every view (tournament, schedule, kiosk) tracks the rehearsal:
 `]`/`[` move the clock 30 sim-minutes, `x` scores every due match with random
 games through the real validation path, and the normal slash verbs edit
 manually. Nothing is ever committed — `.sim/` is not a repo, and `site/` is
-untouched. Prereqs: Node, a browser, and a terminal (the REPL needs
+untouched. Prereqs: Node, a browser, and a terminal (the editor needs
 keypresses).
 
 For the deployment surface the sim deliberately skips — real commits and a

@@ -19,7 +19,7 @@ implement them; don't treat them as style.
   them (standings, ranks, done flags); an aggregate goes silently stale the
   moment a fact is corrected, so everything downstream is recomputed at
   render. Schedules are the exception: they can't be derived, so they're
-  stored — generated from a spec for convenience, tweakable via the REPL;
+  stored — generated from a spec for convenience, tweakable via the editor;
   regeneration rewrites the whole file, so never run it after results are
   in.
 - **Times are wall-clock, never offsets.** `scheduled` holds local wall time
@@ -27,7 +27,7 @@ implement them; don't treat them as style.
   instant is derived at render, so data stays readable local time and stays
   right if clock rules change.
 - **derive.js is the single source of the site's domain model.** Validator,
-  REPL, generator, and renderers all consume it — extend it, never reimplement
+  editor, generator, and renderers all consume it — extend it, never reimplement
   the model elsewhere. The integrity gate never depends on renderer code, and
   derive.js must run in the browser and under node, so node-only modules stay
   out. Its internal laws: side identity derives from the player set, never
@@ -35,7 +35,7 @@ implement them; don't treat them as style.
   surfaces on the next poll; resolution is cycle-proof — the validator
   rejects cycles first, so a guard only ever prevents a hang.
 - **Slots are category-local, consumed at most once, acyclic.**
-- **Every REPL edit validates, writes, and commits itself** — the process can
+- **Every editor edit validates, writes, and commits itself** — the process can
   die at any instant with nothing lost.
 - **One file per tournament, minimal diffs.** Data edits stay byte-identical
   apart from the change, so a commit diff shows only the edit.
@@ -63,7 +63,7 @@ One question decides placement for any new function: does the browser run it?
   `app.js`; markup and styling in `index.html` / `style.css`; shared
   computations in `derive.js` so the gate and the renderer can't drift.
 - **No → `src/`** (the tool layer, never ships). Keep it in the tool that
-  uses it (`validate.js`, `schedule.js`, `repl.js`); share via `src/tools.js`
+  uses it (`validate.js`, `schedule.js`, `editor.js`); share via `src/tools.js`
   — repo I/O and tool-only predicates already live there. Root files
   (`gb.js`, `.githooks/`) dispatch and gate only; logic lives in `src/`.
 - **Specs → `specs/`**, one file per tournament, consumed only by

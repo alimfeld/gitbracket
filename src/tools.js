@@ -1,6 +1,6 @@
 'use strict';
 
-// Logic shared by the tools (validator, generator, REPL) that the site never
+// Logic shared by the tools (validator, generator, editor) that the site never
 // ships — repo I/O plus tool-only domain predicates. site/ is the shipping
 // surface; anything only a tool consumes lives here, so derive.js stays
 // exactly the site's domain model. (The "site root" is the directory holding

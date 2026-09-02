@@ -1,11 +1,11 @@
 'use strict';
 
-// GitBracket match-day REPL — a vim-flavored keypress editor over the whole
-// tournament buffer: every line is one match, j/k move, / narrows, s/v/t/w/o
-// arm the line and Enter commits. Live and sim share the same editor — the
-// mode only swaps the clock, the repo target, and whether edits commit. Every
-// edit validates, writes, and commits itself, so the process can die at any
-// instant with nothing lost.
+// GitBracket match-day editor — vim-flavored keys over the whole tournament
+// buffer: every line is one match, j/k move, / narrows, s/v/t/w/o arm the line
+// and Enter commits. Live and sim share the same editor — the mode only swaps
+// the clock, the repo target, and whether edits commit. Every edit validates,
+// writes, and commits itself, so the process can die at any instant with
+// nothing lost.
 //
 // Interaction contract, no exceptions:
 //   browse keys never write; a verb key arms a visible target; the bottom
@@ -271,7 +271,7 @@ function cursorIndex(view, state) {
 
 // Payload grammar per verb — one grammar for the arm line and the sim.
 // Grammar errors are caught here, before any I/O; data errors (unknown venue,
-// impossible date) belong to the validator, exactly as before.
+// impossible date) belong to the validator.
 function parsePayload(kind, tokens, tz) {
   if (kind === 'score') {
     if (!tokens.length) return { err: 'expected a score, e.g. 21:19' };
@@ -305,7 +305,7 @@ function parsePayload(kind, tokens, tz) {
   return { value: iso };
 }
 
-// The five verbs map to the same apply functions the gate has always run.
+// The five verbs each map to one apply function.
 function applyFor(verb, matchId, value) {
   return verb === 'score' ? (ms, ctx) => applyScore(ms, matchId, value, ctx)
     : verb === 'walkover' ? c => applyResult(c, matchId, 'walkover', value)
@@ -450,7 +450,7 @@ function step(state, key, view) {
     return { state: ns, action: null };
   }
 
-  // browse — Esc cancels an applied filter view (the universal cancel key); Enter is a no-op
+  // browse — Esc clears the filter (the universal cancel key)
   if (name === 'escape') return { state: { ...ns, query: null }, action: null };
   if (name === 'return') return { state: ns, action: null };
   if (name === 'down' || ch === 'j') return { state: { ...ns, cursorId: nextKey(view, ns, +1) }, action: null };
@@ -765,7 +765,7 @@ function editorMain(root, siteRoot, repo, opts) {
   };
 
   if (!process.stdin.isTTY) {
-    console.error('repl: needs a terminal for keypresses');
+    console.error('editor: needs a terminal for keypresses');
     process.exit(1);
   }
   process.stdin.setRawMode(true);
