@@ -97,6 +97,14 @@ function bestOfOf(m, ctx) {
   return m.bestOf ?? ctx.bestOf[stageOf(m)];
 }
 
+// A pool's game differential is only a real differentiator when a match can
+// span several games — a best-of-1 pool's per-match diff is always ±1, so the
+// standings' GD column would just restate W−L. One match overridden to
+// best-of-3 brings GD back.
+function poolBo1(ctx, pool) {
+  return ctx.matches.filter(m => m && m.pool === pool).every(m => bestOfOf(m, ctx) === 1);
+}
+
 function winnerIdx(m) {
   // The stored winner IS the outcome; in-play matches have no result -> null.
   return m && m.result && m.result.winner !== undefined ? sideIdx(m.result.winner) : null;
@@ -1112,5 +1120,5 @@ function playerStatus(ctx, pid) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, countWins, winTarget, reachedWinner, sideIdx, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, possibleStages, placementLabel, plRange, placementColumn, bandLabels, stageGroupName, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dayShort, dayLabel, fmtDiff, kioskStatus, currentRowIndex, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, playerStatus };
+  module.exports = { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, poolBo1, countWins, winTarget, reachedWinner, sideIdx, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, resolveSide, slotLabel, teamLabel, sideLabel, playerMatches, possibleStages, placementLabel, plRange, placementColumn, bandLabels, stageGroupName, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dayShort, dayLabel, fmtDiff, kioskStatus, currentRowIndex, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, playerStatus };
 }

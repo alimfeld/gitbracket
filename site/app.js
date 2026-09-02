@@ -255,13 +255,16 @@ function catSection(ctx, opts) {
       parts.push('<div class="grid">');
       for (const [pool] of byPool) {
         parts.push(`<div><h4>Pool ${esc(String(pool))}</h4>`);
-        parts.push('<table><thead><tr><th scope="col" class="num">#</th><th scope="col">Team</th><th scope="col" class="num">W</th><th scope="col" class="num">L</th><th scope="col" class="num">GD</th><th scope="col" class="num">PD</th></tr></thead><tbody>');
+        const bo1 = poolBo1(ctx, pool); // GD restates W−L in a best-of-1 pool — drop the column, keep PD
+        const gdHead = bo1 ? '' : '<th scope="col" class="num">GD</th>';
+        parts.push(`<table><thead><tr><th scope="col" class="num">#</th><th scope="col">Team</th><th scope="col" class="num">W</th><th scope="col" class="num">L</th>${gdHead}<th scope="col" class="num">PD</th></tr></thead><tbody>`);
         const std = poolStandings(ctx, pool, true); // pools come from matches, so partial standings always resolve
         // a rank is a fact only once a match decided a record — before that every team ties at zero and a wall of 1s reads as "all ranked first"
         const ranks = poolDecided(std) ? poolRanks(std) : null;
         std.forEach((r, i) => {
           const team = teamLabel(r.ids, ctx);
-          parts.push(`<tr><td class="num">${ranks ? ranks[i] : ''}</td><td>${esc(team)}</td><td class="num">${r.wins}</td><td class="num">${r.losses}</td><td class="num">${fmtDiff(r.gd)}</td><td class="num">${fmtDiff(r.pd)}</td></tr>`);
+          const gdCell = bo1 ? '' : `<td class="num">${fmtDiff(r.gd)}</td>`;
+          parts.push(`<tr><td class="num">${ranks ? ranks[i] : ''}</td><td>${esc(team)}</td><td class="num">${r.wins}</td><td class="num">${r.losses}</td>${gdCell}<td class="num">${fmtDiff(r.pd)}</td></tr>`);
         });
         parts.push('</tbody></table></div>');
       }

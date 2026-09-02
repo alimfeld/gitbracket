@@ -792,6 +792,20 @@ test('renderers: all four render from a repo and escape repo-sourced strings', (
   assert(!text(tieHtml).includes('†') && text(tieHtml).includes('1 A') && text(tieHtml).includes('1 B'), 'tied teams share rank 1, no dagger');
 });
 
+test('pool table: GD column drops when every game is best-of-1 — GD would restate W−L — while PD stays', () => {
+  const dataOf = name => {
+    const repo = loadRepo(FIX(name));
+    const info = repo.tournaments.get(name);
+    return { index: repo.index, t: repo.index[0], tjson: info.tjson, cats: toCats(info.tjson) };
+  };
+  // sample md40 is best-of-3 in groups -> GD shows; result is best-of-1 -> GD drops
+  const b03 = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' }, dataOf('sample'));
+  const b01 = renderTournament({ slug: 'result', view: 'tournament' }, dataOf('result'));
+  assert(b03.includes('<th scope="col" class="num">GD</th>') && b03.includes('<th scope="col" class="num">PD</th>'), 'best-of-3 pool keeps both GD and PD columns');
+  assert(!b01.includes('<th scope="col" class="num">GD</th>') && b01.includes('<th scope="col" class="num">PD</th>'), 'best-of-1 pool drops GD, keeps PD');
+  assert(!text(b01).match(/GD/), 'no GD header or cell anywhere in a best-of-1 pool table');
+});
+
 test('the next card is one card: a second category sharing the match id must not double-flag', () => {
   // Match ids are per-category — Ada's first undone xd match is given the md40
   // final's id (9); the old id-only comparison flagged both cards as next.
