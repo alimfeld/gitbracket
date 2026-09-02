@@ -755,7 +755,6 @@ function editorMain(root, siteRoot, repo, opts) {
     if (process.stdin.isTTY) process.stdin.setRawMode(false);
     state.quit = true;
     if (opts.onQuit) opts.onQuit();
-    console.log(C.dim('\nbye'));
     // the keypress listener has no natural end — and the sim's server may
     // hold the browser's idle keep-alive connections, so close() alone can
     // hang — quit is the hard kind, exit now
