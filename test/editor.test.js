@@ -380,18 +380,21 @@ test('editor rejects edits the validator would refuse', () => {
   assert(hasErr(r2, /scored match must have both sides resolved/), 'scoring a match with an unresolved side is rejected');
 });
 
-test('editor parseKeys: raw bytes to keys — a lone ESC is instant, arrows are one key, chunks split', () => {
+test('editor parseKeys: UTF-8-decoded input to keys — a lone ESC is instant, arrows are one key, umlauts are one key', () => {
   const cases = [
-    [[27], [{ name: 'escape' }]],
-    [[27, 91, 65], [{ name: 'up' }]],
-    [[27, 91, 66], [{ name: 'down' }]],
-    [[3], [{ name: 'c', ctrl: true }]],
-    [[13], [{ name: 'return' }]],
-    [[127], [{ name: 'backspace' }]],
+    ['\x1b', [{ name: 'escape' }]],
+    ['\x1b[A', [{ name: 'up' }]],
+    ['\x1b[B', [{ name: 'down' }]],
+    ['\x03', [{ name: 'c', ctrl: true }]],
+    ['\r', [{ name: 'return' }]],
+    ['\x7f', [{ name: 'backspace' }]],
     ['ada', [{ ch: 'a' }, { ch: 'd' }, { ch: 'a' }]],
     ['hello\x1b[A', [{ ch: 'h' }, { ch: 'e' }, { ch: 'l' }, { ch: 'l' }, { ch: 'o' }, { name: 'up' }]],
+    // a dead-key-composed char arrives as multi-byte UTF-8 and must be ONE key
+    ['ä', [{ ch: 'ä' }]],
+    ['Öl', [{ ch: 'Ö' }, { ch: 'l' }]],
   ];
-  for (const [input, expected] of cases) assert.deepEqual(editor.parseKeys(Buffer.from(input)), expected);
+  for (const [input, expected] of cases) assert.deepEqual(editor.parseKeys(input), expected);
 });
 
 test('editor parseGame', () => {

@@ -14,6 +14,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
+const { StringDecoder } = require('string_decoder');
 const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, fmtTime, matchLabel, bestOfOf, winTarget, reachedWinner, winnerIdx, dayKey, DATE_RE, catStatus, currentWave } = require('../site/derive.js');
 const { loadRepo, writeTournament, catCtx, byMatchOrder } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
@@ -30,13 +31,16 @@ function parseGame(s) {
 // arrow sequences — raw bytes deliver a lone ESC and \x1b[A instantly (real
 // terminals send arrows as one chunk). ponytail: a split arrow sequence
 // misfires an Esc keypress; accept it, the 500ms wait is worse.
-function parseKeys(buf) {
+function parseKeys(s) {
+  // s is the chunk already decoded from UTF-8 — a dead-key umlaut (¨+a) is
+  // two bytes on the wire but must be one key, since filter/payload matching
+  // runs on real characters
   const keys = [];
-  for (let i = 0; i < buf.length; i++) {
-    const c = buf[i];
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
     if (c === 27) { // CSI arrows are one key; a bare ESC is the escape key
-      if (buf[i + 1] === 91 && (buf[i + 2] === 65 || buf[i + 2] === 66)) {
-        keys.push({ name: buf[i + 2] === 65 ? 'up' : 'down' });
+      if (s.charCodeAt(i + 1) === 91 && (s.charCodeAt(i + 2) === 65 || s.charCodeAt(i + 2) === 66)) {
+        keys.push({ name: s.charCodeAt(i + 2) === 65 ? 'up' : 'down' });
         i += 2;
       } else keys.push({ name: 'escape' });
     } else if (c === 3) keys.push({ name: 'c', ctrl: true });  // ^C
@@ -821,8 +825,11 @@ function editorMain(root, siteRoot, repo, opts) {
   }
   process.stdin.setRawMode(true);
   process.stdout.on('resize', render);
+  // one stateful decoder — a multibyte char split across chunk writes must
+  // still come out as a single key
+  const decoder = new StringDecoder('utf8');
   process.stdin.on('data', chunk => {
-    for (const k of parseKeys(chunk)) {
+    for (const k of parseKeys(decoder.write(chunk))) {
       if (opts.simKey && k.ch) {
         const r = opts.simKey(k.ch);
         if (r) { if (typeof r === 'string') state.msg = { text: r, color: 'red' }; render(); return; }
