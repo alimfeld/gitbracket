@@ -607,6 +607,9 @@ test('editor editDetail: the side op reports the applied slot label; a cleared v
   const m = repo.tournaments.get('sample').tjson.matches.xd.find(x => x.id === 1);
   assert.equal(editor.editDetail('venue', m), '→ court-1', 'a venue edit on an undecided match reports the court');
   assert.equal(editor.editDetail('side', m9, { si: 1, side: { kind: 'players', ids: ['p1', 'p2'] } }, ctx), 'side b → Ada Lovelace / Grace Hopper', 'a players side labels the team');
+  const done = repo.tournaments.get('sample').tjson.matches.md40.find(m => m.id === 1);
+  const d2 = editor.editDetail('side', done, { si: 0, side: { kind: 'players', ids: ['p3', 'p4'] } }, ctx);
+  assert(/result kept/.test(d2), 'a side op on a decided match flags the kept result — history never reads as a silent rewrite');
 });
 
 test('editor boardText: arming a verb reserves the input row — the match window never shifts', () => {

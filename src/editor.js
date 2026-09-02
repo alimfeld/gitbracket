@@ -366,13 +366,15 @@ function commitMessage(kind, slug, cat, matchId, detail) {
 // One-line summary of what changed — mirror it in the commit message and the
 // echo. Keyed off the edit kind, never the match state, so a venue or time
 // edit on an already-decided match reports the move, not the result. side
-// carries value+ctx: the applied side's label, e.g. "side a → Winner of 8".
+// carries value+ctx: the applied side's label, e.g. "side a → Winner of 8". A
+// side op on a decided match keeps the stored games/result for the NEW team,
+// so the detail flags it — history must never read as a silent rewrite.
 function editDetail(kind, m, value, ctx) {
   const r = m.result;
   return kind === 'score' ? (m.games || []).map(gg => `${gg.a}-${gg.b}`).join(' · ') // dashes — the echo mirrors the board's score column
     : kind === 'time' ? (m.scheduled === undefined ? '→ TBD' : `→ ${m.scheduled}`)
     : kind === 'venue' ? `→ ${m.venue === undefined ? 'TBD' : m.venue}`
-    : kind === 'side' ? `side ${value.si === 0 ? 'a' : 'b'} → ${sideLabel(value.side, ctx)}`
+    : kind === 'side' ? `side ${value.si === 0 ? 'a' : 'b'} → ${sideLabel(value.side, ctx)}${isDone(m) ? ' (result kept)' : ''}`
     : r.status === 'void' ? 'void' : `side ${r.winner} wins by walkover`;
 }
 
