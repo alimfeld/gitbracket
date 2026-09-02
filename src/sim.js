@@ -13,8 +13,8 @@ const fs = require('fs');
 const http = require('http');
 const path = require('path');
 const { spawn } = require('child_process');
-const { makeCat, isDone, resolveSide, schedTime, matchLabel, bestOfOf } = require('../site/derive.js');
-const { loadRepo } = require('./tools.js');
+const { isDone, resolveSide, schedTime, matchLabel, bestOfOf } = require('../site/derive.js');
+const { loadRepo, catCtx, byMatchOrder } = require('./tools.js');
 const { writeEdit, applyScore, defaultSlug, C, editorMain } = require('./editor.js');
 
 const STEP = 30 * 60 * 1000;  // ]/[ move the clock in 30 sim-minutes
@@ -48,9 +48,8 @@ function planScorable(tjson, now) {
   const blocked = [];
   const byVenue = new Map();
   for (const cid of Object.keys(tjson.matches || {})) {
-    const meta = (tjson.categories || []).find(c => c.id === cid);
     const ms = tjson.matches[cid] || [];
-    const ctx = makeCat({ meta, matches: ms }, tjson);
+    const ctx = catCtx(tjson, cid);
     for (const m of ms) {
       if (!m || isDone(m)) continue;
       const t = schedTime(m, tz);
@@ -67,14 +66,13 @@ function planScorable(tjson, now) {
       }
     }
   }
-  const byTime = (a, b) => a.t - b.t || a.cat.localeCompare(b.cat) || a.m.id - b.m.id;
   for (const [venue, es] of byVenue) {
-    es.sort(byTime);
+    es.sort(byMatchOrder);
     for (let i = 1; i < es.length; i++) blocked.push({ ...es[i], venue, first: es[0] });
     list.push(es[0]);
   }
-  list.sort(byTime);
-  blocked.sort(byTime);
+  list.sort(byMatchOrder);
+  blocked.sort(byMatchOrder);
   return { list, blocked };
 }
 

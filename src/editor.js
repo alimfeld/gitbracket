@@ -15,7 +15,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, fmtTime, matchLabel, bestOfOf, winTarget, reachedWinner, winnerIdx, dayKey, DATE_RE, catStatus, currentWave } = require('../site/derive.js');
-const { loadRepo, writeTournament } = require('./tools.js');
+const { loadRepo, writeTournament, catCtx, byMatchOrder } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 const { ship } = require('./publish.js');
 
@@ -206,31 +206,26 @@ const rowKey = (cat, m) => `${cat} ${m.id}`;
 function livePlayable(tjson) {
   const set = new Set();
   for (const cid of Object.keys(tjson.matches || {})) {
-    const meta = (tjson.categories || []).find(c => c.id === cid);
-    const matches = tjson.matches[cid] || [];
-    const ctx = makeCat({ meta, matches }, tjson);
+    const ctx = catCtx(tjson, cid);
     for (const m of currentWave(ctx, catStatus(ctx))) set.add(rowKey(cid, m));
   }
   return set;
 }
 
 // One flat, time-ordered buffer of the whole tournament — the day's running
-// order; unscheduled matches go last, still editable. Sim's due list sorts
-// by the same comparator, so the two surfaces can never present different
-// orders.
+// order; unscheduled matches go last, still editable.
 function buildRows(tjson, playable) {
   const tz = tjson.timezone || 'UTC';
   const rows = [];
   for (const cid of Object.keys(tjson.matches || {})) {
-    const meta = (tjson.categories || []).find(c => c.id === cid);
-    const ctx = makeCat({ meta, matches: tjson.matches[cid] || [] }, tjson);
+    const ctx = catCtx(tjson, cid);
     for (const m of tjson.matches[cid] || []) {
       if (!m) continue;
       const t = schedTime(m, tz);
       rows.push({ cat: cid, m, ctx, stage: matchLabel(m, ctx), t: t === null ? Infinity : t, playable: playable.has(rowKey(cid, m)) });
     }
   }
-  rows.sort((a, b) => a.t - b.t || a.cat.localeCompare(b.cat) || a.m.id - b.m.id);
+  rows.sort(byMatchOrder);
   return rows;
 }
 
@@ -454,12 +449,12 @@ function step(state, key, view, now) {
   // browse — Esc clears the filter (the universal cancel key)
   if (name === 'escape') return { state: { ...ns, query: null }, action: null };
   if (name === 'return') return { state: ns, action: null };
-  if (name === 'down' || ch === 'j') return { state: { ...ns, cursorId: nextKey(view, ns, +1) }, action: null };
-  if (name === 'up' || ch === 'k') return { state: { ...ns, cursorId: nextKey(view, ns, -1) }, action: null };
+  if (name === 'down' || ch === 'j') return { state: { ...ns, cursorId: nextRow(view, ns, +1, () => true) }, action: null };
+  if (name === 'up' || ch === 'k') return { state: { ...ns, cursorId: nextRow(view, ns, -1, () => true) }, action: null };
   if (ch === 'g') return { state: { ...ns, cursorId: view.filtered.length ? rowKey(view.rows[view.filtered[0].i].cat, view.rows[view.filtered[0].i].m) : null }, action: null };
   if (ch === 'G') return { state: { ...ns, cursorId: view.filtered.length ? rowKey(view.rows[view.filtered[view.filtered.length - 1].i].cat, view.rows[view.filtered[view.filtered.length - 1].i].m) : null }, action: null };
-  if (ch === 'n') return { state: { ...ns, cursorId: nextPlayable(view, ns, +1) }, action: null };
-  if (ch === 'N') return { state: { ...ns, cursorId: nextPlayable(view, ns, -1) }, action: null };
+  if (ch === 'n') return { state: { ...ns, cursorId: nextRow(view, ns, +1, r => r.playable) }, action: null };
+  if (ch === 'N') return { state: { ...ns, cursorId: nextRow(view, ns, -1, r => r.playable) }, action: null };
   if (ch === '/') return { state: { ...ns, mode: 'filter', query: '' }, action: null };
   if (ch === ':') return { state: { ...ns, mode: 'cmd', cmdline: '' }, action: null };
   if (ch === '?') return { state: { ...ns, mode: 'report', report: helpText(ns.sim), msg: null }, action: null };
@@ -471,20 +466,13 @@ function step(state, key, view, now) {
   return { state: ns, action: null };
 }
 
-function nextKey(view, state, dir) {
-  const cur = cursorIndex(view, state);
-  const i = cur + dir;
-  if (i < 0 || i >= view.filtered.length || cur === -1) return state.cursorId;
-  const r = view.rows[view.filtered[i].i];
-  return rowKey(r.cat, r.m);
-}
-
-function nextPlayable(view, state, dir) {
-  const start = cursorIndex(view, state);
+// Movement in one loop: j/k walk every row, n/N stop only on a playable one —
+// the same scan, the stop predicate is the only difference.
+function nextRow(view, state, dir, stop) {
   const n = view.filtered.length;
-  for (let k = start + dir; dir > 0 ? k < n : k >= 0; k += dir) {
+  for (let k = cursorIndex(view, state) + dir; dir > 0 ? k < n : k >= 0; k += dir) {
     const r = view.rows[view.filtered[k].i];
-    if (r.playable) return rowKey(r.cat, r.m);
+    if (stop(r)) return rowKey(r.cat, r.m);
   }
   return state.cursorId;
 }
@@ -645,7 +633,7 @@ function execEdit(state, verb, cat, matchId, value) {
   if (res.err) return { text: res.err, color: 'red' };
   if (res.errs) return { text: res.errs.join('\n') + '\nnot written — validation error(s), file rolled back', color: 'red' };
   const info = repo.tournaments.get(slug);
-  const ctx = makeCat({ meta: info.tjson.categories.find(c => c.id === cat), matches: info.tjson.matches[cat] }, info.tjson);
+  const ctx = catCtx(info.tjson, cat);
   const m = ctx.byId.get(Number(matchId));
   if (state.commit) {
     const file = res.file; // writeEdit's own byte-identical write target

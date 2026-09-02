@@ -9,7 +9,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { ID_RE } = require('../site/derive.js');
+const { ID_RE, makeCat } = require('../site/derive.js');
 
 // Window collision test: shared by the validator's venue-overlap rule and the
 // generator's court/player occupancy — one predicate, no drift. (matchSlotMs,
@@ -23,6 +23,18 @@ function fixedPlayers(m) {
   return Array.isArray(m.sides) && m.sides.length === 2 && m.sides.every(s => s && s.kind === 'players' && Array.isArray(s.ids))
     ? new Set(m.sides.flatMap(s => s.ids)) : null;
 }
+
+// The one category context a tool pass iterates: meta + matches by category
+// id — the editor's buffer and the sim's due list used to re-type the
+// find+makeCat lookup, so it lives here.
+function catCtx(tjson, cid) {
+  return makeCat({ meta: (tjson.categories || []).find(c => c.id === cid), matches: (tjson.matches || {})[cid] || [] }, tjson);
+}
+
+// The day's running order, one comparator: time, then category id, then match
+// id — the editor's buffer and the sim's due list sort with the same rule so
+// the two surfaces can never present different orders.
+const byMatchOrder = (a, b) => a.t - b.t || a.cat.localeCompare(b.cat) || a.m.id - b.m.id;
 
 // Impossible calendar dates (2025-02-30) roll over in Date.UTC; check the
 // round-trip. Used by the validator (scheduled) and the generator (spec date).
@@ -82,4 +94,4 @@ function writeTournamentIndex(siteRoot, entries) {
   fs.writeFileSync(path.join(siteRoot, 'tournaments.json'), '[' + entries.map((t) => `\n  ${JSON.stringify(t)}`).join(',') + '\n]\n');
 }
 
-module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, fixedPlayers, isRealDate, findRoot };
+module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, fixedPlayers, isRealDate, findRoot, catCtx, byMatchOrder };
