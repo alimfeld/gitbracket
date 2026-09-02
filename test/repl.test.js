@@ -1,6 +1,7 @@
 'use strict';
 
-// repl.js: scoring eligibility, edits, command parsing, listing filters, commit messages, disk writes.
+// repl.js: the match-day editor (buffer, filter, state machine), scoring
+// eligibility, edits, command parsing, commit messages, disk writes.
 
 const fs = require('fs');
 const os = require('os');
@@ -19,22 +20,227 @@ function md40Ctx(repo) {
   return { tjson, matches, ctx: makeCat({ meta: tjson.categories.find(c => c.id === 'md40'), matches }, tjson) };
 }
 
-test('completer: match-id position completes on strings — numeric ids can’t throw', () => {
+// the editor keys — { ch, name, ctrl } is what step consumes
+const key = (ch, name) => ({ ch: ch || null, name: name || null, ctrl: false });
+// the sample's one playable match (deterministic — no wall clock in tests)
+const WAVE = new Set(['md40 8']);
+const viewOf = (repo, playable, query) => repl.makeView(repo.tournaments.get('sample').tjson, playable, query);
+const rkey = r => repl.rowKey(r.cat, r.m);
+
+// ---------- the editor ----------
+
+test('editor buildRows: one flat buffer, time order, tie-break cat then id, TBD last', () => {
   const repo = loadRepo(FIX('sample'));
-  const complete = repl.completer({ repo, slug: 'sample' });
-  const [cands, partial] = complete('/score md40 7');
-  assert.equal(partial, '7');
-  assert.ok(cands.every(c => typeof c === 'string'), 'match-id candidates are strings');
-  assert.doesNotThrow(() => complete('/score md40 1'), 'a partial that matches ids still completes cleanly');
+  const rows = repl.buildRows(repo.tournaments.get('sample').tjson, WAVE);
+  assert.equal(rows.length, 16, 'md40 10 + xd 6 — the whole day is one list');
+  assert.equal(rkey(rows[0]), 'md40 1', 'the 09:00 opener leads');
+  assert.equal(rkey(rows[1]), 'md40 2', 'same minute, same category: id order');
+  const idx = rows.findIndex(r => r.m.id === 8);
+  assert(rows[idx].playable, 'the ▶ flag comes from the injected playable set');
+  assert(!rows.find(r => r.m.id === 1).playable, 'unlisted matches are not flagged');
+  const copy = repo.tournaments.get('sample').tjson;
+  copy.matches.md40.find(m => m.id === 9).scheduled = undefined;
+  const rows2 = repl.buildRows(copy, WAVE);
+  assert.equal(rows2[rows2.length - 1].m.id, 9, 'an unscheduled match goes last, still editable');
 });
 
-test('repl: a null-tjson tournament is refused (auto-select and /use)', () => {
+test('editor makeView: / filters the rendered lines — names, refs, venues — case-insensitively', () => {
+  const repo = loadRepo(FIX('sample'));
+  const byName = repl.makeView(repo.tournaments.get('sample').tjson, WAVE, 'ada');
+  assert(byName.filtered.length > 0, 'a player name narrows the day');
+  const vc = repl.makeView(repo.tournaments.get('sample').tjson, WAVE, 'COURT-2');
+  assert(vc.filtered.length > 0 && vc.filtered.every(e => e.r.m.venue === 'court-2'), 'venues filter, case-blind');
+  const vRef = repl.makeView(repo.tournaments.get('sample').tjson, WAVE, 'md40 9');
+  assert.equal(vRef.filtered.length, 1, 'the ref pins the one match (md40 10 does not match md40 9)');
+  assert.equal(repl.makeView(repo.tournaments.get('sample').tjson, WAVE, 'zzz').filtered.length, 0, 'a miss is an empty view, never an error');
+  assert.equal(repl.makeView(repo.tournaments.get('sample').tjson, WAVE, null).filtered.length, 16, 'no query = the whole day');
+});
+
+test('editor step: j/k walk, g/G jump, clamped at the ends', () => {
+  const view = viewOf(loadRepo(FIX('sample')), WAVE, null);
+  let s = { mode: 'browse', cursorId: null, msg: null };
+  let r = repl.step(s, key('j'), view);
+  assert.equal(r.state.cursorId, 'md40 2', 'the first j steps into the list — the cursor starts at the top row');
+  for (let i = 0; i < 4; i++) r = repl.step(r.state, key('j'), view);
+  assert.equal(r.state.cursorId, 'md40 6', 'j walks down in id order');
+  r = repl.step(r.state, key('k'), view);
+  assert.equal(r.state.cursorId, 'md40 5', 'k walks back up');
+  r = repl.step(r.state, key('G'), view);
+  assert.equal(r.state.cursorId, 'xd 6', 'G bottoms out');
+  r = repl.step(r.state, key('j'), view);
+  assert.equal(r.state.cursorId, 'xd 6', 'j clamps at the last row');
+  r = repl.step(r.state, key('g'), view);
+  assert.equal(r.state.cursorId, 'md40 1', 'g tops out');
+});
+
+test('editor step: n/N jump between the ▶-flagged rows', () => {
+  const view = viewOf(loadRepo(FIX('sample')), WAVE, null);
+  let s = { mode: 'browse', cursorId: 'md40 1', msg: null };
+  let r = repl.step(s, key('n'), view);
+  assert.equal(r.state.cursorId, 'md40 8', 'n lands on the playable match');
+  r = repl.step(r.state, key('N'), view);
+  assert.equal(r.state.cursorId, 'md40 8', 'nothing playable before it — N stays');
+});
+
+test('editor step: / narrows live, Enter keeps it, Esc clears it', () => {
+  const view = viewOf(loadRepo(FIX('sample')), WAVE, null);
+  let s = { mode: 'browse', cursorId: null, msg: null };
+  let r = repl.step(s, key('/'), view);
+  assert.equal(r.state.mode, 'filter', '/ opens the filter input');
+  for (const c of ['c', 'o', 'u']) r = repl.step(r.state, key(c), view);
+  assert.equal(r.state.query, 'cou', 'typed chars accumulate');
+  r = repl.step(r.state, key(null, 'return'), view);
+  assert.equal(r.state.mode, 'browse');
+  assert.equal(r.state.query, 'cou', 'Enter keeps the filter applied');
+  r = repl.step(r.state, key(null, 'escape'), view);
+  assert.equal(r.state.query, null, 'Esc in browse clears the applied filter too');
+});
+
+test('editor step: an old /score prefix gets a hint, not silence', () => {
+  const view = viewOf(loadRepo(FIX('sample')), WAVE, null);
+  let r = repl.step({ mode: 'browse', cursorId: null, msg: null }, key('/'), view);
+  for (const c of 'score md40 8 21:19'.split('')) r = repl.step(r.state, key(c), view);
+  assert(r.state.msg && /old slash grammar/.test(r.state.msg.text), 'the operator is pointed at s, not at zero matches');
+});
+
+test('editor step: s arms the cursor line; payload + Enter emits the exact edit', () => {
+  const view = viewOf(loadRepo(FIX('sample')), WAVE, null);
+  let s = { mode: 'browse', cursorId: 'md40 8', msg: null };
+  let r = repl.step(s, key('s'), view);
+  assert.equal(r.state.mode, 'arm', 's arms score');
+  for (const c of '21:19'.split('')) r = repl.step(r.state, key(c), view);
+  assert.equal(r.state.payload, '21:19', 'payload accumulates');
+  r = repl.step(r.state, key(null, 'return'), view);
+  assert.deepEqual(r.action, { kind: 'edit', verb: 'score', cat: 'md40', matchId: '8', value: [{ a: 21, b: 19 }] }, 'enter emits the edit');
+  assert.equal(r.state.mode, 'browse', 'back to browse, unarmed');
+});
+
+test('editor step: a bad payload stays armed with the error — never writes', () => {
+  const view = viewOf(loadRepo(FIX('sample')), WAVE, null);
+  let s = { mode: 'browse', cursorId: 'md40 8', msg: null };
+  let r = repl.step(s, key('s'), view);
+  r = repl.step(r.state, key('x'), view);
+  r = repl.step(r.state, key(null, 'return'), view);
+  assert(r.action === null, 'no action on a bad score');
+  assert.equal(r.state.mode, 'arm', 'still armed');
+  assert.equal(r.state.payload, 'x', 'payload kept for retype');
+  assert(r.state.msg && /bad score/.test(r.state.msg.text), 'the error names the token');
+});
+
+test('editor step: Esc cancels an arm without touching anything', () => {
+  const view = viewOf(loadRepo(FIX('sample')), WAVE, null);
+  let s = { mode: 'browse', cursorId: 'md40 8', msg: null };
+  let r = repl.step(s, key('t'), view);
+  r = repl.step(r.state, key('1'), view);
+  r = repl.step(r.state, key(null, 'escape'), view);
+  assert.equal(r.state.mode, 'browse');
+  assert.equal(r.state.verb, null, 'esc unarms the time verb too');
+});
+
+test('editor step: o void needs no payload — Enter alone emits; a payload is refused', () => {
+  const view = viewOf(loadRepo(FIX('sample')), WAVE, null);
+  let s = { mode: 'browse', cursorId: 'md40 8', msg: null };
+  let r = repl.step(s, key('o'), view);
+  r = repl.step(r.state, key(null, 'return'), view);
+  assert.deepEqual(r.action, { kind: 'edit', verb: 'void', cat: 'md40', matchId: '8', value: undefined }, 'Enter confirms the void');
+  r = repl.step(s, key('o'), view);
+  r = repl.step(r.state, key('a'), view);
+  r = repl.step(r.state, key(null, 'return'), view);
+  assert(r.action === null, 'no action');
+  assert(r.state.msg && /no payload/.test(r.state.msg.text), 'void takes nothing');
+});
+
+test('editor step: :score md40 8 11:9 — the old syntax — routes to the same funnel', () => {
+  const view = viewOf(loadRepo(FIX('sample')), WAVE, null);
+  let r = repl.step({ mode: 'browse', cursorId: null, msg: null }, key(':'), view);
+  for (const c of 'score md40 8 11:9'.split('')) r = repl.step(r.state, key(c), view);
+  r = repl.step(r.state, key(null, 'return'), view);
+  assert.deepEqual(r.action, { kind: 'edit', verb: 'score', cat: 'md40', matchId: '8', value: [{ a: 11, b: 9 }] }, 'the colon command is the old parseCmd grammar');
+  r = repl.step({ mode: 'browse', cursorId: null, msg: null }, key(':'), view);
+  for (const c of 'wo md40 8 b'.split('')) r = repl.step(r.state, key(c), view);
+  r = repl.step(r.state, key(null, 'return'), view);
+  assert.deepEqual(r.action, { kind: 'edit', verb: 'walkover', cat: 'md40', matchId: '8', value: 'b' }, ':wo maps to the same walkover verb as the w key');
+});
+
+test('editor step: bare q and :q quit; typos get a hint, never a write', () => {
+  const view = viewOf(loadRepo(FIX('sample')), WAVE, null);
+  let r = repl.step({ mode: 'browse', cursorId: null, msg: null }, key('q'), view);
+  assert.equal(r.state.quit, true, 'bare q quits');
+  r = repl.step({ mode: 'browse', cursorId: null, msg: null }, key(':'), view);
+  r = repl.step(r.state, key('q'), view);
+  r = repl.step(r.state, key(null, 'return'), view);
+  assert.equal(r.state.quit, true, ':q quits');
+  r = repl.step({ mode: 'browse', cursorId: null, msg: null }, key(':'), view);
+  for (const c of 'frobnicate'.split('')) r = repl.step(r.state, key(c), view);
+  r = repl.step(r.state, key(null, 'return'), view);
+  assert(r.state.msg && /unknown command/.test(r.state.msg.text), 'typos answer with :help');
+});
+
+test('editor parsePayload: one grammar for the arm line and the : command', () => {
+  assert.deepEqual(repl.parsePayload('score', ['21:19', '11:9'], 'UTC').value.map(g => `${g.a}:${g.b}`), ['21:19', '11:9']);
+  assert(repl.parsePayload('score', ['21x9'], 'UTC').err, 'a malformed game is refused');
+  assert(repl.parsePayload('score', [], 'UTC').err, 'no games at all is refused');
+  assert.equal(repl.parsePayload('walkover', ['b'], 'UTC').value, 'b');
+  assert(repl.parsePayload('walkover', ['c'], 'UTC').err, 'only a|b');
+  assert.equal(repl.parsePayload('void', [], 'UTC').value, undefined);
+  assert(repl.parsePayload('void', ['a'], 'UTC').err, 'void takes nothing');
+  assert.equal(repl.parsePayload('venue', ['court-2'], 'UTC').value, 'court-2');
+  assert(repl.parsePayload('venue', [], 'UTC').err, 'a venue is required');
+  assert.match(repl.parsePayload('time', ['10:30'], 'UTC').value, /T10:30:00$/);
+  assert.equal(repl.parsePayload('time', ['-'], 'UTC').value, undefined, 'a lone - unschedules');
+  assert(repl.parsePayload('time', ['10:99'], 'UTC').err, 'impossible minutes refused');
+});
+
+test('editor execAction: :use refuses a broken or unknown tournament, lists at bare use', () => {
   const repo = loadRepo(FIX('bad-null-tjson'));
   assert.equal(repl.defaultSlug(repo), null, 'auto-select skips a tournament whose file is null');
   const state = { repo, slug: null };
-  assert.match(repl.dispatch({ kind: 'use', args: ['bad-null-tjson'] }, state), /no readable data/);
-  assert.equal(state.slug, null, '/use refuses the broken tournament');
-  assert.doesNotThrow(() => repl.dispatch({ kind: 'ls', args: [] }, state), 'bare ls at the root stays safe');
+  let r = repl.execAction(state, { kind: 'use', slug: 'bad-null-tjson' });
+  assert(r.msg && /no readable data/.test(r.msg.text), 'a broken tournament is refused');
+  assert.equal(state.slug, null, 'a refused use never changes the selection');
+  r = repl.execAction(state, { kind: 'use', slug: 'nope' });
+  assert(r.msg && /unknown tournament/.test(r.msg.text), 'an unknown slug is refused');
+  r = repl.execAction({ repo: loadRepo(FIX('sample')), slug: 'sample' }, { kind: 'use', slug: '' });
+  assert(r.msg && /tournaments:/.test(r.msg.text), 'bare use lists them');
+  r = repl.execAction({ repo: loadRepo(FIX('sample')), slug: 'md40' }, { kind: 'use', slug: 'sample' });
+  assert.equal(r.slug, 'sample', 'a good use returns the new slug');
+});
+
+test('editor execEdit: commit=false writes the scratch copy, validates, echoes the sim receipt', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gitbracket-'));
+  try {
+    const dataRoot = path.join(tmp, 'site');
+    fs.mkdirSync(dataRoot, { recursive: true });
+    fs.cpSync(FIX('sample'), dataRoot, { recursive: true });
+    const repo = loadRepo(dataRoot);
+    const state = { root: tmp, siteRoot: dataRoot, repo, slug: 'sample', commit: false };
+    const r = repl.execEdit(state, 'score', 'md40', '8', [{ a: 11, b: 5 }, { a: 11, b: 3 }]);
+    assert.equal(r.color, 'green');
+    assert(/\[sim\]/.test(r.text), 'the sim receipt marks the scratch write');
+    const reread = loadRepo(dataRoot);
+    assert(validateRepo(reread).errs.length === 0, 'the scratch copy still validates');
+    const m8 = reread.tournaments.get('sample').tjson.matches.md40.find(m => m.id === 8);
+    assert(m8.result.status === 'played' && m8.result.winner === 'a', 'games applied with a result');
+    const bad = repl.execEdit(state, 'venue', 'md40', '8', 'bogus-court');
+    assert.equal(bad.color, 'red');
+    assert(/rolled back/.test(bad.text), 'a validator refusal reports the rollback');
+    assert(loadRepo(dataRoot).tournaments.get('sample').tjson.matches.md40.find(m => m.id === 8).venue === 'court-2', 'the venue rolls back to the original court');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('editor boardText: header, ▶ flag, cursor marker, hint bar — one screen', () => {
+  const repo = loadRepo(FIX('sample'));
+  const view = repl.makeView(repo.tournaments.get('sample').tjson, WAVE, null);
+  const state = { mode: 'browse', cursorId: 'md40 8', msg: null, verb: null, payload: '', query: null, cmdline: '' };
+  const info = { title: 'Sample', mode: 'LIVE', clock: '14:32', played: 11, total: 16, note: '', sim: false };
+  const txt = repl.boardText(state, view, info);
+  assert(txt.includes('Sample · LIVE 14:32 · 11/16 played'), 'the header carries mode and tally');
+  assert(/^>▶/.test(txt.split('\n').find(l => l.includes('md40 8') && l.includes(' vs '))), 'the cursor line carries both markers');
+  const other = txt.split('\n').find(l => l.includes('md40 1') && l.includes(' vs '));
+  assert(!other.startsWith('>'), 'only the cursor line is marked >');
+  assert(/j\/k move/.test(txt), 'the browse hint bar is on screen');
 });
 
 test('repl applyScore: games + a played result at the target, repo still validates', () => {
@@ -149,48 +355,6 @@ test('repl parseCmd: mutators are slash-gated, reading is bare', () => {
   assert.deepEqual(repl.parseCmd('pull').kind, 'unknown', 'pull is gone — leave it to the shell');
 });
 
-test('repl listText: player filter narrows standings rows and matches to that player', () => {
-  const repo = loadRepo(FIX('sample'));
-  const all = repl.listText(repo, 'sample', ['md40'], null);
-  assert(all.includes('Pool A Teams'), 'pool id lives in the table header — no title line');
-  assert(all.includes('Ada Lovelace'), 'unfiltered view lists Ada\'s team');
-  const ada = repl.listText(repo, 'sample', ['md40'], 'ada');
-  assert(ada.includes('Ada Lovelace') && ada.includes('Grace Hopper'), 'filtered standings keep Ada\'s team');
-  // standings rows start with the rank digits; match lines start with the category id —
-  // opponents staying in match lines is expected, they only drop out of the standings table
-  const standingRows = ada.split('\n').filter(l => /^\d+\s/.test(l));
-  assert.equal(standingRows.length, 1, 'only the player\'s standings row remains');
-  assert(standingRows[0].includes('Ada Lovelace'), 'the surviving row is Ada\'s team');
-  const matchLines = ada.split('\n').filter(l => l.includes(' vs ') || l.includes('·'));
-  assert(matchLines.length > 0, 'filtered listing still has matches');
-  assert(matchLines[0].startsWith('md40 '), 'match refs carry the category id — copy-paste into /score');
-  for (const l of matchLines) {
-    assert(l.includes('Ada Lovelace') || l.includes('Grace Hopper'), `every listed match holds the player: ${l.trim()}`);
-  }
-  assert(repl.listText(repo, 'sample', ['md40'], 'nobody-here').includes('nothing for'), 'no match → nothing for "…"');
-  // `ls <category>` keeps the full standings + match sheet; bare `ls` sections per category
-  const xd = repl.listText(repo, 'sample', ['xd'], null);
-  assert(xd.includes('Pool A Teams'), 'xd standings render');
-  const everything = repl.listText(repo, 'sample', ['md40', 'xd'], null);
-  assert(everything.includes('Men\'s Doubles 40+ — md40') && everything.includes('Mixed Doubles — xd'), 'bare ls names the category first, id second');
-  // a filter that matches nothing drops every section — no dangling category titles
-  const none = repl.listText(repo, 'sample', ['md40', 'xd'], 'nobody-here');
-  assert(!none.includes('Men\'s Doubles 40+ — md40') && !none.includes('Mixed Doubles — xd'), 'empty sections are suppressed');
-  assert(none.includes('nothing for'), '…replaced by the nothing-for line');
-  assert(everything.includes('\n\nMixed Doubles — xd'), 'sections are separated by a blank line — never glued');
-});
-
-test('repl listText: matches are listed in chronological id order', () => {
-  const repo = loadRepo(FIX('sample'));
-  const txt = repl.listText(repo, 'sample', ['md40'], null);
-  const ids = txt.split('\n')
-    .filter(l => /^md40\s+\d+\b/.test(l))
-    .map(l => Number(l.match(/^md40\s+(\d+)/)[1]));
-  assert(ids.length > 1, 'multiple match lines to compare');
-  const sorted = [...ids].sort((a, b) => a - b);
-  assert.deepEqual(ids, sorted, `match ids in id order, got ${ids.join(',')}`);
-});
-
 test('repl formatMatchLine: a filled width bag keeps time and venue aligned across lines', () => {
   // the sim's screen — and listText's pass 1 — fill this bag from the lines
   // about to render; without it, every column collapses to its own content
@@ -212,15 +376,6 @@ test('repl formatMatchLine: a filled width bag keeps time and venue aligned acro
   const pos = (l, s) => l.indexOf(s);
   assert.equal(pos(l1, fmtTime(schedTime(m1, tz), tz)), pos(l9, fmtTime(schedTime(m9, tz), tz)), 'time column lines up');
   assert.equal(pos(l1, m1.venue), pos(l9, m9.venue), 'venue column lines up');
-});
-
-test('repl listText: dead-tied standings rows share the group rank', () => {
-  const repo = loadRepo(FIX('tie'));
-  const txt = repl.listText(repo, 'tie', ['t'], null);
-  const rows = txt.split('\n').filter(l => /^\d+\s/.test(l));
-  assert.equal(rows.length, 2, 'two tied sides render');
-  const ranks = rows.map(l => l.match(/^(\d+)/)[1]);
-  assert(ranks[0] === '1' && ranks[1] === '1', `dead tie shares rank 1 in the REPL table, got ${ranks}`);
 });
 
 test('repl commitMessage: conventional types with tournament scope', () => {
@@ -255,21 +410,6 @@ test('repl echoLine: sides first, then the detail and the sha receipt', () => {
   assert(line.includes('[abc1234]'), 'the short sha is the dimmed receipt');
   const t = repl.echoLine('time', m8, ctx, 'abc1234');
   assert(t.includes(' vs ') && t.includes('→'), 'a move edit still shows the sides and its target');
-});
-
-test('repl next: the current playable wave, across categories', () => {
-  const repo = loadRepo(FIX('sample'));
-  const out = repl.dispatch({ kind: 'next', args: [] }, { repo, slug: 'sample' });
-  assert(out.includes('md40 8'), 'the wave is the resolved-but-unplayed semifinal (id 8)');
-  assert(!/md40 (9|10)/.test(out), 'matches waiting on an unresolved feeder are not playable yet');
-  assert(!out.includes('Mixed Doubles'), 'a finished category contributes no wave section');
-  const done = repl.dispatch({ kind: 'next', args: [] }, { repo: loadRepo(FIX('full')), slug: 'full' });
-  assert.equal(done, 'no playable matches right now', 'a finished tournament reports no wave');
-  const none = repl.dispatch({ kind: 'next', args: [] }, { repo, slug: null });
-  assert.match(none, /use a tournament first/, 'next needs a selected tournament');
-  const fresh = repl.dispatch({ kind: 'next', args: [] }, { repo: loadRepo(FIX('byes')), slug: 'byes' });
-  assert(fresh.includes('t 1') && fresh.includes('t 2'), 'before the first result the 09:00 pool block is the wave');
-  assert(!fresh.includes('t 3'), 'a later-scheduled match is not in the opening wave');
 });
 
 test('repl writeEdit: the gate sees schedule edits — a date the index lacks is rejected and rolled back', () => {

@@ -5,25 +5,19 @@
 // sim clock and the results: it serves .sim/site over HTTP with a script that
 // overrides the page's Date.now to the sim clock (so the kiosk's statuses,
 // auto-centering, and board clock all track the rehearsal — site/ itself is
-// untouched), and a raw-keypress REPL drives the clock and picks which
-// matches to score. Every edit goes through the real REPL's writeEdit — same
-// validation gate, byte-identical writes — but is never committed: the
-// scratch copy is not a repo.
+// untouched), and the shared editor from repl.js drives the day: same buffer,
+// keys, and verbs, but a fake clock, a planScorable playable set, and never
+// a commit — the scratch copy is not a repo.
 
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
-const readline = require('readline');
 const { spawn } = require('child_process');
-const { makeCat, isDone, resolveSide, schedTime, matchLabel, sideLabel, bestOfOf, fmtTime } = require('../site/derive.js');
+const { makeCat, isDone, resolveSide, schedTime, matchLabel, bestOfOf } = require('../site/derive.js');
 const { loadRepo } = require('./tools.js');
-const { writeEdit, applyScore, formatMatchLine, defaultSlug, widthBag, C } = require('./repl.js');
+const { writeEdit, applyScore, defaultSlug, C, editorMain } = require('./repl.js');
 
 const STEP = 30 * 60 * 1000;  // ]/[ move the clock in 30 sim-minutes
-// ponytail: the digit keys cap the list at 9 — only a 10+ court hall ever
-// exceeds it (the venue rule caps the list at the venue count); page the list
-// when a hall that big simulates.
-const LIST_CAP = 9;
 
 // Random games for a match: the winner side takes the target games, with the
 // loser's wins leading so no side reaches the target before the last game
@@ -134,85 +128,6 @@ function openBrowser(url) {
   if (cmd) spawn(cmd, [url], { detached: true, stdio: 'ignore' }).unref();
 }
 
-function repMain(state, server) {
-  const tz = state.tjson.timezone || 'UTC';
-  let lastErr = '';
-
-  const played = () => Object.values(state.tjson.matches || {}).flat().filter(isDone).length;
-  // Score one match: random games through the real writeEdit — validation,
-  // rollback, byte-identical writes. Returns an error string or ''.
-  const score = e => {
-    const res = writeEdit(state.siteRoot, state.repo, state.slug, e.cat,
-      (ms, ctx) => applyScore(ms, e.m.id, makeGames(bestOfOf(e.m, ctx)), ctx));
-    return res.errs ? res.errs.join(' ') : res.err ? res.err : '';
-  };
-
-  // Re-plan until a pass scores nothing: a child fed by another match in the
-  // same batch becomes scoreable once its feeder lands, whatever the order.
-  const scoreAll = () => {
-    let errs = '';
-    let progress = true;
-    while (progress) {
-      progress = false;
-      for (const e of planScorable(state.tjson, state.now).list) {
-        const err = score(e);
-        if (err) errs += err + '\n'; else progress = true;
-      }
-    }
-    return errs;
-  };
-
-  const render = () => {
-    const { list, blocked } = planScorable(state.tjson, state.now);
-    // the columns come from the due list itself — the width bag is the same
-    // one listText feeds, so the sim line format can never drift from the listing
-    const { g, add } = widthBag();
-    for (const e of list) add(e);
-    const lines = ['\x1b[2J\x1b[H', state.banner];
-    lines.push(`${C.bold(state.tjson.name)} — sim ${C.cyan(fmtTime(state.now, tz))} · ${C.green(`${played()}/${state.total}`)} played` +
-      (blocked.length ? ` · ${C.yellow(`${blocked.length} blocked: ${blocked.slice(0, 2).map(b => b.first
-        ? `${b.cat} ${b.m.id} waits on ${(state.tjson.venues || []).find(v => v.id === b.venue)?.name || b.venue} (${b.first.cat} ${b.first.m.id} first)`
-        : `${b.cat} ${b.m.id} waits on ${sideLabel(b.wait, b.ctx)}`).join(', ')}`)}` : ''));
-    if (list.length) {
-      for (let i = 0; i < Math.min(list.length, LIST_CAP); i++) {
-        const e = list[i];
-        lines.push(`${C.bold(String(i + 1))})  ${formatMatchLine(e.cat, e.m, e.ctx, tz, e.stage, g)}`);
-      }
-      if (list.length > LIST_CAP) lines.push(C.dim(`+${list.length - LIST_CAP} more due — x scores them all`));
-    } else lines.push(C.dim('nothing due — ] advances the clock'));
-    if (lastErr) lines.push(C.red(lastErr));
-    lines.push(`${C.dim('1-9 score · x all · ] +30m · [ rewind · q quit — rewind never un-scores')}`);
-    process.stdout.write(lines.join('\n') + '\n');
-  };
-
-  const quit = () => {
-    if (process.stdin.isTTY) process.stdin.setRawMode(false);
-    server.close();
-    console.log(C.dim('\nbye — the day stayed in .sim/, nothing committed'));
-    process.exit(0);
-  };
-
-  const onKey = (str, key) => {
-    if (key && key.ctrl && key.name === 'c') return quit();
-    if (str === 'q') return quit();
-    lastErr = '';
-    if (str === 'x') lastErr = scoreAll();
-    else if (str === ']') state.now += STEP;
-    else if (str === '[') state.now -= STEP;
-    else if (str && str >= '1' && str <= '9') {
-      const n = Number(str) - 1;
-      const e = planScorable(state.tjson, state.now).list[n];
-      if (e) lastErr = score(e);
-    }
-    render();
-  };
-
-  readline.emitKeypressEvents(process.stdin);
-  process.stdin.setRawMode(true);
-  process.stdin.on('keypress', onKey);
-  render();
-}
-
 // CLI entry (dispatched from gb.js): args = ['<slug>'].
 function main(root, args) {
   const slug = args.find((a) => a && !a.startsWith('-')) || null;
@@ -233,15 +148,61 @@ function main(root, args) {
     console.error('sim: nothing scheduled — generate a schedule first (node gb.js schedule specs/<slug>.json)');
     process.exit(1);
   }
-  const state = { siteRoot, repo, slug: key, tjson, now: Math.min(...times), total: all.length };
+  const state = { siteRoot, repo, slug: key, tjson, now: Math.min(...times) };
   const server = serve(siteRoot, () => state.now);
   server.listen(0, '127.0.0.1', () => {
     if (!process.stdin.isTTY) { console.error('sim: needs a terminal for keypresses'); process.exit(0); }
     const url = `http://127.0.0.1:${server.address().port}/`;
-    state.banner = `${C.bold(tjson.name)} — simulated day in ${C.cyan('.sim/site')} (never committed)\n` +
-      `${C.cyan(url)} — opening your browser; every view goes live on each poll`;
+    console.log(C.dim(`${tjson.name} — simulated day in .sim/site (never committed) — ${url}`));
     openBrowser(url);
-    repMain(state, server);
+
+    // Score one match: random games through the real writeEdit — validation,
+    // rollback, byte-identical writes. Returns an error string or ''.
+    const score = e => {
+      const res = writeEdit(state.siteRoot, state.repo, state.slug, e.cat,
+        (ms, ctx) => applyScore(ms, e.m.id, makeGames(bestOfOf(e.m, ctx)), ctx));
+      return res.errs ? res.errs.join(' ') : res.err ? res.err : '';
+    };
+
+    // Re-plan until a pass scores nothing: a child fed by another match in
+    // the same batch becomes scoreable once its feeder lands, any order.
+    const scoreAll = () => {
+      let errs = '';
+      let progress = true;
+      while (progress) {
+        progress = false;
+        for (const e of planScorable(state.tjson, state.now).list) {
+          const err = score(e);
+          if (err) errs += err + '\n'; else progress = true;
+        }
+      }
+      return errs;
+    };
+
+    const playable = tjson => {
+      const set = new Set();
+      for (const e of planScorable(tjson, state.now).list) set.add(`${e.cat} ${e.m.id}`);
+      return set;
+    };
+
+    // ]/[ nudge the clock, x plays everything due — sim-only keys, hidden
+    // from live's hint bar; a string return is an error for the board's
+    // message line.
+    const simKey = ch => {
+      if (ch === ']') { state.now += STEP; return true; }
+      if (ch === '[') { state.now -= STEP; return true; }
+      if (ch === 'x') return scoreAll() || true;
+      return false;
+    };
+
+    editorMain(root, siteRoot, repo, {
+      sim: true,
+      slug: state.slug,
+      clock: () => state.now,
+      playable,
+      simKey,
+      onQuit: () => server.close(),
+    });
   });
 }
 
