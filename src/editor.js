@@ -34,7 +34,8 @@ function parseGame(s) {
 function parseKeys(s) {
   // s is the chunk already decoded from UTF-8 — a dead-key umlaut (¨+a) is
   // two bytes on the wire but must be one key, since filter/payload matching
-  // runs on real characters
+  // runs on real characters (BMP is all a terminal sends; an astral char would
+  // split into two surrogate keys)
   const keys = [];
   for (let i = 0; i < s.length; i++) {
     const c = s.charCodeAt(i);
