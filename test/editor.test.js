@@ -183,6 +183,12 @@ test('editor parsePayload: one grammar for the arm line and the sim', () => {
   assert(editor.parsePayload('time', ['10:99'], 'UTC').err, 'impossible minutes refused');
 });
 
+test('editor parsePayload: score accepts dashes and colons alike — the display form leads', () => {
+  assert.deepEqual(editor.parsePayload('score', ['21-19', '11:9'], 'UTC').value, [{ a: 21, b: 19 }, { a: 11, b: 9 }], 'dash and colon entries parse to the same games');
+  assert(/expected a-b/.test(editor.parsePayload('score', ['21x9'], 'UTC').err), 'the error speaks the display form');
+  assert(/21-19/.test(editor.parsePayload('score', [], 'UTC').err), 'the example speaks the display form');
+});
+
 test('editor execAction: :use refuses a broken or unknown tournament, lists at bare use', () => {
   const repo = loadRepo(FIX('bad-null-tjson'));
   assert.equal(editor.defaultSlug(repo), null, 'auto-select skips a tournament whose file is null');
@@ -236,6 +242,32 @@ test('editor boardText: header, ▶ flag, inverted cursor row, hint bar — one 
     === '\x1b[7m\x1b[1mref\x1b[0m\x1b[7mcyan\x1b[0m\x1b[7mdim\x1b[0m\x1b[7mgreen\x1b[0m\x1b[7m\x1b[0m', 'rowAttr drops colors and dims, keeps bold, re-asserts the invert after each reset');
   assert(editor.rowAttr(7, 'plain text') === 'plain text', 'plain input stays plain');
   assert(/\? help · q quit/.test(txt), 'the browse hint bar is on screen');
+});
+
+test('editor boardText: an armed action goes bold, draws the ▌ caret, and leads the hint with the entries', () => {
+  const repo = loadRepo(FIX('sample'));
+  const view = editor.makeView(repo.tournaments.get('sample').tjson, WAVE, null);
+  const state = { mode: 'arm', cursorId: 'md40 8', msg: null, verb: 'score', payload: '21-19', query: null, cmdline: '' };
+  const info = { title: 'Sample', mode: 'LIVE', clock: '14:32', played: 11, total: 16, note: '', sim: false };
+  const txt = editor.boardText(state, view, info);
+  const input = txt.split('\n').find(l => l.includes('→ ') && l.includes('▌'));
+  assert(input && input.startsWith('\x1b[1m') && input.endsWith('\x1b[0m'), 'the armed input line goes bold');
+  assert(input.includes('21-19▌'), 'the block caret sits right after the payload');
+  const hint = txt.split('\n').pop();
+  assert(hint.indexOf('21-19') < hint.indexOf('enter commits'), 'the expected entries lead the hint, enter/esc trail');
+  assert(!hint.includes('\x1b[2m'), 'the armed hint brightens — no dim');
+});
+
+test('editor boardText: the ▌ caret marks the filter and command input slots too', () => {
+  const repo = loadRepo(FIX('sample'));
+  const view = editor.makeView(repo.tournaments.get('sample').tjson, WAVE, null);
+  const info = { title: 'Sample', mode: 'LIVE', clock: '14:32', played: 11, total: 16, note: '', sim: false };
+  const f = editor.boardText({ mode: 'filter', cursorId: 'md40 8', msg: null, verb: null, payload: '', query: 'ada', cmdline: '' }, view, info);
+  assert(f.split('\n').some(l => /\/ ada▌ —/.test(l)), 'the filter caret follows the typed query, before the count note');
+  const c = editor.boardText({ mode: 'cmd', cursorId: 'md40 8', msg: null, verb: null, payload: '', query: null, cmdline: 'status' }, view, info);
+  assert(c.split('\n').some(l => /: status▌/.test(l)), 'the command caret follows the typed command');
+  const b = editor.boardText({ mode: 'browse', cursorId: 'md40 8', msg: null, verb: null, payload: '', query: null, cmdline: '' }, view, info);
+  assert(!b.includes('▌'), 'browse draws no caret — no input expected');
 });
 
 test('editor boardText: an active filter is echoed on the status line', () => {
@@ -441,6 +473,7 @@ test('editor editDetail: venue/time edits report the move, never the match resul
   assert.equal(editor.editDetail('time', m1), '→ 2025-07-14T16:00:00', 'time edit reports the time');
   assert.equal(editor.editDetail('walkover', m1), 'side a wins by walkover', 'walkover detail from the result');
   assert.equal(editor.editDetail('void', { result: { status: 'void' } }), 'void', 'void detail');
+  assert.equal(editor.editDetail('score', { games: [{ a: 21, b: 19 }, { a: 11, b: 5 }] }), '21-19 · 11-5', 'a score echo speaks dashes, mirroring the board column');
 });
 
 test('editor echoLine: sides first, then the detail and the sha receipt', () => {
@@ -449,7 +482,7 @@ test('editor echoLine: sides first, then the detail and the sha receipt', () => 
   editor.applyScore(matches, '8', [{ a: 11, b: 7 }, { a: 11, b: 3 }], ctx); // fixture bestOf 3, target 2 → done
   const m8 = matches.find(m => m.id === 8);
   const line = editor.echoLine('score', m8, ctx, 'abc1234');
-  assert(line.includes(' vs ') && line.includes('11:7'), 'the echo carries both sides and the score');
+  assert(line.includes(' vs ') && line.includes('11-7'), 'the echo carries both sides and the score — dashes, matching the board column');
   assert(line.includes('— done'), 'a completed score is flagged done');
   assert(line.includes('[abc1234]'), 'the short sha is the dimmed receipt');
   const t = editor.echoLine('time', m8, ctx, 'abc1234');

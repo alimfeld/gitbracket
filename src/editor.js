@@ -276,10 +276,11 @@ function cursorIndex(view, state) {
 // impossible date) belong to the validator.
 function parsePayload(kind, tokens, tz, now) {
   if (kind === 'score') {
-    if (!tokens.length) return { err: 'expected a score, e.g. 21:19' };
+    // the display speaks dashes; parseGame accepts both, so colon muscle memory still works
+    if (!tokens.length) return { err: 'expected a score, e.g. 21-19' };
     const games = tokens.map(parseGame);
     const bad = tokens.findIndex((t, i) => !games[i]);
-    if (bad !== -1) return { err: `bad score ${JSON.stringify(tokens[bad])} — expected a:b` };
+    if (bad !== -1) return { err: `bad score ${JSON.stringify(tokens[bad])} — expected a-b` };
     return { value: games };
   }
   if (kind === 'walkover') {
@@ -329,7 +330,7 @@ function commitMessage(kind, slug, cat, matchId, detail) {
 // edit on an already-decided match reports the move, not the result.
 function editDetail(kind, m) {
   const r = m.result;
-  return kind === 'score' ? (m.games || []).map(gg => `${gg.a}:${gg.b}`).join(' · ')
+  return kind === 'score' ? (m.games || []).map(gg => `${gg.a}-${gg.b}`).join(' · ') // dashes — the echo mirrors the board's score column
     : kind === 'time' ? (m.scheduled === undefined ? '→ TBD' : `→ ${m.scheduled}`)
     : kind === 'venue' ? `→ ${m.venue}`
     : r.status === 'void' ? 'void' : `side ${r.winner} wins by walkover`;
@@ -369,7 +370,7 @@ function helpText(sim) {
     C.bold('find'),
     `  ${k('/')} narrow to matching lines — Enter keeps, Esc clears it`, '',
     `${C.bold('act')} — the line under the cursor is the target`,
-    `  ${k('s')} score → 21:19 [11:9 …]`,
+    `  ${k('s')} score → 21-19 [11-9 …]`,
     `  ${k('t')} time → 10:30 [date 10:30], or - to unschedule`,
     `  ${k('v')} venue → court-2`,
     `  ${k('w')} walkover → a or b`,
@@ -392,7 +393,8 @@ function helpText(sim) {
 
 const PROMPT_HINT = {
   browse: '? help · q quit',
-  arm: { score: 'enter commits · esc cancels · a:b a:b … (or one game per commit)', venue: 'enter commits · esc cancels · a venue id, e.g. court-2', time: 'enter commits · esc cancels · hh:mm · [date] hh:mm · - unschedules', walkover: 'enter commits · esc cancels · a or b', void: 'enter confirms the void · esc cancels' },
+  // expected entries first — the what — enter/esc trail as the how
+  arm: { score: '21-19 11-9 … (or one game per commit) · enter commits · esc cancels', venue: 'a venue id, e.g. court-2 · enter commits · esc cancels', time: 'hh:mm · [date] hh:mm · - unschedules · enter commits · esc cancels', walkover: 'a or b · enter commits · esc cancels', void: 'enter confirms the void · esc cancels' },
   filter: 'type to narrow · enter keeps · esc clears',
   cmd: 'enter runs · esc cancels',
   report: 'esc back',
@@ -501,7 +503,9 @@ function boardText(state, view, info, rows, cols) {
     : '';
   const header = `${C.bold(C.cyan(info.title))} · ${info.mode} ${C.cyan(info.clock)} · ${info.played}/${info.total} played${info.note || ''}${filterNote}`;
   const msg = state.msg ? C[state.msg.color](state.msg.text) : '';
-  const hint = C.dim(hintLine(state));
+  // an armed action owns the bottom of the screen — the hint brightens and the
+  // input line goes bold
+  const hint = state.mode === 'arm' ? hintLine(state) : C.dim(hintLine(state));
   // physical rows a rendered line occupies after auto-wrap — ANSI is stripped
   // (formatting, not width) and this board's glyphs are single-width, so plain
   // length / cols; over-reporting wide glyphs only shrinks the window, never
@@ -553,23 +557,26 @@ function boardText(state, view, info, rows, cols) {
   }
   lines.push('');
   if (msg) lines.push(msg);
-  if (input) lines.push(input);
+  if (input) lines.push(state.mode === 'arm' ? `\x1b[1m${input}\x1b[0m` : input); // bold marks the fill-in field — the ref is bold too, so it reads as one system, not two
   lines.push(hint);
   return lines.join('\n');
 }
 
 function inputLine(state, view) {
+  // the block caret marks the input position — end of the typed text, before
+  // any trailing note; the board hides the real terminal cursor, so the caret
+  // is drawn, not moved
   if (state.mode === 'arm') {
     const cur = cursorIndex(view, state);
     const row = cur !== -1 ? view.rows[view.filtered[cur].i] : null;
     const target = row ? `${state.verb} ${rowKey(row.cat, row.m)} — ${listingSide(row.m.sides[0], row.ctx)} vs ${listingSide(row.m.sides[1], row.ctx)}` : `${state.verb} (no match)`;
-    return `${target} → ${state.payload}`;
+    return `${target} → ${state.payload}▌`;
   }
   if (state.mode === 'filter') {
     const count = view.filtered.length;
-    return count === 0 ? `/ ${state.query || ''} — no match` : `/ ${state.query || ''} — ${count} match${count === 1 ? '' : 'es'}`;
+    return count === 0 ? `/ ${state.query || ''}▌ — no match` : `/ ${state.query || ''}▌ — ${count} match${count === 1 ? '' : 'es'}`;
   }
-  if (state.mode === 'cmd') return `: ${state.cmdline}`;
+  if (state.mode === 'cmd') return `: ${state.cmdline}▌`;
   return '';
 }
 
