@@ -105,31 +105,44 @@ test('editor step: x is an ordinary character in the filter input — never a si
   assert.equal(r.state.query, 'x', 'x types into the query — /xd narrows, it does not score');
 });
 
-test('editor step: re-scoring a scored match prefills the games on record', () => {
+test('editor step: Enter on a decided match prefills the outcome on record', () => {
   const view = viewOf(loadRepo(FIX('sample')), WAVE, null);
   let s = { mode: 'browse', cursorId: 'md40 1', msg: null }; // md40 1 is played 11-9 11-7
-  const r = editor.step(s, key('s'), view);
-  assert.equal(r.state.mode, 'arm', 's arms score');
-  assert.equal(r.state.payload, '11-9 11-7', 'the recorded games prefill — append or amend');
+  let r = editor.step(s, key(null, 'return'), view);
+  assert.equal(r.state.mode, 'arm', 'Enter arms the result entry');
+  assert.equal(r.state.verb, 'result');
+  assert.equal(r.state.payload, '11-9 11-7', 'the recorded games prefill — append or amend, Enter on it round-trips');
+  r = editor.step(s, key(null, 'return'), view);
+  assert.equal(r.state.payload, '11-9 11-7', 're-arming is unchanged — a decided row always prefills, never clears');
 });
 
-test('editor step: s arms the cursor line; payload + Enter emits the exact edit', () => {
+test('editor step: Enter arms the cursor line; payload + Enter emits the exact edit', () => {
   const view = viewOf(loadRepo(FIX('sample')), WAVE, null);
   let s = { mode: 'browse', cursorId: 'md40 9', msg: null };
-  let r = editor.step(s, key('s'), view);
-  assert.equal(r.state.mode, 'arm', 's arms score');
+  let r = editor.step(s, key(null, 'return'), view);
+  assert.equal(r.state.mode, 'arm', 'Enter arms the result entry');
   assert.equal(r.state.payload, '', 'an unscored match arms empty');
   for (const c of '21:19'.split('')) r = editor.step(r.state, key(c), view);
   assert.equal(r.state.payload, '21:19', 'payload accumulates');
   r = editor.step(r.state, key(null, 'return'), view);
-  assert.deepEqual(r.action, { kind: 'edit', verb: 'score', cat: 'md40', matchId: '9', value: [{ a: 21, b: 19 }] }, 'enter emits the edit');
+  assert.deepEqual(r.action, { kind: 'edit', verb: 'result', cat: 'md40', matchId: '9', value: { shape: 'score', games: [{ a: 21, b: 19 }] } }, 'enter emits the edit with the score shape');
   assert.equal(r.state.mode, 'browse', 'back to browse, unarmed');
+});
+
+test('editor step: an empty result Enter clears — Enter-Enter on an unplayed row is a no-op, never an error', () => {
+  const view = viewOf(loadRepo(FIX('sample')), WAVE, null);
+  let s = { mode: 'browse', cursorId: 'md40 9', msg: null }; // unscored, unplayed
+  let r = editor.step(s, key(null, 'return'), view);
+  assert.equal(r.state.payload, '', 'an unplayed match arms empty');
+  r = editor.step(r.state, key(null, 'return'), view);
+  assert.deepEqual(r.action, { kind: 'edit', verb: 'result', cat: 'md40', matchId: '9', value: { shape: 'clear' } }, 'empty commits a clear — applied to nothing here');
+  assert.equal(r.state.msg, null, 'no error — the read-only Enter-Enter rhythm is quiet');
 });
 
 test('editor step: a bad payload stays armed with the error — never writes', () => {
   const view = viewOf(loadRepo(FIX('sample')), WAVE, null);
   let s = { mode: 'browse', cursorId: 'md40 8', msg: null };
-  let r = editor.step(s, key('s'), view);
+  let r = editor.step(s, key(null, 'return'), view);
   assert.equal(r.state.payload, '11-7', 're-scoring md40 8 prefills its one game on record');
   r = editor.step(r.state, key('x'), view);
   r = editor.step(r.state, key(null, 'return'), view);
@@ -149,17 +162,25 @@ test('editor step: Esc cancels an arm without touching anything', () => {
   assert.equal(r.state.verb, null, 'esc unarms the time verb too');
 });
 
-test('editor step: o void needs no payload — Enter alone emits; a payload is refused', () => {
+test('editor step: the result entry spells void — wo a and void are tokens, empty clears', () => {
   const view = viewOf(loadRepo(FIX('sample')), WAVE, null);
   let s = { mode: 'browse', cursorId: 'md40 8', msg: null };
-  let r = editor.step(s, key('o'), view);
+  let r = editor.step(s, key(null, 'return'), view);
+  assert.equal(r.state.payload, '11-7', 're-scoring md40 8 prefills its one game on record');
+  r = editor.step(r.state, { ch: null, name: 'u', ctrl: true }, view); // drop the prefill
+  for (const c of 'void'.split('')) r = editor.step(r.state, key(c), view);
   r = editor.step(r.state, key(null, 'return'), view);
-  assert.deepEqual(r.action, { kind: 'edit', verb: 'void', cat: 'md40', matchId: '8', value: undefined }, 'Enter confirms the void');
-  r = editor.step(s, key('o'), view);
-  r = editor.step(r.state, key('a'), view);
+  assert.deepEqual(r.action, { kind: 'edit', verb: 'result', cat: 'md40', matchId: '8', value: { shape: 'void' } }, 'the void token emits the void shape');
+  s = { mode: 'browse', cursorId: 'md40 7', msg: null }; // walkover-decided, prefill wo a
+  r = editor.step(s, key(null, 'return'), view);
+  assert.equal(r.state.payload, 'wo a', 'a walkover row prefills its outcome');
+  r = editor.step(r.state, { ch: null, name: 'u', ctrl: true }, view);
+  for (const c of 'wo b'.split('')) r = editor.step(r.state, key(c), view);
   r = editor.step(r.state, key(null, 'return'), view);
-  assert(r.action === null, 'no action');
-  assert(r.state.msg && /no payload/.test(r.state.msg.text), 'void takes nothing');
+  assert.deepEqual(r.action.value, { shape: 'walkover', winner: 'b' }, 'the walkover override emits the walkover shape');
+  s = { mode: 'browse', cursorId: 'md40 6', msg: null }; // played — clear via ^U then empty Enter
+  r = editor.step(s, key(null, 'return'), view);
+  assert.equal(r.state.payload, '9-11 11-9 11-6', 'played matches prefill all their games');
 });
 
 test('editor step: :score is gone — the edit verbs are single keys on the line', () => {
@@ -188,25 +209,25 @@ test('editor step: bare q quits; :q and typos get a hint, never a write', () => 
 });
 
 test('editor parsePayload: one grammar for the arm line and the sim', () => {
-  assert.deepEqual(editor.parsePayload('score', ['21:19', '11:9'], 'UTC').value.map(g => `${g.a}:${g.b}`), ['21:19', '11:9']);
-  assert(editor.parsePayload('score', ['21x9'], 'UTC').err, 'a malformed game is refused');
-  assert(editor.parsePayload('score', [], 'UTC').err, 'no games at all is refused');
-  assert.equal(editor.parsePayload('walkover', ['b'], 'UTC').value, 'b');
-  assert(editor.parsePayload('walkover', ['c'], 'UTC').err, 'only a|b');
-  assert.equal(editor.parsePayload('void', [], 'UTC').value, undefined);
-  assert(editor.parsePayload('void', ['a'], 'UTC').err, 'void takes nothing');
+  assert.deepEqual(editor.parsePayload('result', ['21:19', '11:9'], 'UTC').value, { shape: 'score', games: [{ a: 21, b: 19 }, { a: 11, b: 9 }] });
+  assert(editor.parsePayload('result', ['21x9'], 'UTC').err, 'a malformed game is refused');
+  assert.deepEqual(editor.parsePayload('result', ['wo', 'b'], 'UTC').value, { shape: 'walkover', winner: 'b' }, 'the wo token names the winner');
+  assert(editor.parsePayload('result', ['wo'], 'UTC').err, 'a side is required after wo');
+  assert(editor.parsePayload('result', ['wo', 'c'], 'UTC').err, 'only a|b');
+  assert.deepEqual(editor.parsePayload('result', ['void'], 'UTC').value, { shape: 'void' }, 'the void token emits the void shape');
+  assert(editor.parsePayload('result', ['void', 'a'], 'UTC').err, 'void takes nothing else');
+  assert.deepEqual(editor.parsePayload('result', [], 'UTC').value, { shape: 'clear' }, 'an empty result entry clears');
   assert.equal(editor.parsePayload('venue', ['court-2'], 'UTC').value, 'court-2');
-  assert(editor.parsePayload('venue', [], 'UTC').err, 'a venue is required');
+  assert.equal(editor.parsePayload('venue', [], 'UTC').value, undefined, 'an empty venue entry clears the court');
   assert.match(editor.parsePayload('time', ['10:30'], 'UTC').value, /T10:30:00$/);
-  assert.equal(editor.parsePayload('time', ['-'], 'UTC').value, undefined, 'a lone - unschedules');
+  assert.equal(editor.parsePayload('time', [], 'UTC').value, undefined, 'an empty time entry unschedules');
   assert(editor.parsePayload('time', ['10:99'], 'UTC').err, 'impossible minutes refused');
   assert.match(editor.parsePayload('time', ['10:30'], 'Not/AZone').err, /bad timezone/, 'a well-formed time failing the default day names the timezone, not the time');
 });
 
-test('editor parsePayload: score accepts dashes and colons alike — the display form leads', () => {
-  assert.deepEqual(editor.parsePayload('score', ['21-19', '11:9'], 'UTC').value, [{ a: 21, b: 19 }, { a: 11, b: 9 }], 'dash and colon entries parse to the same games');
-  assert(/expected a-b/.test(editor.parsePayload('score', ['21x9'], 'UTC').err), 'the error speaks the display form');
-  assert(/21-19/.test(editor.parsePayload('score', [], 'UTC').err), 'the example speaks the display form');
+test('editor parsePayload: the result entry speaks dashes and colons alike — the display form leads', () => {
+  assert.deepEqual(editor.parsePayload('result', ['21-19', '11:9'], 'UTC').value, { shape: 'score', games: [{ a: 21, b: 19 }, { a: 11, b: 9 }] }, 'dash and colon entries parse to the same games');
+  assert(/expected a-b/.test(editor.parsePayload('result', ['21x9'], 'UTC').err), 'the error speaks the display form');
 });
 
 test('editor execAction: :use refuses a broken or unknown tournament, lists at bare use', () => {
@@ -232,7 +253,7 @@ test('editor execEdit: commit=false writes the scratch copy, validates, echoes t
     fs.cpSync(FIX('sample'), dataRoot, { recursive: true });
     const repo = loadRepo(dataRoot);
     const state = { root: tmp, siteRoot: dataRoot, repo, slug: 'sample', commit: false };
-    const r = editor.execEdit(state, 'score', 'md40', '8', [{ a: 11, b: 5 }, { a: 11, b: 3 }]);
+    const r = editor.execEdit(state, 'result', 'md40', '8', { shape: 'score', games: [{ a: 11, b: 5 }, { a: 11, b: 3 }] });
     assert.equal(r.color, 'green');
     assert(/\[sim\]/.test(r.text), 'the sim receipt marks the scratch write');
     const reread = loadRepo(dataRoot);
@@ -267,7 +288,7 @@ test('editor boardText: header, ▶ flag, inverted cursor row, hint bar — one 
 test('editor boardText: an armed action goes bold, draws the ▌ caret, and leads the hint with the entries', () => {
   const repo = loadRepo(FIX('sample'));
   const view = editor.makeView(repo.tournaments.get('sample').tjson, WAVE, null);
-  const state = { mode: 'arm', cursorId: 'md40 8', msg: null, verb: 'score', payload: '21-19', query: null, cmdline: '' };
+  const state = { mode: 'arm', cursorId: 'md40 8', msg: null, verb: 'result', payload: '21-19', query: null, cmdline: '' };
   const info = { title: 'Sample', mode: 'LIVE', clock: '14:32', played: 11, total: 16, note: '', sim: false };
   const txt = editor.boardText(state, view, info);
   const input = txt.split('\n').find(l => l.includes('→ ') && l.includes('▌'));
@@ -477,9 +498,10 @@ test('editor prefillFor: the current value on record, canonical — a date shows
   assert.equal(editor.prefillFor('time', {}, tz, now), '', 'no schedule arms empty');
   assert.equal(editor.prefillFor('venue', m, tz, now), 'court-2', 'venue prefills as stored');
   assert.equal(editor.prefillFor('venue', {}, tz, now), '', 'a courtless match arms empty');
-  assert.equal(editor.prefillFor('score', m, tz, now), '11-7', 'games prefill, dashes — the display form parses back');
-  assert.equal(editor.prefillFor('walkover', m, tz, now), 'a', 'a walkover prefills its winner letter');
-  assert.equal(editor.prefillFor('walkover', {}, tz, now), '', 'an undecided match arms empty');
+  assert.equal(editor.prefillFor('result', m, tz, now), '11-7', 'a played outcome prefills its games, dashes — the display form parses back');
+  assert.equal(editor.prefillFor('result', { result: { status: 'walkover', winner: 'a' } }, tz, now), 'wo a', 'a walkover prefills its spelled outcome');
+  assert.equal(editor.prefillFor('result', { result: { status: 'void' } }, tz, now), 'void', 'a void prefills the void token');
+  assert.equal(editor.prefillFor('result', {}, tz, now), '', 'an undecided match arms empty');
   assert.equal(editor.prefillFor('side-a', m, tz, now), 'pool A 1', 'side a prefills its stored slot');
   assert.equal(editor.prefillFor('side-b', m, tz, now), 'match 8 winner', 'side b prefills its stored slot');
 });
@@ -494,8 +516,8 @@ test('editor step: a and b arm the side verb for that side; Enter emits the fixe
   assert.deepEqual(r.action, { kind: 'edit', verb: 'side-a', cat: 'md40', matchId: '7', value: { si: 0, side: { kind: 'pool', pool: 'A', rank: 1 } } }, 'Enter emits the a-side edit');
   r = editor.step({ mode: 'browse', cursorId: 'md40 7', msg: null }, key('b'), view);
   assert.equal(r.state.payload, 'pool A 4', 'b prefills the other side');
-  r = editor.step({ mode: 'browse', cursorId: 'md40 7', msg: null }, key('w'), view);
-  assert.equal(r.state.payload, 'a', 'a walkover result prefills its winning side letter');
+  r = editor.step({ mode: 'browse', cursorId: 'md40 7', msg: null }, key(null, 'return'), view);
+  assert.equal(r.state.payload, 'wo a', 'a walkover result prefills the spelled outcome');
 });
 
 test('editor step: the arm field edits at the caret — typing inserts, ⌫ deletes before it, ←/→ move, ^U kills', () => {
@@ -560,9 +582,10 @@ test('editor editDetail: venue/time edits report the move, never the match resul
   assert.equal(editor.editDetail('venue', m1), '→ court-2', 'venue edit reports the venue on a decided match');
   m1.scheduled = '2025-07-14T16:00:00';
   assert.equal(editor.editDetail('time', m1), '→ 2025-07-14T16:00:00', 'time edit reports the time');
-  assert.equal(editor.editDetail('walkover', m1), 'side a wins by walkover', 'walkover detail from the result');
-  assert.equal(editor.editDetail('void', { result: { status: 'void' } }), 'void', 'void detail');
-  assert.equal(editor.editDetail('score', { games: [{ a: 21, b: 19 }, { a: 11, b: 5 }] }), '21-19 · 11-5', 'a score echo speaks dashes, mirroring the board column');
+  assert.equal(editor.editDetail('result', m1, { shape: 'walkover', winner: 'a' }), 'side a wins by walkover', 'walkover detail from the result entry');
+  assert.equal(editor.editDetail('result', {}, { shape: 'void' }), 'void', 'void detail');
+  assert.equal(editor.editDetail('result', { games: [{ a: 21, b: 19 }, { a: 11, b: 5 }] }, { shape: 'score' }), '21-19 · 11-5', 'a score echo speaks dashes, mirroring the board column');
+  assert.equal(editor.editDetail('result', {}, { shape: 'clear' }), '→ TBD', 'a clear returns the match to the board');
 });
 
 test('editor echoLine: sides first, then the detail and the sha receipt', () => {
@@ -570,7 +593,7 @@ test('editor echoLine: sides first, then the detail and the sha receipt', () => 
   const { matches, ctx } = md40Ctx(repo);
   editor.applyScore(matches, '8', [{ a: 11, b: 7 }, { a: 11, b: 3 }], ctx); // fixture bestOf 3, target 2 → done
   const m8 = matches.find(m => m.id === 8);
-  const line = editor.echoLine('score', m8, ctx, 'abc1234');
+  const line = editor.echoLine('result', m8, ctx, 'abc1234', { shape: 'score' });
   assert(line.includes(' vs ') && line.includes('11-7'), 'the echo carries both sides and the score — dashes, matching the board column');
   assert(line.includes('— done'), 'a completed score is flagged done');
   assert(line.includes('[abc1234]'), 'the short sha is the dimmed receipt');
@@ -732,7 +755,7 @@ test('editor boardText: the msg line is reserved — errors show while armed, an
   assert.deepStrictEqual(matchLines(ack), matchLines(idle), 'an acknowledgment renders in its reserved row — matches do not move');
   const a = ack.split('\n');
   assert(a[a.length - 3].includes('done'), 'the ack owns the reserved msg row — input row and hint stay put below it');
-  const armed = editor.boardText({ ...base, mode: 'arm', verb: 'score', payload: 'x', msg: { text: 'bad score "x" — expected a-b', color: 'yellow' } }, view, info, 20, 80);
+  const armed = editor.boardText({ ...base, mode: 'arm', verb: 'result', payload: 'x', msg: { text: 'bad score "x" — expected a-b', color: 'yellow' } }, view, info, 20, 80);
   const al = armed.split('\n');
   assert(al[al.length - 2].includes('▌'), 'armed, the input row holds the field');
   assert(al[al.length - 3].includes('bad score'), 'the grammar error keeps its own row — never hidden by the field');
@@ -761,7 +784,7 @@ test('editor boardText: arming a verb reserves the input row — the match windo
   const info = { title: 'Sample', mode: 'LIVE', clock: '14:32', played: 11, total: 16, note: '', sim: false };
   const firstMatch = txt => txt.split('\n').findIndex(l => l.includes(' vs '));
   const browse = editor.boardText({ mode: 'browse', ...base }, view, info, 20, 80);
-  const armed = editor.boardText({ mode: 'arm', ...base, verb: 'score' }, view, info, 20, 80);
+  const armed = editor.boardText({ mode: 'arm', ...base, verb: 'result' }, view, info, 20, 80);
   assert.equal(firstMatch(armed), firstMatch(browse), 'the arm line appears in its reserved row — matches do not move');
   const lines = armed.split('\n');
   const idx = lines.findIndex(l => l.includes('→') && l.includes('▌'));

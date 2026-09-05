@@ -1,15 +1,16 @@
 'use strict';
 
 // GitBracket match-day editor — vim-flavored keys over the whole tournament
-// buffer: every line is one match, j/k move, / narrows, s/v/t/w/o arm the line
-// and Enter commits. Live and sim share the same editor — the mode only swaps
-// the clock, the repo target, and whether edits commit. Every edit validates,
-// writes, and commits itself, so the process can die at any instant with
-// nothing lost.
+// buffer: every line is one match, j/k move, / narrows, Enter arms the result
+// entry (the day's primary act), v/t/a/b arm theirs. Live and sim share the
+// same editor — the mode only swaps the clock, the repo target, and whether
+// edits commit. Every edit validates, writes, and commits itself, so the
+// process can die at any instant with nothing lost.
 //
 // Interaction contract, no exceptions:
-//   browse keys never write; a verb key arms a visible target; the bottom
-//   input line is the only place Enter commits; Esc cancels anywhere.
+//   browse keys never write; Enter arms the result entry, a verb key arms its
+//   target; the bottom input line is the only place Enter commits; Esc cancels
+//   anywhere.
 
 const fs = require('fs');
 const path = require('path');
@@ -88,6 +89,12 @@ function applyResult(matches, matchId, status, winner) {
     m.result = winner === undefined ? { status } : { status, winner };
     return null;
   });
+}
+
+// The clear: games and result are one round-trip pair, so removing a score
+// removes both — the match returns to the unresolved board.
+function applyClear(matches, matchId) {
+  return findMatch(matches, matchId, m => { delete m.games; delete m.result; return null; });
 }
 
 function applyVenue(matches, matchId, venueId) {
@@ -300,27 +307,28 @@ function cursorIndex(view, state) {
 // Grammar errors are caught here, before any I/O; data errors (unknown venue,
 // impossible date) belong to the validator.
 function parsePayload(kind, tokens, tz, now) {
-  if (kind === 'score') {
+  if (kind === 'result') {
+    // one outcome grammar: games (bare) · wo a · void · empty clears — the
+    // shape rides the value, so commit kinds keep score/walkover/void
+    if (!tokens.length) return { value: { shape: 'clear' } }; // empty payload clears — the Enter-armed default
+    const head = tokens[0];
+    if (head === 'wo') {
+      const side = tokens[1];
+      if (side !== 'a' && side !== 'b') return { err: 'expected a or b after wo' };
+      return { value: { shape: 'walkover', winner: side } };
+    }
+    if (head === 'void') {
+      if (tokens.length > 1) return { err: 'void takes nothing else' };
+      return { value: { shape: 'void' } };
+    }
     // the display speaks dashes; parseGame accepts both, so colon muscle memory still works
-    if (!tokens.length) return { err: 'expected a score, e.g. 21-19' };
     const games = tokens.map(parseGame);
     const bad = tokens.findIndex((t, i) => !games[i]);
     if (bad !== -1) return { err: `bad score ${JSON.stringify(tokens[bad])} — expected a-b` };
-    return { value: games };
-  }
-  if (kind === 'walkover') {
-    const side = tokens[0];
-    if (side === undefined) return { err: 'expected a or b' };
-    if (side !== 'a' && side !== 'b') return { err: 'side must be a or b' };
-    return { value: side };
-  }
-  if (kind === 'void') {
-    if (tokens.length) return { err: 'void takes no payload — Enter confirms' };
-    return { value: undefined };
+    return { value: { shape: 'score', games } };
   }
   if (kind === 'venue') {
-    if (tokens.length === 1 && tokens[0] === '-') return { value: undefined }; // - unschedules the court
-    if (!tokens.length) return { err: 'expected a venue, e.g. court-2' };
+    if (!tokens.length) return { value: undefined }; // empty clears the court
     return { value: tokens[0] };
   }
   if (SIDE_VERBS[kind] !== undefined) {
@@ -346,12 +354,12 @@ function parsePayload(kind, tokens, tz, now) {
     }
     return { err: `expected players, pool, or match — got ${JSON.stringify(shape)}` };
   }
-  // time: [YYYY-MM-DD] hh:mm, or - to unschedule
-  if (tokens.length === 1 && tokens[0] === '-') return { value: undefined };
+  // time: [YYYY-MM-DD] hh:mm — empty unschedules
+  if (!tokens.length) return { value: undefined };
   const a = tokens[0], b = tokens[1];
   const date = b !== undefined && DATE_RE.test(a) ? a : undefined;
   const hhmm = date !== undefined ? b : a;
-  if (!hhmm) return { err: 'expected hh:mm (optionally preceded by a date), or - to unschedule' };
+  if (!hhmm) return { err: 'expected hh:mm (optionally preceded by a date) — empty clears' };
   const iso = buildScheduled(hhmm, tz, date, now);
   if (iso === null) {
     // buildScheduled fails on a bad time — or, when the time itself is fine, on
@@ -370,17 +378,22 @@ function parsePayload(kind, tokens, tz, now) {
 // prefill can then show the slot being edited. SIDE_VERBS maps verb → side index.
 const SIDE_VERBS = { 'side-a': 0, 'side-b': 1 };
 
-// The six verbs each map to one apply function.
+// The result verb folds score / walkover / void / clear into one entry — the
+// value's shape dispatches to the domain applies, so the commit kinds stay
+// score / walkover / void and the history greps keep working.
 function applyFor(verb, matchId, value) {
-  return verb === 'score' ? (ms, ctx) => applyScore(ms, matchId, value, ctx)
-    : verb === 'walkover' ? c => applyResult(c, matchId, 'walkover', value)
-    : verb === 'void' ? c => applyResult(c, matchId, 'void')
+  if (verb === 'result') return (ms, ctx) => {
+    if (value.shape === 'score') return applyScore(ms, matchId, value.games, ctx);
+    if (value.shape === 'walkover') return applyResult(ms, matchId, 'walkover', value.winner);
+    if (value.shape === 'void') return applyResult(ms, matchId, 'void');
+    return applyClear(ms, matchId);
+  };
+  return verb === 'venue' ? c => applyVenue(c, matchId, value)
     : SIDE_VERBS[verb] !== undefined ? c => applySide(c, matchId, value)
-    : verb === 'venue' ? c => applyVenue(c, matchId, value)
     : c => applyTime(c, matchId, value); // time — undefined unschedules
 }
 
-const VERB_KEYS = { s: 'score', v: 'venue', t: 'time', w: 'walkover', o: 'void', a: 'side-a', b: 'side-b' };
+const VERB_KEYS = { v: 'venue', t: 'time', a: 'side-a', b: 'side-b' };
 
 // The armed payload for a verb: the current value on record, canonicalized so
 // an unedited Enter stays byte-identical (writeEdit's "unchanged" no-op) —
@@ -389,7 +402,15 @@ const VERB_KEYS = { s: 'score', v: 'venue', t: 'time', w: 'walkover', o: 'void',
 // the same hh:mm round-trips; a different stored date must be shown or Enter
 // would silently move the match to today. An empty value arms an empty field.
 function prefillFor(verb, m, tz, now) {
-  if (verb === 'score') return (m.games || []).map(g => `${g.a}-${g.b}`).join(' ');
+  if (verb === 'result') {
+    // the whole outcome serialized — Enter on it round-trips, never rewrites;
+    // an in-play match arms empty, so Enter-Enter on it is a clear-of-nothing
+    if (m.games) return m.games.map(g => `${g.a}-${g.b}`).join(' ');
+    const r = m.result;
+    if (r && r.status === 'walkover') return `wo ${r.winner}`;
+    if (r && r.status === 'void') return 'void';
+    return '';
+  }
   if (verb === 'venue') return m.venue || '';
   if (verb === 'time') {
     const s = m.scheduled;
@@ -422,12 +443,13 @@ function commitMessage(kind, slug, cat, matchId, detail) {
 // side op on a decided match keeps the stored games/result for the NEW team,
 // so the detail flags it — history must never read as a silent rewrite.
 function editDetail(kind, m, value, ctx) {
-  const r = m.result;
-  return kind === 'score' ? (m.games || []).map(gg => `${gg.a}-${gg.b}`).join(' · ') // dashes — the echo mirrors the board's score column
+  return kind === 'result' ? (value.shape === 'score' ? (m.games || []).map(gg => `${gg.a}-${gg.b}`).join(' · ') // dashes — the echo mirrors the board's score column
+      : value.shape === 'walkover' ? `side ${value.winner} wins by walkover`
+      : value.shape === 'void' ? 'void'
+      : '→ TBD') // a clear returns the match to the board
     : kind === 'time' ? (m.scheduled === undefined ? '→ TBD' : `→ ${m.scheduled}`)
     : kind === 'venue' ? `→ ${m.venue === undefined ? 'TBD' : m.venue}`
-    : SIDE_VERBS[kind] !== undefined ? `side ${value.si === 0 ? 'a' : 'b'} → ${sideLabel(value.side, ctx)}${isDone(m) ? ' (result kept)' : ''}`
-    : r.status === 'void' ? 'void' : `side ${r.winner} wins by walkover`;
+    : `side ${value.si === 0 ? 'a' : 'b'} → ${sideLabel(value.side, ctx)}${isDone(m) ? ' (result kept)' : ''}`; // side — the a/b keys carry value+ctx
 }
 
 // The post-edit confirmation: sides first (so you see you touched the right
@@ -435,7 +457,7 @@ function editDetail(kind, m, value, ctx) {
 // commit message stays machine-facing and unchanged — only the echo is for eyes.
 function echoLine(kind, m, ctx, sha, value) {
   const d = editDetail(kind, m, value, ctx);
-  const sum = `${listingSide(m.sides[0], ctx)} vs ${listingSide(m.sides[1], ctx)} → ${d}${kind === 'score' && isDone(m) ? ' — done' : ''}`;
+  const sum = `${listingSide(m.sides[0], ctx)} vs ${listingSide(m.sides[1], ctx)} → ${d}${kind === 'result' && value.shape === 'score' && isDone(m) ? ' — done' : ''}`;
   return `${sum}  ${C.dim(`[${sha}]`)}`;
 }
 
@@ -462,14 +484,12 @@ function helpText(sim) {
     C.bold('find'),
     `  ${k('/')} narrow to matching lines — Enter keeps, Esc clears it`, '',
     `${C.bold('act')} — the line under the cursor is the target`,
-    `  ${k('s')} score → 21-19 [11-9 …]`,
-    `  ${k('t')} time → 10:30 [date 10:30], or - to unschedule`,
-    `  ${k('v')} venue → court-2, or - to clear`,
-    `  ${k('w')} walkover → a or b`,
-    `  ${k('o')} void → Enter confirms`,
+    `  ${k('Enter')} result → 21-19 [11-9 …] · wo a · void — empty clears`,
+    `  ${k('t')} time → 10:30 [date 10:30] — empty clears`,
+    `  ${k('v')} venue → court-2 — empty clears`,
     `  ${k('a / b')} side a / b → players <ids> · pool <pool> <rank> · match <id> winner|loser`, '',
     C.bold('commit'),
-    `  ${k('Enter')} commits the armed edit — the only key that ever writes`,
+    `  ${k('Enter')} arms the result in browse, commits when armed — the only key that ever writes`,
     `  ${k('Esc')} cancels anywhere`, '',
     C.bold('commands'),
     ...(sim ? [] : [`  ${k(':publish')} ship site/ to the domain`]),
@@ -487,9 +507,9 @@ function helpText(sim) {
 const SIDE_HINT = 'players <ids> · pool <pool> <rank> · match <id> winner|loser · enter commits · esc cancels';
 
 const PROMPT_HINT = {
-  browse: '? help · q quit',
+  browse: 'enter result · ? help · q quit',
   // expected entries first — the what — enter/esc trail as the how
-  arm: { score: '21-19 11-9 … (or one game per commit) · enter commits · esc cancels', venue: 'a venue id, e.g. court-2, or - to clear · enter commits · esc cancels', time: 'hh:mm · [date] hh:mm · - unschedules · enter commits · esc cancels', walkover: 'a or b · enter commits · esc cancels', void: 'enter confirms the void · esc cancels', 'side-a': SIDE_HINT, 'side-b': SIDE_HINT },
+  arm: { result: '21-19 11-9 … · wo a · void · empty clears · enter commits · esc cancels', venue: 'a venue id, e.g. court-2 — empty clears · enter commits · esc cancels', time: 'hh:mm · [date] hh:mm · empty clears · enter commits · esc cancels', 'side-a': SIDE_HINT, 'side-b': SIDE_HINT },
   filter: 'type to narrow · enter keeps · esc clears',
   cmd: 'enter runs · esc cancels',
   report: 'esc back',
@@ -555,7 +575,16 @@ function step(state, key, view, now) {
 
   // browse — Esc clears the filter (the universal cancel key)
   if (name === 'escape') return { state: { ...ns, query: null }, action: null };
-  if (name === 'return') return { state: ns, action: null };
+  // Enter arms the result entry — the day's primary act, one key from the
+  // target line: cursor, Enter, type, Enter. The prefill is the current
+  // outcome; an unplayed match arms empty (empty-clear = a no-op, never an
+  // error), so Enter-Enter reads a row without ever writing.
+  if (name === 'return') {
+    if (cur === -1) return { state: { ...ns, msg: { text: 'no match under the cursor', color: 'red' } }, action: null };
+    const m = rowAt(cur).m;
+    const pre = prefillFor('result', m, view.tz, now);
+    return { state: { ...ns, mode: 'arm', verb: 'result', payload: pre, pos: pre.length }, action: null };
+  }
   if (name === 'down' || ch === 'j') return { state: { ...ns, cursorId: nextRow(view, ns, +1, () => true) }, action: null };
   if (name === 'up' || ch === 'k') return { state: { ...ns, cursorId: nextRow(view, ns, -1, () => true) }, action: null };
   if (ch === 'g') return { state: { ...ns, cursorId: view.filtered.length ? rowKey(view.rows[view.filtered[0].i].cat, view.rows[view.filtered[0].i].m) : null }, action: null };
@@ -766,17 +795,23 @@ async function liveText(siteRoot, slug) {
 // or the rolled-back error becomes the board's message line.
 function execEdit(state, verb, cat, matchId, value) {
   const { root, siteRoot, repo, slug } = state;
+  const info = repo.tournaments.get(slug);
+  const ctx = catCtx(info.tjson, cat);
+  const m = ctx.byId.get(Number(matchId)); // the same object writeEdit mutates in place
+  const preStatus = m && m.result && m.result.status; // what a clear removes — its commit kind matches it
   const res = writeEdit(siteRoot, repo, slug, cat, applyFor(verb, matchId, value));
   if (res.err) return { text: res.err, color: 'red' };
   if (res.errs) return { text: res.errs.join('\n') + '\nnot written — validation error(s), file rolled back', color: 'red' };
-  const info = repo.tournaments.get(slug);
-  const ctx = catCtx(info.tjson, cat);
-  const m = ctx.byId.get(Number(matchId));
   if (res.unchanged) return { text: echoLine(verb, m, ctx, 'unchanged', value), color: 'yellow' }; // same data — nothing written, nothing committed
+  // the git kind names what happened: a result edit keeps its shape kind, a
+  // clear takes the kind of what it removed — greps like ^score( still find it
+  const kind = verb === 'result'
+    ? (value.shape === 'clear' ? (preStatus === 'walkover' ? 'walkover' : preStatus === 'void' ? 'void' : 'score') : value.shape)
+    : SIDE_VERBS[verb] !== undefined ? 'side' : verb;
   if (state.commit) {
     const file = res.file; // writeEdit's own byte-identical write target
     const detail = editDetail(verb, m, value, ctx);
-    const msg = commitMessage(SIDE_VERBS[verb] !== undefined ? 'side' : verb, slug, cat, matchId, detail); // git kind stays 'side' — the detail names a/b
+    const msg = commitMessage(kind, slug, cat, matchId, detail);
     git(root, ['add', path.relative(root, file)]);
     const c = git(root, ['commit', '-m', msg]);
     if (c.code !== 0) return { text: `${path.relative(root, file)} written but the commit failed:\n${c.err}\n(file staged — commit it manually)`, color: 'red' };
@@ -930,4 +965,4 @@ function main(root) {
   editorMain(root, siteRoot, repo, { sim: false, clock: () => Date.now() });
 }
 
-module.exports = { parseGame, parseKeys, buildScheduled, applyScore, applyResult, applyVenue, applySide, applyTime, prefillFor, writeEdit, commitMessage, editDetail, echoLine, parseCmd, formatMatchLine, listingSide, rowKey, waveEntries, buildRows, makeView, parsePayload, step, boardText, execEdit, execAction, defaultSlug, editorMain, main, C, rowAttr };
+module.exports = { parseGame, parseKeys, buildScheduled, applyScore, applyResult, applyClear, applyVenue, applySide, applyTime, prefillFor, writeEdit, commitMessage, editDetail, echoLine, parseCmd, formatMatchLine, listingSide, rowKey, waveEntries, buildRows, makeView, parsePayload, step, boardText, execEdit, execAction, defaultSlug, editorMain, main, C, rowAttr };
