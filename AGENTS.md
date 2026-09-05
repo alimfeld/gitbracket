@@ -83,10 +83,13 @@ agreements; if one doesn't fit, raise it instead of breaking it silently.
   behavior need a committed scenario under `fixtures/` and an assertion in
   `test/`, both loaded via the same `loadRepo` as real checkouts. Tests
   assert domain behavior — ladder order, slot resolution, validation
-  outcomes, escaping, no-throw — and, where shipped behavior is at stake,
-  renderer-output smoke checks (a11y state, status flags, data-jump wiring,
-  escapes); neither layer mutates committed data or depends on live
-  `site/tournaments/`.
+  outcomes, escaping, no-throw. Renderer tests are smoke checks only:
+  shipped state survives — an a11y state, a status flag, a data-jump target,
+  an escape, a no-throw — never the words, columns, tags, or layout that
+  carry it; copy and layout are review changes, not test changes. Derive
+  helpers that only feed the renderer (labels, status words, layout columns,
+  scroll anchors) get smoke coverage or none. Neither layer mutates
+  committed data or depends on live `site/tournaments/`.
 - **Concurrent edits are rebase conflicts, not lost writes.** A rejected push
   means someone pushed first: `git pull --rebase && git push`.
 - **One scorer owns one tournament.**

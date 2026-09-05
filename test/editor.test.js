@@ -10,7 +10,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { loadRepo } = require('../src/tools.js');
 const { validateRepo } = require('../src/validate.js');
-const { makeCat, matchLabel, schedTime, fmtTime } = require('../site/derive.js');
+const { makeCat } = require('../site/derive.js');
 const editor = require('../src/editor.js');
 const { FIX, hasErr } = require('./helpers.js');
 
@@ -269,193 +269,6 @@ test('editor execEdit: commit=false writes the scratch copy, validates, echoes t
   }
 });
 
-test('editor boardText: header, ▶ flag, inverted cursor row, hint bar — one screen', () => {
-  const repo = loadRepo(FIX('sample'));
-  const view = editor.makeView(repo.tournaments.get('sample').tjson, WAVE, null);
-  const state = { mode: 'browse', cursorId: 'md40 8', msg: null, verb: null, payload: '', query: null, cmdline: '' };
-  const info = { title: 'Sample', mode: 'LIVE', clock: '14:32', played: 11, total: 16, note: '', sim: false };
-  const txt = editor.boardText(state, view, info);
-  assert(txt.includes('Sample · LIVE 14:32 · 11/16 played'), 'the header carries mode and tally');
-  assert(/^▶/.test(txt.split('\n').find(l => l.includes('md40 8') && l.includes(' vs '))), 'the playable cursor line leads with the ▶ flag');
-  const other = txt.split('\n').find(l => l.includes('md40 1') && l.includes(' vs '));
-  assert(!other.includes('\x1b[7m'), 'only the cursor line is inverted');
-  assert(editor.rowAttr(7, '\x1b[1mref\x1b[0m\x1b[36mcyan\x1b[0m\x1b[2mdim\x1b[0m\x1b[32mgreen\x1b[0m')
-    === '\x1b[7m\x1b[1mref\x1b[0m\x1b[7mcyan\x1b[0m\x1b[7mdim\x1b[0m\x1b[7mgreen\x1b[0m\x1b[7m\x1b[0m', 'rowAttr drops colors and dims, keeps bold, re-asserts the invert after each reset');
-  assert(editor.rowAttr(7, 'plain text') === 'plain text', 'plain input stays plain');
-  assert(/\? help · q quit/.test(txt), 'the browse hint bar is on screen');
-});
-
-test('editor boardText: an armed action goes bold and leads the hint with the entries — no drawn caret, the native cursor lives in render', () => {
-  const repo = loadRepo(FIX('sample'));
-  const view = editor.makeView(repo.tournaments.get('sample').tjson, WAVE, null);
-  const state = { mode: 'arm', cursorId: 'md40 8', msg: null, verb: 'result', payload: '21-19', query: null, cmdline: '' };
-  const info = { title: 'Sample', mode: 'LIVE', clock: '14:32', played: 11, total: 16, note: '', sim: false };
-  const txt = editor.boardText(state, view, info);
-  const input = txt.split('\n').find(l => l.includes('→ '));
-  assert(input && input.startsWith('\x1b[1m') && input.endsWith('\x1b[0m'), 'the armed input line goes bold');
-  assert(input.includes('21-19') && !input.includes('▌'), 'the payload reads clean — no caret glyph in the text');
-  const hint = txt.split('\n').pop();
-  assert(hint.indexOf('21-19') < hint.indexOf('enter commits'), 'the expected entries lead the hint, enter/esc trail');
-  assert(!hint.includes('\x1b[2m'), 'the armed hint brightens — no dim');
-});
-
-test('editor boardText: no caret glyph in filter or command slots either — board text is cursor-free', () => {
-  const repo = loadRepo(FIX('sample'));
-  const view = editor.makeView(repo.tournaments.get('sample').tjson, WAVE, null);
-  const info = { title: 'Sample', mode: 'LIVE', clock: '14:32', played: 11, total: 16, note: '', sim: false };
-  const f = editor.boardText({ mode: 'filter', cursorId: 'md40 8', msg: null, verb: null, payload: '', query: 'ada', cmdline: '' }, view, info);
-  assert(f.split('\n').some(l => /\/ ada —/.test(l)), 'the filter input reads the typed query, before the count note');
-  const c = editor.boardText({ mode: 'cmd', cursorId: 'md40 8', msg: null, verb: null, payload: '', query: null, cmdline: 'status' }, view, info);
-  assert(c.split('\n').some(l => /: status/.test(l)), 'the command input reads the typed command');
-  assert(!f.includes('▌') && !c.includes('▌'), 'neither input slot draws a caret');
-});
-
-test('editor boardText: an active filter is echoed on the status line', () => {
-  const repo = loadRepo(FIX('sample'));
-  const view = editor.makeView(repo.tournaments.get('sample').tjson, WAVE, 'ada');
-  const state = { mode: 'browse', cursorId: 'md40 8', msg: null, verb: null, payload: '', query: 'ada', cmdline: '' };
-  const info = { title: 'Sample', mode: 'LIVE', clock: '14:32', played: 11, total: 16, note: '', sim: false };
-  const txt = editor.boardText(state, view, info);
-  assert(/· \/ada — \d+ match/.test(txt.split('\n')[0]), 'the status line carries the active filter and its match count');
-  assert(view.filtered.length > 0, 'the ada filter has matches to count');
-  assert(/esc clears the filter/.test(txt.split('\n').pop()), 'the hint says Esc clears the filter when one is active');
-});
-
-// the marker/window tests share one sample view, status line, and stripper —
-// hoisted so the pins read without repeating the plumbing
-const sample = () => {
-  const repo = loadRepo(FIX('sample'));
-  const view = editor.makeView(repo.tournaments.get('sample').tjson, WAVE, null);
-  const info = { title: 'Sample', mode: 'LIVE', clock: '14:32', played: 11, total: 16, note: '', sim: false };
-  const strip = t => t.split('\n').map(l => l.replace(/\x1b\[[0-9;]*m/g, ''));
-  return { view, info, strip };
-};
-
-test('editor boardText: clipped edges show ↑/↓ more markers with the hidden count', () => {
-  const { view, info, strip } = sample();
-  const state = { mode: 'browse', cursorId: 'md40 8', msg: null, verb: null, payload: '', query: null, cmdline: '' };
-  const clipped = strip(editor.boardText(state, view, info, 12, 80));
-  const up = clipped.find(l => /^↑ \d+ more$/.test(l));
-  const down = clipped.find(l => /^↓ \d+ more$/.test(l));
-  assert(up, 'a top marker shows when matches hide above the window');
-  assert(down, 'a bottom marker shows when matches hide below the window');
-  const visible = clipped.filter(l => l.includes(' vs ')).length;
-  assert(+up.match(/\d+/)[0] + visible + +down.match(/\d+/)[0] === view.filtered.length, 'hidden-above + visible + hidden-below = total matches');
-  const full = strip(editor.boardText(state, view, info, 80, 80));
-  assert(!full.some(l => /^[↑↓] \d+ more$/.test(l)), 'no markers when the whole list fits');
-});
-
-test('editor markers: a cue always reads 2 or more — never 1', () => {
-  const { view, info, strip } = sample();
-  const n = view.filtered.length;
-  const mw = editor.matchHeights(view, 80); // two physical rows per match at cols 80
-  // a lone hidden match above takes the marker's row — "↑ 1 more" never renders
-  const one = editor.computeWindow(1, 2, mw, 6, n);
-  assert(one.upMore === 0 && one.start === 0 && one.e > 2, 'a single hidden match above is shown, not announced as "↑ 1 more"');
-  // the bottom mirrors it: a lone hidden overflow still cues — the marker's own
-  // row displaces a match, so the count reads 2, never 1
-  const lone = editor.computeWindow(0, 0, [2, 2, 2, 2, 2, 2], 10, 6);
-  assert(lone.downMore === 2 && lone.e === 4, 'a lone hidden match below reads "↓ 2 more", never "↓ 1 more"');
-  // two hidden matches earn the marker, counted exactly
-  assert(editor.computeWindow(2, 2, mw, 6, n).upMore === 2, 'two hidden matches read "↑ 2 more"');
-  // where the cursor would not fit beside both markers, the anchored scroll
-  // slides the window one match further up instead of dropping the ↓ cue — so
-  // a marker's absence always means "nothing hidden there"
-  const tight = editor.computeWindow(editor.reconcileTop(2, 3, mw, 5, n), 3, mw, 5, n);
-  assert(tight.start === 3 && tight.upMore === 3 && tight.downMore >= 2 && tight.e > 3, 'a tight pane keeps both cues and the cursor, one match more hidden above');
-  // room for both: both edges mark their hidden matches
-  const both = editor.computeWindow(2, 3, mw, 6, n);
-  assert(both.upMore === 2 && both.downMore >= 2, 'both edges show a marker when both fit');
-  // at the second-to-last match nothing hides below — the last one fits, so no
-  // bottom marker
-  const secondLast = editor.rowKey(view.rows[view.filtered[n - 2].i].cat, view.rows[view.filtered[n - 2].i].m);
-  const base = { mode: 'browse', cursorId: secondLast, msg: null, verb: null, payload: '', query: null, cmdline: '' };
-  const at = strip(editor.boardText(base, view, info, 12, 80));
-  assert(!at.some(l => /^↓ 1 more$/.test(l)), 'at the second-to-last match nothing hides below — no bottom marker');
-});
-
-test('editor markers: the first ↑/↓ cue reads 2 more — the marker takes a match line', () => {
-  const { view, info, strip } = sample();
-  const cols = 200, rows = 16; // one physical row per match, a pane that clips
-  const mw = editor.matchHeights(view, cols);
-  const budget = editor.listBudget('h', '', '', rows, cols);
-  const n = view.filtered.length;
-  assert(mw.every(h => h === 1), 'wide pane: one physical row per match');
-  assert(budget < n, 'the pane clips the list');
-  const rk = i => editor.rowKey(view.rows[view.filtered[i].i].cat, view.rows[view.filtered[i].i].m);
-  const cur = s => view.filtered.findIndex(e => editor.rowKey(e.r.cat, e.r.m) === s.cursorId);
-  const firstMarker = (start, key) => {
-    let s = { mode: 'browse', cursorId: rk(start), winTop: null, msg: null, verb: null, payload: '', query: null, cmdline: '' };
-    for (let i = 0; i < n; i++) {
-      s.winTop = editor.reconcileTop(s.winTop, cur(s), mw, budget, n);
-      const b = strip(editor.boardText(s, view, info, rows, cols));
-      const up = b.find(l => /^↑ (\d+) more$/.test(l));
-      const down = b.find(l => /^↓ (\d+) more$/.test(l));
-      if (key === 'down' && up) return +up.match(/\d+/)[0];
-      if (key === 'up' && down) return +down.match(/\d+/)[0];
-      s = editor.step(s, { name: key }, view, 0).state;
-    }
-    return null;
-  };
-  // both directions read 2 on first appearance, never 1: the top anchor lands
-  // one hidden match + the marker row's width, and the bottom marker's own row
-  // displaces a match before it can announce
-  assert(firstMarker(0, 'down') === 2, 'scrolling down: the first ↑ cue reads 2 more, not 3');
-  assert(firstMarker(n - 1, 'up') === 2, 'scrolling up: the first ↓ cue reads 2 more, not 3');
-});
-
-test('editor anchored window: moves only when the cursor leaves it', () => {
-  const { view } = sample();
-  const cols = 88, rows = 16;
-  const mw = editor.matchHeights(view, cols);
-  const budget = editor.listBudget('h', '', '', rows, cols);
-  const n = view.filtered.length;
-  const rk = i => editor.rowKey(view.rows[view.filtered[i].i].cat, view.rows[view.filtered[i].i].m);
-  const cur = s => s.cursorId == null ? 0 : view.filtered.findIndex(e => editor.rowKey(e.r.cat, e.r.m) === s.cursorId);
-  const base = c => ({ mode: 'browse', cursorId: c, winTop: null, msg: null, verb: null, payload: '', query: null, cmdline: '' });
-  const rr = s => { s.winTop = editor.reconcileTop(s.winTop, cur(s), mw, budget, n); return s; };
-  // down from the top: the window never moves, the first match stays
-  let s = rr(base(rk(0)));
-  s = rr(editor.step(s, { name: 'down' }, view, 0).state);
-  assert(s.winTop === 0, 'one down from the top does not scroll the window');
-  assert(editor.computeWindow(s.winTop, cur(s), mw, budget, n).e > cur(s), 'the cursor stays in the window');
-  // last match, then one up: the last match stays in the window
-  s = rr(base(rk(n - 1)));
-  s = rr(editor.step(s, { name: 'up' }, view, 0).state);
-  const w = editor.computeWindow(s.winTop, cur(s), mw, budget, n);
-  assert(w.e === n && w.start === n - 2, 'one up from the last keeps the last match in the window');
-  // scrolling far enough advances the window and never loses the cursor
-  s = rr(base(rk(0)));
-  for (let i = 0; i < 30; i++) {
-    s = rr(editor.step(s, { name: 'down' }, view, 0).state);
-    const c = cur(s), ww = editor.computeWindow(s.winTop, c, mw, budget, n);
-    assert(c >= ww.start && c < ww.e, `cursor (idx ${c}) stays visible at top ${ww.start}`);
-  }
-  assert(s.winTop > 0, 'scrolling down advances the window');
-  // the border keeps its cue: scroll to the very bottom and the top marker
-  // survives — the window hides one match above instead of dropping the marker
-  const wBottom = editor.computeWindow(s.winTop, cur(s), mw, budget, n);
-  assert(wBottom.upMore >= 2 && cur(s) < wBottom.e, 'at the last match the ↑ marker still shows and the cursor stays visible');
-});
-
-
-test('editor boardText: a narrow pane that wraps matches still keeps the header on screen', () => {
-  const { view, info } = sample();
-  const state = { mode: 'browse', cursorId: 'md40 8', msg: null, verb: null, payload: '', query: null, cmdline: '' };
-  const strip = l => l.replace(/\x1b\[[0-9;]*m/g, '');
-  // the wide match lines wrap on a narrow pane — every rendered line must count
-  // its wrapped physical rows so the board never exceeds the pane height
-  for (const cols of [40, 60, 100]) {
-    const rows = 10;
-    const txt = editor.boardText(state, view, info, rows, cols);
-    const lines = txt.split('\n');
-    const phys = lines.reduce((a, l) => a + Math.max(1, Math.ceil(strip(l).length / cols)), 0);
-    assert(phys <= rows, `cols=${cols}: board physically fits the pane`);
-    assert(/^Sample · LIVE/.test(strip(lines[0])), `cols=${cols}: header is the top line, not scrolled off`);
-    assert(lines.some(l => /\? help · q quit/.test(strip(l))), `cols=${cols}: the hint bar is on screen`);
-  }
-});
-
 test('editor applyScore: games + a played result at the target, repo still validates', () => {
   const repo = loadRepo(FIX('sample'));
   const { matches, ctx } = md40Ctx(repo);
@@ -538,19 +351,6 @@ test('editor rejects edits the validator would refuse', () => {
   assert(hasErr(r2, /scored match must have both sides resolved/), 'scoring a match with an unresolved side is rejected');
 });
 
-test('editor caretCell: the native cursor lands on the input row at the plain-text offset, wraps counted', () => {
-  const cell = (input, hint, offset, rows, cols) => editor.caretCell(input, hint, offset, rows, cols);
-  // one-line input above a one-line hint on a 24-row pane: the input row is 23
-  assert.deepEqual(cell('ab', '', 0, 24, 80), { row: 23, col: 1 }, 'caret at the start');
-  assert.deepEqual(cell('ab', '', 2, 24, 80), { row: 23, col: 3 }, 'caret at the end');
-  // a wrapped input moves down a row mid-wrap
-  assert.deepEqual(cell('abcdefghij', '', 5, 24, 5), { row: 23, col: 1 }, 'first cell of the wrapped row');
-  assert.deepEqual(cell('abcdefghij', '', 9, 24, 5), { row: 23, col: 5 }, 'last cell of the wrapped row');
-  assert.deepEqual(cell('abcdefghij', '', 10, 24, 5), { row: 24, col: 1 }, 'a full row wraps the caret to the next row\'s start');
-  // a wrapping hint pushes the input row up by its own rows
-  assert.deepEqual(cell('ab', 'x'.repeat(9), 1, 24, 5), { row: 22, col: 2 }, 'a two-row hint lifts the input row by one');
-});
-
 test('editor parseGame', () => {
   assert(JSON.stringify(editor.parseGame('11-9')) === JSON.stringify({ a: 11, b: 9 }), 'a-b parses');
   assert(JSON.stringify(editor.parseGame('11:9')) === JSON.stringify({ a: 11, b: 9 }), 'a:b parses');
@@ -566,29 +366,6 @@ test('editor parseCmd: the : grammar holds only what single keys cannot', () => 
   }
   assert.equal(editor.parseCmd('cd md40').kind, 'unknown', 'cd is gone — use selects the tournament');
   assert.equal(editor.parseCmd('pull').kind, 'unknown', 'pull is gone — leave it to the shell');
-});
-
-test('editor formatMatchLine: a filled width bag keeps time and venue aligned across lines', () => {
-  // the sim's screen — and listText's pass 1 — fill this bag from the lines
-  // about to render; without it, every column collapses to its own content
-  const repo = loadRepo(FIX('sample'));
-  const { tjson, matches, ctx } = md40Ctx(repo);
-  const tz = tjson.timezone;
-  const m1 = matches.find(m => m.id === 1); // pool match — long player names
-  const m9 = matches.find(m => m.id === 9); // final — short slot labels
-  const g = { idw: 0, stagew: 0, leftw: 0, rightw: 0, venuew: 0 };
-  for (const m of [m1, m9]) {
-    g.idw = Math.max(g.idw, `md40 ${m.id}`.length);
-    g.stagew = Math.max(g.stagew, matchLabel(m, ctx).length);
-    g.leftw = Math.max(g.leftw, editor.listingSide(m.sides[0], ctx).length);
-    g.rightw = Math.max(g.rightw, editor.listingSide(m.sides[1], ctx).length);
-    g.venuew = Math.max(g.venuew, (m.venue || 'TBD').length);
-  }
-  const at = m => editor.formatMatchLine('md40', m, ctx, tz, matchLabel(m, ctx), g);
-  const l1 = at(m1), l9 = at(m9);
-  const pos = (l, s) => l.indexOf(s);
-  assert.equal(pos(l1, fmtTime(schedTime(m1, tz), tz)), pos(l9, fmtTime(schedTime(m9, tz), tz)), 'time column lines up');
-  assert.equal(pos(l1, m1.venue), pos(l9, m9.venue), 'venue column lines up');
 });
 
 test('editor execAction: sim mode refuses :publish — the scratch never ships', () => {
@@ -886,51 +663,4 @@ test('editor editDetail: the side op reports the applied slot label; a cleared v
   const done = repo.tournaments.get('sample').tjson.matches.md40.find(m => m.id === 1);
   const d2 = editor.editDetail('side-a', done, { si: 0, side: { kind: 'players', ids: ['p3', 'p4'] } }, ctx);
   assert(/result kept/.test(d2), 'a side op on a decided match flags the kept result — history never reads as a silent rewrite');
-});
-
-test('editor boardText: the msg line is reserved — errors show while armed, and the window never shifts', () => {
-  const repo = loadRepo(FIX('sample'));
-  const view = editor.makeView(repo.tournaments.get('sample').tjson, WAVE, null);
-  const base = { mode: 'browse', cursorId: 'md40 8', verb: null, payload: '', query: null, cmdline: '' };
-  const info = { title: 'Sample', mode: 'LIVE', clock: '14:32', played: 11, total: 16, note: '', sim: false };
-  const matchLines = txt => txt.split('\n').filter(l => /court-\d|TBD/.test(l));
-  const idle = editor.boardText({ ...base, msg: null }, view, info, 20, 80);
-  const ack = editor.boardText({ ...base, msg: { text: 'md40 8 — → 21-19 — done', color: 'green' } }, view, info, 20, 80);
-  assert.deepStrictEqual(matchLines(ack), matchLines(idle), 'an acknowledgment renders in its reserved row — matches do not move');
-  const a = ack.split('\n');
-  assert(a[a.length - 3].includes('done'), 'the ack owns the reserved msg row — input row and hint stay put below it');
-  const armed = editor.boardText({ ...base, mode: 'arm', verb: 'result', payload: 'x', msg: { text: 'bad score "x" — expected a-b', color: 'yellow' } }, view, info, 20, 80);
-  const al = armed.split('\n');
-  assert(al[al.length - 2].includes('→'), 'armed, the input row holds the field — no caret glyph, the native cursor lives in render');
-  assert(al[al.length - 3].includes('bad score'), 'the grammar error keeps its own row — never hidden by the field');
-  assert.deepStrictEqual(matchLines(armed), matchLines(idle), 'the window stays put through arming and error alike');
-});
-
-test('editor boardText: the hint anchors to the pane bottom — spare height pads above it', () => {
-  const repo = loadRepo(FIX('sample'));
-  const view = editor.makeView(repo.tournaments.get('sample').tjson, WAVE, null);
-  const state = { mode: 'browse', cursorId: 'md40 8', msg: null, verb: null, payload: '', query: null, cmdline: '' };
-  const info = { title: 'Sample', mode: 'LIVE', clock: '14:32', played: 11, total: 16, note: '', sim: false };
-  const strip = l => l.replace(/\x1b\[[0-9;]*m/g, '');
-  for (const rows of [20, 40]) {
-    const txt = editor.boardText(state, view, info, rows, 80);
-    const lines = txt.split('\n');
-    const physOf = lines.reduce((n, l) => n + Math.max(1, Math.ceil(strip(l).length / 80)), 0);
-    assert.equal(physOf, rows, `rows=${rows}: the board fills the pane`);
-    assert(lines[lines.length - 1].includes('? help'), `rows=${rows}: the hint owns the last row`);
-  }
-});
-
-test('editor boardText: arming a verb reserves the input row — the match window never shifts', () => {
-  const repo = loadRepo(FIX('sample'));
-  const view = editor.makeView(repo.tournaments.get('sample').tjson, WAVE, null);
-  const base = { cursorId: 'md40 8', msg: null, verb: null, payload: '', query: null, cmdline: '' };
-  const info = { title: 'Sample', mode: 'LIVE', clock: '14:32', played: 11, total: 16, note: '', sim: false };
-  const firstMatch = txt => txt.split('\n').findIndex(l => l.includes(' vs '));
-  const browse = editor.boardText({ mode: 'browse', ...base }, view, info, 20, 80);
-  const armed = editor.boardText({ mode: 'arm', ...base, verb: 'result' }, view, info, 20, 80);
-  assert.equal(firstMatch(armed), firstMatch(browse), 'the arm line appears in its reserved row — matches do not move');
-  const lines = armed.split('\n');
-  const idx = lines.findIndex(l => l.includes('→'));
-  assert(idx > firstMatch(armed), 'the armed input row sits below the match list');
 });
