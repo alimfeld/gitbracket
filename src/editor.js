@@ -40,11 +40,16 @@ function parseKeys(s) {
   for (let i = 0; i < s.length; i++) {
     const c = s.charCodeAt(i);
     if (c === 27) { // CSI arrows are one key; a bare ESC is the escape key
-      if (s.charCodeAt(i + 1) === 91 && (s.charCodeAt(i + 2) === 65 || s.charCodeAt(i + 2) === 66)) {
-        keys.push({ name: s.charCodeAt(i + 2) === 65 ? 'up' : 'down' });
+      const n2 = s.charCodeAt(i + 2);
+      if (s.charCodeAt(i + 1) === 91 && (n2 === 65 || n2 === 66)) {
+        keys.push({ name: n2 === 65 ? 'up' : 'down' });
+        i += 2;
+      } else if (s.charCodeAt(i + 1) === 91 && (n2 === 67 || n2 === 68)) {
+        keys.push({ name: n2 === 67 ? 'right' : 'left' }); // ←/→ move the arm-field caret
         i += 2;
       } else keys.push({ name: 'escape' });
     } else if (c === 3) keys.push({ name: 'c', ctrl: true });  // ^C
+    else if (c === 21) keys.push({ name: 'u', ctrl: true });   // ^U — kill the arm field to its start
     else if (c === 13 || c === 10) keys.push({ name: 'return' });
     else if (c === 127 || c === 8) keys.push({ name: 'backspace' });
     else if (c >= 32) keys.push({ ch: String.fromCharCode(c) });
@@ -318,27 +323,26 @@ function parsePayload(kind, tokens, tz, now) {
     if (!tokens.length) return { err: 'expected a venue, e.g. court-2' };
     return { value: tokens[0] };
   }
-  if (kind === 'side') {
-    // the generic side op: players <ids> | pool <pool> <rank> | match <id> winner|loser —
+  if (SIDE_VERBS[kind] !== undefined) {
+    // the a/b key fixes the side; the payload is shape-only: players <ids> | pool <pool> <rank> | match <id> winner|loser —
     // validity is the validator's (unknown ids, consumed-twice, range, cycles, double-books)
-    const si = tokens[0];
-    if (si !== 'a' && si !== 'b') return { err: 'expected side a or b' };
-    const shape = tokens[1];
-    const rest = tokens.slice(2);
+    const si = SIDE_VERBS[kind];
+    const shape = tokens[0];
+    const rest = tokens.slice(1);
     if (shape === 'players') {
       if (!rest.length) return { err: 'expected player ids after players' };
-      return { value: { si: si === 'b' ? 1 : 0, side: { kind: 'players', ids: rest } } };
+      return { value: { si, side: { kind: 'players', ids: rest } } };
     }
     if (shape === 'pool') {
       if (rest[0] === undefined || rest[1] === undefined) return { err: 'expected pool and rank, e.g. pool A 2' };
       if (!/^\d+$/.test(rest[1]) || +rest[1] < 1) return { err: `bad rank ${JSON.stringify(rest[1])} — expected a positive integer` };
-      return { value: { si: si === 'b' ? 1 : 0, side: { kind: 'pool', pool: rest[0], rank: +rest[1] } } };
+      return { value: { si, side: { kind: 'pool', pool: rest[0], rank: +rest[1] } } };
     }
     if (shape === 'match') {
       if (rest[0] === undefined || rest[1] === undefined) return { err: 'expected match id and result, e.g. match 7 winner' };
       if (!/^\d+$/.test(rest[0])) return { err: `bad match id ${JSON.stringify(rest[0])} — expected a number` };
       if (rest[1] !== 'winner' && rest[1] !== 'loser') return { err: `result must be winner or loser, got ${JSON.stringify(rest[1])}` };
-      return { value: { si: si === 'b' ? 1 : 0, side: { kind: 'match', match: +rest[0], result: rest[1] } } };
+      return { value: { si, side: { kind: 'match', match: +rest[0], result: rest[1] } } };
     }
     return { err: `expected players, pool, or match — got ${JSON.stringify(shape)}` };
   }
@@ -362,17 +366,48 @@ function parsePayload(kind, tokens, tz, now) {
   return { value: iso };
 }
 
-// The five verbs each map to one apply function.
+// Side is two verbs (a key per side) so the side is known when armed — the
+// prefill can then show the slot being edited. SIDE_VERBS maps verb → side index.
+const SIDE_VERBS = { 'side-a': 0, 'side-b': 1 };
+
+// The six verbs each map to one apply function.
 function applyFor(verb, matchId, value) {
   return verb === 'score' ? (ms, ctx) => applyScore(ms, matchId, value, ctx)
     : verb === 'walkover' ? c => applyResult(c, matchId, 'walkover', value)
     : verb === 'void' ? c => applyResult(c, matchId, 'void')
-    : verb === 'side' ? c => applySide(c, matchId, value)
+    : SIDE_VERBS[verb] !== undefined ? c => applySide(c, matchId, value)
     : verb === 'venue' ? c => applyVenue(c, matchId, value)
     : c => applyTime(c, matchId, value); // time — undefined unschedules
 }
 
-const VERB_KEYS = { s: 'score', v: 'venue', t: 'time', w: 'walkover', o: 'void', e: 'side' };
+const VERB_KEYS = { s: 'score', v: 'venue', t: 'time', w: 'walkover', o: 'void', a: 'side-a', b: 'side-b' };
+
+// The armed payload for a verb: the current value on record, canonicalized so
+// an unedited Enter stays byte-identical (writeEdit's "unchanged" no-op) —
+// never a rendered label, which would rewrite the slot on a no-op confirm.
+// Time drops the date only when it equals the day the clock would derive, so
+// the same hh:mm round-trips; a different stored date must be shown or Enter
+// would silently move the match to today. An empty value arms an empty field.
+function prefillFor(verb, m, tz, now) {
+  if (verb === 'score') return (m.games || []).map(g => `${g.a}-${g.b}`).join(' ');
+  if (verb === 'venue') return m.venue || '';
+  if (verb === 'time') {
+    const s = m.scheduled;
+    if (!s) return '';
+    const date = s.slice(0, 10);
+    return (date === dayKey(now, tz) ? '' : date + ' ') + s.slice(11, 16);
+  }
+  if (verb === 'walkover') return m.result && m.result.status === 'walkover' ? m.result.winner : '';
+  const si = SIDE_VERBS[verb];
+  if (si !== undefined) {
+    const side = m.sides && m.sides[si];
+    if (!side) return '';
+    return side.kind === 'players' ? `players ${side.ids.join(' ')}`
+      : side.kind === 'pool' ? `pool ${side.pool} ${side.rank}`
+      : side.kind === 'match' ? `match ${side.match} ${side.result}` : '';
+  }
+  return '';
+}
 
 // Conventional-commit messages per edit kind — grep-able match-day history:
 //   git log --grep='^score('
@@ -391,7 +426,7 @@ function editDetail(kind, m, value, ctx) {
   return kind === 'score' ? (m.games || []).map(gg => `${gg.a}-${gg.b}`).join(' · ') // dashes — the echo mirrors the board's score column
     : kind === 'time' ? (m.scheduled === undefined ? '→ TBD' : `→ ${m.scheduled}`)
     : kind === 'venue' ? `→ ${m.venue === undefined ? 'TBD' : m.venue}`
-    : kind === 'side' ? `side ${value.si === 0 ? 'a' : 'b'} → ${sideLabel(value.side, ctx)}${isDone(m) ? ' (result kept)' : ''}`
+    : SIDE_VERBS[kind] !== undefined ? `side ${value.si === 0 ? 'a' : 'b'} → ${sideLabel(value.side, ctx)}${isDone(m) ? ' (result kept)' : ''}`
     : r.status === 'void' ? 'void' : `side ${r.winner} wins by walkover`;
 }
 
@@ -432,7 +467,7 @@ function helpText(sim) {
     `  ${k('v')} venue → court-2, or - to clear`,
     `  ${k('w')} walkover → a or b`,
     `  ${k('o')} void → Enter confirms`,
-    `  ${k('e')} side → a|b players <ids> · pool <pool> <rank> · match <id> winner|loser`, '',
+    `  ${k('a / b')} side a / b → players <ids> · pool <pool> <rank> · match <id> winner|loser`, '',
     C.bold('commit'),
     `  ${k('Enter')} commits the armed edit — the only key that ever writes`,
     `  ${k('Esc')} cancels anywhere`, '',
@@ -449,10 +484,12 @@ function helpText(sim) {
   return lines.join('\n');
 }
 
+const SIDE_HINT = 'players <ids> · pool <pool> <rank> · match <id> winner|loser · enter commits · esc cancels';
+
 const PROMPT_HINT = {
   browse: '? help · q quit',
   // expected entries first — the what — enter/esc trail as the how
-  arm: { score: '21-19 11-9 … (or one game per commit) · enter commits · esc cancels', venue: 'a venue id, e.g. court-2, or - to clear · enter commits · esc cancels', time: 'hh:mm · [date] hh:mm · - unschedules · enter commits · esc cancels', walkover: 'a or b · enter commits · esc cancels', void: 'enter confirms the void · esc cancels', side: 'a or b, then: players <ids> · pool <pool> <rank> · match <id> winner|loser · enter commits · esc cancels' },
+  arm: { score: '21-19 11-9 … (or one game per commit) · enter commits · esc cancels', venue: 'a venue id, e.g. court-2, or - to clear · enter commits · esc cancels', time: 'hh:mm · [date] hh:mm · - unschedules · enter commits · esc cancels', walkover: 'a or b · enter commits · esc cancels', void: 'enter confirms the void · esc cancels', 'side-a': SIDE_HINT, 'side-b': SIDE_HINT },
   filter: 'type to narrow · enter keeps · esc clears',
   cmd: 'enter runs · esc cancels',
   report: 'esc back',
@@ -499,16 +536,20 @@ function step(state, key, view, now) {
   }
 
   if (ns.mode === 'arm') {
-    if (name === 'escape') return { state: { ...ns, mode: 'browse', verb: null, payload: '' }, action: null };
-    if (name === 'backspace') return { state: { ...ns, payload: ns.payload.slice(0, -1) }, action: null };
+    const pos = Math.min(ns.pos ?? ns.payload.length, ns.payload.length);
+    if (name === 'escape') return { state: { ...ns, mode: 'browse', verb: null, payload: '', pos: 0 }, action: null };
+    if (key.ctrl && name === 'u') return { state: { ...ns, payload: ns.payload.slice(pos), pos: 0 }, action: null }; // kill to start — clear a prefill and type fresh
+    if (name === 'backspace') return pos > 0 ? { state: { ...ns, payload: ns.payload.slice(0, pos - 1) + ns.payload.slice(pos), pos: pos - 1 }, action: null } : { state: ns, action: null };
+    if (name === 'left') return { state: { ...ns, pos: Math.max(0, pos - 1) }, action: null };
+    if (name === 'right') return { state: { ...ns, pos: Math.min(ns.payload.length, pos + 1) }, action: null };
     if (name === 'return') {
       if (cur === -1) return { state: { ...ns, msg: { text: 'no match under the cursor', color: 'red' } }, action: null };
       const row = rowAt(cur);
       const p = parsePayload(ns.verb, ns.payload.trim().split(/\s+/).filter(Boolean), view.tz, now);
       if (p.err) return { state: { ...ns, msg: { text: p.err, color: 'yellow' } }, action: null };
-      return { state: { ...ns, mode: 'browse', verb: null, payload: '' }, action: { kind: 'edit', verb: ns.verb, cat: row.cat, matchId: String(row.m.id), value: p.value } };
+      return { state: { ...ns, mode: 'browse', verb: null, payload: '', pos: 0 }, action: { kind: 'edit', verb: ns.verb, cat: row.cat, matchId: String(row.m.id), value: p.value } };
     }
-    if (ch && ch.length === 1) return { state: { ...ns, payload: (ns.payload + ch).slice(0, 40) }, action: null };
+    if (ch && ch.length === 1) return { state: { ...ns, payload: ns.payload.slice(0, pos) + ch + ns.payload.slice(pos), pos: pos + 1 }, action: null };
     return { state: ns, action: null };
   }
 
@@ -528,12 +569,11 @@ function step(state, key, view, now) {
   if (VERB_KEYS[ch]) {
     if (cur === -1) return { state: { ...ns, msg: { text: 'no match under the cursor', color: 'red' } }, action: null };
     const m = rowAt(cur).m;
-    // re-scoring a scored match prefills the games on record — the payload is
-    // the full score either way, so appending a game or amending one stays one commit
-    const pre = VERB_KEYS[ch] === 'score' && m.games
-      ? m.games.map(g => `${g.a}-${g.b}`).join(' ')
-      : '';
-    return { state: { ...ns, mode: 'arm', verb: VERB_KEYS[ch], payload: pre }, action: null };
+    // arming prefills the value on record (score games, the venue, the time, a side's
+    // slot, a walkover's letter) so an edit is an amend — Enter on the untouched
+    // prefill stays a byte-identical "unchanged" no-op, never a rewrite
+    const pre = prefillFor(VERB_KEYS[ch], m, view.tz, now);
+    return { state: { ...ns, mode: 'arm', verb: VERB_KEYS[ch], payload: pre, pos: pre.length }, action: null };
   }
   return { state: ns, action: null };
 }
@@ -650,8 +690,11 @@ function inputLine(state, view) {
   if (state.mode === 'arm') {
     const cur = cursorIndex(view, state);
     const row = cur !== -1 ? view.rows[view.filtered[cur].i] : null;
-    const target = row ? `${state.verb} ${rowKey(row.cat, row.m)} — ${listingSide(row.m.sides[0], row.ctx)} vs ${listingSide(row.m.sides[1], row.ctx)}` : `${state.verb} (no match)`;
-    return `${target} → ${state.payload}▌`;
+    const vb = state.verb === 'side-a' ? 'side a' : state.verb === 'side-b' ? 'side b' : state.verb; // the arm line reads "side a", not the verb id
+    const target = row ? `${vb} ${rowKey(row.cat, row.m)} — ${listingSide(row.m.sides[0], row.ctx)} vs ${listingSide(row.m.sides[1], row.ctx)}` : `${vb} (no match)`;
+    const p = state.payload;
+    const pos = Math.min(state.pos ?? p.length, p.length);
+    return `${target} → ${p.slice(0, pos)}▌${p.slice(pos)}`;
   }
   if (state.mode === 'filter') {
     const count = view.filtered.length;
@@ -733,7 +776,7 @@ function execEdit(state, verb, cat, matchId, value) {
   if (state.commit) {
     const file = res.file; // writeEdit's own byte-identical write target
     const detail = editDetail(verb, m, value, ctx);
-    const msg = commitMessage(verb, slug, cat, matchId, detail);
+    const msg = commitMessage(SIDE_VERBS[verb] !== undefined ? 'side' : verb, slug, cat, matchId, detail); // git kind stays 'side' — the detail names a/b
     git(root, ['add', path.relative(root, file)]);
     const c = git(root, ['commit', '-m', msg]);
     if (c.code !== 0) return { text: `${path.relative(root, file)} written but the commit failed:\n${c.err}\n(file staged — commit it manually)`, color: 'red' };
@@ -784,7 +827,7 @@ function editorMain(root, siteRoot, repo, opts) {
   const state = {
     root, siteRoot, repo,
     slug: opts.slug || defaultSlug(repo),
-    mode: 'browse', cursorId: null, verb: null, payload: '', query: null, cmdline: '',
+    mode: 'browse', cursorId: null, verb: null, payload: '', pos: 0, query: null, cmdline: '',
     report: null, msg: null, quit: false,
     commit: !opts.sim, sim: !!opts.sim,
   };
@@ -887,4 +930,4 @@ function main(root) {
   editorMain(root, siteRoot, repo, { sim: false, clock: () => Date.now() });
 }
 
-module.exports = { parseGame, parseKeys, buildScheduled, applyScore, applyResult, applyVenue, applySide, applyTime, writeEdit, commitMessage, editDetail, echoLine, parseCmd, formatMatchLine, listingSide, rowKey, waveEntries, buildRows, makeView, parsePayload, step, boardText, execEdit, execAction, defaultSlug, editorMain, main, C, rowAttr };
+module.exports = { parseGame, parseKeys, buildScheduled, applyScore, applyResult, applyVenue, applySide, applyTime, prefillFor, writeEdit, commitMessage, editDetail, echoLine, parseCmd, formatMatchLine, listingSide, rowKey, waveEntries, buildRows, makeView, parsePayload, step, boardText, execEdit, execAction, defaultSlug, editorMain, main, C, rowAttr };

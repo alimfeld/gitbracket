@@ -406,7 +406,10 @@ test('editor parseKeys: UTF-8-decoded input to keys — a lone ESC is instant, a
     ['\x1b', [{ name: 'escape' }]],
     ['\x1b[A', [{ name: 'up' }]],
     ['\x1b[B', [{ name: 'down' }]],
+    ['\x1b[C', [{ name: 'right' }]],
+    ['\x1b[D', [{ name: 'left' }]],
     ['\x03', [{ name: 'c', ctrl: true }]],
+    ['\x15', [{ name: 'u', ctrl: true }]],
     ['\r', [{ name: 'return' }]],
     ['\x7f', [{ name: 'backspace' }]],
     ['ada', [{ ch: 'a' }, { ch: 'd' }, { ch: 'a' }]],
@@ -465,17 +468,78 @@ test('editor execAction: sim mode refuses :publish — the scratch never ships',
   assert.equal(r.slug, undefined, 'the refusal leaves the selection untouched');
 });
 
-test('editor step: a sim time edit defaults to the sim clock day, not the real one', () => {
-  const view = viewOf(loadRepo(FIX('sample')), WAVE, null);
-  let s = { mode: 'browse', cursorId: 'md40 8', msg: null };
-  let r = editor.step(s, key('t'), view);
-  for (const c of '10:30'.split('')) r = editor.step(r.state, key(c), view);
-  r = editor.step(r.state, key(null, 'return'), view, Date.parse('2026-10-03T12:00:00Z'));
-  assert.equal(r.action.value, '2026-10-03T10:30:00', 'an armed time uses the sim clock day (America/New_York), not Date.now');
-  // no clock passed (the live editor): the real today still fills the date
-  r = editor.step(s, key('t'), view);
-  for (const c of '10:30'.split('')) r = editor.step(r.state, key(c), view);
+test('editor prefillFor: the current value on record, canonical — a date shows only when a bare hh:mm would move it', () => {
+  const tz = 'America/New_York';
+  const now = Date.parse('2025-07-14T16:00:00Z'); // 12:00 EDT — dayKey is the stored day
+  const m = { scheduled: '2025-07-14T11:15:00', venue: 'court-2', games: [{ a: 11, b: 7 }], result: { status: 'walkover', winner: 'a' }, sides: [{ kind: 'pool', pool: 'A', rank: 1 }, { kind: 'match', match: 8, result: 'winner' }] };
+  assert.equal(editor.prefillFor('time', m, tz, now), '11:15', 'a stored date equal to the derived day drops the date — Enter round-trips on the same bytes');
+  assert.equal(editor.prefillFor('time', { scheduled: '2025-07-15T11:15:00' }, tz, now), '2025-07-15 11:15', 'a different stored date is shown, or Enter would silently move the match');
+  assert.equal(editor.prefillFor('time', {}, tz, now), '', 'no schedule arms empty');
+  assert.equal(editor.prefillFor('venue', m, tz, now), 'court-2', 'venue prefills as stored');
+  assert.equal(editor.prefillFor('venue', {}, tz, now), '', 'a courtless match arms empty');
+  assert.equal(editor.prefillFor('score', m, tz, now), '11-7', 'games prefill, dashes — the display form parses back');
+  assert.equal(editor.prefillFor('walkover', m, tz, now), 'a', 'a walkover prefills its winner letter');
+  assert.equal(editor.prefillFor('walkover', {}, tz, now), '', 'an undecided match arms empty');
+  assert.equal(editor.prefillFor('side-a', m, tz, now), 'pool A 1', 'side a prefills its stored slot');
+  assert.equal(editor.prefillFor('side-b', m, tz, now), 'match 8 winner', 'side b prefills its stored slot');
+});
+
+test('editor step: a and b arm the side verb for that side; Enter emits the fixed side', () => {
+  const repo = loadRepo(FIX('sample'));
+  const view = viewOf(repo, WAVE, null);
+  let r = editor.step({ mode: 'browse', cursorId: 'md40 7', msg: null }, key('a'), view);
+  assert.equal(r.state.verb, 'side-a', 'a arms side a');
+  assert.equal(r.state.payload, 'pool A 1', 'the stored slot prefills — amend the slot, not the whole line');
   r = editor.step(r.state, key(null, 'return'), view);
+  assert.deepEqual(r.action, { kind: 'edit', verb: 'side-a', cat: 'md40', matchId: '7', value: { si: 0, side: { kind: 'pool', pool: 'A', rank: 1 } } }, 'Enter emits the a-side edit');
+  r = editor.step({ mode: 'browse', cursorId: 'md40 7', msg: null }, key('b'), view);
+  assert.equal(r.state.payload, 'pool A 4', 'b prefills the other side');
+  r = editor.step({ mode: 'browse', cursorId: 'md40 7', msg: null }, key('w'), view);
+  assert.equal(r.state.payload, 'a', 'a walkover result prefills its winning side letter');
+});
+
+test('editor step: the arm field edits at the caret — typing inserts, ⌫ deletes before it, ←/→ move, ^U kills', () => {
+  const repo = loadRepo(FIX('sample'));
+  const view = viewOf(repo, WAVE, null);
+  let r = editor.step({ mode: 'browse', cursorId: 'md40 8', msg: null }, key('a'), view);
+  assert.equal(r.state.payload, 'pool A 2', 'side a prefills the stored slot');
+  assert.equal(r.state.pos, 'pool A 2'.length, 'the caret arms at the end of the prefill');
+  r = editor.step(r.state, key(null, 'left'), view);
+  r = editor.step(r.state, key('9'), view);
+  assert.equal(r.state.payload, 'pool A 92', 'a typed char inserts at the caret, not the end');
+  r = editor.step(r.state, key(null, 'backspace'), view);
+  assert.equal(r.state.payload, 'pool A 2', '⌫ deletes before the caret — the prefill round-trips again');
+  // ^U kills from the caret to the field's start (readline): mid-field the tail stays,
+  // from the end the whole prefill goes — one stroke to clear and retype
+  r = editor.step(r.state, { ch: null, name: 'u', ctrl: true }, view);
+  assert.equal(r.state.payload, '2', '^U leaves the tail after the caret');
+  r = editor.step(r.state, key(null, 'right'), view);
+  r = editor.step(r.state, { ch: null, name: 'u', ctrl: true }, view);
+  assert.equal(r.state.payload, '', '^U at the end clears the field — replace a prefill in one stroke');
+});
+
+test('editor step: a time edit keeps the stored day — a bare hh:mm applies only to an unscheduled match', () => {
+  const repo = loadRepo(FIX('sample'));
+  const view = viewOf(repo, WAVE, null);
+  // the sim-clock day and the stored day differ, so the prefill must carry the stored date
+  const now = Date.parse('2026-10-03T12:00:00Z');
+  let s = { mode: 'browse', cursorId: 'md40 8', msg: null }; // scheduled 2025-07-14 11:15
+  let r = editor.step(s, key('t'), view, now);
+  assert.equal(r.state.payload, '2025-07-14 11:15', 'a stored date other than the clock day prefills in full');
+  r = editor.step(r.state, key(null, 'return'), view, now);
+  assert.equal(r.action.value, '2025-07-14T11:15:00', 'the untouched prefill emits the stored time — byte-identical, never a move');
+  // a match with no schedule arms empty, and a bare hh:mm takes the clock's day
+  repo.tournaments.get('sample').tjson.matches.md40.find(m => m.id === 9).scheduled = undefined;
+  const tbd = viewOf(repo, WAVE, null); // rebuilt — the view now reflects the dropped schedule
+  s = { mode: 'browse', cursorId: 'md40 9', msg: null };
+  r = editor.step(s, key('t'), tbd, now);
+  assert.equal(r.state.payload, '', 'an unscheduled match arms empty');
+  for (const c of '10:30'.split('')) r = editor.step(r.state, key(c), tbd, now);
+  r = editor.step(r.state, key(null, 'return'), tbd, now);
+  assert.equal(r.action.value, '2026-10-03T10:30:00', 'a bare hh:mm uses the passed clock day (America/New_York), not Date.now');
+  r = editor.step(s, key('t'), tbd); // no clock — the live editor
+  for (const c of '10:30'.split('')) r = editor.step(r.state, key(c), tbd);
+  r = editor.step(r.state, key(null, 'return'), tbd);
   assert.match(r.action.value, /T10:30:00$/, 'the live default keeps building from the real clock');
 });
 
@@ -582,20 +646,20 @@ test('editor writeEdit: rollback on validation failure, write on success (real d
   }
 });
 
-test('editor parsePayload: the side op parses all three shapes and rejects the rest', () => {
-  const g = s => editor.parsePayload('side', s.trim().split(/\s+/), 'UTC', 0);
-  assert.deepEqual(g('a players p1 p2'), { value: { si: 0, side: { kind: 'players', ids: ['p1', 'p2'] } } }, 'players side');
-  assert.deepEqual(g('b pool A 2'), { value: { si: 1, side: { kind: 'pool', pool: 'A', rank: 2 } } }, 'pool side');
-  assert.deepEqual(g('a match 7 winner'), { value: { si: 0, side: { kind: 'match', match: 7, result: 'winner' } } }, 'match edge side');
-  assert.match(g('x players p1').err, /side a or b/, 'missing side');
-  assert.match(g('b').err, /players, pool, or match/, 'a valid side without a shape names the shape');
-  assert.match(g('a players').err, /player ids/, 'players needs ids');
-  assert.match(g('a pool A').err, /pool and rank/, 'pool needs a rank');
-  assert.match(g('a pool A x').err, /positive integer/, 'rank must be a number');
-  assert.match(g('a match 7').err, /match id and result/, 'match edge needs a result');
-  assert.match(g('a match x winner').err, /match id/, 'match id must be a number');
-  assert.match(g('a match 7 maybe').err, /winner or loser/, 'result must be winner or loser');
-  assert.match(g('a frobnicate p1').err, /players, pool, or match/, 'unknown shape');
+test('editor parsePayload: the side op parses all three shapes — the a/b key fixes the side', () => {
+  const g = s => editor.parsePayload('side-a', s.trim().split(/\s+/), 'UTC', 0);
+  const h = s => editor.parsePayload('side-b', s.trim().split(/\s+/), 'UTC', 0);
+  assert.deepEqual(g('players p1 p2'), { value: { si: 0, side: { kind: 'players', ids: ['p1', 'p2'] } } }, 'players side');
+  assert.deepEqual(h('pool A 2'), { value: { si: 1, side: { kind: 'pool', pool: 'A', rank: 2 } } }, 'the b key picks side 1');
+  assert.deepEqual(g('match 7 winner'), { value: { si: 0, side: { kind: 'match', match: 7, result: 'winner' } } }, 'match edge side');
+  assert.match(g('players').err, /player ids/, 'players needs ids');
+  assert.match(g('pool A').err, /pool and rank/, 'pool needs a rank');
+  assert.match(g('pool A x').err, /positive integer/, 'rank must be a number');
+  assert.match(g('match 7').err, /match id and result/, 'match edge needs a result');
+  assert.match(g('match x winner').err, /match id/, 'match id must be a number');
+  assert.match(g('match 7 maybe').err, /winner or loser/, 'result must be winner or loser');
+  assert.match(g('frobnicate p1').err, /players, pool, or match/, 'unknown shape');
+  assert.match(g('').err, /players, pool, or match/, 'empty payload names the shapes');
 });
 
 test('editor applySide: rewrites a side in place; the generic domain is the validator', () => {
@@ -647,13 +711,13 @@ test('editor editDetail: the side op reports the applied slot label; a cleared v
   const repo = loadRepo(FIX('sample'));
   const { ctx } = md40Ctx(repo);
   const m9 = repo.tournaments.get('sample').tjson.matches.md40.find(m => m.id === 9);
-  const d = editor.editDetail('side', m9, { si: 0, side: { kind: 'match', match: 8, result: 'winner' } }, ctx);
+  const d = editor.editDetail('side-a', m9, { si: 0, side: { kind: 'match', match: 8, result: 'winner' } }, ctx);
   assert(/^side a → Winner of /.test(d), `expected the applied slot label, got ${d}`);
   const m = repo.tournaments.get('sample').tjson.matches.xd.find(x => x.id === 1);
   assert.equal(editor.editDetail('venue', m), '→ court-1', 'a venue edit on an undecided match reports the court');
-  assert.equal(editor.editDetail('side', m9, { si: 1, side: { kind: 'players', ids: ['p1', 'p2'] } }, ctx), 'side b → Ada Lovelace / Grace Hopper', 'a players side labels the team');
+  assert.equal(editor.editDetail('side-b', m9, { si: 1, side: { kind: 'players', ids: ['p1', 'p2'] } }, ctx), 'side b → Ada Lovelace / Grace Hopper', 'a players side labels the team');
   const done = repo.tournaments.get('sample').tjson.matches.md40.find(m => m.id === 1);
-  const d2 = editor.editDetail('side', done, { si: 0, side: { kind: 'players', ids: ['p3', 'p4'] } }, ctx);
+  const d2 = editor.editDetail('side-a', done, { si: 0, side: { kind: 'players', ids: ['p3', 'p4'] } }, ctx);
   assert(/result kept/.test(d2), 'a side op on a decided match flags the kept result — history never reads as a silent rewrite');
 });
 
