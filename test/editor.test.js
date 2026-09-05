@@ -533,6 +533,30 @@ test('editor writeEdit: the gate sees schedule edits — a date the index lacks 
   }
 });
 
+test('editor writeEdit/execEdit: an edit already on record writes and commits nothing — the echo says unchanged', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gitbracket-'));
+  try {
+    const dataRoot = path.join(tmp, 'site');
+    fs.mkdirSync(dataRoot, { recursive: true });
+    fs.cpSync(FIX('sample'), dataRoot, { recursive: true });
+    const repo = loadRepo(dataRoot);
+    const file = path.join(dataRoot, 'tournaments', 'sample.json');
+    const before = fs.readFileSync(file, 'utf8');
+    // md40 8 already sits on court-2 — re-setting it changes nothing
+    const noop = editor.writeEdit(dataRoot, repo, 'sample', 'md40', (c) => editor.applyVenue(c, '8', 'court-2'));
+    assert(noop.unchanged && !noop.file, 'a byte-identical edit reports unchanged, writes nothing');
+    assert(fs.readFileSync(file, 'utf8') === before, 'the file is untouched');
+    // commit:true on a non-git tmp dir would fail loudly — the unchanged path must return before any git call
+    const state = { root: tmp, siteRoot: dataRoot, repo, slug: 'sample', commit: true };
+    const r = editor.execEdit(state, 'venue', 'md40', '8', 'court-2');
+    assert.equal(r.color, 'yellow', 'the no-op acknowledges, not a green commit receipt');
+    assert(/unchanged/.test(r.text), 'the echo reports the no-op');
+    assert(fs.readFileSync(file, 'utf8') === before, 'still nothing written');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 test('editor writeEdit: rollback on validation failure, write on success (real disk)', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gitbracket-'));
   try {

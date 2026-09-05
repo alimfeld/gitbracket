@@ -81,10 +81,14 @@ function loadRepo(siteRoot) {
   return { index, tournaments, readErrs };
 }
 
-// Write one tournament file with the repo's byte-identical formatting
-// (JSON.stringify(..., null, 2) + '\n'), so a commit diff shows only the edit.
+// The repo's one tournament-file byte format — a contract: every write and
+// every no-op comparison must agree, so a commit diff shows only the edit.
+function tournamentText(tjson) {
+  return JSON.stringify(tjson, null, 2) + '\n';
+}
+
 function writeTournament(siteRoot, slug, tjson) {
-  fs.writeFileSync(path.join(siteRoot, 'tournaments', `${slug}.json`), JSON.stringify(tjson, null, 2) + '\n');
+  fs.writeFileSync(path.join(siteRoot, 'tournaments', `${slug}.json`), tournamentText(tjson));
 }
 
 // Write the index in its established one-entry-per-line shape — pretty-printing
@@ -94,4 +98,4 @@ function writeTournamentIndex(siteRoot, entries) {
   fs.writeFileSync(path.join(siteRoot, 'tournaments.json'), '[' + entries.map((t) => `\n  ${JSON.stringify(t)}`).join(',') + '\n]\n');
 }
 
-module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, fixedPlayers, isRealDate, findRoot, catCtx, byMatchOrder };
+module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, fixedPlayers, isRealDate, findRoot, catCtx, byMatchOrder, tournamentText };

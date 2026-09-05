@@ -16,7 +16,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const { StringDecoder } = require('string_decoder');
 const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, fmtTime, matchLabel, bestOfOf, winTarget, reachedWinner, winnerIdx, dayKey, DATE_RE, catStatus, currentWave } = require('../site/derive.js');
-const { loadRepo, writeTournament, catCtx, byMatchOrder } = require('./tools.js');
+const { loadRepo, writeTournament, tournamentText, catCtx, byMatchOrder } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 const { ship } = require('./publish.js');
 
@@ -124,7 +124,9 @@ function applyTime(matches, matchId, isoString) {
 // Apply an edit to one match, validate the whole repo, write — or roll the file
 // back and report the validator's errors. (writeTournament's byte-identical
 // formatting keeps the commit diff to the one edited match.) apply receives
-// the category context so score can read the best-of target.
+// the category context so score can read the best-of target. An edit whose
+// result is byte-identical to the stored file changes nothing: no write, no
+// commit, the echo says so.
 function writeEdit(siteRoot, repo, slug, catId, apply) {
   const info = repo.tournaments.get(slug);
   if (!info || !info.tjson) return { err: `unknown tournament ${slug}` };
@@ -147,6 +149,9 @@ function writeEdit(siteRoot, repo, slug, catId, apply) {
     fs.writeFileSync(file, before);
     return { errs };
   }
+  // byte equality is data equality — "21:19" for a stored "21-9" lands on the
+  // same bytes, as does a re-scored identical game list
+  if (tournamentText(tjson) === before) return { unchanged: true };
   writeTournament(siteRoot, slug, tjson);
   return { file };
 }
@@ -724,6 +729,7 @@ function execEdit(state, verb, cat, matchId, value) {
   const info = repo.tournaments.get(slug);
   const ctx = catCtx(info.tjson, cat);
   const m = ctx.byId.get(Number(matchId));
+  if (res.unchanged) return { text: echoLine(verb, m, ctx, 'unchanged', value), color: 'yellow' }; // same data — nothing written, nothing committed
   if (state.commit) {
     const file = res.file; // writeEdit's own byte-identical write target
     const detail = editDetail(verb, m, value, ctx);
