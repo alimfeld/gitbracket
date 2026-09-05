@@ -27,6 +27,15 @@ function ship(root) {
     console.error(`publish: will not ship from ${branch ? `branch ${branch}` : 'a detached HEAD'} — checkout main first`);
     return 1;
   }
+  // git is the record — ship only what the repo has, so a fresh clone +
+  // publish reproduces live exactly. The editor commits every edit, so a
+  // dirty site/ is a hand-edit (or a staged file) history would never see.
+  const st = spawnSync('git', ['status', '--porcelain', '--', 'site/'], { cwd: root, encoding: 'utf8' });
+  const dirty = (st.status === 0 ? st.stdout : '').trim();
+  if (dirty) {
+    console.error(`publish: site/ is dirty — commit it first:\n${dirty.split('\n').slice(0, 5).map(l => `  ${l}`).join('\n')}${dirty.split('\n').length > 5 ? '\n  …' : ''}`);
+    return 1;
+  }
   // surge ≥0.43: `surge <path> publish` reads the domain from site/CNAME.
   const r = spawnSync('surge', ['site/', 'publish'], { cwd: root, stdio: 'inherit' });
   if (r.error) {

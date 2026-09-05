@@ -71,7 +71,8 @@ test('loadAll: a slug route fetches only the tournament file; the index view onl
       'tournaments.json': [{ slug: 'sample', name: 'Sample', dates: ['2025-07-14'] }],
       'tournaments/sample.json': require(FIX('sample', 'tournaments', 'sample.json')),
     }[url] ?? null;
-    return body === null ? Promise.resolve({ ok: false }) : Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
+    if (url === 'tournaments/flaky.json') return Promise.resolve({ ok: false, status: 503 });
+    return body === null ? Promise.resolve({ ok: false, status: 404 }) : Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
   };
   try {
     const slug = await loadAll({ slug: 'sample', view: 'tournament' });
@@ -86,6 +87,9 @@ test('loadAll: a slug route fetches only the tournament file; the index view onl
     assert.equal(list.tjson, undefined, 'index view carries no tournament data');
     const missing = await loadAll({ slug: 'nope', view: 'tournament' });
     assert.equal(missing.httpError, true, 'a 404 reports httpError — a dead deep link, stop polling, not a retryable null');
+    const flaky = await loadAll({ slug: 'flaky', view: 'tournament' });
+    assert.equal(flaky.httpError, undefined, 'a 5xx is transient — retryable, never a permanent stop');
+    assert.equal(flaky.tjson, null, 'a 5xx returns no data, so the poll keeps trying next tick');
   } finally {
     global.fetch = origFetch;
   }

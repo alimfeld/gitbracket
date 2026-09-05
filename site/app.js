@@ -27,8 +27,11 @@ async function fetchJson(url) {
   try {
     // cache: 'no-cache' revalidates — 304s return 0 bytes, changes arrive fresh
     const res = await fetch(url, { cache: 'no-cache' });
-    if (!res.ok) return HTTP_ERR; // 'not ok' is a dead URL, never a retryable null
-    return await res.json();
+    if (res.ok) return await res.json();
+    // only a gone-for-good link stops the poll — a 5xx is transient, so it
+    // returns null like any network failure and the poll retries next tick
+    if (res.status === 404 || res.status === 410) return HTTP_ERR;
+    return null;
   } catch (e) {
     return null; // network failure — the poll retries next tick
   }
