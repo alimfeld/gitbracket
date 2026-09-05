@@ -16,7 +16,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { schedTime, bestOfOf } = require('../site/derive.js');
 const { loadRepo } = require('./tools.js');
-const { writeEdit, applyScore, defaultSlug, C, editorMain, waveEntries } = require('./editor.js');
+const { writeEdit, applyScore, defaultSlug, C, editorMain, waveEntries, rowKey } = require('./editor.js');
 
 const STEP = 30 * 60 * 1000;  // ]/[ move the clock in 30 sim-minutes
 
@@ -88,6 +88,15 @@ function openBrowser(url) {
   if (cmd) spawn(cmd, [url], { detached: true, stdio: 'ignore' }).unref();
 }
 
+// x's targets: the whole wave by default; with a filter active, only the
+// wave members the filtered view highlights — never a match the board hides.
+function xTargets(tjson, view) {
+  const wave = waveEntries(tjson);
+  if (!view || !view.query) return wave;
+  const visible = new Set(view.filtered.map(e => rowKey(e.r.cat, e.r.m)));
+  return wave.filter(e => visible.has(rowKey(e.cat, e.m)));
+}
+
 // CLI entry (dispatched from gb.js): args = ['<slug>'].
 function main(root, args) {
   const slug = args.find((a) => a && !a.startsWith('-')) || null;
@@ -125,12 +134,13 @@ function main(root, args) {
     };
 
     // ]/[ nudge the kiosk clock (display only — the wave never waits on it),
-    // x scores the highlighted wave — sim-only keys, hidden from live's hint
+    // x scores the highlighted wave — narrowed by an active filter, so x
+    // only touches what's on screen; sim-only keys, hidden from live's hint
     // bar; a string return is an error for the board's message line.
-    const simKey = ch => {
+    const simKey = (ch, view) => {
       if (ch === ']') { state.now += STEP; return true; }
       if (ch === '[') { state.now -= STEP; return true; }
-      if (ch === 'x') return waveEntries(state.tjson).map(score).filter(Boolean).join('\n') || true;
+      if (ch === 'x') return xTargets(state.tjson, view).map(score).filter(Boolean).join('\n') || true;
       return false;
     };
 
@@ -144,4 +154,4 @@ function main(root, args) {
   });
 }
 
-module.exports = { makeGames, main };
+module.exports = { makeGames, xTargets, main };

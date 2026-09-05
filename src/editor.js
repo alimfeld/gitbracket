@@ -522,7 +522,13 @@ function step(state, key, view, now) {
   if (ch === 'q') return { state: { ...ns, quit: true }, action: null };
   if (VERB_KEYS[ch]) {
     if (cur === -1) return { state: { ...ns, msg: { text: 'no match under the cursor', color: 'red' } }, action: null };
-    return { state: { ...ns, mode: 'arm', verb: VERB_KEYS[ch], payload: '' }, action: null };
+    const m = rowAt(cur).m;
+    // re-scoring a scored match prefills the games on record — the payload is
+    // the full score either way, so appending a game or amending one stays one commit
+    const pre = VERB_KEYS[ch] === 'score' && m.games
+      ? m.games.map(g => `${g.a}-${g.b}`).join(' ')
+      : '';
+    return { state: { ...ns, mode: 'arm', verb: VERB_KEYS[ch], payload: pre }, action: null };
   }
   return { state: ns, action: null };
 }
@@ -564,8 +570,10 @@ function boardText(state, view, info, rows, cols) {
   // physical rows a rendered line occupies after auto-wrap — ANSI is stripped
   // (formatting, not width) and this board's glyphs are single-width, so plain
   // length / cols; over-reporting wide glyphs only shrinks the window, never
-  // overflows it.
-  const phys = s => Math.max(1, Math.ceil(strip(s).length / (cols || 80)));
+  // overflows it. Newlines count each of their lines honestly — a multi-line
+  // msg must reserve all its rows — and every rendered line costs at least one
+  // row, a blank included.
+  const phys = s => s.split('\n').reduce((n, l) => n + Math.max(1, Math.ceil(strip(l).length / (cols || 80))), 0);
 
   const lines = [header];
   if (state.mode === 'report') {
@@ -583,10 +591,11 @@ function boardText(state, view, info, rows, cols) {
       total += mw[i];
     }
     // chrome physical rows: header + two blanks + msg + input + hint — the
-    // input row is always reserved (drawn blank when idle), so arming a verb
-    // pushes no match off the window; msg stays dynamic, multi-line error
-    // text is worth the reflow
-    const chrome = phys(header) + 2 + (msg ? phys(msg) : 0) + 1 + phys(hint);
+    // input row and the msg slot are always reserved (blank when idle), so
+    // arming a verb or acknowledging an edit never pushes a match off the
+    // window; only a multi-line message claims its extra rows — an error is
+    // worth the reflow
+    const chrome = phys(header) + 2 + phys(msg) + 1 + phys(hint);
     const budget = rows ? rows - chrome : 0; // physical rows the list may occupy
     let start = 0, end = n;
     if (rows && total > budget) {
@@ -613,12 +622,19 @@ function boardText(state, view, info, rows, cols) {
       lines.push(line);
     }
   }
+  const bodyEnd = lines.length; // spare height pads after the body, so the bottom block anchors to the pane
   lines.push('');
   if (msg) lines.push(msg);
   // the input row is always drawn — idle it reads as the reserved blank, so a
   // filled-in field appears in place and the hint never moves
   lines.push(input ? (state.mode === 'arm' ? `\x1b[1m${input}\x1b[0m` : input) : ''); // bold marks the fill-in field — the ref is bold too, so it reads as one system, not two
   lines.push(hint);
+  // spare pane height pads above the bottom block — the hint always owns the
+  // last row, and no state (msg, arm, filter) ever shifts the window
+  if (rows) {
+    const spare = rows - lines.reduce((n, l) => n + phys(l), 0);
+    if (spare > 0) lines.splice(bodyEnd, 0, ...Array(spare).fill(''));
+  }
   return lines.join('\n');
 }
 
@@ -756,7 +772,8 @@ function defaultSlug(repo) {
 // ---------- the editor loop (shared by live and sim) ----------
 
 // opts: { sim, slug, clock, simKey, onQuit } — sim swaps the clock and the
-// commit policy, and adds ]/[x; the playable set is the same wave either way.
+// commit policy, and adds ]/[x (browse-mode keys — see the loop); the
+// playable set is the same wave either way.
 function editorMain(root, siteRoot, repo, opts) {
   const state = {
     root, siteRoot, repo,
@@ -838,11 +855,14 @@ function editorMain(root, siteRoot, repo, opts) {
   const decoder = new StringDecoder('utf8');
   process.stdin.on('data', chunk => {
     for (const k of parseKeys(decoder.write(chunk))) {
-      if (opts.simKey && k.ch) {
-        const r = opts.simKey(k.ch);
+      const view = getView();
+      // sim ]/[x are browse-mode keys: in filter/cmd/arm they are ordinary
+      // characters step consumes — never a sim action — and x gets the view
+      // so an active filter narrows what it scores
+      if (opts.simKey && k.ch && state.mode === 'browse') {
+        const r = opts.simKey(k.ch, view);
         if (r) { if (typeof r === 'string') state.msg = { text: r, color: 'red' }; render(); return; }
       }
-      const view = getView();
       const { state: ns, action } = step(state, k, view || { rows: [], lines: [], filtered: [], query: null, tz: tz() }, clock());
       Object.assign(state, ns);
       if (state.quit) { quit(); return; }

@@ -96,15 +96,33 @@ test('editor step: / narrows live, Enter keeps it, Esc clears it', () => {
   assert.equal(r.state.query, null, 'Esc in browse clears the applied filter too');
 });
 
+test('editor step: x is an ordinary character in the filter input — never a sim score', () => {
+  const view = viewOf(loadRepo(FIX('sample')), WAVE, null);
+  let s = { mode: 'browse', cursorId: null, msg: null };
+  s = editor.step(s, key('/'), view).state;
+  const r = editor.step(s, key('x'), view);
+  assert.equal(r.state.mode, 'filter', 'still filtering, not scored');
+  assert.equal(r.state.query, 'x', 'x types into the query — /xd narrows, it does not score');
+});
+
+test('editor step: re-scoring a scored match prefills the games on record', () => {
+  const view = viewOf(loadRepo(FIX('sample')), WAVE, null);
+  let s = { mode: 'browse', cursorId: 'md40 1', msg: null }; // md40 1 is played 11-9 11-7
+  const r = editor.step(s, key('s'), view);
+  assert.equal(r.state.mode, 'arm', 's arms score');
+  assert.equal(r.state.payload, '11-9 11-7', 'the recorded games prefill — append or amend');
+});
+
 test('editor step: s arms the cursor line; payload + Enter emits the exact edit', () => {
   const view = viewOf(loadRepo(FIX('sample')), WAVE, null);
-  let s = { mode: 'browse', cursorId: 'md40 8', msg: null };
+  let s = { mode: 'browse', cursorId: 'md40 9', msg: null };
   let r = editor.step(s, key('s'), view);
   assert.equal(r.state.mode, 'arm', 's arms score');
+  assert.equal(r.state.payload, '', 'an unscored match arms empty');
   for (const c of '21:19'.split('')) r = editor.step(r.state, key(c), view);
   assert.equal(r.state.payload, '21:19', 'payload accumulates');
   r = editor.step(r.state, key(null, 'return'), view);
-  assert.deepEqual(r.action, { kind: 'edit', verb: 'score', cat: 'md40', matchId: '8', value: [{ a: 21, b: 19 }] }, 'enter emits the edit');
+  assert.deepEqual(r.action, { kind: 'edit', verb: 'score', cat: 'md40', matchId: '9', value: [{ a: 21, b: 19 }] }, 'enter emits the edit');
   assert.equal(r.state.mode, 'browse', 'back to browse, unarmed');
 });
 
@@ -112,11 +130,12 @@ test('editor step: a bad payload stays armed with the error — never writes', (
   const view = viewOf(loadRepo(FIX('sample')), WAVE, null);
   let s = { mode: 'browse', cursorId: 'md40 8', msg: null };
   let r = editor.step(s, key('s'), view);
+  assert.equal(r.state.payload, '11-7', 're-scoring md40 8 prefills its one game on record');
   r = editor.step(r.state, key('x'), view);
   r = editor.step(r.state, key(null, 'return'), view);
   assert(r.action === null, 'no action on a bad score');
   assert.equal(r.state.mode, 'arm', 'still armed');
-  assert.equal(r.state.payload, 'x', 'payload kept for retype');
+  assert.equal(r.state.payload, '11-7x', 'payload kept for retype — the prefill rides along');
   assert(r.state.msg && /bad score/.test(r.state.msg.text), 'the error names the token');
 });
 
@@ -612,6 +631,39 @@ test('editor editDetail: the side op reports the applied slot label; a cleared v
   const done = repo.tournaments.get('sample').tjson.matches.md40.find(m => m.id === 1);
   const d2 = editor.editDetail('side', done, { si: 0, side: { kind: 'players', ids: ['p3', 'p4'] } }, ctx);
   assert(/result kept/.test(d2), 'a side op on a decided match flags the kept result — history never reads as a silent rewrite');
+});
+
+test('editor boardText: the msg line is reserved — errors show while armed, and the window never shifts', () => {
+  const repo = loadRepo(FIX('sample'));
+  const view = editor.makeView(repo.tournaments.get('sample').tjson, WAVE, null);
+  const base = { mode: 'browse', cursorId: 'md40 8', verb: null, payload: '', query: null, cmdline: '' };
+  const info = { title: 'Sample', mode: 'LIVE', clock: '14:32', played: 11, total: 16, note: '', sim: false };
+  const matchLines = txt => txt.split('\n').filter(l => /court-\d|TBD/.test(l));
+  const idle = editor.boardText({ ...base, msg: null }, view, info, 20, 80);
+  const ack = editor.boardText({ ...base, msg: { text: 'md40 8 — → 21-19 — done', color: 'green' } }, view, info, 20, 80);
+  assert.deepStrictEqual(matchLines(ack), matchLines(idle), 'an acknowledgment renders in its reserved row — matches do not move');
+  const a = ack.split('\n');
+  assert(a[a.length - 3].includes('done'), 'the ack owns the reserved msg row — input row and hint stay put below it');
+  const armed = editor.boardText({ ...base, mode: 'arm', verb: 'score', payload: 'x', msg: { text: 'bad score "x" — expected a-b', color: 'yellow' } }, view, info, 20, 80);
+  const al = armed.split('\n');
+  assert(al[al.length - 2].includes('▌'), 'armed, the input row holds the field');
+  assert(al[al.length - 3].includes('bad score'), 'the grammar error keeps its own row — never hidden by the field');
+  assert.deepStrictEqual(matchLines(armed), matchLines(idle), 'the window stays put through arming and error alike');
+});
+
+test('editor boardText: the hint anchors to the pane bottom — spare height pads above it', () => {
+  const repo = loadRepo(FIX('sample'));
+  const view = editor.makeView(repo.tournaments.get('sample').tjson, WAVE, null);
+  const state = { mode: 'browse', cursorId: 'md40 8', msg: null, verb: null, payload: '', query: null, cmdline: '' };
+  const info = { title: 'Sample', mode: 'LIVE', clock: '14:32', played: 11, total: 16, note: '', sim: false };
+  const strip = l => l.replace(/\x1b\[[0-9;]*m/g, '');
+  for (const rows of [20, 40]) {
+    const txt = editor.boardText(state, view, info, rows, 80);
+    const lines = txt.split('\n');
+    const physOf = lines.reduce((n, l) => n + Math.max(1, Math.ceil(strip(l).length / 80)), 0);
+    assert.equal(physOf, rows, `rows=${rows}: the board fills the pane`);
+    assert(lines[lines.length - 1].includes('? help'), `rows=${rows}: the hint owns the last row`);
+  }
 });
 
 test('editor boardText: arming a verb reserves the input row — the match window never shifts', () => {
