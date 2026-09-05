@@ -916,7 +916,7 @@ function editorMain(root, siteRoot, repo, opts) {
     commit: !opts.sim, sim: !!opts.sim,
   };
   const clock = opts.clock;
-  const playable = opts.playable || livePlayable;
+  const playable = livePlayable;
 
   const tjson = () => {
     const info = state.slug && state.repo.tournaments.get(state.slug);
