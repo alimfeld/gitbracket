@@ -629,25 +629,100 @@ function nextRow(view, state, dir, stop) {
 // would scroll a full pane. The window is sized in *physical* rows (what the
 // terminal really renders after auto-wrap), so a narrow pane that wraps the
 // wide match lines still keeps the header on screen.
-function boardText(state, view, info, rows, cols) {
-  const input = inputLine(state, view);
+
+// physical rows a rendered line occupies after auto-wrap — ANSI is stripped
+// (formatting, not width) and this board's glyphs are single-width, so plain
+// length / cols; over-reporting wide glyphs only shrinks the window, never
+// overflows it. Newlines count each of their lines honestly — a multi-line
+// msg must reserve all its rows — and every rendered line costs at least one
+// row, a blank included.
+const physLine = (s, cols) => s.split('\n').reduce((n, l) => n + Math.max(1, Math.ceil(strip(l).length / (cols || 80))), 0);
+
+// physical rows each filtered match line occupies, slot included
+function matchHeights(view, cols) {
+  return view.filtered.map((e, i) => physLine((e.r.playable ? '▶' : ' ') + ' ' + view.lines[e.i], cols));
+}
+
+// physical rows the chrome occupies (header + two blanks + msg + input + hint)
+// — input and msg slots are always reserved (blank when idle), so arming a
+// verb or acknowledging an edit never pushes a match off the window
+function listBudget(header, msg, hint, rows, cols) {
+  const chrome = physLine(header, cols) + 2 + physLine(msg, cols) + 1 + physLine(hint, cols);
+  return rows ? rows - chrome : 0;
+}
+
+// the status line as text — shared by the budget math (its wrap height counts
+// against the list) and the render, so the two can't drift
+function headerLine(info, state, view) {
   // an active filter is a view state, so it lives on the status line — the
   // filter input slot already echoes it while typing, so skip that mode
   const filterNote = state.mode !== 'filter' && state.query
     ? ` · ${C.dim('/' + state.query + ' — ' + view.filtered.length + (view.filtered.length === 1 ? ' match' : ' matches'))}`
     : '';
-  const header = `${C.bold(C.cyan(info.title))} · ${info.mode} ${C.cyan(info.clock)} · ${info.played}/${info.total} played${info.note || ''}${filterNote}`;
+  return `${C.bold(C.cyan(info.title))} · ${info.mode} ${C.cyan(info.clock)} · ${info.played}/${info.total} played${info.note || ''}${filterNote}`;
+}
+
+// The window from an anchor, extended greedily down to fill the budget. A
+// marker row never reads 1: the lone hidden match above takes the row itself,
+// and a bottom marker's row always displaces a match (so its count is >= 2) —
+// every cue is the exact scrolled-off count, upMore + visible + downMore = n.
+function windowFrom(start, mw, budget, n) {
+  if (n === 0) return { start: 0, e: 0, upMore: 0, downMore: 0 };
+  let s = start === 1 ? 0 : start; // a lone hidden match above takes the marker's row
+  let used = s ? 1 : 0, e = s;
+  while (e < n && used + mw[e] <= budget) { used += mw[e]; e++; }
+  let downMore = n - e;
+  if (downMore > 0) { // a bottom marker wants its row — re-fit with both; the count it shows is >= 2
+    let e2 = s, used2 = (s ? 1 : 0) + 1;
+    while (e2 < n && used2 + mw[e2] <= budget) { used2 += mw[e2]; e2++; }
+    e = e2;
+    downMore = n - e;
+  }
+  return { start: s, e, upMore: s, downMore };
+}
+
+// `windowFrom` plus the one safety: a marker never hides the cursor — on a pane
+// too small for cursor + markers, drop the cues rather than lose the selection.
+function computeWindow(start, cur, mw, budget, n) {
+  let w = windowFrom(start, mw, budget, n);
+  if (cur >= w.e) {
+    // pane too small for cursor + markers — show the cursor, drop the cues
+    let e = w.start, used = 0;
+    while (e < n && used + mw[e] <= budget) { used += mw[e]; e++; }
+    w = { start: w.start, e, upMore: 0, downMore: 0 };
+  }
+  return w;
+}
+
+// Anchored scroll: keep the window put unless the cursor leaves it, then move
+// it just enough to bring the cursor back — the cursor rides the top scrolling
+// up, the bottom scrolling down, markers included — the model every pager and
+// Vim use. The simple rule the re-centering fit kept tripping over.
+function reconcileTop(winTop, cur, mw, budget, n) {
+  if (n === 0) return 0;
+  if (winTop == null) return Math.max(0, cur);
+  const s = Math.min(winTop, n - 1);
+  if (cur < s) return cur; // cursor above the window: ride the top
+  if (cur >= windowFrom(s, mw, budget, n).e) {
+    // cursor below the window: scroll down to the smallest top that shows it
+    // with its markers — the guard-free end, so the border keeps its cue.
+    // ponytail: linear scan, O(n·window) worst case — fine while a tournament
+    // is dozens of matches; bisect if it ever needs to be huge.
+    for (let s2 = s + 1; s2 < n; s2++) {
+      if (cur < windowFrom(s2, mw, budget, n).e) return s2;
+    }
+    return n - 1; // unreachable unless the pane fits less than one match
+  }
+  return s; // visible: stay put
+}
+
+function boardText(state, view, info, rows, cols) {
+  const input = inputLine(state, view);
+  const header = headerLine(info, state, view);
   const msg = state.msg ? C[state.msg.color](state.msg.text) : '';
   // an armed action owns the bottom of the screen — the hint brightens and the
   // input line goes bold
   const hint = state.mode === 'arm' ? hintLine(state) : C.dim(hintLine(state));
-  // physical rows a rendered line occupies after auto-wrap — ANSI is stripped
-  // (formatting, not width) and this board's glyphs are single-width, so plain
-  // length / cols; over-reporting wide glyphs only shrinks the window, never
-  // overflows it. Newlines count each of their lines honestly — a multi-line
-  // msg must reserve all its rows — and every rendered line costs at least one
-  // row, a blank included.
-  const phys = s => s.split('\n').reduce((n, l) => n + Math.max(1, Math.ceil(strip(l).length / (cols || 80))), 0);
 
   const lines = [header];
   if (state.mode === 'report') {
@@ -656,34 +731,18 @@ function boardText(state, view, info, rows, cols) {
     lines.push('');
     const cur = cursorIndex(view, state);
     const n = view.filtered.length;
-    // physical rows each match line occupies, slot included
-    const mw = [];
-    let total = 0;
-    for (let i = 0; i < n; i++) {
-      const r = view.rows[view.filtered[i].i];
-      mw[i] = phys((r.playable ? '▶' : ' ') + ' ' + view.lines[view.filtered[i].i]);
-      total += mw[i];
-    }
-    // chrome physical rows: header + two blanks + msg + input + hint — the
-    // input row and the msg slot are always reserved (blank when idle), so
-    // arming a verb or acknowledging an edit never pushes a match off the
-    // window; only a multi-line message claims its extra rows — an error is
-    // worth the reflow
-    const chrome = phys(header) + 2 + phys(msg) + 1 + phys(hint);
-    const budget = rows ? rows - chrome : 0; // physical rows the list may occupy
-    let start = 0, end = n;
-    if (rows && total > budget) {
-      // largest window around the cursor that fits the physical budget, extend
-      // down then up; if even the cursor match alone doesn't fit (a pane too
-      // small for one wrapped line + chrome), show chrome only rather than cut
-      // the header
-      let used = mw[cur], win = mw[cur] <= budget;
-      if (win) {
-        start = cur; end = cur + 1;
-        while (end < n && used + mw[end] <= budget) { used += mw[end]; end++; }
-        while (start > 0 && used + mw[start - 1] <= budget) { start--; used += mw[start]; }
-      } else start = end = 0;
-    }
+    const mw = matchHeights(view, cols);
+    const total = mw.reduce((a, b) => a + b, 0);
+    const budget = listBudget(header, msg, hint, rows, cols);
+    // anchored window: start rides state.winTop (set by render's reconcile), so
+    // the window stays put unless the cursor leaves it — no re-centering
+    let { start, e: end, upMore, downMore } = !rows || total <= budget
+      ? { start: 0, e: n, upMore: 0, downMore: 0 }
+      : computeWindow(state.winTop == null ? cur : state.winTop, cur, mw, budget, n);
+    // the clip-edge cue: the exact scrolled-off count — never 1: a lone match
+    // above takes the marker's row, and the bottom marker's own row displaces
+    // a match before it can announce, so its count always reads 2 or more
+    if (upMore >= 2) lines.push(C.dim(`↑ ${upMore} more`));
     for (let i = start; i < end; i++) {
       const e = view.filtered[i];
       const r = view.rows[e.i];
@@ -695,6 +754,7 @@ function boardText(state, view, info, rows, cols) {
       if (here) line = rowAttr(7, line);
       lines.push(line);
     }
+    if (downMore >= 2) lines.push(C.dim(`↓ ${downMore} more`));
   }
   const bodyEnd = lines.length; // spare height pads after the body, so the bottom block anchors to the pane
   lines.push('');
@@ -706,7 +766,7 @@ function boardText(state, view, info, rows, cols) {
   // spare pane height pads above the bottom block — the hint always owns the
   // last row, and no state (msg, arm, filter) ever shifts the window
   if (rows) {
-    const spare = rows - lines.reduce((n, l) => n + phys(l), 0);
+    const spare = rows - lines.reduce((n, l) => n + physLine(l, cols), 0);
     if (spare > 0) lines.splice(bodyEnd, 0, ...Array(spare).fill(''));
   }
   return lines.join('\n');
@@ -865,7 +925,7 @@ function editorMain(root, siteRoot, repo, opts) {
     root, siteRoot, repo,
     slug: opts.slug || defaultSlug(repo),
     mode: 'browse', cursorId: null, verb: null, payload: '', pos: 0, query: null, cmdline: '',
-    report: null, msg: null, quit: false,
+    report: null, msg: null, quit: false, winTop: null, // winTop: the anchored window's first visible row
     commit: !opts.sim, sim: !!opts.sim,
   };
   const clock = opts.clock;
@@ -892,6 +952,7 @@ function editorMain(root, siteRoot, repo, opts) {
     }
     const played = Object.values(t.matches || {}).flat().filter(m => m && isDone(m)).length;
     const total = Object.values(t.matches || {}).flat().filter(Boolean).length;
+    const rows = process.stdout.rows || 40, cols = process.stdout.columns || 80;
     const header = {
       title: t.name,
       mode: state.sim ? C.yellow('SIM') : C.green('LIVE'),
@@ -900,7 +961,12 @@ function editorMain(root, siteRoot, repo, opts) {
       note: state.sim ? ' · scratch — never committed' : '',
       sim: state.sim,
     };
-    process.stdout.write('\x1b[?25l\x1b[2J\x1b[H' + boardText(state, view, header, process.stdout.rows || 40, process.stdout.columns || 80));
+    // anchored window: recompute the anchor so the cursor stays in view, once
+    // per keypress, before rendering — the window itself never re-centers
+    const msg = state.msg ? C[state.msg.color](state.msg.text) : '';
+    const hint = state.mode === 'arm' ? hintLine(state) : C.dim(hintLine(state));
+    state.winTop = reconcileTop(state.winTop, cursorIndex(view, state), matchHeights(view, cols), listBudget(headerLine(header, state, view), msg, hint, rows, cols), view.filtered.length);
+    process.stdout.write('\x1b[?25l\x1b[2J\x1b[H' + boardText(state, view, header, rows, cols));
   };
 
   const exec = action => {
@@ -967,4 +1033,4 @@ function main(root) {
   editorMain(root, siteRoot, repo, { sim: false, clock: () => Date.now() });
 }
 
-module.exports = { parseGame, parseKeys, buildScheduled, applyScore, applyResult, applyClear, applyVenue, applySide, applyTime, prefillFor, writeEdit, commitMessage, editDetail, echoLine, parseCmd, formatMatchLine, listingSide, rowKey, waveEntries, buildRows, makeView, parsePayload, step, boardText, execEdit, execAction, defaultSlug, editorMain, main, C, rowAttr };
+module.exports = { parseGame, parseKeys, buildScheduled, applyScore, applyResult, applyClear, applyVenue, applySide, applyTime, prefillFor, writeEdit, commitMessage, editDetail, echoLine, parseCmd, formatMatchLine, listingSide, rowKey, waveEntries, buildRows, makeView, parsePayload, step, boardText, computeWindow, reconcileTop, matchHeights, listBudget, execEdit, execAction, defaultSlug, editorMain, main, C, rowAttr };

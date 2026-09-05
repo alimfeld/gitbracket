@@ -322,11 +322,127 @@ test('editor boardText: an active filter is echoed on the status line', () => {
   assert(/esc clears the filter/.test(txt.split('\n').pop()), 'the hint says Esc clears the filter when one is active');
 });
 
-test('editor boardText: a narrow pane that wraps matches still keeps the header on screen', () => {
+// the marker/window tests share one sample view, status line, and stripper —
+// hoisted so the pins read without repeating the plumbing
+const sample = () => {
   const repo = loadRepo(FIX('sample'));
   const view = editor.makeView(repo.tournaments.get('sample').tjson, WAVE, null);
-  const state = { mode: 'browse', cursorId: 'md40 8', msg: null, verb: null, payload: '', query: null, cmdline: '' };
   const info = { title: 'Sample', mode: 'LIVE', clock: '14:32', played: 11, total: 16, note: '', sim: false };
+  const strip = t => t.split('\n').map(l => l.replace(/\x1b\[[0-9;]*m/g, ''));
+  return { view, info, strip };
+};
+
+test('editor boardText: clipped edges show ↑/↓ more markers with the hidden count', () => {
+  const { view, info, strip } = sample();
+  const state = { mode: 'browse', cursorId: 'md40 8', msg: null, verb: null, payload: '', query: null, cmdline: '' };
+  const clipped = strip(editor.boardText(state, view, info, 12, 80));
+  const up = clipped.find(l => /^↑ \d+ more$/.test(l));
+  const down = clipped.find(l => /^↓ \d+ more$/.test(l));
+  assert(up, 'a top marker shows when matches hide above the window');
+  assert(down, 'a bottom marker shows when matches hide below the window');
+  const visible = clipped.filter(l => l.includes(' vs ')).length;
+  assert(+up.match(/\d+/)[0] + visible + +down.match(/\d+/)[0] === view.filtered.length, 'hidden-above + visible + hidden-below = total matches');
+  const full = strip(editor.boardText(state, view, info, 80, 80));
+  assert(!full.some(l => /^[↑↓] \d+ more$/.test(l)), 'no markers when the whole list fits');
+});
+
+test('editor markers: a cue always reads 2 or more — never 1', () => {
+  const { view, info, strip } = sample();
+  const n = view.filtered.length;
+  const mw = editor.matchHeights(view, 80); // two physical rows per match at cols 80
+  // a lone hidden match above takes the marker's row — "↑ 1 more" never renders
+  const one = editor.computeWindow(1, 2, mw, 6, n);
+  assert(one.upMore === 0 && one.start === 0 && one.e > 2, 'a single hidden match above is shown, not announced as "↑ 1 more"');
+  // the bottom mirrors it: a lone hidden overflow still cues — the marker's own
+  // row displaces a match, so the count reads 2, never 1
+  const lone = editor.computeWindow(0, 0, [2, 2, 2, 2, 2, 2], 10, 6);
+  assert(lone.downMore === 2 && lone.e === 4, 'a lone hidden match below reads "↓ 2 more", never "↓ 1 more"');
+  // two hidden matches earn the marker, counted exactly
+  assert(editor.computeWindow(2, 2, mw, 6, n).upMore === 2, 'two hidden matches read "↑ 2 more"');
+  // where the cursor would not fit beside both markers, the anchored scroll
+  // slides the window one match further up instead of dropping the ↓ cue — so
+  // a marker's absence always means "nothing hidden there"
+  const tight = editor.computeWindow(editor.reconcileTop(2, 3, mw, 5, n), 3, mw, 5, n);
+  assert(tight.start === 3 && tight.upMore === 3 && tight.downMore >= 2 && tight.e > 3, 'a tight pane keeps both cues and the cursor, one match more hidden above');
+  // room for both: both edges mark their hidden matches
+  const both = editor.computeWindow(2, 3, mw, 6, n);
+  assert(both.upMore === 2 && both.downMore >= 2, 'both edges show a marker when both fit');
+  // at the second-to-last match nothing hides below — the last one fits, so no
+  // bottom marker
+  const secondLast = editor.rowKey(view.rows[view.filtered[n - 2].i].cat, view.rows[view.filtered[n - 2].i].m);
+  const base = { mode: 'browse', cursorId: secondLast, msg: null, verb: null, payload: '', query: null, cmdline: '' };
+  const at = strip(editor.boardText(base, view, info, 12, 80));
+  assert(!at.some(l => /^↓ 1 more$/.test(l)), 'at the second-to-last match nothing hides below — no bottom marker');
+});
+
+test('editor markers: the first ↑/↓ cue reads 2 more — the marker takes a match line', () => {
+  const { view, info, strip } = sample();
+  const cols = 200, rows = 16; // one physical row per match, a pane that clips
+  const mw = editor.matchHeights(view, cols);
+  const budget = editor.listBudget('h', '', '', rows, cols);
+  const n = view.filtered.length;
+  assert(mw.every(h => h === 1), 'wide pane: one physical row per match');
+  assert(budget < n, 'the pane clips the list');
+  const rk = i => editor.rowKey(view.rows[view.filtered[i].i].cat, view.rows[view.filtered[i].i].m);
+  const cur = s => view.filtered.findIndex(e => editor.rowKey(e.r.cat, e.r.m) === s.cursorId);
+  const firstMarker = (start, key) => {
+    let s = { mode: 'browse', cursorId: rk(start), winTop: null, msg: null, verb: null, payload: '', query: null, cmdline: '' };
+    for (let i = 0; i < n; i++) {
+      s.winTop = editor.reconcileTop(s.winTop, cur(s), mw, budget, n);
+      const b = strip(editor.boardText(s, view, info, rows, cols));
+      const up = b.find(l => /^↑ (\d+) more$/.test(l));
+      const down = b.find(l => /^↓ (\d+) more$/.test(l));
+      if (key === 'down' && up) return +up.match(/\d+/)[0];
+      if (key === 'up' && down) return +down.match(/\d+/)[0];
+      s = editor.step(s, { name: key }, view, 0).state;
+    }
+    return null;
+  };
+  // both directions read 2 on first appearance, never 1: the top anchor lands
+  // one hidden match + the marker row's width, and the bottom marker's own row
+  // displaces a match before it can announce
+  assert(firstMarker(0, 'down') === 2, 'scrolling down: the first ↑ cue reads 2 more, not 3');
+  assert(firstMarker(n - 1, 'up') === 2, 'scrolling up: the first ↓ cue reads 2 more, not 3');
+});
+
+test('editor anchored window: moves only when the cursor leaves it', () => {
+  const { view } = sample();
+  const cols = 88, rows = 16;
+  const mw = editor.matchHeights(view, cols);
+  const budget = editor.listBudget('h', '', '', rows, cols);
+  const n = view.filtered.length;
+  const rk = i => editor.rowKey(view.rows[view.filtered[i].i].cat, view.rows[view.filtered[i].i].m);
+  const cur = s => s.cursorId == null ? 0 : view.filtered.findIndex(e => editor.rowKey(e.r.cat, e.r.m) === s.cursorId);
+  const base = c => ({ mode: 'browse', cursorId: c, winTop: null, msg: null, verb: null, payload: '', query: null, cmdline: '' });
+  const rr = s => { s.winTop = editor.reconcileTop(s.winTop, cur(s), mw, budget, n); return s; };
+  // down from the top: the window never moves, the first match stays
+  let s = rr(base(rk(0)));
+  s = rr(editor.step(s, { name: 'down' }, view, 0).state);
+  assert(s.winTop === 0, 'one down from the top does not scroll the window');
+  assert(editor.computeWindow(s.winTop, cur(s), mw, budget, n).e > cur(s), 'the cursor stays in the window');
+  // last match, then one up: the last match stays in the window
+  s = rr(base(rk(n - 1)));
+  s = rr(editor.step(s, { name: 'up' }, view, 0).state);
+  const w = editor.computeWindow(s.winTop, cur(s), mw, budget, n);
+  assert(w.e === n && w.start === n - 2, 'one up from the last keeps the last match in the window');
+  // scrolling far enough advances the window and never loses the cursor
+  s = rr(base(rk(0)));
+  for (let i = 0; i < 30; i++) {
+    s = rr(editor.step(s, { name: 'down' }, view, 0).state);
+    const c = cur(s), ww = editor.computeWindow(s.winTop, c, mw, budget, n);
+    assert(c >= ww.start && c < ww.e, `cursor (idx ${c}) stays visible at top ${ww.start}`);
+  }
+  assert(s.winTop > 0, 'scrolling down advances the window');
+  // the border keeps its cue: scroll to the very bottom and the top marker
+  // survives — the window hides one match above instead of dropping the marker
+  const wBottom = editor.computeWindow(s.winTop, cur(s), mw, budget, n);
+  assert(wBottom.upMore >= 2 && cur(s) < wBottom.e, 'at the last match the ↑ marker still shows and the cursor stays visible');
+});
+
+
+test('editor boardText: a narrow pane that wraps matches still keeps the header on screen', () => {
+  const { view, info } = sample();
+  const state = { mode: 'browse', cursorId: 'md40 8', msg: null, verb: null, payload: '', query: null, cmdline: '' };
   const strip = l => l.replace(/\x1b\[[0-9;]*m/g, '');
   // the wide match lines wrap on a narrow pane — every rendered line must count
   // its wrapped physical rows so the board never exceeds the pane height
