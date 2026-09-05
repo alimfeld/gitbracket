@@ -15,7 +15,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { StringDecoder } = require('string_decoder');
+const readline = require('readline');
 const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, fmtTime, matchLabel, bestOfOf, winTarget, reachedWinner, winnerIdx, dayKey, DATE_RE, catStatus, currentWave } = require('../site/derive.js');
 const { loadRepo, writeTournament, tournamentText, catCtx, byMatchOrder } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
@@ -26,36 +26,6 @@ const { ship } = require('./publish.js');
 function parseGame(s) {
   const mm = /^(\d+)[:-](\d+)$/.exec(s);
   return mm ? { a: +mm[1], b: +mm[2] } : null;
-}
-
-// readline waits its 500ms escapeCodeTimeout on a bare ESC to disambiguate
-// arrow sequences — raw bytes deliver a lone ESC and \x1b[A instantly (real
-// terminals send arrows as one chunk). ponytail: a split arrow sequence
-// misfires an Esc keypress; accept it, the 500ms wait is worse.
-function parseKeys(s) {
-  // s is the chunk already decoded from UTF-8 — a dead-key umlaut (¨+a) is
-  // two bytes on the wire but must be one key, since filter/payload matching
-  // runs on real characters (BMP is all a terminal sends; an astral char would
-  // split into two surrogate keys)
-  const keys = [];
-  for (let i = 0; i < s.length; i++) {
-    const c = s.charCodeAt(i);
-    if (c === 27) { // CSI arrows are one key; a bare ESC is the escape key
-      const n2 = s.charCodeAt(i + 2);
-      if (s.charCodeAt(i + 1) === 91 && (n2 === 65 || n2 === 66)) {
-        keys.push({ name: n2 === 65 ? 'up' : 'down' });
-        i += 2;
-      } else if (s.charCodeAt(i + 1) === 91 && (n2 === 67 || n2 === 68)) {
-        keys.push({ name: n2 === 67 ? 'right' : 'left' }); // ←/→ move the arm-field caret
-        i += 2;
-      } else keys.push({ name: 'escape' });
-    } else if (c === 3) keys.push({ name: 'c', ctrl: true });  // ^C
-    else if (c === 21) keys.push({ name: 'u', ctrl: true });   // ^U — kill the arm field to its start
-    else if (c === 13 || c === 10) keys.push({ name: 'return' });
-    else if (c === 127 || c === 8) keys.push({ name: 'backspace' });
-    else if (c >= 32) keys.push({ ch: String.fromCharCode(c) });
-  }
-  return keys;
 }
 
 // Mutate the category's match list in memory; return an error string or null.
@@ -559,9 +529,17 @@ function step(state, key, view, now) {
     const pos = Math.min(ns.pos ?? ns.payload.length, ns.payload.length);
     if (name === 'escape') return { state: { ...ns, mode: 'browse', verb: null, payload: '', pos: 0 }, action: null };
     if (key.ctrl && name === 'u') return { state: { ...ns, payload: ns.payload.slice(pos), pos: 0 }, action: null }; // kill to start — clear a prefill and type fresh
+    if (key.ctrl && name === 'k') return { state: { ...ns, payload: ns.payload.slice(0, pos) }, action: null }; // kill to the end — re-type the tail
+    if (key.ctrl && name === 'w') {
+      const left = ns.payload.slice(0, pos).replace(/[^\s]+\s*$/, ''); // kill the word back — the caret may be mid-field
+      return { state: { ...ns, payload: left + ns.payload.slice(pos), pos: left.length }, action: null };
+    }
     if (name === 'backspace') return pos > 0 ? { state: { ...ns, payload: ns.payload.slice(0, pos - 1) + ns.payload.slice(pos), pos: pos - 1 }, action: null } : { state: ns, action: null };
+    if (name === 'delete') return pos < ns.payload.length ? { state: { ...ns, payload: ns.payload.slice(0, pos) + ns.payload.slice(pos + 1) }, action: null } : { state: ns, action: null };
     if (name === 'left') return { state: { ...ns, pos: Math.max(0, pos - 1) }, action: null };
     if (name === 'right') return { state: { ...ns, pos: Math.min(ns.payload.length, pos + 1) }, action: null };
+    if (name === 'home' || (key.ctrl && name === 'a')) return { state: { ...ns, pos: 0 }, action: null };
+    if (name === 'end' || (key.ctrl && name === 'e')) return { state: { ...ns, pos: ns.payload.length }, action: null };
     if (name === 'return') {
       if (cur === -1) return { state: { ...ns, msg: { text: 'no match under the cursor', color: 'red' } }, action: null };
       const row = rowAt(cur);
@@ -773,24 +751,33 @@ function boardText(state, view, info, rows, cols) {
 }
 
 function inputLine(state, view) {
-  // the block caret marks the input position — end of the typed text, before
-  // any trailing note; the board hides the real terminal cursor, so the caret
-  // is drawn, not moved
+  // no caret glyph — the terminal's own cursor is shown at the caret cell in
+  // render (arm/filter/cmd only); browse stays cursorless with the inverted row
   if (state.mode === 'arm') {
     const cur = cursorIndex(view, state);
     const row = cur !== -1 ? view.rows[view.filtered[cur].i] : null;
     const vb = state.verb === 'side-a' ? 'side a' : state.verb === 'side-b' ? 'side b' : state.verb; // the arm line reads "side a", not the verb id
     const target = row ? `${vb} ${rowKey(row.cat, row.m)} — ${listingSide(row.m.sides[0], row.ctx)} vs ${listingSide(row.m.sides[1], row.ctx)}` : `${vb} (no match)`;
-    const p = state.payload;
-    const pos = Math.min(state.pos ?? p.length, p.length);
-    return `${target} → ${p.slice(0, pos)}▌${p.slice(pos)}`;
+    return `${target} → ${state.payload}`;
   }
   if (state.mode === 'filter') {
     const count = view.filtered.length;
-    return count === 0 ? `/ ${state.query || ''}▌ — no match` : `/ ${state.query || ''}▌ — ${count} match${count === 1 ? '' : 'es'}`;
+    return count === 0 ? `/ ${state.query || ''} — no match` : `/ ${state.query || ''} — ${count} match${count === 1 ? '' : 'es'}`;
   }
-  if (state.mode === 'cmd') return `: ${state.cmdline}▌`;
+  if (state.mode === 'cmd') return `: ${state.cmdline}`;
   return '';
+}
+
+// the native cursor's cell: the input line sits directly above the hint, and
+// both occupy physLine rows; the caret is a plain-text offset into the input
+// length, split into row + column across its wraps. The terminal draws the
+// cursor there — none is rendered in the text. ponytail: an offset exactly at
+// a row boundary (caret at the end of a full-width line) lands on the next
+// row's first cell, where typing will wrap; some terminals park at the last
+// cell until the next key — cosmetic, accept.
+function caretCell(input, hint, offset, rows, cols) {
+  const ih = physLine(input, cols), hh = physLine(hint, cols);
+  return { row: rows - hh - ih + 1 + Math.floor(offset / cols), col: offset % cols + 1 };
 }
 
 function hintLine(state) {
@@ -966,7 +953,21 @@ function editorMain(root, siteRoot, repo, opts) {
     const msg = state.msg ? C[state.msg.color](state.msg.text) : '';
     const hint = state.mode === 'arm' ? hintLine(state) : C.dim(hintLine(state));
     state.winTop = reconcileTop(state.winTop, cursorIndex(view, state), matchHeights(view, cols), listBudget(headerLine(header, state, view), msg, hint, rows, cols), view.filtered.length);
-    process.stdout.write('\x1b[?25l\x1b[2J\x1b[H' + boardText(state, view, header, rows, cols));
+    const board = boardText(state, view, header, rows, cols);
+    // the native cursor: on an input row the terminal cursor is placed at the
+    // caret cell and shown; elsewhere the draw's leading hide-cursor stays
+    let tail = '';
+    if (state.mode === 'arm' || state.mode === 'filter' || state.mode === 'cmd') {
+      const input = inputLine(state, view);
+      // the caret offset in plain chars: arm is a real caret (pos may be
+      // mid-field — strip the suffix), filter/cmd always sit at the text end
+      const offset = state.mode === 'arm'
+        ? strip(input).length - (state.payload.length - Math.min(state.pos ?? state.payload.length, state.payload.length))
+        : 2 + (state.mode === 'filter' ? (state.query || '').length : state.cmdline.length);
+      const c = caretCell(input, hint, offset, rows, cols);
+      tail = `\x1b[${c.row};${c.col}H\x1b[?25h`;
+    }
+    process.stdout.write('\x1b[?25l\x1b[2J\x1b[H' + board + tail);
   };
 
   const exec = action => {
@@ -1000,27 +1001,31 @@ function editorMain(root, siteRoot, repo, opts) {
     console.error('editor: needs a terminal for keypresses');
     process.exit(1);
   }
+  // readline parses every key to a name (arrows, home/end, delete, ctrl+letter);
+  // its default escapeCodeTimeout of 500ms is the Esc lag — 30ms is beyond
+  // perception and still catches an arrow split across writes
+  readline.emitKeypressEvents(process.stdin, { escapeCodeTimeout: 30 });
   process.stdin.setRawMode(true);
   process.stdout.on('resize', render);
-  // one stateful decoder — a multibyte char split across chunk writes must
-  // still come out as a single key
-  const decoder = new StringDecoder('utf8');
-  process.stdin.on('data', chunk => {
-    for (const k of parseKeys(decoder.write(chunk))) {
-      const view = getView();
-      // sim ]/[x are browse-mode keys: in filter/cmd/arm they are ordinary
-      // characters step consumes — never a sim action — and x gets the view
-      // so an active filter narrows what it scores
-      if (opts.simKey && k.ch && state.mode === 'browse') {
-        const r = opts.simKey(k.ch, view);
-        if (r) { if (typeof r === 'string') state.msg = { text: r, color: 'red' }; render(); return; }
-      }
-      const { state: ns, action } = step(state, k, view || { rows: [], lines: [], filtered: [], query: null, tz: tz() }, clock());
-      Object.assign(state, ns);
-      if (state.quit) { quit(); return; }
-      exec(action);
-      render();
+  process.stdin.on('keypress', (str, key) => {
+    // the editor consumes { ch, name, ctrl }: only real characters ride ch —
+    // readline hands back control bytes as str, and a bare \n is `enter`, which
+    // the byte parser used to fold into `return`
+    const cc = str && str.length === 1 ? str.charCodeAt(0) : -1;
+    const k = { ch: cc >= 32 && cc !== 127 ? str : null, name: key.name === 'enter' ? 'return' : key.name, ctrl: key.ctrl };
+    const view = getView();
+    // sim ]/[x are browse-mode keys: in filter/cmd/arm they are ordinary
+    // characters step consumes — never a sim action — and x gets the view
+    // so an active filter narrows what it scores
+    if (opts.simKey && k.ch && state.mode === 'browse') {
+      const r = opts.simKey(k.ch, view);
+      if (r) { if (typeof r === 'string') state.msg = { text: r, color: 'red' }; render(); return; }
     }
+    const { state: ns, action } = step(state, k, view || { rows: [], lines: [], filtered: [], query: null, tz: tz() }, clock());
+    Object.assign(state, ns);
+    if (state.quit) { quit(); return; }
+    exec(action);
+    render();
   });
   render();
 }
@@ -1033,4 +1038,4 @@ function main(root) {
   editorMain(root, siteRoot, repo, { sim: false, clock: () => Date.now() });
 }
 
-module.exports = { parseGame, parseKeys, buildScheduled, applyScore, applyResult, applyClear, applyVenue, applySide, applyTime, prefillFor, writeEdit, commitMessage, editDetail, echoLine, parseCmd, formatMatchLine, listingSide, rowKey, waveEntries, buildRows, makeView, parsePayload, step, boardText, computeWindow, reconcileTop, matchHeights, listBudget, execEdit, execAction, defaultSlug, editorMain, main, C, rowAttr };
+module.exports = { parseGame, buildScheduled, applyScore, applyResult, applyClear, applyVenue, applySide, applyTime, prefillFor, writeEdit, commitMessage, editDetail, echoLine, parseCmd, formatMatchLine, listingSide, rowKey, waveEntries, buildRows, makeView, parsePayload, step, boardText, caretCell, computeWindow, reconcileTop, matchHeights, listBudget, execEdit, execAction, defaultSlug, editorMain, main, C, rowAttr };

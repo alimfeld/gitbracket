@@ -285,30 +285,29 @@ test('editor boardText: header, ▶ flag, inverted cursor row, hint bar — one 
   assert(/\? help · q quit/.test(txt), 'the browse hint bar is on screen');
 });
 
-test('editor boardText: an armed action goes bold, draws the ▌ caret, and leads the hint with the entries', () => {
+test('editor boardText: an armed action goes bold and leads the hint with the entries — no drawn caret, the native cursor lives in render', () => {
   const repo = loadRepo(FIX('sample'));
   const view = editor.makeView(repo.tournaments.get('sample').tjson, WAVE, null);
   const state = { mode: 'arm', cursorId: 'md40 8', msg: null, verb: 'result', payload: '21-19', query: null, cmdline: '' };
   const info = { title: 'Sample', mode: 'LIVE', clock: '14:32', played: 11, total: 16, note: '', sim: false };
   const txt = editor.boardText(state, view, info);
-  const input = txt.split('\n').find(l => l.includes('→ ') && l.includes('▌'));
+  const input = txt.split('\n').find(l => l.includes('→ '));
   assert(input && input.startsWith('\x1b[1m') && input.endsWith('\x1b[0m'), 'the armed input line goes bold');
-  assert(input.includes('21-19▌'), 'the block caret sits right after the payload');
+  assert(input.includes('21-19') && !input.includes('▌'), 'the payload reads clean — no caret glyph in the text');
   const hint = txt.split('\n').pop();
   assert(hint.indexOf('21-19') < hint.indexOf('enter commits'), 'the expected entries lead the hint, enter/esc trail');
   assert(!hint.includes('\x1b[2m'), 'the armed hint brightens — no dim');
 });
 
-test('editor boardText: the ▌ caret marks the filter and command input slots too', () => {
+test('editor boardText: no caret glyph in filter or command slots either — board text is cursor-free', () => {
   const repo = loadRepo(FIX('sample'));
   const view = editor.makeView(repo.tournaments.get('sample').tjson, WAVE, null);
   const info = { title: 'Sample', mode: 'LIVE', clock: '14:32', played: 11, total: 16, note: '', sim: false };
   const f = editor.boardText({ mode: 'filter', cursorId: 'md40 8', msg: null, verb: null, payload: '', query: 'ada', cmdline: '' }, view, info);
-  assert(f.split('\n').some(l => /\/ ada▌ —/.test(l)), 'the filter caret follows the typed query, before the count note');
+  assert(f.split('\n').some(l => /\/ ada —/.test(l)), 'the filter input reads the typed query, before the count note');
   const c = editor.boardText({ mode: 'cmd', cursorId: 'md40 8', msg: null, verb: null, payload: '', query: null, cmdline: 'status' }, view, info);
-  assert(c.split('\n').some(l => /: status▌/.test(l)), 'the command caret follows the typed command');
-  const b = editor.boardText({ mode: 'browse', cursorId: 'md40 8', msg: null, verb: null, payload: '', query: null, cmdline: '' }, view, info);
-  assert(!b.includes('▌'), 'browse draws no caret — no input expected');
+  assert(c.split('\n').some(l => /: status/.test(l)), 'the command input reads the typed command');
+  assert(!f.includes('▌') && !c.includes('▌'), 'neither input slot draws a caret');
 });
 
 test('editor boardText: an active filter is echoed on the status line', () => {
@@ -539,24 +538,17 @@ test('editor rejects edits the validator would refuse', () => {
   assert(hasErr(r2, /scored match must have both sides resolved/), 'scoring a match with an unresolved side is rejected');
 });
 
-test('editor parseKeys: UTF-8-decoded input to keys — a lone ESC is instant, arrows are one key, umlauts are one key', () => {
-  const cases = [
-    ['\x1b', [{ name: 'escape' }]],
-    ['\x1b[A', [{ name: 'up' }]],
-    ['\x1b[B', [{ name: 'down' }]],
-    ['\x1b[C', [{ name: 'right' }]],
-    ['\x1b[D', [{ name: 'left' }]],
-    ['\x03', [{ name: 'c', ctrl: true }]],
-    ['\x15', [{ name: 'u', ctrl: true }]],
-    ['\r', [{ name: 'return' }]],
-    ['\x7f', [{ name: 'backspace' }]],
-    ['ada', [{ ch: 'a' }, { ch: 'd' }, { ch: 'a' }]],
-    ['hello\x1b[A', [{ ch: 'h' }, { ch: 'e' }, { ch: 'l' }, { ch: 'l' }, { ch: 'o' }, { name: 'up' }]],
-    // a dead-key-composed char arrives as multi-byte UTF-8 and must be ONE key
-    ['ä', [{ ch: 'ä' }]],
-    ['Öl', [{ ch: 'Ö' }, { ch: 'l' }]],
-  ];
-  for (const [input, expected] of cases) assert.deepEqual(editor.parseKeys(input), expected);
+test('editor caretCell: the native cursor lands on the input row at the plain-text offset, wraps counted', () => {
+  const cell = (input, hint, offset, rows, cols) => editor.caretCell(input, hint, offset, rows, cols);
+  // one-line input above a one-line hint on a 24-row pane: the input row is 23
+  assert.deepEqual(cell('ab', '', 0, 24, 80), { row: 23, col: 1 }, 'caret at the start');
+  assert.deepEqual(cell('ab', '', 2, 24, 80), { row: 23, col: 3 }, 'caret at the end');
+  // a wrapped input moves down a row mid-wrap
+  assert.deepEqual(cell('abcdefghij', '', 5, 24, 5), { row: 23, col: 1 }, 'first cell of the wrapped row');
+  assert.deepEqual(cell('abcdefghij', '', 9, 24, 5), { row: 23, col: 5 }, 'last cell of the wrapped row');
+  assert.deepEqual(cell('abcdefghij', '', 10, 24, 5), { row: 24, col: 1 }, 'a full row wraps the caret to the next row\'s start');
+  // a wrapping hint pushes the input row up by its own rows
+  assert.deepEqual(cell('ab', 'x'.repeat(9), 1, 24, 5), { row: 22, col: 2 }, 'a two-row hint lifts the input row by one');
 });
 
 test('editor parseGame', () => {
@@ -655,6 +647,41 @@ test('editor step: the arm field edits at the caret — typing inserts, ⌫ dele
   r = editor.step(r.state, key(null, 'right'), view);
   r = editor.step(r.state, { ch: null, name: 'u', ctrl: true }, view);
   assert.equal(r.state.payload, '', '^U at the end clears the field — replace a prefill in one stroke');
+});
+
+test('editor step: readline goodies — home/end, ^A/^E, ^K, ^W, and delete edit the arm field at the caret', () => {
+  const repo = loadRepo(FIX('sample'));
+  const view = viewOf(repo, WAVE, null);
+  const arm = payload => ({ mode: 'arm', cursorId: 'md40 8', msg: null, verb: 'result', payload, pos: payload.length });
+  // arm a prefilled score, jump the caret home, kill to the end, retype
+  let r = editor.step(arm('21-19 11-9'), key(null, 'home'), view);
+  assert.equal(r.state.pos, 0, 'home jumps the caret to the start');
+  r = editor.step(r.state, { ch: null, name: 'k', ctrl: true }, view);
+  assert.equal(r.state.payload, '', '^K kills from the caret to the end — the prefill goes');
+  r = editor.step(r.state, key('1'), view);
+  r = editor.step(r.state, key('2'), view);
+  assert.equal(r.state.payload, '12', 'a fresh score types after the kill');
+  // ^E and end both park the caret at the end; ^A is home's twin
+  r = editor.step(arm('a b'), key(null, 'end'), view);
+  assert.equal(r.state.pos, 3, 'end jumps the caret to the end');
+  r = editor.step(r.state, { ch: null, name: 'a', ctrl: true }, view);
+  assert.equal(r.state.pos, 0, '^A jumps to the start');
+  r = editor.step(r.state, { ch: null, name: 'e', ctrl: true }, view);
+  assert.equal(r.state.pos, 3, '^E jumps to the end');
+  // ^W kills the word back from the caret — mid-field it leaves the tail
+  r = editor.step(arm('pool A 92'), key(null, 'left'), view);
+  r = editor.step(r.state, key(null, 'left'), view);
+  r = editor.step(r.state, { ch: null, name: 'w', ctrl: true }, view);
+  assert.equal(r.state.payload, 'pool 92', '^W kills the word before the caret, tail stays');
+  // delete is forward-backspace: at the end it's a no-op
+  r = editor.step(arm('a b'), key(null, 'delete'), view);
+  assert.equal(r.state.payload, 'a b', 'delete past the end is a no-op');
+  r = editor.step(r.state, key(null, 'home'), view);
+  r = editor.step(r.state, key(null, 'delete'), view);
+  assert.equal(r.state.payload, ' b', 'delete at the caret removes the char after it');
+  // the goodies are arm-only — in browse they are no-ops, never a write
+  const b = editor.step({ mode: 'browse', cursorId: 'md40 8', msg: null }, { ch: null, name: 'home', ctrl: false }, view);
+  assert.equal(b.state.mode, 'browse', 'home in browse changes nothing');
 });
 
 test('editor step: a time edit keeps the stored day — a bare hh:mm applies only to an unscheduled match', () => {
@@ -874,7 +901,7 @@ test('editor boardText: the msg line is reserved — errors show while armed, an
   assert(a[a.length - 3].includes('done'), 'the ack owns the reserved msg row — input row and hint stay put below it');
   const armed = editor.boardText({ ...base, mode: 'arm', verb: 'result', payload: 'x', msg: { text: 'bad score "x" — expected a-b', color: 'yellow' } }, view, info, 20, 80);
   const al = armed.split('\n');
-  assert(al[al.length - 2].includes('▌'), 'armed, the input row holds the field');
+  assert(al[al.length - 2].includes('→'), 'armed, the input row holds the field — no caret glyph, the native cursor lives in render');
   assert(al[al.length - 3].includes('bad score'), 'the grammar error keeps its own row — never hidden by the field');
   assert.deepStrictEqual(matchLines(armed), matchLines(idle), 'the window stays put through arming and error alike');
 });
@@ -904,6 +931,6 @@ test('editor boardText: arming a verb reserves the input row — the match windo
   const armed = editor.boardText({ mode: 'arm', ...base, verb: 'result' }, view, info, 20, 80);
   assert.equal(firstMatch(armed), firstMatch(browse), 'the arm line appears in its reserved row — matches do not move');
   const lines = armed.split('\n');
-  const idx = lines.findIndex(l => l.includes('→') && l.includes('▌'));
+  const idx = lines.findIndex(l => l.includes('→'));
   assert(idx > firstMatch(armed), 'the armed input row sits below the match list');
 });
