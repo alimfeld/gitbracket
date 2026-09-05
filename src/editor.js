@@ -443,6 +443,7 @@ function parseCmd(line) {
 
 function helpText(sim) {
   const k = s => s.padEnd(12);
+  const what = v => PROMPT_HINT.arm[v].split(' — ')[0]; // the arm hint's what side — the how (keys) belongs to the hint bar only
   const lines = [
     C.bold('GitBracket — the match-day editor. Every line is one match.'), '',
     C.bold('move'),
@@ -451,37 +452,39 @@ function helpText(sim) {
     `  ${k('n / N')} next / previous playable (▶)`,
     `  ${k('g / G')} top / bottom`, '',
     C.bold('find'),
-    `  ${k('/')} narrow to matching lines — Enter keeps, Esc clears it`, '',
-    `${C.bold('act')} — the line under the cursor is the target`,
-    `  ${k('Enter')} result → 21-19 [11-9 …] · wo a · void — empty clears`,
-    `  ${k('t')} time → 10:30 [date 10:30] — empty clears`,
-    `  ${k('v')} venue → court-2 — empty clears`,
-    `  ${k('a / b')} side a / b → players <ids> · pool <pool> <rank> · match <id> winner|loser`, '',
-    C.bold('commit'),
-    `  ${k('Enter')} arms the result in browse, commits when armed — the only key that ever writes`,
-    `  ${k('Esc')} cancels anywhere`, '',
+    `  ${k('/')} narrow to matching lines — enter keeps, esc clears it`, '',
+    `${C.bold('act')} — keys act on the selected line`,
+    `  ${k('enter')} result: ${what('result')}`,
+    `  ${k('t')} time: ${what('time')}`,
+    `  ${k('v')} venue: ${what('venue')}`,
+    `  ${k('a / b')} side a / b: ${what('side-a')}`, '',
+    C.bold('save'),
+    `  ${k('enter')} saves — the only key that writes`,
+    `  ${k('esc')} cancels anywhere`, '',
     C.bold('commands'),
     ...(sim ? [] : [`  ${k(':publish')} ship site/ to the domain`]),
     `  ${k(':status')} validator + git status`,
     `  ${k(':use <slug>')} switch tournament`,
   ];
   if (sim) lines.push('', C.bold('sim'),
-    `  ${k(']')} +30 min`,
+    `  ${k(']')} +30 min`, // [ and ] can't take key brackets — []] / [[] would read as garbage; the key column marks them
     `  ${k('[')} −30 min`,
-    `  ${k('x')} score the highlighted matches`);
+    `  ${k('x')} score the ▶ matches (a filter narrows the set)`);
   lines.push('', C.dim('q quits — every edit validates, writes, and commits itself'));
   return lines.join('\n');
 }
 
-const SIDE_HINT = 'players <ids> · pool <pool> <rank> · match <id> winner|loser · enter commits · esc cancels';
+// the how shared by every arm hint — the what differs per verb
+const HOW = ' — [enter] saves · [esc] cancels';
+const SIDE_HINT = `format players <ids> · pool <pool> <rank> · match <id> winner|loser${HOW}`;
 
 const PROMPT_HINT = {
-  browse: 'enter result · ? help · q quit',
+  browse: '[enter] result · [?] help · [q] quit',
   // expected entries first — the what — enter/esc trail as the how
-  arm: { result: '21-19 11-9 … · wo a · void · empty clears · enter commits · esc cancels', venue: 'a venue id, e.g. court-2 — empty clears · enter commits · esc cancels', time: 'hh:mm · [date] hh:mm · empty clears · enter commits · esc cancels', 'side-a': SIDE_HINT, 'side-b': SIDE_HINT },
-  filter: 'type to narrow · enter keeps · esc clears',
-  cmd: 'enter runs · esc cancels',
-  report: 'esc back',
+  arm: { result: `format 21-19 (11-9 …) · wo a · void · empty clears${HOW}`, venue: `format venue id, e.g. court-2 · empty clears${HOW}`, time: `format hh:mm · (date hh:mm) · empty clears${HOW}`, 'side-a': SIDE_HINT, 'side-b': SIDE_HINT },
+  filter: 'type to narrow · [enter] keeps · [esc] clears',
+  cmd: '[enter] runs · [esc] cancels',
+  report: '[esc] back',
 };
 
 // One keypress in. Pure: returns the next state and, when the key completes
@@ -515,7 +518,7 @@ function step(state, key, view, now) {
     if (name === 'return') {
       const cmd = parseCmd('/' + ns.cmdline);
       const args = cmd.args;
-      if (cmd.kind === 'unknown') return { state: { ...ns, mode: 'browse', cmdline: '', msg: { text: `unknown command ${ns.cmdline.split(/\s+/)[0]} — ? for help`, color: 'red' } }, action: null };
+      if (cmd.kind === 'unknown') return { state: { ...ns, mode: 'browse', cmdline: '', msg: { text: `unknown command ${ns.cmdline.split(/\s+/)[0]} — [?] for help`, color: 'red' } }, action: null };
       if (cmd.kind === 'publish') return { state: { ...ns, mode: 'browse', cmdline: '' }, action: { kind: 'publish' } };
       if (cmd.kind === 'use') return { state: { ...ns, mode: 'browse', cmdline: '', cursorId: null }, action: { kind: 'use', slug: args[0] } };
       if (cmd.kind === 'status') return { state: { ...ns, mode: 'browse', cmdline: '' }, action: { kind: 'status' } };
@@ -540,7 +543,7 @@ function step(state, key, view, now) {
     if (name === 'home' || (key.ctrl && name === 'a')) return { state: { ...ns, pos: 0 }, action: null };
     if (name === 'end' || (key.ctrl && name === 'e')) return { state: { ...ns, pos: ns.payload.length }, action: null };
     if (name === 'return') {
-      if (cur === -1) return { state: { ...ns, msg: { text: 'no match under the cursor', color: 'red' } }, action: null };
+      if (cur === -1) return { state: { ...ns, msg: { text: 'no match to edit', color: 'red' } }, action: null };
       const row = rowAt(cur);
       const p = parsePayload(ns.verb, ns.payload.trim().split(/\s+/).filter(Boolean), view.tz, now);
       if (p.err) return { state: { ...ns, msg: { text: p.err, color: 'yellow' } }, action: null };
@@ -557,7 +560,7 @@ function step(state, key, view, now) {
   // outcome; an unplayed match arms empty (empty-clear = a no-op, never an
   // error), so Enter-Enter reads a row without ever writing.
   if (name === 'return') {
-    if (cur === -1) return { state: { ...ns, msg: { text: 'no match under the cursor', color: 'red' } }, action: null };
+    if (cur === -1) return { state: { ...ns, msg: { text: 'no match to edit', color: 'red' } }, action: null };
     const m = rowAt(cur).m;
     const pre = prefillFor('result', m, view.tz, now);
     return { state: { ...ns, mode: 'arm', verb: 'result', payload: pre, pos: pre.length }, action: null };
@@ -573,7 +576,7 @@ function step(state, key, view, now) {
   if (ch === '?') return { state: { ...ns, mode: 'report', report: helpText(ns.sim), msg: null }, action: null };
   if (ch === 'q') return { state: { ...ns, quit: true }, action: null };
   if (VERB_KEYS[ch]) {
-    if (cur === -1) return { state: { ...ns, msg: { text: 'no match under the cursor', color: 'red' } }, action: null };
+    if (cur === -1) return { state: { ...ns, msg: { text: 'no match to edit', color: 'red' } }, action: null };
     const m = rowAt(cur).m;
     // arming prefills the value on record (score games, the venue, the time, a side's
     // slot, a walkover's letter) so an edit is an amend — Enter on the untouched
@@ -781,7 +784,7 @@ function caretCell(input, hint, offset, rows, cols) {
 
 function hintLine(state) {
   // Esc clears the filter only in browse — the static browse hint can't say so
-  if (state.mode === 'browse' && state.query) return 'enter result · esc clears the filter · ? help · q quit';
+  if (state.mode === 'browse' && state.query) return '[enter] result · [esc] clears the filter · [?] help · [q] quit';
   // sim keys live only in the help screen — the status line stays sparse
   const base = PROMPT_HINT[state.mode];
   if (typeof base === 'string') return base;
@@ -933,7 +936,7 @@ function editorMain(root, siteRoot, repo, opts) {
     const view = getView();
     const t = tjson();
     if (!t) {
-      process.stdout.write('\x1b[?25l\x1b[2J\x1b[H' + (state.msg ? C.yellow(state.msg.text) : 'no tournament selected') + '\n\n' + C.dim(':use <slug> — ' + [...state.repo.tournaments.keys()].join(', ')) + '\n\n' + C.dim('q quit') + '\n');
+      process.stdout.write('\x1b[?25l\x1b[2J\x1b[H' + (state.msg ? C.yellow(state.msg.text) : 'no tournament selected') + '\n\n' + C.dim(':use <slug> — ' + [...state.repo.tournaments.keys()].join(', ')) + '\n\n' + C.dim('[q] quit') + '\n');
       return;
     }
     const played = Object.values(t.matches || {}).flat().filter(m => m && isDone(m)).length;
