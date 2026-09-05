@@ -426,7 +426,7 @@ function possibleCard(stage, ctx, opts) {
   const when = stage.time !== null ? timeEl(stage.time, ctx.tz, opts.day) : '<span class="tbd">TBD</span>';
   const where = stage.court !== null ? esc(venueName(ctx, stage.court)) : '<span class="tbd">TBD</span>';
   const label = esc(stage.label);
-  return `<article${opts.id ? ` id="${opts.id}"` : ''} data-status="possible"><div class="head"><span>${when}</span><span>${where}</span></div><div class="meta">${esc(ctx.name)} · ${label}${stage.chip ? ` — ${esc(stage.chip)}` : ''}</div></article>`;
+  return `<article${opts.id ? ` id="${opts.id}"` : ''} data-status="possible"><div class="head"><span>${when}</span><span>${where}</span></div><div class="meta">${esc(ctx.name)} · ${label}</div>${stage.chip ? `<div class="meta">(${esc(stage.chip)})</div>` : ''}</article>`;
 }
 
 function renderPlayer(route, data) {
