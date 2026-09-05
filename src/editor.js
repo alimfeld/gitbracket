@@ -388,7 +388,6 @@ function prefillFor(verb, m, tz, now) {
     const date = s.slice(0, 10);
     return (date === dayKey(now, tz) ? '' : date + ' ') + s.slice(11, 16);
   }
-  if (verb === 'walkover') return m.result && m.result.status === 'walkover' ? m.result.winner : '';
   const si = SIDE_VERBS[verb];
   if (si !== undefined) {
     const side = m.sides && m.sides[si];
@@ -1038,4 +1037,4 @@ function main(root) {
   editorMain(root, siteRoot, repo, { sim: false, clock: () => Date.now() });
 }
 
-module.exports = { parseGame, buildScheduled, applyScore, applyResult, applyClear, applyVenue, applySide, applyTime, prefillFor, writeEdit, commitMessage, editDetail, echoLine, parseCmd, formatMatchLine, listingSide, rowKey, waveEntries, buildRows, makeView, parsePayload, step, boardText, caretCell, computeWindow, reconcileTop, matchHeights, listBudget, execEdit, execAction, defaultSlug, editorMain, main, C, rowAttr };
+module.exports = { parseGame, buildScheduled, applyScore, applyResult, applyVenue, applySide, applyTime, prefillFor, writeEdit, commitMessage, editDetail, echoLine, parseCmd, rowKey, waveEntries, buildRows, makeView, parsePayload, step, execEdit, execAction, defaultSlug, editorMain, main, C };

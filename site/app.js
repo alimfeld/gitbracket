@@ -32,7 +32,7 @@ async function fetchJson(url) {
     // returns null like any network failure and the poll retries next tick
     if (res.status === 404 || res.status === 410) return HTTP_ERR;
     return null;
-  } catch (e) {
+  } catch {
     return null; // network failure — the poll retries next tick
   }
 }
