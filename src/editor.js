@@ -734,6 +734,8 @@ function inputLine(state, view) {
 }
 
 function hintLine(state) {
+  // Esc clears the filter only in browse — the static browse hint can't say so
+  if (state.mode === 'browse' && state.query) return 'enter result · esc clears the filter · ? help · q quit';
   // sim keys live only in the help screen — the status line stays sparse
   const base = PROMPT_HINT[state.mode];
   if (typeof base === 'string') return base;

@@ -319,6 +319,7 @@ test('editor boardText: an active filter is echoed on the status line', () => {
   const txt = editor.boardText(state, view, info);
   assert(/· \/ada — \d+ match/.test(txt.split('\n')[0]), 'the status line carries the active filter and its match count');
   assert(view.filtered.length > 0, 'the ada filter has matches to count');
+  assert(/esc clears the filter/.test(txt.split('\n').pop()), 'the hint says Esc clears the filter when one is active');
 });
 
 test('editor boardText: a narrow pane that wraps matches still keeps the header on screen', () => {
