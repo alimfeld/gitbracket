@@ -61,20 +61,41 @@ function legalSlots(tjson, cat, matchId, day, gcd) {
   const others = entries.filter(e => !(e.cat === cat && e.m.id === Number(matchId)));
   const ctx = catCtx(tjson, cat);
   const m = ctx.byId.get(Number(matchId));
-  if (!m) return {};
+  if (!m || !Array.isArray(m.sides) || m.sides.length !== 2) return {}; // malformed match: the gate reports, the preview never offers
   const slotMin = matchSlotMs(m, ctx) / 60000;
   const players = fixedPlayers(m);
   const fb = feederBounds(m, ctx, tz);
+  let floor = fb.floor; // m's own bound: its feeder slots' ends (match-edge + pool sides), gate-mirrored
+  let ceiling = fb.ceiling; // match-edge consumers' starts — a pool match's rank consumers are invisible to feederBounds, so the pool scan extends it
+  // A pool match carries no own bound, yet a move is gated by every scheduled
+  // knockout match holding a rank slot of its pool: such a consumer must start
+  // after the pool's last scheduled end. Only committed data reaches this daemon
+  // (every edit validates), so a move can only raise the pool end — the whole
+  // consumer set collapses to one bound, the earliest scheduled consumer's start.
+  if (m.pool !== undefined) {
+    for (const C of ctx.matches) {
+      if (!C || C.pool !== undefined || C.scheduled === undefined) continue;
+      if (!C.sides || !C.sides.some(s => s && s.kind === 'pool' && s.pool === m.pool)) continue;
+      const cs = schedTime(C, tz);
+      if (cs === null) continue;
+      ceiling = ceiling === null ? cs : Math.min(ceiling, cs);
+    }
+  }
   const out = {};
   for (const venue of (tjson.venues || []).map(v => v.id)) {
     const ticks = [];
     for (let wm = 0; wm < 1440; wm += gcd) {
       if (!Number.isFinite(slotMin) || wm + slotMin > 1440) continue;
-      const cand = { m: { venue }, t: schedTime({ scheduled: `${day}T${String(Math.floor(wm / 60)).padStart(2, '0')}:${String(wm % 60).padStart(2, '0')}:00` }, tz), ctx, players };
-      if (cand.t === null) continue;
-      if (fb.floor !== null && cand.t < fb.floor) continue;
-      if (fb.ceiling !== null && cand.t + slotMin * 60000 > fb.ceiling) continue;
+      const iso = `${day}T${String(Math.floor(wm / 60)).padStart(2, '0')}:${String(wm % 60).padStart(2, '0')}:00`;
+      const t = schedTime({ scheduled: iso }, tz);
+      if (t === null) continue;
+      if (floor !== null && t < floor) continue;
+      const slotEnd = t + slotMin * 60000;
+      if (ceiling !== null && slotEnd > ceiling) continue;
       let busy = false;
+      // the candidate carries the real match — its pool and slotMinutes size
+      // the window pairBusy tests, exactly as the gate sizes the same match
+      const cand = { m: { ...m, scheduled: iso, venue }, t, ctx, players };
       for (const e of others) if (pairBusy(cand, e).length) { busy = true; break; }
       if (!busy) ticks.push(wm);
     }

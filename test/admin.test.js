@@ -162,6 +162,36 @@ test('admin legalSlots: legal starts come from the gate\'s own rules (venue, fee
   assert.deepEqual(ok8['court-2'], [675], 'the semi\'s only legal start is 11:15 — the feeder floor, before its consumer 9');
 });
 
+test('admin legalSlots: a pool match cannot push its pool past a rank-consumer\'s start — the ghost respects the consumers\' gate bounds', () => {
+  const tjson = loadRepo(FIX('sample')).tournaments.get('sample').tjson;
+  // md40/1 is a pool-A match; the QFs 7/8 hold pool-A rank slots at 11:15 and
+  // gate the pool's last scheduled end there — no start may end later, on any
+  // court (the QF holds no venue in common; only the pool end binds it)
+  const ok = admin.legalSlots(tjson, 'md40', '1', '2025-07-14', 15);
+  for (const v of ['court-1', 'court-2']) {
+    assert(ok[v].every(wm => wm + 45 <= 675), `${v}: every pool-A start must end by the consumers' 11:15 start`);
+  }
+  assert(ok['court-1'].includes(450), 'a free morning slot is still offered');
+});
+
+test('admin legalSlots: the overlap window is the dragged match\'s own slotMinutes — a category default can\'t undersize it', () => {
+  const tjson = loadRepo(FIX('bad-slot-overlap')).tournaments.get('bad-slot-overlap').tjson;
+  // t/1 is a 60-minute pool match and t/2 (09:50-10:50, same court) shares the
+  // 60-minute groups default; the candidate must be sized from the real match
+  // — a default-less `{ venue }` window would make the overlap test vacuous
+  const ok = admin.legalSlots(tjson, 't', '1', '2025-07-14', 15);
+  const c1 = new Set(ok['court-1']);
+  for (const wm of [540, 555, 570, 585, 600, 615, 630, 645]) {
+    assert(!c1.has(wm), `tick ${wm} collides with t/2's 09:50-10:50 window`);
+  }
+  assert(c1.has(660), '11:00 clears t/2 and is offered');
+});
+
+test('admin legalSlots: a match without sides never throws — the daemon reports, the preview offers nothing', () => {
+  const tjson = loadRepo(FIX('bad-pool-missing-sides')).tournaments.get('bad-pool-missing-sides').tjson;
+  assert.deepEqual(admin.legalSlots(tjson, 't', '2', '2026-05-02', 30), {}, 'sides-less match 2 gets no offers and no crash');
+});
+
 test('admin pairBusy: the validators\' conflict kinds served to the preview — the same code the gate runs', () => {
   const { schedEntries, pairBusy } = require('../src/tools.js');
   const db = schedEntries(loadRepo(FIX('bad-player-doublebook')).tournaments.get('bad-player-doublebook').tjson).entries;
