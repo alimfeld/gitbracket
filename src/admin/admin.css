@@ -76,7 +76,7 @@ main { flex: 1; display: flex; min-height: 0; }
 /* ---- side panel ---- */
 #editor .matchhead { font-weight: 600; margin-bottom: .4rem; }
 #editor label { display: block; font-size: .8rem; color: var(--muted); margin: .5rem 0 .2rem; }
-#editor input[type=text], #editor select { font: inherit; width: 100%; padding: .3rem; border: 1px solid var(--line); border-radius: .3rem; }
+#editor input[type=text] { font: inherit; width: 100%; padding: .3rem; border: 1px solid var(--line); border-radius: .3rem; }
 .sidebtn { width: 100%; text-align: left; }
 .sidebtn small { color: var(--muted); display: block; }
 .scoreinput { font-family: ui-monospace, monospace; }
