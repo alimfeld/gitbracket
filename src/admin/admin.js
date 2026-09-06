@@ -203,7 +203,13 @@ const keyParts = k => { const i = k.indexOf(':'); return [k.slice(0, i), k.slice
 function wireGrid() {
   const grid = $('grid');
   grid.querySelectorAll('.match').forEach(el => {
-    el.addEventListener('click', e => { e.stopPropagation(); S.selected = S.selected === el.dataset.key ? null : el.dataset.key; renderGrid(); renderEditor(); });
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      S.selected = el.dataset.key; // a card click always selects — Esc/cancel or an empty-board click closes, so a half-typed entry survives an accidental second click
+      renderGrid();
+      const input = renderEditor();
+      if (input) { input.focus(); input.select(); } // typing replaces the entry — the match-day act is click, type, enter
+    });
     el.addEventListener('dragstart', e => {
       S.dragSource = el.dataset.key;
       e.dataTransfer.setData('text/plain', S.dragSource);
@@ -312,6 +318,27 @@ async function sendEdit(verb, cid, mid, value) {
 }
 
 // ---- the match editor (side panel) ----
+// One result grammar, same as the terminal editor: bare games · wo a/b · void ·
+// empty clears. The shape rides the value; validity past shape (target count,
+// even best-of…) is the daemon's gate, flashed back on a failed write.
+function parseResult(s) {
+  const toks = s.trim().split(/\s+/).filter(Boolean);
+  if (!toks.length) return { value: { shape: 'clear' } }; // empty input is a deliberate clear
+  if (toks[0] === 'wo') {
+    return toks.length === 2 && (toks[1] === 'a' || toks[1] === 'b')
+      ? { value: { shape: 'walkover', winner: toks[1] } }
+      : { err: 'expected a or b after wo' };
+  }
+  if (toks[0] === 'void') return toks.length > 1 ? { err: 'void takes nothing else' } : { value: { shape: 'void' } };
+  const games = [];
+  for (const t of toks) {
+    const mm = /^(\d+)[:-](\d+)$/.exec(t);
+    if (!mm) return { err: `bad score ${JSON.stringify(t)} — expected a-b` };
+    games.push({ a: +mm[1], b: +mm[2] });
+  }
+  return { value: { shape: 'score', games } };
+}
+
 function renderEditor() {
   const ed = $('editor');
   if (!S.selected) { ed.hidden = true; return; }
@@ -324,26 +351,30 @@ function renderEditor() {
     <div class="matchhead">${esc(matchLabel(m, ctx))} · ${cid} ${m.id}</div>
     <button class="sidebtn" data-side="a"><small>side a</small>${esc(teamText(m.sides[0], ctx))}</button>
     <button class="sidebtn" data-side="b"><small>side b</small>${esc(teamText(m.sides[1], ctx))}</button>
-    <label>Result / score <input type="text" class="scoreinput" id="scoreinput" value="${esc(pre)}" placeholder="21-19 11-9 · wo a · void"></label>
+    <label>Result / score <input type="text" class="scoreinput" id="scoreinput" value="${esc(pre)}"></label>
+    <p class="hint">games 21-19 11-9 · wo a · void · empty clears — [enter] ok · [esc] cancel</p>
     <div class="buttons">
-      <button data-act="score">Score</button>
-      <button data-act="woa">W/O a</button>
-      <button data-act="wob">W/O b</button>
-      <button data-act="void">Void</button>
-      <span class="spacer"></span>
-      <button data-act="clear" class="danger">Clear</button>
+      <button data-act="cancel">Cancel</button>
+      <button data-act="ok" class="primary">Ok</button>
     </div>`;
   ed.querySelector('.sidebtn[data-side="a"]').onclick = () => openSide(cid, m, 0);
   ed.querySelector('.sidebtn[data-side="b"]').onclick = () => openSide(cid, m, 1);
-  ed.querySelector('[data-act="score"]').onclick = async () => {
-    const games = $('scoreinput').value.trim().split(/\s+/).filter(Boolean).map(tok => { const mm = /^(\d+)[:-](\d+)$/.exec(tok); return mm ? { a: +mm[1], b: +mm[2] } : null; });
-    if (games.some(g => !g)) { flash('bad score — expected a-b games'); return; }
-    await sendEdit('result', cid, mid, { shape: 'score', games });
+  const input = ed.querySelector('#scoreinput');
+  const refocus = el => { if (el) { el.focus(); el.select(); } };
+  const submit = async () => {
+    const p = parseResult(input.value);
+    if (p.err) { flash(p.err); refocus(input); return; }
+    const ok = await sendEdit('result', cid, mid, p.value);
+    refocus(ok ? ed.querySelector('#scoreinput') : input); // a success reload rebuilt the field; a rejection keeps the draft for fixing
   };
-  ed.querySelector('[data-act="woa"]').onclick = () => sendEdit('result', cid, mid, { shape: 'walkover', winner: 'a' });
-  ed.querySelector('[data-act="wob"]').onclick = () => sendEdit('result', cid, mid, { shape: 'walkover', winner: 'b' });
-  ed.querySelector('[data-act="void"]').onclick = () => sendEdit('result', cid, mid, { shape: 'void' });
-  ed.querySelector('[data-act="clear"]').onclick = () => sendEdit('result', cid, mid, { shape: 'clear' });
+  const cancel = () => { S.selected = null; renderGrid(); renderEditor(); };
+  ed.querySelector('[data-act="ok"]').onclick = submit;
+  ed.querySelector('[data-act="cancel"]').onclick = cancel;
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); submit(); }
+    if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+  });
+  return input;
 }
 
 // ---- the side picker (modal) ----

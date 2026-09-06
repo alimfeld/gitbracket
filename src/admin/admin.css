@@ -81,8 +81,7 @@ main { flex: 1; display: flex; min-height: 0; }
 .sidebtn small { color: var(--muted); display: block; }
 .scoreinput { font-family: ui-monospace, monospace; }
 .buttons { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .6rem; }
-.buttons .spacer { flex: 1; }
-button.danger { color: var(--danger); border-color: var(--danger); }
+#editor .hint { margin: .4rem 0 0; } /* the generic hint's 1rem inset fits the modal box, not the flush panel field */
 
 /* ---- modal ---- */
 .modal {
