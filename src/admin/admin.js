@@ -106,7 +106,7 @@ function computeDays() {
 // Fill the board's height when the day fits; floor the scale so even the smallest
 // slot is tall enough for a scored card's three rows — no clipping, no overlap.
 function fitScale() {
-  const sc = $('scroll');
+  const sc = $('board');
   const avail = sc ? sc.clientHeight : 0;
   const total = S.dayEnd - S.dayStart || 1;
   S.pxPerMin = Math.max(1.6, avail / total);
@@ -115,7 +115,6 @@ function fitScale() {
 // ---- the grid ----
 function renderGrid() {
   const grid = $('grid');
-  const hint = $('hint');
   S.legal = null; // a re-render (day switch, edit, undo) invalidates the slots
   const dayMatches = [];
   for (const c of S.cats) for (const m of c.matches) {
@@ -157,7 +156,6 @@ function renderGrid() {
   html += '</div>';
 
   grid.innerHTML = html;
-  hint.textContent = `Venues across · time down (${S.dayStart / 60 | 0}:00–${dayEnd / 60 | 0}:00) · drag a card — drops snap to the day's legal starts (the daemon computes them with the write gate's own rules)`;
   wireGrid();
 }
 
