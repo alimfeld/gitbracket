@@ -207,6 +207,16 @@ const keyParts = k => { const i = k.indexOf(':'); return [k.slice(0, i), k.slice
 
 function wireGrid() {
   const grid = $('grid');
+  // Board-level listeners bind once — only the .match nodes are recreated per
+  // render, so rebinding here would stack a handler set on #grid per render and
+  // an empty-board click would fan out into one full re-render per stale set.
+  if (!grid.dataset.wired) {
+    grid.dataset.wired = '1';
+    grid.addEventListener('dragover', e => { e.preventDefault(); ghost(e); });
+    grid.addEventListener('dragleave', e => { if (e.relatedTarget == null) clearGhost(); });
+    grid.addEventListener('drop', e => { e.preventDefault(); dropAt(e); });
+    grid.addEventListener('click', e => { if (!e.target.closest('.match')) { S.selected = null; renderGrid(); renderEditor(); } });
+  }
   grid.querySelectorAll('.match').forEach(el => {
     el.addEventListener('click', e => {
       e.stopPropagation();
@@ -225,10 +235,6 @@ function wireGrid() {
     });
     el.addEventListener('dragend', () => { clearGhost(); S.dragSource = null; renderGrid(); });
   });
-  grid.addEventListener('dragover', e => { e.preventDefault(); ghost(e); });
-  grid.addEventListener('dragleave', e => { if (e.relatedTarget == null) clearGhost(); });
-  grid.addEventListener('drop', e => { e.preventDefault(); dropAt(e); });
-  grid.addEventListener('click', e => { if (!e.target.closest('.match')) { S.selected = null; renderGrid(); renderEditor(); } });
 }
 
 // The candidate (venue, wallMin) under the pointer, in raw minutes — legal
