@@ -164,7 +164,6 @@ function cardHtml(c, m, venue) {
   const st = isDone(m) ? m.result.status : 'open';
   const active = S.selected === keyOf(c, m) ? ' active' : '';
   const stCls = st === 'open' ? '' : ' done';
-  const overdue = !isDone(m) && t !== null && Date.now() > t + matchSlotMs(m, c) ? ' overdue' : '';
   const time = t !== null ? fmtTime(t, S.tz) : '—';
   // wall-time placement in the day's px-per-minute scale; unscheduled cards in
   // the unscheduled column are flow-positioned (their .unsched .match rule)
@@ -174,7 +173,7 @@ function cardHtml(c, m, venue) {
     ? ` style="top:${(wm - S.dayStart) * S.pxPerMin}px;min-height:${slot * S.pxPerMin}px;"` : '';
   const k = keyOf(c, m);
   // same card shape as the tournament page: one side row per side, meta last
-  return `<article class="match${active}${stCls}${overdue}" draggable="true" data-key="${esc(k)}" data-venue="${esc(venue || '')}"${pos}>
+  return `<article class="match${active}${stCls}" draggable="true" data-key="${esc(k)}" data-venue="${esc(venue || '')}"${pos}>
     ${sideRow(c, m, 0)}${sideRow(c, m, 1)}<div class="meta">${time} · ${esc(matchLabel(m, c))}</div>
   </article>`;
 }

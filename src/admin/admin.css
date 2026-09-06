@@ -9,7 +9,6 @@
   --page: #fdfdfc;
   --accent: #0a66c2;
   --on-accent: #fff;
-  --overdue: #b3261e;
   --due: #15803d;
   --danger: #b3261e;
 }
@@ -53,13 +52,12 @@ main { flex: 1; display: flex; min-height: 0; }
 
 .match {
   position: absolute; left: .25rem; right: .25rem; overflow: hidden;
-  background: #fff; border: 1px solid var(--line); border-left: 3px solid var(--accent);
+  background: #fff; border: 1px solid var(--line); border-left: 3px solid var(--muted);
   border-radius: .3rem; padding: .2rem .35rem; font-size: .75rem; cursor: grab;
   box-shadow: 0 1px 2px #00000012;
 }
 .match.done { border-left-color: var(--due); opacity: .8; }
-.match.overdue { border-left-color: var(--overdue); }
-.match.active { outline: 2px solid var(--accent); }
+.match.active { outline: 2px solid var(--accent); z-index: 1; } /* z-index: an outline draws outside the box, so the next card (a later positioned sibling) would paint over its bottom edge */
 .match.dragging { opacity: .4; }
 .match .side { display: flex; justify-content: space-between; align-items: baseline; gap: .35rem; line-height: 1.2; }
 .match .side > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
