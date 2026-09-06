@@ -71,18 +71,36 @@ main { flex: 1; display: flex; min-height: 0; }
 
 .match {
   position: absolute; left: .25rem; right: .25rem; overflow: hidden;
+  display: flex; gap: .2rem;
   background: #fff; border: 1px solid var(--line); border-left: 3px solid var(--muted);
-  border-radius: .3rem; padding: .2rem .35rem; font-size: .75rem; cursor: grab;
+  border-radius: .3rem; padding: .2rem .35rem; font-size: .75rem;
   box-shadow: 0 1px 2px #00000012;
 }
 .match.done { border-left-color: var(--due); opacity: .8; }
 .match.active { outline: 2px solid var(--accent); z-index: 1; } /* z-index: an outline draws outside the box, so the next card (a later positioned sibling) would paint over its bottom edge */
 .match.dragging { opacity: .4; }
+.match .rows { flex: 1; min-width: 0; }
+/* the grip is the card's only drag surface — the rows beneath stay click targets */
+.match .grip {
+  flex: 0 0 auto; width: .85rem; cursor: grab;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--muted);
+}
+.match .grip::before {
+  content: ''; width: 3px; height: 3px; border-radius: 50%; background: currentColor;
+  box-shadow: .4rem 0 0 currentColor, 0 .4rem 0 currentColor, .4rem .4rem 0 currentColor,
+    0 .8rem 0 currentColor, .4rem .8rem 0 currentColor;
+}
+.match .grip:hover { color: var(--accent); }
 .match .side { display: flex; justify-content: space-between; align-items: baseline; gap: .35rem; line-height: 1.2; }
-.match .who { display: flex; align-items: baseline; gap: .2rem; min-width: 0; }
-.match .who .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sideedit { flex-shrink: 0; padding: 0 .15rem; border: 0; background: none; color: var(--muted); cursor: pointer; line-height: 1; font-size: .7rem; border-radius: .2rem; }
-.sideedit:hover { color: var(--accent); }
+/* the whole name row and the score are the picker / result targets — hover tints them */
+.match .who, .match .score {
+  border: 0; background: none; padding: .1rem; margin: -.1rem; font: inherit; color: inherit;
+  cursor: pointer; border-radius: .2rem; text-align: left;
+}
+.match .who { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.match .who:hover, .match .score:hover,
+.match .who:focus-visible, .match .score:focus-visible { background: #0a66c21a; }
 .match .side[data-win] { font-weight: 600; }
 .match .score { display: flex; gap: .2rem; }
 .match .score span { font-weight: 600; min-width: 1.3em; text-align: right; }
@@ -95,10 +113,15 @@ main { flex: 1; display: flex; min-height: 0; }
 .unsched { position: relative; }
 .unsched .match { position: relative; left: auto; right: auto; margin: .3rem; }
 
-/* ---- result modal ---- */
+/* ---- dialog header ---- */
+.modal .kicker { margin: 0 0 .15rem; font-size: .68rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+.modal .box h2 { font-size: 1rem; margin: 0 0 .7rem; } /* the title is the match card meta line — time · category · label */
+.modal .hint { margin: .4rem 0 0; }
+/* the side picker's labeled selects */
 .modal .field { display: block; font-size: .8rem; color: var(--muted); margin: .55rem 0 .2rem; }
-.modal .field input[type=text] { font: inherit; width: 100%; padding: .3rem; border: 1px solid var(--line); border-radius: .3rem; }
-.scoreinput { font-family: ui-monospace, monospace; }
+.modal .field select { font: inherit; padding: .2rem .4rem; border: 1px solid var(--line); border-radius: .3rem; background: #fff; }
+/* the result input leads the box directly — no label wrapper between title and field */
+.scoreinput { font: inherit; width: 100%; padding: .3rem; border: 1px solid var(--line); border-radius: .3rem; font-family: ui-monospace, monospace; }
 
 /* ---- modal ---- */
 .modal {

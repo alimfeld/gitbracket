@@ -176,15 +176,17 @@ function cardHtml(c, m, venue) {
   const pos = wm != null && Number.isFinite(slot)
     ? ` style="top:${(wm - S.dayStart) * S.pxPerMin}px;min-height:${slot * S.pxPerMin}px;"` : '';
   const k = keyOf(c, m);
-  // same card shape as the tournament page: one side row per side, meta last
-  return `<article class="match${active}${stCls}" draggable="true" data-key="${esc(k)}" data-venue="${esc(venue || '')}"${pos}>
-    ${sideRow(c, m, 0)}${sideRow(c, m, 1)}<div class="meta">${esc(cardMeta(c, m))}</div>
+  // same card shape as the tournament page: one side row per side, meta last —
+  // but a drag grip leads: only the grip drags, so the sides and score stay click targets
+  return `<article class="match${active}${stCls}" data-key="${esc(k)}" data-venue="${esc(venue || '')}"${pos}>
+    <span class="grip" draggable="true" title="Drag to move"></span>
+    <div class="rows">${sideRow(c, m, 0)}${sideRow(c, m, 1)}<div class="meta">${esc(cardMeta(c, m))}</div></div>
   </article>`;
 }
 
-// One side row mirroring the site's card: name left (✎ opens the side picker),
-// per-game score right (click opens the result modal); placeholder dots keep the
-// best-of shape, the winner carries the W/O mark.
+// One side row mirroring the site's card: the name is the side picker's target,
+// the per-game score the result dialog's — both hover-flagged, no ✎ in between;
+// placeholder dots keep the best-of shape, the winner carries the W/O mark.
 function sideRow(c, m, i) {
   const r = m.result;
   const w = winnerIdx(m);
@@ -199,7 +201,8 @@ function sideRow(c, m, i) {
     : r.status === 'void' ? '<span>void</span>'
     : sideIdx(r.winner) === i ? '<span>W/O</span>'
     : slots();
-  return `<div class="side"${w === i ? ' data-win' : ''}><span class="who"><span class="name">${esc(teamText(m.sides[i], c))}</span><button class="sideedit" data-side="${i}" title="edit side ${i === 0 ? 'a' : 'b'}" aria-label="edit side ${i === 0 ? 'a' : 'b'}">✎</button></span><span class="score">${score}</span></div>`;
+  const sideName = esc(teamText(m.sides[i], c));
+  return `<div class="side"${w === i ? ' data-win' : ''}><button type="button" class="who" data-side="${i}" title="edit side ${i === 0 ? 'a' : 'b'}" aria-label="edit side ${i === 0 ? 'a' : 'b'} — ${sideName}">${sideName}</button><button type="button" class="score" title="edit result">${score}</button></div>`;
 }
 
 const keyOf = (c, m) => `${c.id}:${m.id}`;
@@ -223,12 +226,12 @@ function wireGrid() {
       S.selected = el.dataset.key; // a card click selects (drag anchor + active outline); the modal triggers below stop propagation so they never re-render over an open dialog
       renderGrid();
     });
-    el.querySelector('.score').addEventListener('click', e => {
+    el.querySelectorAll('.score').forEach(btn => btn.addEventListener('click', e => {
       e.stopPropagation();
       const [cid, mid] = keyParts(el.dataset.key);
       openResult(cid, matchOf(cid, mid));
-    });
-    el.querySelectorAll('.sideedit').forEach(btn => btn.addEventListener('click', e => {
+    }));
+    el.querySelectorAll('.who').forEach(btn => btn.addEventListener('click', e => {
       e.stopPropagation();
       const [cid, mid] = keyParts(el.dataset.key);
       openSide(cid, matchOf(cid, mid), +btn.dataset.side);
@@ -238,6 +241,10 @@ function wireGrid() {
       e.dataTransfer.setData('text/plain', S.dragSource);
       el.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
+      // only the grip is draggable, so the drag image is the little grip by
+      // default — anchor the whole card where the grip was grabbed instead
+      const r = el.getBoundingClientRect();
+      e.dataTransfer.setDragImage(el, e.clientX - r.left, e.clientY - r.top);
       const [cid, mid] = keyParts(S.dragSource);
       loadSlots(cid, mid); // legal starts for the dragged match — the ghost snaps to these
     });
@@ -364,8 +371,9 @@ function openResult(cid, m) {
   const modal = $('modal');
   modal.hidden = false;
   modal.innerHTML = `<div class="box">
-    <h2>Result — ${esc(matchLabel(m, ctx))}</h2>
-    <label class="field">Result / score <input type="text" class="scoreinput" id="scoreinput" value="${esc(pre)}"></label>
+    <p class="kicker">Result</p>
+    <h2>${esc(cardMeta(ctx, m))}</h2>
+    <input type="text" class="scoreinput" id="scoreinput" value="${esc(pre)}" aria-label="Result">
     <p class="hint">games 21-19 11-9 · wo a · wo b · void · empty clears — [enter] ok · [esc] cancel</p>
     <div class="foot"><button data-x="cancel">Cancel</button><button data-x="apply" class="primary">Apply</button></div>
   </div>`;
@@ -391,7 +399,8 @@ function openSide(cid, m, si) {
   const modal = $('modal');
   modal.hidden = false;
   modal.innerHTML = `<div class="box">
-    <h2>Side ${si === 0 ? 'a' : 'b'} of ${esc(matchLabel(m, ctx))}</h2>
+    <p class="kicker">Side ${si === 0 ? 'A' : 'B'}</p>
+    <h2>${esc(cardMeta(ctx, m))}</h2>
     <div class="tabs">
       <button data-kind="players" class="active">Players</button>
       <button data-kind="pool">Pool</button>
@@ -406,18 +415,18 @@ function openSide(cid, m, si) {
     modal.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.kind === kind));
     if (kind === 'players') {
       const ids = cur && cur.kind === 'players' ? cur.ids : [];
-      body.innerHTML = `<p class="hint">pick ${size} player${size === 1 ? '' : 's'} (singles ${size})</p>` +
+      body.innerHTML = `<p class="hint">pick ${size} player${size === 1 ? '' : 's'}</p>` +
         ctx.matches.flatMap(mm => (mm.sides || []).flatMap(s => (s.kind === 'players' ? s.ids : [])))
           .filter((v, i, a) => a.indexOf(v) === i)
           .map(id => { const nm = S.tjson.players.find(p => p.id === id); return `<label><input type="checkbox" value="${esc(id)}"${ids.includes(id) ? ' checked' : ''}>${esc(nm ? nm.name : id)}</label>`; }).join('');
     } else if (kind === 'pool') {
       const p = pools(ctx);
-      body.innerHTML = `<label>Pool <select id="poolsel">${p.map(x => `<option>${esc(x)}</option>`).join('')}</select></label>
-        <label>Rank <select id="ranksel">${[1, 2, 3, 4, 5, 6].map(r => `<option>${r}</option>`).join('')}</select></label>`;
+      body.innerHTML = `<p class="hint">pool slot — pool + rank</p><label class="field">Pool <select id="poolsel">${p.map(x => `<option>${esc(x)}</option>`).join('')}</select></label>
+        <label class="field">Rank <select id="ranksel">${[1, 2, 3, 4, 5, 6].map(r => `<option>${r}</option>`).join('')}</select></label>`;
     } else {
       const undone = ctx.matches.filter(mm => !isDone(mm));
-      body.innerHTML = `<label>Match <select id="matchsel">${undone.map(mm => `<option value="${mm.id}">${mm.id} · ${esc(matchLabel(mm, ctx))}</option>`).join('')}</select></label>
-        <label>Result <select id="resel"><option value="winner">winner</option><option value="loser">loser</option></select></label>`;
+      body.innerHTML = `<p class="hint">feeder match result</p><label class="field">Match <select id="matchsel">${undone.map(mm => `<option value="${mm.id}">${mm.id} · ${esc(matchLabel(mm, ctx))}</option>`).join('')}</select></label>
+        <label class="field">Result <select id="resel"><option value="winner">winner</option><option value="loser">loser</option></select></label>`;
     }
   };
   modal.querySelectorAll('.tabs button').forEach(b => b.onclick = () => setKind(b.dataset.kind));
