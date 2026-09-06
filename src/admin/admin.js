@@ -103,6 +103,15 @@ function computeDays() {
   return [...ks].sort();
 }
 
+// Fill the board's height when the day fits; floor the scale so even the smallest
+// slot is tall enough for a scored card's three rows — no clipping, no overlap.
+function fitScale() {
+  const sc = $('scroll');
+  const avail = sc ? sc.clientHeight : 0;
+  const total = S.dayEnd - S.dayStart || 1;
+  S.pxPerMin = Math.max(1.6, avail / total);
+}
+
 // ---- the grid ----
 function renderGrid() {
   const grid = $('grid');
@@ -120,6 +129,7 @@ function renderGrid() {
   dayEnd = Math.ceil((dayEnd + 15) / S.gcd) * S.gcd;
   if (dayStart < 0) dayStart = 0;
   S.dayStart = dayStart; S.dayEnd = dayEnd;
+  fitScale(); // scale to the board's height so short days fill it, long days scroll
   const h = (dayEnd - dayStart) * S.pxPerMin;
   grid.style.height = h + 'px';
 
@@ -147,7 +157,7 @@ function renderGrid() {
   html += '</div>';
 
   grid.innerHTML = html;
-  hint.textContent = `Venues across · real time down (${S.dayStart / 60 | 0}:00–${dayEnd / 60 | 0}:00) · drag a card — drops snap to the day's legal starts (the daemon computes them with the write gate's own rules)`;
+  hint.textContent = `Venues across · time down (${S.dayStart / 60 | 0}:00–${dayEnd / 60 | 0}:00) · drag a card — drops snap to the day's legal starts (the daemon computes them with the write gate's own rules)`;
   wireGrid();
 }
 
@@ -163,7 +173,7 @@ function cardHtml(c, m, venue) {
   const wm = (m.scheduled != null && venue) ? wallMin(m.scheduled) : null;
   const slot = matchSlotMs(m, c) / 60000;
   const pos = wm != null && Number.isFinite(slot)
-    ? ` style="top:${(wm - S.dayStart) * S.pxPerMin}px;height:${slot * S.pxPerMin}px;"` : '';
+    ? ` style="top:${(wm - S.dayStart) * S.pxPerMin}px;min-height:${slot * S.pxPerMin}px;"` : '';
   const score = m.result && m.result.status === 'played'
     ? (m.games || []).map(g => `${g.a}-${g.b}`).join(' ')
     : m.result && m.result.status === 'walkover' ? `W/O ${m.result.winner}`
@@ -412,6 +422,7 @@ async function boot() {
   const slugs = await get('/api/tournaments') || [];
   $('slug').innerHTML = slugs.map(t => `<option value="${esc(t.slug)}">${esc(t.name)}</option>`).join('');
   if (slugs.length) await setSlug(slugs[0].slug);
+  window.addEventListener('resize', () => { if (S.tjson) renderGrid(); });
   setInterval(refreshPending, 4000);
 }
 boot();
