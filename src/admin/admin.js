@@ -174,7 +174,7 @@ function cardHtml(c, m, venue) {
   const k = keyOf(c, m);
   // same card shape as the tournament page: one side row per side, meta last
   return `<article class="match${active}${stCls}" draggable="true" data-key="${esc(k)}" data-venue="${esc(venue || '')}"${pos}>
-    ${sideRow(c, m, 0)}${sideRow(c, m, 1)}<div class="meta">${time} · ${esc(matchLabel(m, c))}</div>
+    ${sideRow(c, m, 0)}${sideRow(c, m, 1)}<div class="meta">${time} · ${esc(c.name || c.id)} · ${esc(matchLabel(m, c))}</div>
   </article>`;
 }
 
