@@ -14,7 +14,10 @@
     <label>Day <select id="day"></select></label>
   </div>
   <div class="actions">
-    <span id="pendingBadge" class="badge"></span>
+    <details id="pending" class="pending">
+      <summary id="pendingBadge" class="badge"></summary>
+      <ul id="pendingList"></ul>
+    </details>
     <button id="undo" type="button">Undo</button>
     <button id="publish" type="button" class="primary">Publish</button>
   </div>
@@ -23,12 +26,6 @@
   <section class="board">
     <div id="grid" class="grid"></div>
   </section>
-  <aside class="panel">
-    <section id="pending">
-      <h2>Pending changes</h2>
-      <ul id="pendingList"></ul>
-    </section>
-  </aside>
 </main>
 <div id="modal" class="modal" hidden></div>
 <div id="flash" class="flash" hidden></div>

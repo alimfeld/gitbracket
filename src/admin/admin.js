@@ -452,6 +452,12 @@ async function refreshPending() {
   $('publish').disabled = p.commits.length === 0 || p.dirty;
   $('publish').title = p.dirty ? 'site/ is dirty — commit or stash first' : '';
 }
+// the pending popover is a native <details> — close it when the pointer lands elsewhere
+// (the summary toggles it, so clicking it again is always an escape hatch)
+document.addEventListener('click', e => {
+  const p = $('pending');
+  if (p.open && !p.contains(e.target)) p.open = false;
+});
 $('undo').onclick = async () => {
   const r = await post('/api/undo', {});
   if (!r.ok) { flash(r.error); return; }
