@@ -90,7 +90,6 @@ async function setSlug(slug) {
   daySel.innerHTML = S.days.map(d => `<option>${d}</option>`).join('');
   S.day = S.days[0] || null;
   renderGrid();
-  renderEditor();
   refreshPending();
 }
 
@@ -159,7 +158,7 @@ function renderGrid() {
   wireGrid();
 }
 
-// The card's meta line — the aside reuses it as its title, so the two never drift.
+// The card's meta line — time · category · match label.
 function cardMeta(c, m) {
   const t = schedTime(m, S.tz);
   const time = t !== null ? fmtTime(t, S.tz) : '—';
@@ -183,8 +182,9 @@ function cardHtml(c, m, venue) {
   </article>`;
 }
 
-// One side row mirroring the site's card: name left, per-game score right;
-// placeholder dots keep the best-of shape, the winner carries the W/O mark.
+// One side row mirroring the site's card: name left (✎ opens the side picker),
+// per-game score right (click opens the result modal); placeholder dots keep the
+// best-of shape, the winner carries the W/O mark.
 function sideRow(c, m, i) {
   const r = m.result;
   const w = winnerIdx(m);
@@ -199,7 +199,7 @@ function sideRow(c, m, i) {
     : r.status === 'void' ? '<span>void</span>'
     : sideIdx(r.winner) === i ? '<span>W/O</span>'
     : slots();
-  return `<div class="side"${w === i ? ' data-win' : ''}><span>${esc(teamText(m.sides[i], c))}</span><span class="score">${score}</span></div>`;
+  return `<div class="side"${w === i ? ' data-win' : ''}><span class="who"><span class="name">${esc(teamText(m.sides[i], c))}</span><button class="sideedit" data-side="${i}" title="edit side ${i === 0 ? 'a' : 'b'}" aria-label="edit side ${i === 0 ? 'a' : 'b'}">✎</button></span><span class="score">${score}</span></div>`;
 }
 
 const keyOf = (c, m) => `${c.id}:${m.id}`;
@@ -215,16 +215,24 @@ function wireGrid() {
     grid.addEventListener('dragover', e => { e.preventDefault(); ghost(e); });
     grid.addEventListener('dragleave', e => { if (e.relatedTarget == null) clearGhost(); });
     grid.addEventListener('drop', e => { e.preventDefault(); dropAt(e); });
-    grid.addEventListener('click', e => { if (!e.target.closest('.match')) { S.selected = null; renderGrid(); renderEditor(); } });
+    grid.addEventListener('click', e => { if (!e.target.closest('.match')) { S.selected = null; renderGrid(); } });
   }
   grid.querySelectorAll('.match').forEach(el => {
     el.addEventListener('click', e => {
       e.stopPropagation();
-      S.selected = el.dataset.key; // a card click always selects — Esc/cancel or an empty-board click closes, so a half-typed entry survives an accidental second click
+      S.selected = el.dataset.key; // a card click selects (drag anchor + active outline); the modal triggers below stop propagation so they never re-render over an open dialog
       renderGrid();
-      const input = renderEditor();
-      if (input) { input.focus(); input.select(); } // typing replaces the entry — the match-day act is click, type, enter
     });
+    el.querySelector('.score').addEventListener('click', e => {
+      e.stopPropagation();
+      const [cid, mid] = keyParts(el.dataset.key);
+      openResult(cid, matchOf(cid, mid));
+    });
+    el.querySelectorAll('.sideedit').forEach(btn => btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const [cid, mid] = keyParts(el.dataset.key);
+      openSide(cid, matchOf(cid, mid), +btn.dataset.side);
+    }));
     el.addEventListener('dragstart', e => {
       S.dragSource = el.dataset.key;
       e.dataTransfer.setData('text/plain', S.dragSource);
@@ -328,7 +336,7 @@ async function sendEdit(verb, cid, mid, value) {
   return true;
 }
 
-// ---- the match editor (side panel) ----
+// ---- the result modal ----
 // One result grammar, same as the terminal editor: bare games · wo a/b · void ·
 // empty clears. The shape rides the value; validity past shape (target count,
 // even best-of…) is the daemon's gate, flashed back on a failed write.
@@ -350,49 +358,37 @@ function parseResult(s) {
   return { value: { shape: 'score', games } };
 }
 
-function renderEditor() {
-  const ed = $('editor');
-  if (!S.selected) { ed.hidden = true; return; }
-  const [cid, mid] = keyParts(S.selected);
-  const ctx = cat(cid), m = matchOf(cid, mid);
-  if (!ctx || !m) { ed.hidden = true; return; }
+function openResult(cid, m) {
+  const ctx = cat(cid);
   const pre = m.games ? m.games.map(g => `${g.a}-${g.b}`).join(' ') : m.result && m.result.status === 'walkover' ? `wo ${m.result.winner}` : m.result && m.result.status === 'void' ? 'void' : '';
-  ed.hidden = false;
-  ed.innerHTML = `
-    <div class="matchhead">${esc(cardMeta(ctx, m))}</div>
-    <button class="sidebtn" data-side="a"><small>side a</small>${esc(teamText(m.sides[0], ctx))}</button>
-    <button class="sidebtn" data-side="b"><small>side b</small>${esc(teamText(m.sides[1], ctx))}</button>
-    <label>Result / score <input type="text" class="scoreinput" id="scoreinput" value="${esc(pre)}"></label>
-    <p class="hint">games 21-19 11-9 · wo a · void · empty clears — [enter] ok · [esc] cancel</p>
-    <div class="buttons">
-      <button data-act="cancel">Cancel</button>
-      <button data-act="ok" class="primary">Ok</button>
-    </div>`;
-  ed.querySelector('.sidebtn[data-side="a"]').onclick = () => openSide(cid, m, 0);
-  ed.querySelector('.sidebtn[data-side="b"]').onclick = () => openSide(cid, m, 1);
-  const input = ed.querySelector('#scoreinput');
-  const refocus = el => { if (el) { el.focus(); el.select(); } };
+  const modal = $('modal');
+  modal.hidden = false;
+  modal.innerHTML = `<div class="box">
+    <h2>Result — ${esc(matchLabel(m, ctx))}</h2>
+    <label class="field">Result / score <input type="text" class="scoreinput" id="scoreinput" value="${esc(pre)}"></label>
+    <p class="hint">games 21-19 11-9 · wo a · wo b · void · empty clears — [enter] ok · [esc] cancel</p>
+    <div class="foot"><button data-x="cancel">Cancel</button><button data-x="apply" class="primary">Apply</button></div>
+  </div>`;
+  const input = modal.querySelector('#scoreinput');
+  input.focus(); input.select();
   const submit = async () => {
     const p = parseResult(input.value);
-    if (p.err) { flash(p.err); refocus(input); return; }
-    const ok = await sendEdit('result', cid, mid, p.value);
-    refocus(ok ? ed.querySelector('#scoreinput') : input); // a success reload rebuilt the field; a rejection keeps the draft for fixing
+    if (p.err) { flash(p.err); input.focus(); input.select(); return; } // a rejection keeps the draft for fixing
+    if (await sendEdit('result', cid, m.id, p.value)) modal.hidden = true;
   };
-  const cancel = () => { S.selected = null; renderGrid(); renderEditor(); };
-  ed.querySelector('[data-act="ok"]').onclick = submit;
-  ed.querySelector('[data-act="cancel"]').onclick = cancel;
+  modal.querySelector('[data-x="cancel"]').onclick = () => { modal.hidden = true; };
+  modal.querySelector('[data-x="apply"]').onclick = submit;
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); submit(); }
-    if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+    if (e.key === 'Escape') { e.preventDefault(); modal.hidden = true; }
   });
-  return input;
 }
 
 // ---- the side picker (modal) ----
 function openSide(cid, m, si) {
   const ctx = cat(cid);
   const size = teamSize(ctx);
-  const modal = $('sideModal');
+  const modal = $('modal');
   modal.hidden = false;
   modal.innerHTML = `<div class="box">
     <h2>Side ${si === 0 ? 'a' : 'b'} of ${esc(matchLabel(m, ctx))}</h2>

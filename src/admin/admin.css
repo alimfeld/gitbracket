@@ -60,7 +60,10 @@ main { flex: 1; display: flex; min-height: 0; }
 .match.active { outline: 2px solid var(--accent); z-index: 1; } /* z-index: an outline draws outside the box, so the next card (a later positioned sibling) would paint over its bottom edge */
 .match.dragging { opacity: .4; }
 .match .side { display: flex; justify-content: space-between; align-items: baseline; gap: .35rem; line-height: 1.2; }
-.match .side > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.match .who { display: flex; align-items: baseline; gap: .2rem; min-width: 0; }
+.match .who .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sideedit { flex-shrink: 0; padding: 0 .15rem; border: 0; background: none; color: var(--muted); cursor: pointer; line-height: 1; font-size: .7rem; border-radius: .2rem; }
+.sideedit:hover { color: var(--accent); }
 .match .side[data-win] { font-weight: 600; }
 .match .score { display: flex; gap: .2rem; }
 .match .score span { font-weight: 600; min-width: 1.3em; text-align: right; }
@@ -73,15 +76,10 @@ main { flex: 1; display: flex; min-height: 0; }
 .unsched { position: relative; }
 .unsched .match { position: relative; left: auto; right: auto; margin: .3rem; }
 
-/* ---- side panel ---- */
-#editor .matchhead { font-weight: 600; margin-bottom: .4rem; }
-#editor label { display: block; font-size: .8rem; color: var(--muted); margin: .5rem 0 .2rem; }
-#editor input[type=text] { font: inherit; width: 100%; padding: .3rem; border: 1px solid var(--line); border-radius: .3rem; }
-.sidebtn { width: 100%; text-align: left; }
-.sidebtn small { color: var(--muted); display: block; }
+/* ---- result modal ---- */
+.modal .field { display: block; font-size: .8rem; color: var(--muted); margin: .55rem 0 .2rem; }
+.modal .field input[type=text] { font: inherit; width: 100%; padding: .3rem; border: 1px solid var(--line); border-radius: .3rem; }
 .scoreinput { font-family: ui-monospace, monospace; }
-.buttons { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .6rem; }
-#editor .hint { margin: .4rem 0 0; } /* the generic hint's 1rem inset fits the modal box, not the flush panel field */
 
 /* ---- modal ---- */
 .modal {
