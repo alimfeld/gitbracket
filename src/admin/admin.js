@@ -159,12 +159,17 @@ function renderGrid() {
   wireGrid();
 }
 
-function cardHtml(c, m, venue) {
+// The card's meta line — the aside reuses it as its title, so the two never drift.
+function cardMeta(c, m) {
   const t = schedTime(m, S.tz);
+  const time = t !== null ? fmtTime(t, S.tz) : '—';
+  return `${time} · ${c.name || c.id} · ${matchLabel(m, c)}`;
+}
+
+function cardHtml(c, m, venue) {
   const st = isDone(m) ? m.result.status : 'open';
   const active = S.selected === keyOf(c, m) ? ' active' : '';
   const stCls = st === 'open' ? '' : ' done';
-  const time = t !== null ? fmtTime(t, S.tz) : '—';
   // wall-time placement in the day's px-per-minute scale; unscheduled cards in
   // the unscheduled column are flow-positioned (their .unsched .match rule)
   const wm = (m.scheduled != null && venue) ? wallMin(m.scheduled) : null;
@@ -174,7 +179,7 @@ function cardHtml(c, m, venue) {
   const k = keyOf(c, m);
   // same card shape as the tournament page: one side row per side, meta last
   return `<article class="match${active}${stCls}" draggable="true" data-key="${esc(k)}" data-venue="${esc(venue || '')}"${pos}>
-    ${sideRow(c, m, 0)}${sideRow(c, m, 1)}<div class="meta">${time} · ${esc(c.name || c.id)} · ${esc(matchLabel(m, c))}</div>
+    ${sideRow(c, m, 0)}${sideRow(c, m, 1)}<div class="meta">${esc(cardMeta(c, m))}</div>
   </article>`;
 }
 
@@ -348,7 +353,7 @@ function renderEditor() {
   const pre = m.games ? m.games.map(g => `${g.a}-${g.b}`).join(' ') : m.result && m.result.status === 'walkover' ? `wo ${m.result.winner}` : m.result && m.result.status === 'void' ? 'void' : '';
   ed.hidden = false;
   ed.innerHTML = `
-    <div class="matchhead">${esc(matchLabel(m, ctx))} · ${cid} ${m.id}</div>
+    <div class="matchhead">${esc(cardMeta(ctx, m))}</div>
     <button class="sidebtn" data-side="a"><small>side a</small>${esc(teamText(m.sides[0], ctx))}</button>
     <button class="sidebtn" data-side="b"><small>side b</small>${esc(teamText(m.sides[1], ctx))}</button>
     <label>Result / score <input type="text" class="scoreinput" id="scoreinput" value="${esc(pre)}"></label>
