@@ -22,6 +22,29 @@ production CNAME.
 - **Branch + local server** — real commits and clock, everything except real CDN answers (latency, 304s, HTTPS).
 - **Scratch clone + throwaway surge domain** — real CDN behaviour.
 
+## Rehearse the admin UI: a branch and the local daemon
+
+`node gb.js admin [slug]` serves the admin page — drag reschedule, click-to-
+score, pending/undo, publish. Same push-proof rule as the site recipe above:
+on a branch (or detached HEAD) the publish button is inert — the daemon only
+ships from `main`, and a branch with no upstream can't push.
+
+```bash
+# ── setup (one time) ──
+git checkout -b test     # publish button inert: the daemon only ships from main
+
+# ── iterate ──
+node gb.js admin         # serves http://127.0.0.1:<port>/ and opens the browser
+# drag matches, score, undo — every edit validates and commits locally
+
+# ── cleanup ──
+git checkout main && git branch -d test
+```
+
+Only `node gb.js admin` starts it — `src/admin.js` has no self-start. The
+daemon reads `site/` at boot, so restart it after edits made in another
+terminal.
+
 ## Everything except CDN: a branch and a local server
 
 Serve `site/` locally on a branch. Nothing here pushes, and publish refuses
