@@ -52,8 +52,10 @@ implement them; don't treat them as style.
   are no media queries. New markup reuses existing elements and rules;
   a new class is a change to be justified.
 - **Never weaken a check to make data pass — fix the data.** Pre-commit runs
-  validate + tests (the dev gate); `gb.js publish` re-runs validate (the data
-  gate) — a bypassed hook can't ship.
+  validate + the test suite (the dev gate); a commit staging only tournament
+  data skips the suite — it reads fixtures, never live data, so it can't
+  change with an edit — while validate always runs; `gb.js publish` re-runs
+  validate (the data gate) — a bypassed hook can't ship.
 
 ## Where code lives
 
