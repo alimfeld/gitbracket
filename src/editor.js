@@ -69,7 +69,7 @@ function applyClear(matches, matchId) {
 
 function applyVenue(matches, matchId, venueId) {
   return findMatch(matches, matchId, m => {
-    if (venueId === undefined) delete m.venue; // `v -` unschedules the court — undefined rides the same apply
+    if (venueId == null) delete m.venue; // `v -` unschedules the court — undefined (terminal) and null (admin JSON) ride the same apply
     else m.venue = venueId; // unknown venue + court double-booking are caught by validateRepo
   });
 }
@@ -100,7 +100,18 @@ function buildScheduled(hhmm, tz, date, now) {
 }
 
 function applyTime(matches, matchId, isoString) {
-  return findMatch(matches, matchId, m => { m.scheduled = isoString; });
+  return findMatch(matches, matchId, m => { if (isoString == null) delete m.scheduled; else m.scheduled = isoString; });
+}
+
+// A move sets time and venue together — one writeEdit, one commit, so a drag
+// on the admin grid can never land a half-moved match. null clears the field,
+// like applyVenue/applyTime's empty rides.
+function applyMove(matches, matchId, value) {
+  return findMatch(matches, matchId, m => {
+    if (value.time == null) delete m.scheduled; else m.scheduled = value.time;
+    if (value.venue == null) delete m.venue; else m.venue = value.venue;
+    return null;
+  });
 }
 
 // Apply an edit to one match, validate the whole repo, write — or roll the file
@@ -359,6 +370,7 @@ function applyFor(verb, matchId, value) {
     return applyClear(ms, matchId);
   };
   return verb === 'venue' ? c => applyVenue(c, matchId, value)
+    : verb === 'move' ? c => applyMove(c, matchId, value)
     : SIDE_VERBS[verb] !== undefined ? c => applySide(c, matchId, value)
     : c => applyTime(c, matchId, value); // time — undefined unschedules
 }
@@ -418,6 +430,7 @@ function editDetail(kind, m, value, ctx) {
       : '→ TBD') // a clear returns the match to the board
     : kind === 'time' ? (m.scheduled === undefined ? '→ TBD' : `→ ${m.scheduled}`)
     : kind === 'venue' ? `→ ${m.venue === undefined ? 'TBD' : m.venue}`
+    : kind === 'move' ? `→ ${value.time ?? 'TBD'} @ ${value.venue ?? 'TBD'}`
     : `side ${value.si === 0 ? 'a' : 'b'} → ${sideLabel(value.side, ctx)}${isDone(m) ? ' (result kept)' : ''}`; // side — the a/b keys carry value+ctx
 }
 
@@ -851,9 +864,11 @@ function execEdit(state, verb, cat, matchId, value) {
   const m = ctx.byId.get(Number(matchId)); // the same object writeEdit mutates in place
   const preStatus = m && m.result && m.result.status; // what a clear removes — its commit kind matches it
   const res = writeEdit(siteRoot, repo, slug, cat, applyFor(verb, matchId, value));
-  if (res.err) return { text: res.err, color: 'red' };
-  if (res.errs) return { text: res.errs.join('\n') + '\nnot written — validation error(s), file rolled back', color: 'red' };
-  if (res.unchanged) return { text: echoLine(verb, m, ctx, 'unchanged', value), color: 'yellow' }; // same data — nothing written, nothing committed
+  // returns carry both the render-facing text/color and the structured facts
+  // (error, errors, unchanged, sha) the admin daemon JSON-ifies
+  if (res.err) return { text: res.err, color: 'red', error: res.err };
+  if (res.errs) return { text: res.errs.join('\n') + '\nnot written — validation error(s), file rolled back', color: 'red', errors: res.errs };
+  if (res.unchanged) return { text: echoLine(verb, m, ctx, 'unchanged', value), color: 'yellow', unchanged: true }; // same data — nothing written, nothing committed
   // the git kind names what happened: a result edit keeps its shape kind, a
   // clear takes the kind of what it removed — greps like ^score( still find it
   const kind = verb === 'result'
@@ -865,11 +880,14 @@ function execEdit(state, verb, cat, matchId, value) {
     const msg = commitMessage(kind, slug, cat, matchId, detail);
     git(root, ['add', path.relative(root, file)]);
     const c = git(root, ['commit', '-m', msg]);
-    if (c.code !== 0) return { text: `${path.relative(root, file)} written but the commit failed:\n${c.err}\n(file staged — commit it manually)`, color: 'red' };
+    if (c.code !== 0) {
+      const msg = `${path.relative(root, file)} written but the commit failed:\n${c.err}\n(file staged — commit it manually)`;
+      return { text: msg, color: 'red', error: msg };
+    }
     const sha = git(root, ['rev-parse', '--short', 'HEAD']).out.trim();
-    return { text: echoLine(verb, m, ctx, sha, value), color: 'green' };
+    return { text: echoLine(verb, m, ctx, sha, value), color: 'green', sha };
   }
-  return { text: echoLine(verb, m, ctx, 'sim', value), color: 'green' }; // sim: written to the scratch copy, never committed
+  return { text: echoLine(verb, m, ctx, 'sim', value), color: 'green', sha: 'sim' }; // sim: written to the scratch copy, never committed
 }
 
 // Non-rendering command execution — exported so tests can drive :use and
@@ -1040,4 +1058,4 @@ function main(root) {
   editorMain(root, siteRoot, repo, { sim: false, clock: () => Date.now() });
 }
 
-module.exports = { parseGame, buildScheduled, applyScore, applyResult, applyVenue, applySide, applyTime, prefillFor, writeEdit, commitMessage, editDetail, echoLine, parseCmd, rowKey, waveEntries, buildRows, makeView, parsePayload, step, execEdit, execAction, defaultSlug, editorMain, main, C };
+module.exports = { parseGame, buildScheduled, applyScore, applyResult, applyVenue, applySide, applyTime, applyMove, prefillFor, writeEdit, commitMessage, editDetail, echoLine, parseCmd, rowKey, waveEntries, buildRows, makeView, parsePayload, step, execEdit, execAction, defaultSlug, editorMain, main, git, C };

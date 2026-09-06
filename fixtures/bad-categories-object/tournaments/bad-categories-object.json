@@ -1,0 +1,13 @@
+{
+  "name": "Bad Categories Object",
+  "location": "Test Hall",
+  "timezone": "UTC",
+  "venues": [
+    { "id": "court-1", "name": "Court 1" }
+  ],
+  "categories": {},
+  "players": [
+    { "id": "p1", "name": "P1" }
+  ],
+  "matches": {}
+}

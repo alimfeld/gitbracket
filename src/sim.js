@@ -15,7 +15,7 @@ const http = require('http');
 const path = require('path');
 const { spawn } = require('child_process');
 const { schedTime, bestOfOf } = require('../site/derive.js');
-const { loadRepo } = require('./tools.js');
+const { loadRepo, staticFile } = require('./tools.js');
 const { writeEdit, applyScore, defaultSlug, C, editorMain, waveEntries, rowKey } = require('./editor.js');
 
 const STEP = 30 * 60 * 1000;  // ]/[ move the clock in 30 sim-minutes
@@ -46,12 +46,6 @@ function copySite(root) {
   return dst;
 }
 
-const MIME = {
-  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8',
-  '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon',
-};
-
 // Serve the scratch site with the clock override injected into the one SPA
 // page (index.html is every view — fragment routing). The injected script
 // owns the only clock the app reads (Date.now), refreshed from /clock once a
@@ -67,18 +61,14 @@ function serve(siteRoot, clock) {
     let rel;
     try { rel = decodeURIComponent((req.url || '/').split('?')[0]).replace(/^\/+/, ''); }
     catch { res.statusCode = 400; res.end(); return; }
-    const file = path.join(siteRoot, rel === '' ? 'index.html' : rel);
-    if (path.relative(siteRoot, file).startsWith('..') || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
-      res.statusCode = 404;
-      res.end('not found');
-      return;
-    }
-    let body = fs.readFileSync(file);
-    if (file.endsWith('.html')) {
+    const f = staticFile(siteRoot, rel);
+    if (!f) { res.statusCode = 404; res.end('not found'); return; }
+    let body = f.body;
+    if (f.type.startsWith('text/html')) {
       const inj = `<script>let __simT=${clock()};setInterval(async()=>{try{__simT=(await(await fetch('/clock')).json()).t}catch(e){}},1000);Date.now=()=>__simT;</script>`;
       body = Buffer.from(body.toString('utf8').replace('</head>', inj + '</head>'));
     }
-    res.setHeader('Content-Type', MIME[path.extname(file)] || 'application/octet-stream');
+    res.setHeader('Content-Type', f.type);
     res.end(body);
   });
 }

@@ -1,0 +1,209 @@
+'use strict';
+
+// GitBracket admin daemon — a localhost page plus a tiny API over the repo.
+// The browser is the UI; this process is the only writer (git is the record):
+// every edit reuses the editor's writeEdit funnel — validate, write, commit —
+// so the browser can never outrun the gate. Pending = unpushed commits
+// (origin/main..HEAD); publish = validate + push + deploy; undo = reset the
+// last commit, offered only while unpushed (history is append-only once pushed).
+// Nothing ships — site/ is untouched; the page lives under src/admin/ and the
+// daemon serves it locally, exactly as sim serves .sim/site.
+
+const fs = require('fs');
+const http = require('http');
+const path = require('path');
+const { loadRepo, staticFile, catCtx, schedEntries, pairBusy, fixedPlayers } = require('./tools.js');
+const { execEdit, defaultSlug, git } = require('./editor.js');
+const { matchSlotMs, feederBounds, schedTime } = require('../site/derive.js');
+const { validateRepo } = require('./validate.js');
+const { ship } = require('./publish.js');
+
+// The unpushed commits as [{sha, msg}], empty when no remote or nothing pending.
+function unpushed(root) {
+  const b = git(root, ['rev-parse', '--verify', '--quiet', 'origin/main']);
+  if (b.code !== 0) return { commits: [], hasRemote: false };
+  const l = git(root, ['log', '--oneline', 'origin/main..HEAD']);
+  const commits = l.code === 0 && l.out.trim()
+    ? l.out.trim().split('\n').map(line => ({ sha: line.slice(0, 7), msg: line.slice(8) }))
+    : [];
+  return { commits, hasRemote: true };
+}
+
+// Validate the gate on disk (never memory) — the same guarantee publish makes.
+function gate(siteRoot) {
+  const { errs } = validateRepo(loadRepo(siteRoot));
+  return errs;
+}
+
+// The edit funnel, one path for every verb the page can send — score/wo/void/
+// clear via 'result', venue, time, a side, or a combined 'move' (a drag sets
+// time+venue atomically: one validate, one commit — a half-moved match must
+// never land). The editor owns the funnel (execEdit); this is the JSON view.
+function doEdit(state, verb, cat, matchId, value) {
+  state.commit = true; // the daemon always commits — git is the record
+  const r = execEdit(state, verb, cat, matchId, value);
+  if (r.errors) return { ok: false, errors: r.errors };
+  if (r.error) return { ok: false, error: r.error };
+  if (r.unchanged) return { ok: true, unchanged: true, text: r.text };
+  return { ok: true, sha: r.sha, text: r.text };
+}
+
+// The day's legal starts for one match, as wall-clock minutes per venue — the
+// grid ticks (0..1440 step gcd) where the move passes the gate's own rules:
+// venue/player conflicts via the validator's shared atoms (schedEntries +
+// pairBusy), feeder bounds via derive.js's feederBounds — the same functions
+// validateRepo runs, so the preview and the write gate can't disagree. The
+// dragged match is off the board during the query: its own window conflicts
+// with nothing.
+function legalSlots(tjson, cat, matchId, day, gcd) {
+  const tz = tjson.timezone || 'UTC';
+  const { entries } = schedEntries(tjson);
+  const others = entries.filter(e => !(e.cat === cat && e.m.id === Number(matchId)));
+  const ctx = catCtx(tjson, cat);
+  const m = ctx.byId.get(Number(matchId));
+  if (!m) return {};
+  const slotMin = matchSlotMs(m, ctx) / 60000;
+  const players = fixedPlayers(m);
+  const fb = feederBounds(m, ctx, tz);
+  const out = {};
+  for (const venue of (tjson.venues || []).map(v => v.id)) {
+    const ticks = [];
+    for (let wm = 0; wm < 1440; wm += gcd) {
+      if (!Number.isFinite(slotMin) || wm + slotMin > 1440) continue;
+      const cand = { m: { venue }, t: schedTime({ scheduled: `${day}T${String(Math.floor(wm / 60)).padStart(2, '0')}:${String(wm % 60).padStart(2, '0')}:00` }, tz), ctx, players };
+      if (cand.t === null) continue;
+      if (fb.floor !== null && cand.t < fb.floor) continue;
+      if (fb.ceiling !== null && cand.t + slotMin * 60000 > fb.ceiling) continue;
+      let busy = false;
+      for (const e of others) if (pairBusy(cand, e).length) { busy = true; break; }
+      if (!busy) ticks.push(wm);
+    }
+    out[venue] = ticks;
+  }
+  return out;
+}
+
+// Reload the repo from disk — undo (git reset) rewrites files, so the in-memory
+// view must be rebuilt or the next edit would validate against stale data.
+function reload(state) {
+  state.repo = loadRepo(state.siteRoot);
+}
+
+function json(res, code, obj) {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.statusCode = code;
+  res.end(JSON.stringify(obj));
+}
+
+function readBody(req) {
+  return new Promise((resolve) => {
+    let b = '';
+    req.on('data', c => { b += c; if (b.length > 1e6) req.destroy(); });
+    req.on('end', () => resolve(b));
+    req.on('error', () => resolve(''));
+  });
+}
+
+// Serve the admin page (src/admin/) plus site/derive.js (the shared domain model).
+function serve(state) {
+  const pageRoot = path.join(__dirname, 'admin');
+  let server;
+  server = http.createServer(async (req, res) => {
+    const url = (req.url || '/').split('?')[0];
+    if (req.method === 'POST') {
+      // Any webpage the operator has open can POST to this loopback daemon — a
+      // text/plain fetch is a CORS-safelisted "simple" request (no preflight).
+      // Reject cross-origin writes so a stray page can't score matches or deploy.
+      const o = req.headers.origin;
+      const self = `http://127.0.0.1:${server.address().port}`;
+      if (o && o !== self && o !== self.replace('127.0.0.1', 'localhost')) return json(res, 403, { error: 'forbidden origin' });
+    }
+    if (url.startsWith('/api/')) {
+      if (url === '/api/tournaments') {
+        const out = state.repo.index
+          .filter(t => state.repo.tournaments.has(t.slug) && state.repo.tournaments.get(t.slug).tjson)
+          .map(t => ({ slug: t.slug, name: t.name }));
+        // the daemon's own default first, so the page boots on the same
+        // tournament the serve log names — one source of truth for the active one
+        if (state.slug) out.sort((a, b) => a.slug === state.slug ? -1 : b.slug === state.slug ? 1 : 0);
+        return json(res, 200, out);
+      }
+      if (url === '/api/data') {
+        const slug = new URL(req.url, 'http://x').searchParams.get('slug') || state.slug;
+        const info = state.repo.tournaments.get(slug);
+        if (!info || !info.tjson) return json(res, 404, { error: `unknown tournament ${slug}` });
+        return json(res, 200, info.tjson);
+      }
+      if (url === '/api/slots') {
+        const q = new URL(req.url, 'http://x').searchParams;
+        const info = state.repo.tournaments.get(q.get('slug') || state.slug);
+        if (!info || !info.tjson) return json(res, 404, { error: 'unknown tournament' });
+        return json(res, 200, { ok: legalSlots(info.tjson, q.get('cat'), q.get('id'), q.get('day'), +(q.get('gcd') || '15')) });
+      }
+      if (url === '/api/pending') {
+        const p = unpushed(state.root);
+        const dirty = git(state.root, ['status', '--porcelain', '--', 'site/']);
+        return json(res, 200, { ...p, dirty: dirty.code === 0 && dirty.out.trim().length > 0, slug: state.slug });
+      }
+      if (url === '/api/edit' && req.method === 'POST') {
+        let body;
+        try { body = JSON.parse(await readBody(req)); } catch { return json(res, 400, { error: 'bad JSON' }); }
+        if (body.slug && body.slug !== state.slug) { state.slug = body.slug; reload(state); }
+        const r = doEdit(state, body.verb, body.cat, String(body.matchId), body.value);
+        return json(res, r.ok ? 200 : 400, r);
+      }
+      if (url === '/api/undo' && req.method === 'POST') {
+        // reset --hard rewrites every tracked file, so the clean check must
+        // cover the whole working tree — a site/-only scope would silently
+        // wipe an in-progress edit elsewhere (README, a spec). Untracked files
+        // are safe (reset --hard leaves them) and stay unblocking.
+        const clean = git(state.root, ['diff', '--quiet']).code === 0 && git(state.root, ['diff', '--cached', '--quiet']).code === 0;
+        if (!clean) return json(res, 400, { error: 'the repo has uncommitted changes — commit or stash before undoing' });
+        const p = unpushed(state.root);
+        if (!p.commits.length) return json(res, 400, { error: 'nothing to undo' });
+        const r = git(state.root, ['reset', '--hard', 'HEAD~1']);
+        if (r.code !== 0) return json(res, 400, { error: `undo failed: ${r.err}` });
+        reload(state);
+        return json(res, 200, { sha: p.commits[0].sha, msg: p.commits[0].msg });
+      }
+      if (url === '/api/publish' && req.method === 'POST') {
+        const errs = gate(state.siteRoot);
+        if (errs.length) return json(res, 400, { errors: errs });
+        const p = unpushed(state.root);
+        const push = p.hasRemote ? git(state.root, ['push']) : { code: 0 };
+        if (push.code !== 0) return json(res, 400, { error: `push failed:\n${push.err}` });
+        const s = ship(state.root);
+        return json(res, s === 0 ? 200 : 400, s === 0 ? { text: 'published' } : { error: 'deploy failed — see the daemon output' });
+      }
+      return json(res, 404, { error: 'unknown api' });
+    }
+    // static: admin page files + the one shared domain module
+    const rel = url.replace(/^\/+/, '') || 'index.html';
+    const f = staticFile(rel === 'derive.js' ? state.siteRoot : pageRoot, rel);
+    if (!f) { res.statusCode = 404; return res.end('not found'); }
+    res.setHeader('Content-Type', f.type);
+    res.end(f.body);
+  });
+  return server;
+}
+
+// CLI entry (dispatched from gb.js): slug optional.
+function main(root, args) {
+  const slug = (args.find(a => a && !a.startsWith('-')) || null);
+  const siteRoot = path.join(root, 'site');
+  const repo = loadRepo(siteRoot);
+  if (repo.readErrs.length) { console.error(repo.readErrs.join('\n')); process.exit(1); }
+  const state = { root, siteRoot, repo, slug: slug || defaultSlug(repo) };
+  const server = serve(state);
+  server.listen(0, '127.0.0.1', () => {
+    const url = `http://127.0.0.1:${server.address().port}/`;
+    console.log(`GitBracket admin — ${state.slug || '(pick a tournament)'} — ${url}  (ctrl-c quits; every edit validates and commits)`);
+    if (process.platform === 'darwin' && !process.env.CI) {
+      const { spawn } = require('child_process');
+      spawn('open', [url], { detached: true, stdio: 'ignore' }).unref();
+    }
+  });
+  return 0;
+}
+
+module.exports = { legalSlots, doEdit, unpushed, main };

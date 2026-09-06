@@ -9,7 +9,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { ID_RE, makeCat } = require('../site/derive.js');
+const { ID_RE, makeCat, schedTime, isDone, matchSlotMs } = require('../site/derive.js');
 
 // Window collision test: shared by the validator's venue-overlap rule and the
 // generator's court/player occupancy — one predicate, no drift. (matchSlotMs,
@@ -98,4 +98,60 @@ function writeTournamentIndex(siteRoot, entries) {
   fs.writeFileSync(path.join(siteRoot, 'tournaments.json'), '[' + entries.map((t) => `\n  ${JSON.stringify(t)}`).join(',') + '\n]\n');
 }
 
-module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, fixedPlayers, isRealDate, findRoot, catCtx, byMatchOrder, tournamentText };
+const MIME = {
+  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon',
+};
+
+// One static GET under a serving root — MIME by extension, traversal-guarded,
+// null when missing. Shared by the sim's served site and the admin daemon page.
+function staticFile(root, rel) {
+  const file = path.join(root, rel === '' ? 'index.html' : rel);
+  if (path.relative(root, file).startsWith('..') || !fs.existsSync(file) || fs.statSync(file).isDirectory()) return null;
+  return { body: fs.readFileSync(file), type: MIME[path.extname(file)] || 'application/octet-stream' };
+}
+
+// The board's scheduled-unplayed window list — every match that can conflict
+// with a placement: {m, t, ctx, players, cat}. noSlot names categories whose
+// scheduled matches resolve to no slot length (a warn for the validator, noise
+// to a query). Shared by the validator's venue/double-book scan and the admin
+// daemon's placement preview — one definition of what is on the board.
+function schedEntries(tjson) {
+  const entries = [];
+  const noSlot = new Set();
+  // The raw categories value may be malformed (an object, a null entry) — the
+  // validator's shape loop reports those; this scan only skips them, or the
+  // gate would crash instead of reporting (never throw).
+  for (const cat of Array.isArray(tjson.categories) ? tjson.categories : []) {
+    if (!cat || typeof cat !== 'object') continue;
+    const ms = tjson.matches && typeof tjson.matches === 'object' && !Array.isArray(tjson.matches) ? tjson.matches[cat.id] : undefined;
+    if (!Array.isArray(ms)) continue;
+    const ctx = makeCat({ meta: cat, matches: ms }, tjson);
+    for (const m of ms) {
+      if (!m || typeof m !== 'object' || m.venue === undefined || m.scheduled === undefined) continue;
+      if (isDone(m)) continue;
+      const t = schedTime(m, tjson.timezone);
+      if (t === null) continue;
+      if (Number.isNaN(matchSlotMs(m, ctx))) noSlot.add(cat.id);
+      entries.push({ m, t, ctx, players: fixedPlayers(m), cat: cat.id });
+    }
+  }
+  return { entries, noSlot };
+}
+
+// The placement conflicts between two board entries, in the same window:
+// venue double-book, else player double-book (venue-blind — a player can't
+// be on two courts at once). Empty when the windows don't overlap. The one
+// definition of "busy": the validator's scan and the admin daemon's
+// placement preview both call it, so a preview can never disagree with the gate.
+function pairBusy(a, b) {
+  const aMs = matchSlotMs(a.m, a.ctx), bMs = matchSlotMs(b.m, b.ctx);
+  if (!slotsOverlap(a.t, a.t + aMs, b.t, b.t + bMs)) return [];
+  const kinds = [];
+  if (a.m.venue === b.m.venue) kinds.push('venue');
+  if (a.players && b.players) for (const id of a.players) if (b.players.has(id)) { kinds.push('player'); break; }
+  return kinds;
+}
+
+module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, fixedPlayers, schedEntries, pairBusy, isRealDate, findRoot, catCtx, byMatchOrder, tournamentText, staticFile };

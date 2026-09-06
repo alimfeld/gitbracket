@@ -65,6 +65,8 @@ const V = [
   ['index dates mismatch the schedule', 'bad-dates-mismatch', r => r.errs.length > 0, /does not match the schedule/],
   ['scheduled tournament missing index dates', 'bad-dates-missing', r => r.errs.length > 0, /dates missing/],
   ['non-array categories reported, not a crash', 'bad-not-array', r => r.errs.length > 0, /categories must be an array/],
+  ['object-shaped categories reported, not a crash', 'bad-categories-object', r => r.errs.length > 0, /categories must be an array/],
+  ['null category entry reported, not a crash', 'bad-null-category', r => r.errs.length > 0, /entry must be an object/],
   ['8-team classification fixture validates', 'place8', r => r.errs.length === 0 && r.warns.length === 0, null],
   ['a matching dates claim validates — multi-day span', 'multiday', r => r.errs.length === 0 && r.warns.length === 0, null],
   ['all result statuses validate and pool completes', 'result', r => r.errs.length === 0 && r.warns.length === 0, null],

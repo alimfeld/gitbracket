@@ -6,7 +6,7 @@
 // memory. Never writes — the gate stays pure.
 
 const path = require('path');
-const { loadRepo, fixedPlayers, isRealDate, slotsOverlap } = require('./tools.js');
+const { loadRepo, isRealDate, schedEntries, pairBusy } = require('./tools.js');
 const { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, isDone, poolStandings, resolveSide, isDeadTie, bestOfOf, winTarget, reachedWinner, schedTime, schedDays, placementLabel, feederBounds } = require('../site/derive.js');
 
 const RESULTS = ['winner', 'loser'];
@@ -187,25 +187,10 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
   // Per-category scope would miss a court double-booked by two categories. A
   // match's window is its effective slot (match slotMinutes > per-stage
   // category slotMinutes > default), so a long final can collide with the next match
-  // even when starts are more than the default apart.
-  const sched = [];
-  const noSlot = new Set(); // categories whose scheduled matches resolve to no slot length
-  for (const cat of categories.values()) {
-    const ms = mjson ? mjson[cat.id] : undefined;
-    if (!Array.isArray(ms)) continue;
-    const ctx = makeCat({ meta: cat, matches: ms }, tjson);
-    for (const m of ms) {
-      if (!m || typeof m !== 'object' || m.venue === undefined || m.scheduled === undefined) continue;
-      if (isDone(m)) continue;
-      const t = schedTime(m, tjson.timezone);
-      if (t === null) continue;
-      if (Number.isNaN(matchSlotMs(m, ctx))) noSlot.add(cat.id); // NaN slots make the kiosk's due/overdue windows uncomputable
-      // Known-player set only when both sides are fixed players — a match/pool
-      // slot's players resolve only after results, so it can't be checked here.
-      const players = fixedPlayers(m);
-      sched.push({ f: `${tFile} matches.${cat.id}`, m, t, ctx, players });
-    }
-  }
+  // even when starts are more than the default apart. The windows and the pair
+  // conflicts are schedEntries/pairBusy in tools.js — the same code the admin
+  // daemon's placement preview runs, so a preview can never disagree with the gate.
+  const { entries: sched, noSlot } = schedEntries(tjson);
   for (const cid of noSlot) {
     warns.push(`${tFile} matches.${cid}: scheduled matches resolve to no slot length — set slotMinutes (per stage or per match) or the kiosk can't mark matches overdue`);
   }
@@ -215,18 +200,13 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
     for (let j = i + 1; j < sched.length; j++) {
       const a = sched[i], b = sched[j];
       const aMs = matchSlotMs(a.m, a.ctx), bMs = matchSlotMs(b.m, b.ctx);
-      if (!slotsOverlap(a.t, a.t + aMs, b.t, b.t + bMs)) continue;
-      if (a.m.venue === b.m.venue) {
-        err(a.f, `${a.m.id} and ${b.m.id} overlap at venue ${a.m.venue} (${aMs / 60000}-minute and ${bMs / 60000}-minute slots) — ${b.f} also schedules ${b.m.id}`);
-      }
-      // player double-book: two undone matches sharing a known player in the same
-      // window, across courts and categories — the generator's invariant, moved
-      // into the gate so an editor time/venue edit can't reopen it. venue-blind
-      // (a player can't be in two places at once even on different courts).
-      if (a.players && b.players) {
-        const shared = [...a.players].filter(p => b.players.has(p));
-        if (shared.length) {
-          err(a.f, `player ${shared.join(', ')} double-booked — ${a.m.id} (${a.m.scheduled}) and ${b.m.id} (${b.m.scheduled}, ${b.f})`);
+      const aF = `${tFile} matches.${a.cat}`, bF = `${tFile} matches.${b.cat}`;
+      for (const kind of pairBusy(a, b)) {
+        if (kind === 'venue') {
+          err(aF, `${a.m.id} and ${b.m.id} overlap at venue ${a.m.venue} (${aMs / 60000}-minute and ${bMs / 60000}-minute slots) — ${bF} also schedules ${b.m.id}`);
+        } else {
+          const shared = [...a.players].filter(p => b.players.has(p)).join(', ');
+          err(aF, `player ${shared} double-booked — ${a.m.id} (${a.m.scheduled}) and ${b.m.id} (${b.m.scheduled}, ${bF})`);
         }
       }
     }
