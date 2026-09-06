@@ -172,16 +172,30 @@ function cardHtml(c, m, venue) {
   const slot = matchSlotMs(m, c) / 60000;
   const pos = wm != null && Number.isFinite(slot)
     ? ` style="top:${(wm - S.dayStart) * S.pxPerMin}px;min-height:${slot * S.pxPerMin}px;"` : '';
-  const score = m.result && m.result.status === 'played'
-    ? (m.games || []).map(g => `${g.a}-${g.b}`).join(' ')
-    : m.result && m.result.status === 'walkover' ? `W/O ${m.result.winner}`
-    : m.result && m.result.status === 'void' ? 'void' : '';
   const k = keyOf(c, m);
+  // same card shape as the tournament page: one side row per side, meta last
   return `<article class="match${active}${stCls}${overdue}" draggable="true" data-key="${esc(k)}" data-venue="${esc(venue || '')}"${pos}>
-    <div class="t">${time} · ${esc(matchLabel(m, c))}</div>
-    <div class="teams">${esc(teamText(m.sides[0], c))} vs ${esc(teamText(m.sides[1], c))}</div>
-    ${score ? `<div class="scr">${esc(score)}</div>` : ''}
+    ${sideRow(c, m, 0)}${sideRow(c, m, 1)}<div class="meta">${time} · ${esc(matchLabel(m, c))}</div>
   </article>`;
+}
+
+// One side row mirroring the site's card: name left, per-game score right;
+// placeholder dots keep the best-of shape, the winner carries the W/O mark.
+function sideRow(c, m, i) {
+  const r = m.result;
+  const w = winnerIdx(m);
+  const games = m.games || [];
+  const bo = bestOfOf(m, c) || 1; // unset stage config -> one unmarked slot
+  const slots = () => Array.from({ length: bo }, (_, g) => {
+    const game = games[g];
+    // aria-hidden: the placeholder dot is shape-as-label, noise to a screen reader
+    return `<span${game ? '' : ' class="ph" aria-hidden="true"'}>${game ? (i === 0 ? game.a : game.b) : '·'}</span>`;
+  }).join('');
+  const score = !r || r.status === 'played' ? slots()
+    : r.status === 'void' ? '<span>void</span>'
+    : sideIdx(r.winner) === i ? '<span>W/O</span>'
+    : slots();
+  return `<div class="side"${w === i ? ' data-win' : ''}><span>${esc(teamText(m.sides[i], c))}</span><span class="score">${score}</span></div>`;
 }
 
 const keyOf = (c, m) => `${c.id}:${m.id}`;

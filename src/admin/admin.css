@@ -61,9 +61,13 @@ main { flex: 1; display: flex; min-height: 0; }
 .match.overdue { border-left-color: var(--overdue); }
 .match.active { outline: 2px solid var(--accent); }
 .match.dragging { opacity: .4; }
-.match .t { color: var(--muted); font-size: .6rem; line-height: 1.2; }
-.match .teams { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
-.match .scr { font-weight: 600; line-height: 1.2; }
+.match .side { display: flex; justify-content: space-between; align-items: baseline; gap: .35rem; line-height: 1.2; }
+.match .side > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.match .side[data-win] { font-weight: 600; }
+.match .score { display: flex; gap: .2rem; }
+.match .score span { font-weight: 600; min-width: 1.3em; text-align: right; }
+.match .score span.ph { font-weight: normal; opacity: .4; }
+.match .meta { color: var(--muted); font-size: .6rem; line-height: 1.2; }
 
 .ghost { position: absolute; left: .25rem; right: .25rem; border: 2px dashed var(--accent); border-radius: .3rem; background: #0a66c21a; pointer-events: none; z-index: 2; }
 .ghost.invalid { border-color: var(--danger); background: #b3261e1a; }
