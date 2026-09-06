@@ -182,7 +182,7 @@ const keyParts = k => { const i = k.indexOf(':'); return [k.slice(0, i), k.slice
 function wireGrid() {
   const grid = $('grid');
   grid.querySelectorAll('.match').forEach(el => {
-    el.addEventListener('click', e => { S.selected = el.dataset.key; renderGrid(); renderEditor(); });
+    el.addEventListener('click', e => { e.stopPropagation(); S.selected = S.selected === el.dataset.key ? null : el.dataset.key; renderGrid(); renderEditor(); });
     el.addEventListener('dragstart', e => {
       S.dragSource = el.dataset.key;
       e.dataTransfer.setData('text/plain', S.dragSource);
@@ -196,6 +196,7 @@ function wireGrid() {
   grid.addEventListener('dragover', e => { e.preventDefault(); ghost(e); });
   grid.addEventListener('dragleave', e => { if (e.relatedTarget == null) clearGhost(); });
   grid.addEventListener('drop', e => { e.preventDefault(); dropAt(e); });
+  grid.addEventListener('click', e => { if (!e.target.closest('.match')) { S.selected = null; renderGrid(); renderEditor(); } });
 }
 
 // The candidate (venue, wallMin) under the pointer, in raw minutes — legal
@@ -296,7 +297,6 @@ function renderEditor() {
   const [cid, mid] = keyParts(S.selected);
   const ctx = cat(cid), m = matchOf(cid, mid);
   if (!ctx || !m) { ed.hidden = true; return; }
-  const t = schedTime(m, S.tz);
   const pre = m.games ? m.games.map(g => `${g.a}-${g.b}`).join(' ') : m.result && m.result.status === 'walkover' ? `wo ${m.result.winner}` : m.result && m.result.status === 'void' ? 'void' : '';
   ed.hidden = false;
   ed.innerHTML = `
@@ -311,9 +311,7 @@ function renderEditor() {
       <button data-act="void">Void</button>
       <span class="spacer"></span>
       <button data-act="clear" class="danger">Clear</button>
-    </div>
-    <label>Time <input type="text" id="timeinput" value="${t !== null ? fmtTime(t, S.tz) : ''}" placeholder="hh:mm"></label>
-    <label>Venue <select id="venueinput">${S.venues.map(v => `<option value="${esc(v.id)}"${m.venue === v.id ? ' selected' : ''}>${esc(v.name)}</option>`).join('')}<option value="" ${m.venue == null ? ' selected' : ''}>(none)</option></select></label>`;
+    </div>`;
   ed.querySelector('.sidebtn[data-side="a"]').onclick = () => openSide(cid, m, 0);
   ed.querySelector('.sidebtn[data-side="b"]').onclick = () => openSide(cid, m, 1);
   ed.querySelector('[data-act="score"]').onclick = async () => {
@@ -325,14 +323,6 @@ function renderEditor() {
   ed.querySelector('[data-act="wob"]').onclick = () => sendEdit('result', cid, mid, { shape: 'walkover', winner: 'b' });
   ed.querySelector('[data-act="void"]').onclick = () => sendEdit('result', cid, mid, { shape: 'void' });
   ed.querySelector('[data-act="clear"]').onclick = () => sendEdit('result', cid, mid, { shape: 'clear' });
-  ed.querySelector('#timeinput').addEventListener('change', async e => {
-    const v = e.target.value.trim();
-    if (!v) return sendEdit('time', cid, mid, null);
-    const mm = /^(\d{1,2}):(\d{2})$/.exec(v);
-    if (!mm || +mm[1] > 23 || +mm[2] > 59) { flash('bad time — expected hh:mm'); return; }
-    await sendEdit('time', cid, mid, isoOf(S.day, +mm[1] * 60 + +mm[2]));
-  });
-  ed.querySelector('#venueinput').addEventListener('change', e => sendEdit('venue', cid, mid, e.target.value || null));
 }
 
 // ---- the side picker (modal) ----
