@@ -71,41 +71,47 @@ main { flex: 1; display: flex; min-height: 0; }
 
 .match {
   position: absolute; left: .25rem; right: .25rem; overflow: hidden;
-  display: flex; gap: .2rem;
+  display: grid; grid-template-columns: auto 1fr auto; grid-template-rows: auto auto;
+  gap: .15rem .4rem; /* row-gap: meta spacing; column-gap: grip/scores spacing */
   background: #fff; border: 1px solid var(--line); border-left: 3px solid var(--muted);
-  border-radius: .3rem; padding: .2rem .35rem; font-size: .75rem;
+  border-radius: .3rem; padding: 0 .35rem 0 0; font-size: .75rem; /* vertical padding lives on .rows/.scores so the grip can span the full card height */
   box-shadow: 0 1px 2px #00000012;
 }
 .match.done { border-left-color: var(--due); opacity: .8; }
-.match.active { outline: 2px solid var(--accent); z-index: 1; } /* z-index: an outline draws outside the box, so the next card (a later positioned sibling) would paint over its bottom edge */
 .match.dragging { opacity: .4; }
-.match .rows { flex: 1; min-width: 0; }
+/* three columns: grip | rows | scores, two rows: sides/score | meta — the grip
+   spans both rows, the meta spans under both columns at card width */
+.match .rows { grid-column: 2; grid-row: 1; min-width: 0; padding: .1rem 0; }
+.match .scores { grid-column: 3; grid-row: 1; display: flex; flex-direction: column; padding: .1rem 0; }
+.match .meta { grid-column: 2 / 4; grid-row: 2; color: var(--muted); font-size: .6rem; line-height: 1.2; }
 /* the grip is the card's only drag surface — the rows beneath stay click targets */
-.match .grip {
-  flex: 0 0 auto; width: .85rem; cursor: grab;
-  display: flex; align-items: center; justify-content: center;
-  color: var(--muted);
-}
+/* display:flex is load-bearing — it makes the ::before dots' height:100% resolve against
+   the grid-track-sized grip; as a block child of a height:auto parent the dots collapse to 0 */
+.match .grip { grid-row: 1 / 3; display: flex; width: .9rem; cursor: grab; color: var(--muted); border-right: 1px solid var(--hairline); }
 .match .grip::before {
-  content: ''; width: 3px; height: 3px; border-radius: 50%; background: currentColor;
-  box-shadow: .4rem 0 0 currentColor, 0 .4rem 0 currentColor, .4rem .4rem 0 currentColor,
-    0 .8rem 0 currentColor, .4rem .8rem 0 currentColor;
+  content: ''; width: 100%; height: 100%; opacity: .5;
+  background: radial-gradient(circle, currentColor .8px, transparent .9px);
+  background-size: .4rem .4rem; background-position: center;
 }
 .match .grip:hover { color: var(--accent); }
-.match .side { display: flex; justify-content: space-between; align-items: baseline; gap: .35rem; line-height: 1.2; }
+.match .side { display: flex; line-height: 1.2; }
 /* the whole name row and the score are the picker / result targets — hover tints them */
 .match .who, .match .score {
-  border: 0; background: none; padding: .1rem; margin: -.1rem; font: inherit; color: inherit;
+  border: 0; background: none; font: inherit; color: inherit;
   cursor: pointer; border-radius: .2rem; text-align: left;
 }
-.match .who { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.match .who:hover, .match .score:hover,
-.match .who:focus-visible, .match .score:focus-visible { background: #0a66c21a; }
+.match .who {
+  flex: 1; min-width: 0; padding: .1rem; margin: -.1rem; /* margin cancels the padding so the row stays slot-sized */
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.match .who:hover, .match .who:focus-visible { background: #0a66c21a; }
+/* the two scores share one right column; result edit tints it as a single block, no seam between rows */
+.match:has(.score:hover) .scores,
+.match:has(.score:focus-visible) .scores { background: #0a66c21a; border-radius: .2rem; }
 .match .side[data-win] { font-weight: 600; }
-.match .score { display: flex; gap: .2rem; }
+.match .score { display: flex; gap: .2rem; padding: 0 .1rem; line-height: 1.2; }
 .match .score span { font-weight: 600; min-width: 1.3em; text-align: right; }
 .match .score span.ph { font-weight: normal; opacity: .4; }
-.match .meta { color: var(--muted); font-size: .6rem; line-height: 1.2; }
 
 .ghost { position: absolute; left: .25rem; right: .25rem; border: 2px dashed var(--accent); border-radius: .3rem; background: #0a66c21a; pointer-events: none; z-index: 2; }
 .ghost.invalid { border-color: var(--danger); background: #b3261e1a; }

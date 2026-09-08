@@ -10,7 +10,7 @@ const $ = id => document.getElementById(id);
 // ---- tiny state ----
 const S = {
   slug: null, day: null, tjson: null, tz: 'UTC', gcd: 15,
-  pxPerMin: 1.2, dayStart: 0, dayEnd: 0, selected: null,
+  pxPerMin: 1.2, dayStart: 0, dayEnd: 0,
   cats: [], venues: [], days: [], dragSource: null, ghost: null, legal: null,
 };
 
@@ -167,7 +167,6 @@ function cardMeta(c, m) {
 
 function cardHtml(c, m, venue) {
   const st = isDone(m) ? m.result.status : 'open';
-  const active = S.selected === keyOf(c, m) ? ' active' : '';
   const stCls = st === 'open' ? '' : ' done';
   // wall-time placement in the day's px-per-minute scale; unscheduled cards in
   // the unscheduled column are flow-positioned (their .unsched .match rule)
@@ -178,18 +177,24 @@ function cardHtml(c, m, venue) {
   const k = keyOf(c, m);
   // same card shape as the tournament page: one side row per side, meta last —
   // but a drag grip leads: only the grip drags, so the sides and score stay click targets
-  return `<article class="match${active}${stCls}" data-key="${esc(k)}" data-venue="${esc(venue || '')}"${pos}>
+  return `<article class="match${stCls}" data-key="${esc(k)}" data-venue="${esc(venue || '')}"${pos}>
     <span class="grip" draggable="true" title="Drag to move"></span>
-    <div class="rows">${sideRow(c, m, 0)}${sideRow(c, m, 1)}<div class="meta">${esc(cardMeta(c, m))}</div></div>
+    <div class="rows">${sideRow(c, m, 0)}${sideRow(c, m, 1)}</div>
+    <div class="scores">${scoreCell(c, m, 0)}${scoreCell(c, m, 1)}</div>
+    <div class="meta">${esc(cardMeta(c, m))}</div>
   </article>`;
 }
 
-// One side row mirroring the site's card: the name is the side picker's target,
-// the per-game score the result dialog's — both hover-flagged, no ✎ in between;
-// placeholder dots keep the best-of shape, the winner carries the W/O mark.
+// The name is the side picker's target; the two per-side scores live in a shared
+// .scores column so the result editor tints them as one right block with no seam.
 function sideRow(c, m, i) {
+  const sideName = esc(teamText(m.sides[i], c));
+  return `<div class="side"${winnerIdx(m) === i ? ' data-win' : ''}><button type="button" class="who" data-side="${i}" title="edit side ${i === 0 ? 'a' : 'b'}" aria-label="edit side ${i === 0 ? 'a' : 'b'} — ${sideName}">${sideName}</button></div>`;
+}
+
+// placeholder dots keep the best-of shape, the winner carries the W/O mark.
+function scoreCell(c, m, i) {
   const r = m.result;
-  const w = winnerIdx(m);
   const games = m.games || [];
   const bo = bestOfOf(m, c) || 1; // unset stage config -> one unmarked slot
   const slots = () => Array.from({ length: bo }, (_, g) => {
@@ -201,8 +206,7 @@ function sideRow(c, m, i) {
     : r.status === 'void' ? '<span>void</span>'
     : sideIdx(r.winner) === i ? '<span>W/O</span>'
     : slots();
-  const sideName = esc(teamText(m.sides[i], c));
-  return `<div class="side"${w === i ? ' data-win' : ''}><button type="button" class="who" data-side="${i}" title="edit side ${i === 0 ? 'a' : 'b'}" aria-label="edit side ${i === 0 ? 'a' : 'b'} — ${sideName}">${sideName}</button><button type="button" class="score" title="edit result">${score}</button></div>`;
+  return `<button type="button" class="score" title="edit result">${score}</button>`;
 }
 
 const keyOf = (c, m) => `${c.id}:${m.id}`;
@@ -210,22 +214,14 @@ const keyParts = k => { const i = k.indexOf(':'); return [k.slice(0, i), k.slice
 
 function wireGrid() {
   const grid = $('grid');
-  // Board-level listeners bind once — only the .match nodes are recreated per
-  // render, so rebinding here would stack a handler set on #grid per render and
-  // an empty-board click would fan out into one full re-render per stale set.
+  // Board-level listeners bind once — only the .match nodes are recreated per render.
   if (!grid.dataset.wired) {
     grid.dataset.wired = '1';
     grid.addEventListener('dragover', e => { e.preventDefault(); ghost(e); });
     grid.addEventListener('dragleave', e => { if (e.relatedTarget == null) clearGhost(); });
     grid.addEventListener('drop', e => { e.preventDefault(); dropAt(e); });
-    grid.addEventListener('click', e => { if (!e.target.closest('.match')) { S.selected = null; renderGrid(); } });
   }
   grid.querySelectorAll('.match').forEach(el => {
-    el.addEventListener('click', e => {
-      e.stopPropagation();
-      S.selected = el.dataset.key; // a card click selects (drag anchor + active outline); the modal triggers below stop propagation so they never re-render over an open dialog
-      renderGrid();
-    });
     el.querySelectorAll('.score').forEach(btn => btn.addEventListener('click', e => {
       e.stopPropagation();
       const [cid, mid] = keyParts(el.dataset.key);
@@ -331,7 +327,6 @@ async function dropAt(e) {
     if (wm === null) { flash('no legal slot here'); return; }
     time = isoOf(S.day, wm); venue = ht.venue;
   }
-  S.selected = src;
   await sendEdit('move', cid, mid, { time, venue });
 }
 
@@ -480,8 +475,8 @@ $('publish').onclick = async () => {
 };
 
 // ---- boot ----
-$('slug').addEventListener('change', e => { S.selected = null; setSlug(e.target.value); });
-$('day').addEventListener('change', e => { S.day = e.target.value; S.selected = null; renderGrid(); });
+$('slug').addEventListener('change', e => { setSlug(e.target.value); });
+$('day').addEventListener('change', e => { S.day = e.target.value; renderGrid(); });
 async function boot() {
   const slugs = await get('/api/tournaments') || [];
   $('slug').innerHTML = slugs.map(t => `<option value="${esc(t.slug)}">${esc(t.name)}</option>`).join('');
