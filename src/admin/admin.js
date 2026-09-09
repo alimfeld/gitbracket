@@ -175,21 +175,20 @@ function cardHtml(c, m, venue) {
   const pos = wm != null && Number.isFinite(slot)
     ? ` style="top:${(wm - S.dayStart) * S.pxPerMin}px;min-height:${slot * S.pxPerMin}px;"` : '';
   const k = keyOf(c, m);
-  // same card shape as the tournament page: one side row per side, meta last —
-  // but a drag grip leads: only the grip drags, so the sides and score stay click targets
+  // one side row per side, meta last; a drag grip leads — only the grip drags,
+  // and the whole card (minus grip + pencils) is the score target
   return `<article class="match${stCls}" data-key="${esc(k)}" data-venue="${esc(venue || '')}"${pos}>
     <span class="grip" draggable="true" title="Drag to move"></span>
-    <div class="rows">${sideRow(c, m, 0)}${sideRow(c, m, 1)}</div>
-    <div class="scores">${scoreCell(c, m, 0)}${scoreCell(c, m, 1)}</div>
+    ${sideRow(c, m, 0)}${sideRow(c, m, 1)}
     <div class="meta">${esc(cardMeta(c, m))}</div>
   </article>`;
 }
 
-// The name is the side picker's target; the two per-side scores live in a shared
-// .scores column so the result editor tints them as one right block with no seam.
+// One row per side: the name is inert display text, the pencil is the only
+// side-edit surface, and the score rides the row (the card handles score entry).
 function sideRow(c, m, i) {
   const sideName = esc(teamText(m.sides[i], c));
-  return `<div class="side"${winnerIdx(m) === i ? ' data-win' : ''}><button type="button" class="who" data-side="${i}" title="edit side ${i === 0 ? 'a' : 'b'}" aria-label="edit side ${i === 0 ? 'a' : 'b'} — ${sideName}">${sideName}</button></div>`;
+  return `<div class="side"${winnerIdx(m) === i ? ' data-win' : ''}><span class="name">${sideName}</span><button type="button" class="edit-side" data-side="${i}" title="edit side ${i === 0 ? 'a' : 'b'}" aria-label="edit side ${i === 0 ? 'a' : 'b'} — ${sideName}">✎</button><span class="score">${scoreCell(c, m, i)}</span></div>`;
 }
 
 // placeholder dots keep the best-of shape, the winner carries the W/O mark.
@@ -202,11 +201,10 @@ function scoreCell(c, m, i) {
     // aria-hidden: the placeholder dot is shape-as-label, noise to a screen reader
     return `<span${game ? '' : ' class="ph" aria-hidden="true"'}>${game ? (i === 0 ? game.a : game.b) : '·'}</span>`;
   }).join('');
-  const score = !r || r.status === 'played' ? slots()
+  return !r || r.status === 'played' ? slots()
     : r.status === 'void' ? '<span>void</span>'
     : sideIdx(r.winner) === i ? '<span>W/O</span>'
     : slots();
-  return `<button type="button" class="score" title="edit result">${score}</button>`;
 }
 
 const keyOf = (c, m) => `${c.id}:${m.id}`;
@@ -222,16 +220,16 @@ function wireGrid() {
     grid.addEventListener('drop', e => { e.preventDefault(); dropAt(e); });
   }
   grid.querySelectorAll('.match').forEach(el => {
-    el.querySelectorAll('.score').forEach(btn => btn.addEventListener('click', e => {
-      e.stopPropagation();
-      const [cid, mid] = keyParts(el.dataset.key);
-      openResult(cid, matchOf(cid, mid));
-    }));
-    el.querySelectorAll('.who').forEach(btn => btn.addEventListener('click', e => {
-      e.stopPropagation();
+    el.querySelectorAll('.edit-side').forEach(btn => btn.addEventListener('click', e => {
       const [cid, mid] = keyParts(el.dataset.key);
       openSide(cid, matchOf(cid, mid), +btn.dataset.side);
     }));
+    // the whole card is the score target; the grip and the per-side pencils are not
+    el.addEventListener('click', e => {
+      if (e.target.closest('.grip, .edit-side')) return;
+      const [cid, mid] = keyParts(el.dataset.key);
+      openResult(cid, matchOf(cid, mid));
+    });
     el.addEventListener('dragstart', e => {
       S.dragSource = el.dataset.key;
       e.dataTransfer.setData('text/plain', S.dragSource);
