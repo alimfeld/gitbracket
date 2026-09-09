@@ -361,13 +361,18 @@ function parseResult(s) {
 function openResult(cid, m) {
   const ctx = cat(cid);
   const pre = m.games ? m.games.map(g => `${g.a}-${g.b}`).join(' ') : m.result && m.result.status === 'walkover' ? `wo ${m.result.winner}` : m.result && m.result.status === 'void' ? 'void' : '';
+  // a realistic example for this match's best-of: a 2-1 (3 games) won at full length,
+  // winners alternating so the shape is legible — games 1,3,5… go A, games 2,4… go B
+  const bo = bestOfOf(m, ctx) || 1;
+  const ex = Array.from({ length: bo }, (_, g) => g % 2 ? '17-21' : '21-19').join(' ');
   const modal = $('modal');
   modal.hidden = false;
   modal.innerHTML = `<div class="box">
     <p class="kicker">Result</p>
-    <h2>${esc(cardMeta(ctx, m))}</h2>
+    <h2 class="sides">${esc(teamText(m.sides[0], ctx))} vs ${esc(teamText(m.sides[1], ctx))}</h2>
+    <p class="sub">${esc(cardMeta(ctx, m))}</p>
     <input type="text" class="scoreinput" id="scoreinput" value="${esc(pre)}" aria-label="Result">
-    <p class="hint">games 21-19 11-9 · wo a · wo b · void · empty clears — [enter] ok · [esc] cancel</p>
+    <p class="hint">${ex} · wo a · wo b · void · empty clears</p>
     <div class="foot"><button data-x="cancel">Cancel</button><button data-x="apply" class="primary">Apply</button></div>
   </div>`;
   const input = modal.querySelector('#scoreinput');

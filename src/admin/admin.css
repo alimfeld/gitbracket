@@ -114,7 +114,8 @@ main { flex: 1; display: flex; min-height: 0; }
 
 /* ---- dialog header ---- */
 .modal .kicker { margin: 0 0 .15rem; font-size: .68rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
-.modal .box h2 { font-size: 1rem; margin: 0 0 .7rem; } /* the title is the match card meta line — time · category · label */
+.modal .box h2.sides { font-size: 1.1rem; margin: 0 0 .2rem; } /* the headline is the sides; the meta line is the sub */
+.modal .sub { margin: 0 0 .6rem; font-size: .75rem; color: var(--muted); }
 .modal .hint { margin: .4rem 0 0; }
 /* the side picker's labeled selects */
 .modal .field { display: block; font-size: .8rem; color: var(--muted); margin: .55rem 0 .2rem; }
