@@ -16,7 +16,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const readline = require('readline');
-const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, fmtTime, matchLabel, bestOfOf, winTarget, reachedWinner, winnerIdx, dayKey, DATE_RE, catStatus, currentWave } = require('../site/derive.js');
+const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, schedDays, fmtTime, matchLabel, bestOfOf, winTarget, reachedWinner, winnerIdx, dayKey, DATE_RE, catStatus, currentWave } = require('../site/derive.js');
 const { loadRepo, writeTournament, tournamentText, catCtx, byMatchOrder } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 const { ship } = require('./publish.js');
@@ -132,13 +132,27 @@ function writeEdit(siteRoot, repo, slug, catId, apply) {
   const ctx = makeCat({ meta, matches: ms }, tjson);
   const file = path.join(siteRoot, 'tournaments', `${slug}.json`);
   const before = fs.readFileSync(file, 'utf8');
+  const beforeJson = JSON.parse(before); // the rollback snapshot — the day guard below reads it too
   const aerr = apply(ms, ctx);
   if (aerr) return { err: aerr };
+  // The published days (the index dates) are fixed: only the schedule generator
+  // rewrites them, and that's off the table once results are in. An edit that
+  // moves a match onto another day — or clears the last match of one — would
+  // desync the index with no edit path to follow, so it's refused here with the
+  // cause named; the validator's dates-mismatch error stays for out-of-band hand edits.
+  const daysOf = tj => schedDays(Object.values(tj.matches || {}).flat(), tj.timezone || 'UTC');
+  const beforeDays = daysOf(beforeJson);
+  const afterDays = daysOf(tjson);
+  const fmtDays = ds => ds.length ? ds.join(', ') : 'no scheduled days';
+  if (fmtDays(beforeDays) !== fmtDays(afterDays)) {
+    ms.splice(0, ms.length, ...((beforeJson.matches || {})[catId] || [])); // undo the in-memory edit too — a same-process retry must start from the original
+    return { err: `refused: this edit changes the tournament's scheduled days (${fmtDays(beforeDays)} → ${fmtDays(afterDays)}) — the index dates are fixed once the schedule is published and no edit follows them; keep the match on a published day, or change the days by hand-editing the file and its tournaments.json entry together` };
+  }
   // tjson is the single view of the data, so the validator sees exactly what
   // writeTournament will write — the dates-vs-index and pass-B checks agree.
   const { errs } = validateRepo(repo);
   if (errs.length) {
-    ms.splice(0, ms.length, ...((JSON.parse(before).matches || {})[catId] || [])); // undo the in-memory edit too — a same-process retry must start from the original
+    ms.splice(0, ms.length, ...((beforeJson.matches || {})[catId] || [])); // undo the in-memory edit too — a same-process retry must start from the original
     fs.writeFileSync(file, before);
     return { errs };
   }

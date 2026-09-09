@@ -351,6 +351,35 @@ test('editor rejects edits the validator would refuse', () => {
   assert(hasErr(r2, /scored match must have both sides resolved/), 'scoring a match with an unresolved side is rejected');
 });
 
+test('editor writeEdit: a cross-day time edit is refused with the cause named; days-unchanged edits still apply', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gitbracket-'));
+  try {
+    const dataRoot = path.join(tmp, 'site');
+    fs.mkdirSync(dataRoot, { recursive: true });
+    fs.cpSync(FIX('multiday'), dataRoot, { recursive: true });
+    const repo = loadRepo(dataRoot);
+    const slug = 'multiday';
+    const tjson = () => repo.tournaments.get(slug).tjson;
+    const ms = () => tjson().matches.md40;
+    const m = ms().find(x => x.id === 7); // day 2 (2026-07-12)
+    const orig = m.scheduled;
+    const edit = scheduled => editor.writeEdit(dataRoot, repo, slug, 'md40', list => {
+      const t = list.find(x => x.id === m.id);
+      if (scheduled === undefined) delete t.scheduled; else t.scheduled = scheduled;
+      return null;
+    });
+    const cross = edit('2026-07-13T' + orig.slice(11));
+    assert(cross.err && /changes the tournament's scheduled days \(2026-07-11, 2026-07-12 → 2026-07-11, 2026-07-12, 2026-07-13\)/.test(cross.err), `the refusal names the day change, got: ${cross.err}`);
+    assert.equal(ms().find(x => x.id === 7).scheduled, orig, 'in-memory edit rolled back — a same-process retry starts from the original');
+    assert.equal(loadRepo(dataRoot).tournaments.get(slug).tjson.matches.md40.find(x => x.id === 7).scheduled, orig, 'file untouched');
+    const same = edit(undefined); // clear match 7's time — 8 and 9 still hold the day, so the day set is unchanged
+    assert(!same.err && !same.errs, `a days-unchanged edit still applies, got: ${same.err || (same.errs || []).join('; ')}`);
+    assert(loadRepo(dataRoot).tournaments.get(slug).tjson.matches.md40.find(x => x.id === 7).scheduled === undefined, 'the same-day clear landed');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 test('editor parseGame', () => {
   assert(JSON.stringify(editor.parseGame('11-9')) === JSON.stringify({ a: 11, b: 9 }), 'a-b parses');
   assert(JSON.stringify(editor.parseGame('11:9')) === JSON.stringify({ a: 11, b: 9 }), 'a:b parses');
@@ -522,7 +551,7 @@ test('editor echoLine: sides first, then the detail and the sha receipt', () => 
   assert(t.includes(' vs ') && t.includes('→'), 'a move edit still shows the sides and its target');
 });
 
-test('editor writeEdit: the gate sees schedule edits — a date the index lacks is rejected and rolled back', () => {
+test('editor writeEdit: a cross-day edit is refused with the cause named — the index dates only change via the generator', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gitbracket-'));
   try {
     const dataRoot = path.join(tmp, 'site');
@@ -532,7 +561,7 @@ test('editor writeEdit: the gate sees schedule edits — a date the index lacks 
     const file = path.join(dataRoot, 'tournaments', 'sample.json');
     const before = fs.readFileSync(file, 'utf8');
     const res = editor.writeEdit(dataRoot, repo, 'sample', 'md40', (c) => editor.applyTime(c, '2', '2025-07-15T09:00:00'));
-    assert(res.errs && res.errs.some(e => /dates/.test(e)), 'index dates must mismatch the edited schedule — the edit cannot silently pass');
+    assert(res.err && /changes the tournament's scheduled days \(2025-07-14 → 2025-07-14, 2025-07-15\)/.test(res.err), `the refusal names the day change, got: ${res.err}`);
     assert(fs.readFileSync(file, 'utf8') === before, 'rejected edit rolls the file back byte-identical');
     const m2 = repo.tournaments.get('sample').tjson.matches.md40.find(m => m.id === 2);
     assert.equal(m2.scheduled, '2025-07-14T09:00:00', 'in-memory match restored for a same-process retry');
