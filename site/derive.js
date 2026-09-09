@@ -254,6 +254,25 @@ function sideLabel(side, ctx) {
   return teamLabel(ids, ctx);
 }
 
+// One score-cell renderer for both pages — the site's sideRow and the admin's
+// board show the same per-side game scores; a shared source, so a display fix
+// lands on both surfaces at once.
+function scoreCells(m, i, ctx) {
+  const r = m.result;
+  const games = m.games || [];
+  const bo = bestOfOf(m, ctx) || 1; // unset stage config -> one unmarked slot
+  // placeholder dots keep the best-of shape; the winner carries the W/O mark
+  const slot = () => Array.from({ length: bo }, (_, g) => {
+    const game = games[g];
+    // aria-hidden: the placeholder dot is shape-as-label, noise to a screen reader
+    return `<span${game ? '' : ' class="ph" aria-hidden="true"'}>${game ? (i === 0 ? game.a : game.b) : '·'}</span>`;
+  }).join('');
+  return !r || r.status === 'played' ? slot()
+    : r.status === 'void' ? '<span>void</span>'
+    : sideIdx(r.winner) === i ? '<span>W/O</span>'
+    : slot();
+}
+
 // Confirmed only: a side must resolve to the player — undecided slots stay off.
 function playerMatches(ctx, pid) {
   const rows = [];
@@ -1082,5 +1101,5 @@ function playerStatus(ctx, pid) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, esc, makeCat, toCats, matchSlotMs, bestOfOf, poolBo1, sideIdx, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, resolveSide, teamLabel, sideLabel, playerMatches, possibleStages, placementLabel, plRange, placementColumn, bandLabels, stageGroupName, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dayShort, dayLabel, fmtDiff, kioskStatus, currentRowIndex, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, currentWave, playerStatus };
+  module.exports = { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, esc, makeCat, toCats, matchSlotMs, bestOfOf, poolBo1, sideIdx, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, resolveSide, teamLabel, sideLabel, scoreCells, playerMatches, possibleStages, placementLabel, plRange, placementColumn, bandLabels, stageGroupName, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dayShort, dayLabel, fmtDiff, kioskStatus, currentRowIndex, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, currentWave, playerStatus };
 }

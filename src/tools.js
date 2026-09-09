@@ -127,6 +127,13 @@ function findRoot(from) {
   return dir;
 }
 
+// site/CNAME as text (trimmed), null when missing — publish's deploy role and
+// sim's teardown gate on the same read; one source, the two can't disagree.
+function cnameOf(root) {
+  try { return fs.readFileSync(path.join(root, 'site', 'CNAME'), 'utf8').trim(); }
+  catch { return null; }
+}
+
 // The current branch name ('' on a detached HEAD) — what publish, admin, and
 // sim gate on.
 function branchOf(root) {
@@ -307,4 +314,4 @@ function pairBusy(a, b) {
   return kinds;
 }
 
-module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, fixedPlayers, schedEntries, pairBusy, consumedSlots, descendants, winTarget, reachedWinner, makeGames, feederBounds, isRealDate, findRoot, catCtx, tournamentText, staticFile, openBrowser, branchOf, isRehearsalBranch, cleanTree, git, defaultSlug };
+module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, fixedPlayers, schedEntries, pairBusy, consumedSlots, descendants, winTarget, reachedWinner, makeGames, feederBounds, isRealDate, findRoot, catCtx, tournamentText, staticFile, openBrowser, cnameOf, branchOf, isRehearsalBranch, cleanTree, git, defaultSlug };

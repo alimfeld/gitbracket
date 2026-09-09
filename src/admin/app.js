@@ -60,10 +60,6 @@ function flash(msg) {
 }
 
 // ---- data loading ----
-function teamText(side, ctx) {
-  const ids = resolveSide(side, ctx);
-  return ids ? teamLabel([...ids], ctx) : sideLabel(side, ctx);
-}
 function teamSize(ctx) {
   for (const m of ctx.matches) {
     if (!m || !Array.isArray(m.sides)) continue;
@@ -81,7 +77,7 @@ async function setSlug(slug) {
   S.gcd = gridGcd(S.tjson);
   S.cats = toCats(S.tjson);
   S.venues = S.tjson.venues || [];
-  S.days = computeDays();
+  S.days = schedDays(S.cats.flatMap(c => c.matches), S.tz);
   const daySel = $('day');
   daySel.innerHTML = S.days.map(d => `<option>${d}</option>`).join('');
   S.day = S.days[0] || null;
@@ -91,12 +87,6 @@ async function setSlug(slug) {
 
 // keep slug/day/selection, just re-fetch the data after an edit or undo
 async function reload() { await setSlug(S.slug); }
-
-function computeDays() {
-  const ks = new Set();
-  for (const c of S.cats) for (const m of c.matches) { const t = schedTime(m, S.tz); if (t !== null) ks.add(dayKey(t, S.tz)); }
-  return [...ks].sort();
-}
 
 // Fill the board's height when the day fits; floor the scale so a scored
 // card's three rows never clip.
@@ -184,24 +174,8 @@ function cardHtml(c, m, venue) {
 // the row. The pencil sits inside .who with its name — it edits that side,
 // never the score.
 function sideRow(c, m, i) {
-  const sideName = esc(teamText(m.sides[i], c));
-  return `<div class="side"${winnerIdx(m) === i ? ' data-win' : ''}><span class="who"><span class="name">${sideName}</span><button type="button" class="edit-side" data-side="${i}" title="edit side ${i === 0 ? 'a' : 'b'}" aria-label="edit side ${i === 0 ? 'a' : 'b'} — ${sideName}">✎</button></span><span class="score">${scoreCell(c, m, i)}</span></div>`;
-}
-
-// placeholder dots keep the best-of shape, the winner carries the W/O mark.
-function scoreCell(c, m, i) {
-  const r = m.result;
-  const games = m.games || [];
-  const bo = bestOfOf(m, c) || 1; // unset stage config -> one unmarked slot
-  const slots = () => Array.from({ length: bo }, (_, g) => {
-    const game = games[g];
-    // aria-hidden: the placeholder dot is shape-as-label, noise to a screen reader
-    return `<span${game ? '' : ' class="ph" aria-hidden="true"'}>${game ? (i === 0 ? game.a : game.b) : '·'}</span>`;
-  }).join('');
-  return !r || r.status === 'played' ? slots()
-    : r.status === 'void' ? '<span>void</span>'
-    : sideIdx(r.winner) === i ? '<span>W/O</span>'
-    : slots();
+  const sideName = esc(sideLabel(m.sides[i], c));
+  return `<div class="side"${winnerIdx(m) === i ? ' data-win' : ''}><span class="who"><span class="name">${sideName}</span><button type="button" class="edit-side" data-side="${i}" title="edit side ${i === 0 ? 'a' : 'b'}" aria-label="edit side ${i === 0 ? 'a' : 'b'} — ${sideName}">✎</button></span><span class="score">${scoreCells(m, i, c)}</span></div>`;
 }
 
 const keyOf = (c, m) => `${c.id}:${m.id}`;
@@ -348,12 +322,12 @@ function openResult(cid, m) {
   modal.hidden = false;
   modal.innerHTML = `<div class="box">
     <p class="kicker">Result</p>
-    <h2 class="sides">${esc(teamText(m.sides[0], ctx))} vs ${esc(teamText(m.sides[1], ctx))}</h2>
+    <h2 class="sides">${esc(sideLabel(m.sides[0], ctx))} vs ${esc(sideLabel(m.sides[1], ctx))}</h2>
     <p class="sub">${esc(cardMeta(ctx, m))}</p>
     <input type="text" class="scoreinput" id="scoreinput" value="${esc(pre)}" aria-label="Result" placeholder="${esc(ex)}">
     <div class="fillbtns">
-      <button type="button" data-fill="wo a">${esc(teamText(m.sides[0], ctx))} wins by walkover</button>
-      <button type="button" data-fill="wo b">${esc(teamText(m.sides[1], ctx))} wins by walkover</button>
+      <button type="button" data-fill="wo a">${esc(sideLabel(m.sides[0], ctx))} wins by walkover</button>
+      <button type="button" data-fill="wo b">${esc(sideLabel(m.sides[1], ctx))} wins by walkover</button>
       <button type="button" data-fill="void">Match annulled</button>
       <button type="button" data-fill="">No result</button>
     </div>

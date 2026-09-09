@@ -9,7 +9,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { loadRepo, branchOf, isRehearsalBranch, cleanTree, defaultSlug, git } = require('./tools.js');
+const { loadRepo, branchOf, isRehearsalBranch, cleanTree, defaultSlug, git, cnameOf } = require('./tools.js');
 const { productionCNAME } = require('./publish.js');
 const admin = require('./admin.js');
 
@@ -28,9 +28,7 @@ function teardown(root) {
     console.error('sim: the tree is dirty — commit or stash before tearing down');
     process.exit(1);
   }
-  let cname;
-  try { cname = fs.readFileSync(path.join(root, 'site', 'CNAME'), 'utf8').trim(); }
-  catch { cname = null; }
+  const cname = cnameOf(root);
   if (cname === null || cname === productionCNAME(root)) {
     console.error(`sim: site/CNAME (${cname || 'missing'}) does not name a scratch domain — refusing teardown`);
     process.exit(1);

@@ -7,10 +7,9 @@
 // and without that anchor only main deploys.
 
 const { spawnSync } = require('child_process');
-const fs = require('fs');
 const path = require('path');
 const validate = require('./validate.js');
-const { branchOf, git } = require('./tools.js');
+const { branchOf, git, cnameOf } = require('./tools.js');
 
 // CLI entry (from gb.js): validate exits 1 on data errors, so nothing dirty ships.
 function main(root) {
@@ -29,9 +28,8 @@ function productionCNAME(root) {
 function deployRole(root) {
   const branch = branchOf(root);
   if (!branch) return { ok: false, why: 'detached HEAD — checkout main or a rehearsal branch first' };
-  let cname;
-  try { cname = fs.readFileSync(path.join(root, 'site', 'CNAME'), 'utf8').trim(); }
-  catch { return { ok: false, why: 'no site/CNAME — nothing to ship to' }; }
+  const cname = cnameOf(root);
+  if (cname === null) return { ok: false, why: 'no site/CNAME — nothing to ship to' };
   const prod = productionCNAME(root);
   if (branch === 'main') {
     if (prod !== null && cname !== prod) {

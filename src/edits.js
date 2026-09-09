@@ -7,7 +7,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { makeCat, isDone, sideLabel, schedDays, dayKey, DATE_RE, catStatus, currentWave, bestOfOf } = require('../site/derive.js');
+const { isDone, sideLabel, schedDays, dayKey, DATE_RE, catStatus, currentWave, bestOfOf } = require('../site/derive.js');
 const { writeTournament, tournamentText, catCtx, winTarget, reachedWinner, git } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 
@@ -116,8 +116,7 @@ function writeEdit(siteRoot, repo, slug, catId, apply) {
   if (!cats.includes(catId)) return { err: `unknown category ${catId} — have: ${cats.join(', ')}` };
   const ms = tjson.matches && typeof tjson.matches === 'object' && !Array.isArray(tjson.matches) ? tjson.matches[catId] : undefined;
   if (!ms) return { err: `no matches for category ${catId}` };
-  const meta = tjson.categories.find(c => c.id === catId);
-  const ctx = makeCat({ meta, matches: ms }, tjson);
+  const ctx = catCtx(tjson, catId);
   const file = path.join(siteRoot, 'tournaments', `${slug}.json`);
   const before = fs.readFileSync(file, 'utf8');
   const beforeJson = JSON.parse(before); // the rollback snapshot — the day guard below reads it too

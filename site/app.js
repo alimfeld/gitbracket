@@ -324,21 +324,7 @@ function matchCard(m, ctx, opts = {}) {
 
 function sideRow(m, ctx, i) {
   const w = winnerIdx(m);
-  const games = m.games || [];
-  const r = m.result;
-  // one slot per best-of game — placeholders keep the shape, so no label is needed
-  const bo = bestOfOf(m, ctx) || 1; // unset stage config -> one unmarked slot
-  const slot = () => Array.from({ length: bo }, (_, g) => {
-    const game = games[g];
-    // aria-hidden: the placeholder dot is shape-as-label, noise to a screen reader
-    return `<span${game ? '' : ' class="ph" aria-hidden="true"'}>${game ? (i === 0 ? game.a : game.b) : '·'}</span>`;
-  }).join('');
-  // the winning side carries the W/O mark
-  const score = !r || r.status === 'played' ? slot()
-    : r.status === 'void' ? '<span>void</span>'
-    : sideIdx(r.winner) === i ? '<span>W/O</span>'
-    : slot();
-  return `<div class="side"${w === i ? ' data-win' : ''}><span>${esc(sideLabel(m.sides[i], ctx))}</span><span class="score">${score}</span></div>`;
+  return `<div class="side"${w === i ? ' data-win' : ''}><span>${esc(sideLabel(m.sides[i], ctx))}</span><span class="score">${scoreCells(m, i, ctx)}</span></div>`;
 }
 
 function renderVenue(route, data, now) {
@@ -369,7 +355,7 @@ function renderVenue(route, data, now) {
   const header = `<header><div><h1>${esc(data.t.name)}</h1><p>${shownDay === today ? 'Today' : dayLabel(shownDay)}</p></div><time id="clock"></time></header>`;
   // header and venue titles stick as one block — the titles ride the running
   // clock, aligned to the board by the shared --cols track
-  const top = `<div class="kiosk-top" style="--cols: ${cols.length}">${header}${cols.map(id => `<h2>${esc((ctxs[0] && venueName(ctxs[0], id)) || id)}</h2>`).join('')}</div>`;
+  const top = `<div class="kiosk-top" style="--cols: ${cols.length}">${header}${cols.map(id => `<h2>${esc(venueName(ctxs[0], id))}</h2>`).join('')}</div>`;
   if (!cols.length) return top + '<p>Nothing scheduled.</p>';
   // Columns are venues, rows are start times — the cards of one wave line up;
   // holes stay empty cells. ponytail: one card per (venue, start) cell — a done
