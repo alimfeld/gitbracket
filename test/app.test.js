@@ -10,11 +10,20 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, matchSlotMs, sideLabel, placementLabel, koColumn, koOrdinal, matchLabel, schedTime, toCats, isDeadTie, winners, catStatus, roundName } = require('../site/derive.js');
-const { parseRoute, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer } = require('../site/app.js');
+const { parseRoute, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset } = require('../site/app.js');
 const { FIX, catOf, text, vals, card, cards, links } = require('./helpers.js');
 const { loadRepo } = require('../src/tools.js');
 
 const sameRecord = (a, b) => a.wins === b.wins && a.gd === b.gd && a.pd === b.pd; // test-only — derive.js doesn't ship it
+
+test('simAimOffset: ?sim aims the rehearsal clock at the event\'s first scheduled match', () => {
+  const tjson = { timezone: 'UTC', matches: { md: [
+    { id: 1, scheduled: '2026-05-02T09:00:00' },
+    { id: 2, scheduled: '2026-05-02T13:00:00' } ] } };
+  const now = Date.parse('2026-05-02T06:00:00Z');
+  assert.equal(simAimOffset(tjson, now), Date.parse('2026-05-02T09:00:00Z') - now, 'the offset lands now() on the earliest scheduled match');
+  assert.equal(simAimOffset({ timezone: 'UTC', matches: {} }, now), null, 'nothing scheduled — no aim');
+});
 
 test('schedTime: an invalid timezone reads as unparseable — never throws', () => {
   assert.equal(schedTime({ scheduled: '2026-05-02T09:00:00' }, 'Mars/Olympus'), null, 'a bad tz is a parse failure, not a crash');

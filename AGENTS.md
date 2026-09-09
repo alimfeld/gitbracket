@@ -10,8 +10,15 @@ fact changes: a wrong render, a bypassable gate, lost data. Code and tests
 implement them; don't treat them as style.
 
 - **Git is the record, not the transport.** No server, no accounts — the repo
-  is data, history, and frontend. Only `gb.js publish` ships `site/` to the
-  production domain, and only from `main`. Publishing sits outside git — last
+  is data, history, and frontend. Only `gb.js publish` ships `site/`, and the
+  deploy role follows the branch, never the operator's intent: `main` ships
+  the production domain, proved equal to `origin/main`'s CNAME; a branch
+  ships only a CNAME proved different from it — a missing anchor (no
+  `origin/main`) refuses every branch deploy. Rehearsal branches (`gb.js sim`)
+  practice the whole pipeline — commits, pushes, scratch surge deploys — on a
+  branch that is never merged: their scores are fabricated and their scratch
+  CNAME must not ride into production history (`gb.js sim --teardown` is the
+  only exit). Publishing sits outside git — last
   write wins on the CDN, safe because one director ships, everyone else pulls
   and reviews.
 - **Never store what can be derived.** Results are stored as the raw facts a

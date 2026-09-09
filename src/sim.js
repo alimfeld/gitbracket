@@ -1,91 +1,66 @@
 'use strict';
 
-// GitBracket match-day simulator — rehearse a whole tournament against a
-// scratch copy of site/, watched live in a browser. One process owns both the
-// sim clock and the results: it serves .sim/site over HTTP with a script that
-// overrides the page's Date.now to the sim clock (so the kiosk's statuses,
-// auto-centering, and board clock all track the rehearsal — site/ itself is
-// untouched), and the shared editor from editor.js drives the day: same buffer,
-// keys, and verbs, but a fake clock and never a commit — the scratch copy is
-// not a repo. The scoreable set is the same wave live uses, so the clock only
-// drives the browser display, never what's ready to score.
+// GitBracket rehearsal launcher — the whole pipeline practiced end to end.
+// Creates a rehearsal/<slug>-<rand> branch off a clean main, commits a
+// scratch surge domain as site/CNAME (the deploy gate in publish.js derives
+// production from origin/main, so the scratch can never reach it), pushes the
+// branch once so admin's publish can push it onward, then starts the admin
+// daemon. The kiosk is the deployed scratch site with app.js's ?sim clock.
+// A rehearsal branch is practice, never merged: its random scores are
+// fabricated, and its scratch CNAME must not ride into production history —
+// teardown deletes branch and domain, then the real day happens on main.
 
 const fs = require('fs');
-const http = require('http');
 const path = require('path');
-const { schedTime, bestOfOf } = require('../site/derive.js');
-const { loadRepo, staticFile, openBrowser } = require('./tools.js');
-const { writeEdit, applyScore, defaultSlug, C, editorMain, waveEntries, rowKey } = require('./editor.js');
+const { spawnSync } = require('child_process');
+const { loadRepo, branchOf, isRehearsalBranch } = require('./tools.js');
+const { defaultSlug, git } = require('./editor.js');
+const { productionCNAME } = require('./publish.js');
+const admin = require('./admin.js');
 
-const STEP = 30 * 60 * 1000;  // ]/[ move the clock in 30 sim-minutes
+const rand = () => Date.now().toString(36).slice(-5);
 
-// Random games for a match: the winner side takes the target games, with the
-// loser's wins leading so no side reaches the target before the last game
-// (the validator's match-flow rule); deuce games (12+, +2) a fifth of the time.
-function makeGames(bestOf) {
-  const target = (bestOf + 1) / 2;
-  const n = target + Math.floor(Math.random() * (bestOf - target + 1));
-  const winnerIsA = Math.random() < 0.5;
-  const games = [];
-  for (let i = 0; i < n; i++) {
-    const aWins = i < n - target ? !winnerIsA : winnerIsA;
-    const deuce = Math.random() < 0.2;
-    const ws = deuce ? 12 + Math.floor(Math.random() * 5) : 11;
-    const ls = deuce ? ws - 2 : Math.floor(Math.random() * 10);
-    games.push(aWins ? { a: ws, b: ls } : { a: ls, b: ws });
+function cleanTree(root) {
+  const s = git(root, ['status', '--porcelain']);
+  return s.code === 0 && s.out.trim() === '';
+}
+
+// Teardown: the mirror of setup. surge domains stay hosted until torn down,
+// so the domain goes first; the branch lives on only as long as its CNAME is
+// readable — the branch goes last, the remote copy with it.
+function teardown(root) {
+  const branch = branchOf(root);
+  if (!isRehearsalBranch(branch)) {
+    console.error(`sim: not on a rehearsal branch (on ${branch || 'a detached HEAD'}) — nothing to tear down`);
+    process.exit(1);
   }
-  return games;
+  if (!cleanTree(root)) {
+    console.error('sim: the tree is dirty — commit or stash before tearing down');
+    process.exit(1);
+  }
+  let cname;
+  try { cname = fs.readFileSync(path.join(root, 'site', 'CNAME'), 'utf8').trim(); }
+  catch { cname = null; }
+  if (cname === null || cname === productionCNAME(root)) {
+    console.error(`sim: site/CNAME (${cname || 'missing'}) does not name a scratch domain — refusing teardown`);
+    process.exit(1);
+  }
+  const s = spawnSync('surge', ['teardown', cname], { cwd: root, stdio: 'inherit' });
+  if (s.error || s.status) {
+    console.error(`sim: surge teardown ${cname} failed — the domain stays hosted until it succeeds; the branch stays so its CNAME stays readable`);
+    process.exit(1);
+  }
+  git(root, ['checkout', 'main']);
+  git(root, ['branch', '-D', branch]);
+  git(root, ['push', 'origin', '--delete', branch]);
+  console.log(`sim: ${cname} torn down; ${branch} deleted (local + origin)`);
 }
 
-// Scratch copy of site/ — the rehearsal's whole world; the repo is untouched.
-function copySite(root) {
-  const dst = path.join(root, '.sim', 'site');
-  fs.rmSync(dst, { recursive: true, force: true });
-  fs.cpSync(path.join(root, 'site'), dst, { recursive: true });
-  return dst;
-}
-
-// Serve the scratch site with the clock override injected into the one SPA
-// page (index.html is every view — fragment routing). The injected script
-// owns the only clock the app reads (Date.now), refreshed from /clock once a
-// second, so the kiosk statuses, auto-centering, and board clock all track
-// the editor's sim time without a single change to site/.
-function serve(siteRoot, clock) {
-  return http.createServer((req, res) => {
-    if (req.url === '/clock') {
-      res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ t: clock() }));
-      return;
-    }
-    let rel;
-    try { rel = decodeURIComponent((req.url || '/').split('?')[0]).replace(/^\/+/, ''); }
-    catch { res.statusCode = 400; res.end(); return; }
-    const f = staticFile(siteRoot, rel);
-    if (!f) { res.statusCode = 404; res.end('not found'); return; }
-    let body = f.body;
-    if (f.type.startsWith('text/html')) {
-      const inj = `<script>let __simT=${clock()};setInterval(async()=>{try{__simT=(await(await fetch('/clock')).json()).t}catch(e){}},1000);Date.now=()=>__simT;</script>`;
-      body = Buffer.from(body.toString('utf8').replace('</head>', inj + '</head>'));
-    }
-    res.setHeader('Content-Type', f.type);
-    res.end(body);
-  });
-}
-
-// x's targets: the whole wave by default; with a filter active, only the
-// wave members the filtered view highlights — never a match the board hides.
-function xTargets(tjson, view) {
-  const wave = waveEntries(tjson);
-  if (!view || !view.query) return wave;
-  const visible = new Set(view.filtered.map(e => rowKey(e.r.cat, e.r.m)));
-  return wave.filter(e => visible.has(rowKey(e.cat, e.m)));
-}
-
-// CLI entry (dispatched from gb.js): args = ['<slug>'].
+// CLI entry (dispatched from gb.js): args = ['--teardown'] | ['<slug>'].
 function main(root, args) {
-  const slug = args.find((a) => a && !a.startsWith('-')) || null;
-  const siteRoot = copySite(root);
-  const repo = loadRepo(siteRoot);
+  if (args.includes('--teardown')) return teardown(root);
+  const slug = args.find(a => a && !a.startsWith('-')) || null;
+  const repo = loadRepo(path.join(root, 'site'));
   if (repo.readErrs.length) { console.error(repo.readErrs.join('\n')); process.exit(1); }
   const key = slug || defaultSlug(repo);
   const info = key && repo.tournaments.get(key);
@@ -93,49 +68,34 @@ function main(root, args) {
     console.error(`sim: unknown tournament ${JSON.stringify(slug || '')} — have: ${repo.index.map(t => t.slug).join(', ')}`);
     process.exit(1);
   }
-  const tjson = info.tjson;
-  const tz = tjson.timezone || 'UTC';
-  const all = Object.values(tjson.matches || {}).flat();
-  const times = all.map(m => schedTime(m, tz)).filter(Number.isFinite);
-  if (!times.length) {
-    console.error('sim: nothing scheduled — generate a schedule first (node gb.js schedule specs/<slug>.json)');
+  if (!productionCNAME(root)) {
+    console.error('sim: no origin/main — push main once so the production domain exists as the deploy anchor');
     process.exit(1);
   }
-  const state = { siteRoot, repo, slug: key, tjson, now: Math.min(...times) };
-  const server = serve(siteRoot, () => state.now);
-  server.listen(0, '127.0.0.1', () => {
-    if (!process.stdin.isTTY) { console.error('sim: needs a terminal for keypresses'); process.exit(0); }
-    const url = `http://127.0.0.1:${server.address().port}/`;
-    console.log(C.dim(`${tjson.name} — simulated day in .sim/site (never committed) — ${url}`));
-    openBrowser(url);
-
-    // Score one match: random games through the real writeEdit — validation,
-    // rollback, byte-identical writes. Returns an error string or ''.
-    const score = e => {
-      const res = writeEdit(state.siteRoot, state.repo, state.slug, e.cat,
-        (ms, ctx) => applyScore(ms, e.m.id, makeGames(bestOfOf(e.m, ctx)), ctx));
-      return res.errs ? res.errs.join(' ') : res.err ? res.err : '';
-    };
-
-    // ]/[ nudge the kiosk clock (display only — the wave never waits on it),
-    // x scores the highlighted wave — narrowed by an active filter, so x
-    // only touches what's on screen; sim-only keys, hidden from live's hint
-    // bar; a string return is an error for the board's message line.
-    const simKey = (ch, view) => {
-      if (ch === ']') { state.now += STEP; return true; }
-      if (ch === '[') { state.now -= STEP; return true; }
-      if (ch === 'x') return xTargets(state.tjson, view).map(score).filter(Boolean).join('\n') || true;
-      return false;
-    };
-
-    editorMain(root, siteRoot, repo, {
-      sim: true,
-      slug: state.slug,
-      clock: () => state.now,
-      simKey,
-      onQuit: () => server.close(),
-    });
-  });
+  const branch = branchOf(root);
+  if (branch !== 'main') {
+    console.error(`sim: start from main — on ${branch} right now`);
+    process.exit(1);
+  }
+  if (!cleanTree(root)) {
+    console.error('sim: the tree is dirty — commit or stash before branching');
+    process.exit(1);
+  }
+  const name = `rehearsal/${key}-${rand()}`;
+  const cname = `rehearsal-${key}-${rand()}.surge.sh`;
+  const checkout = git(root, ['checkout', '-b', name]);
+  if (checkout.code !== 0) { console.error(`sim: checkout ${name} failed:\n${checkout.err}`); process.exit(1); }
+  fs.writeFileSync(path.join(root, 'site', 'CNAME'), cname + '\n');
+  git(root, ['add', 'site/CNAME']);
+  const c = git(root, ['commit', '-m', `chore(sim): scratch domain ${cname} on ${name}`]);
+  if (c.code !== 0) { console.error(`sim: CNAME commit failed:\n${c.err}`); process.exit(1); }
+  const p = git(root, ['push', '-u', 'origin', name]);
+  if (p.code !== 0) console.warn('sim: branch push failed (offline?) — admin publish will refuse until it has an upstream:\n' + p.err);
+  console.log(`sim: ${name} — the rehearsal is the real pipeline: commits, pushes, and publish to a scratch site`);
+  console.log(`  trigger notes: [publish] in admin ships ${cname} (never the production domain: the gate proves it from origin/main)`);
+  console.log(`  kiosk: after publishing, open https://${cname}/?sim#${key}/venues — ]/[ or the ◀▶ panel move the clock`);
+  console.log(`  done: node gb.js sim --teardown tears ${cname} down and deletes ${name}`);
+  return admin.main(root, [key]);
 }
 
-module.exports = { makeGames, xTargets, main };
+module.exports = { main };

@@ -19,6 +19,15 @@ function esc(s) {
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+// ?sim: the offset that lands the rehearsal clock on the event's first
+// scheduled match — the earliest across every day in the file, so the kiosk
+// opens where the tournament starts. Pure — tests pin it.
+function simAimOffset(tjson, now) {
+  const tz = tjson.timezone || 'UTC';
+  const ts = Object.values(tjson.matches || {}).flat().map(m => m ? schedTime(m, tz) : NaN).filter(Number.isFinite);
+  return ts.length ? Math.min(...ts) - now : null;
+}
+
 // A dead deep link (the slug's file 404s — permanent, stop polling) versus a
 // transient network failure (null — the poll retries next tick).
 const HTTP_ERR = { httpError: true };
@@ -521,7 +530,17 @@ function renderPlayer(route, data) {
 function boot() {
   const app = document.querySelector('main');
 
-  const renderers = { index: renderIndex, tournament: renderTournament, venues: (r, d) => renderVenue(r, d, Date.now()), schedule: renderPlayer };
+  // ?sim rehearsal clock: now() rides a localStorage offset the ◀▶ panel and
+  // ]/[ keys move. The kiosk already takes `now` as a parameter (renderVenue,
+  // kioskStatus), so derive.js is untouched; without ?sim everything below is
+  // dead weight a production page never runs.
+  const SIM_KEY = 'gitbracket.sim.offset';
+  const sim = new URLSearchParams(location.search).has('sim');
+  const simOffset = () => Number(localStorage.getItem(SIM_KEY)) || 0;
+  const now = sim ? () => Date.now() + simOffset() : () => Date.now();
+  let simPanel = null;
+
+  const renderers = { index: renderIndex, tournament: renderTournament, venues: (r, d) => renderVenue(r, d, now()), schedule: renderPlayer };
   const pageTitle = (r, d) => {
     if (r.view === 'index' || !d.t) return 'Bracket';
     if (r.view === 'schedule') {
@@ -555,17 +574,18 @@ function boot() {
       // Clock lives in an element the change-guard never re-renders; look it up
       // fresh each tick (the poll re-renders).
       clockTimer = setInterval(() => {
-        const now = Date.now();
+        const t = now();
         const el = document.getElementById('clock');
         if (el) {
           const tz = (data && data.tjson && data.tjson.timezone) || 'UTC';
-          el.textContent = `${dayShort(now, tz)} · ${fmtTime(now, tz)}`; // the kiosk clock carries its date
-          el.dateTime = new Date(now).toISOString(); // the instant, derived — the label stays wall clock
+          el.textContent = `${dayShort(t, tz)} · ${fmtTime(t, tz)}`; // the kiosk clock carries its date
+          el.dateTime = new Date(t).toISOString(); // the instant, derived — the label stays wall clock
         }
+        if (simPanel) simPanel(); // the sim panel's readout rides the kiosk tick
         // once a minute, re-follow from the last snapshot — statuses and the anchor
         // recompute against now, so the play is tracked through a quiet hour too
-        if (now - lastFollow >= FOLLOW_MS && data) {
-          lastFollow = now;
+        if (t - lastFollow >= FOLLOW_MS && data) {
+          lastFollow = t;
           render(route, data);
         }
       }, 1000);
@@ -601,6 +621,12 @@ function boot() {
 
   const render = (r, d) => {
     data = d;
+    // the first sim load aims the offset at the event's first match; it persists,
+    // so a reload keeps the rehearsal where it was
+    if (sim && !localStorage.getItem(SIM_KEY) && d.tjson) {
+      const off = simAimOffset(d.tjson, Date.now());
+      if (off !== null) localStorage.setItem(SIM_KEY, String(off));
+    }
     // full-width board layout keys off body.venue — present only on the venue view
     document.body.classList.toggle('venue', r.view === 'venues');
     document.title = pageTitle(r, d);
@@ -655,6 +681,39 @@ function boot() {
     jumpTo(a.dataset.jump);
   });
 
+  // The ?sim panel: ◀▶ step the offset, reset returns to real time (] and [
+  // mirror the buttons). It lives outside main, so no render touches it.
+  if (sim) {
+    const step = ms => {
+      localStorage.setItem(SIM_KEY, String(simOffset() + ms));
+      if (data && route) render(route, data);
+      if (simPanel) simPanel();
+    };
+    const aside = document.createElement('aside');
+    aside.id = 'sim-clock';
+    aside.setAttribute('role', 'group');
+    aside.setAttribute('aria-label', 'rehearsal clock');
+    const back = document.createElement('button'); back.type = 'button'; back.textContent = '◀'; back.setAttribute('aria-label', 'rehearsal clock 30 minutes back');
+    const fwd = document.createElement('button'); fwd.type = 'button'; fwd.textContent = '▶'; fwd.setAttribute('aria-label', 'rehearsal clock 30 minutes forward');
+    const reset = document.createElement('button'); reset.type = 'button'; reset.textContent = 'now'; reset.setAttribute('aria-label', 'return the rehearsal clock to real time');
+    const readout = document.createElement('span'); readout.setAttribute('aria-live', 'polite');
+    back.onclick = () => step(-30 * 60000);
+    fwd.onclick = () => step(30 * 60000);
+    reset.onclick = () => { localStorage.setItem(SIM_KEY, '0'); if (data && route) render(route, data); if (simPanel) simPanel(); };
+    simPanel = () => {
+      const t = now();
+      const tz = (data && data.tjson && data.tjson.timezone) || 'UTC';
+      readout.textContent = `${dayShort(t, tz)} · ${fmtTime(t, tz)}`;
+    };
+    aside.append(back, readout, fwd, reset);
+    document.body.appendChild(aside);
+    simPanel();
+    window.addEventListener('keydown', e => {
+      if (e.key === '[') { e.preventDefault(); step(-30 * 60000); }
+      else if (e.key === ']') { e.preventDefault(); step(30 * 60000); }
+    });
+  }
+
   navigate();
   window.addEventListener('hashchange', navigate);
   // a hidden tab stops polling entirely; a return fetches immediately, so the
@@ -669,5 +728,5 @@ if (typeof document !== 'undefined') boot();
 
 // CommonJS exports for node tests; the browser <script> ignores these.
 if (typeof module !== 'undefined') {
-  module.exports = { parseRoute, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer };
+  module.exports = { parseRoute, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset };
 }

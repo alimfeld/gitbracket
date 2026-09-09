@@ -1,25 +1,17 @@
 'use strict';
 
-// GitBracket match-day editor — vim-flavored keys over the whole tournament
-// buffer: every line is one match, j/k move, / narrows, Enter arms the result
-// entry (the day's primary act), v/t/a/b arm theirs. Live and sim share the
-// same editor — the mode only swaps the clock, the repo target, and whether
-// edits commit. Every edit validates, writes, and commits itself, so the
-// process can die at any instant with nothing lost.
-//
-// Interaction contract, no exceptions:
-//   browse keys never write; Enter arms the result entry, a verb key arms its
-//   target; the bottom input line is the only place Enter commits; Esc cancels
-//   anywhere.
+// GitBracket edit engine — the one write path every surface uses. The admin
+// daemon (the only editor) drives it: every edit validates, writes, and
+// commits itself, so the process can die at any instant with nothing lost.
+// The grammar (parsePayload) is shared with the daemon's result field, so
+// the browser and any typed entry can never drift.
 
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const readline = require('readline');
-const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, schedDays, fmtTime, matchLabel, bestOfOf, winnerIdx, dayKey, DATE_RE, catStatus, currentWave } = require('../site/derive.js');
-const { loadRepo, writeTournament, tournamentText, catCtx, byMatchOrder, winTarget, reachedWinner } = require('./tools.js');
+const { makeCat, isDone, sideLabel, schedDays, dayKey, DATE_RE, catStatus, currentWave, bestOfOf } = require('../site/derive.js');
+const { writeTournament, tournamentText, catCtx, winTarget, reachedWinner } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
-const { ship } = require('./publish.js');
 
 // ---------- pure logic (tests drive these on fixture repos) ----------
 
@@ -69,7 +61,7 @@ function applyClear(matches, matchId) {
 
 function applyVenue(matches, matchId, venueId) {
   return findMatch(matches, matchId, m => {
-    if (venueId == null) delete m.venue; // `v -` unschedules the court — undefined (terminal) and null (admin JSON) ride the same apply
+    if (venueId == null) delete m.venue; // null (admin JSON) unschedules the court
     else m.venue = venueId; // unknown venue + court double-booking are caught by validateRepo
   });
 }
@@ -93,7 +85,7 @@ function buildScheduled(hhmm, tz, date, now) {
   if (+h > 23 || +m > 59) return null;
   if (date !== undefined && !DATE_RE.test(date)) return null;
   // an impossible date (2026-02-30) passes this regex — the validator gate rejects it on write, like applyVenue's unknown venues
-  // the default date is "today" — the sim's clock when the sim passes one, the real clock live (sim and live share this editor)
+  // the default date is "today" — the caller's clock (the daemon's real clock; sim time never reaches an edit)
   const d = date || dayKey(now ?? Date.now(), tz);
   if (!d) return null; // dayKey: null on an unreadable timezone — never emit a "nullT…" scheduled string
   return `${d}T${h.padStart(2,'0')}:${m}:00`; // wall time — the tournament tz interprets it
@@ -119,7 +111,7 @@ function applyMove(matches, matchId, value) {
 // formatting keeps the commit diff to the one edited match.) apply receives
 // the category context so score can read the best-of target. An edit whose
 // result is byte-identical to the stored file changes nothing: no write, no
-// commit, the echo says so.
+// commit — execEdit reports unchanged.
 function writeEdit(siteRoot, repo, slug, catId, apply) {
   const info = repo.tournaments.get(slug);
   if (!info || !info.tjson) return { err: `unknown tournament ${slug}` };
@@ -163,67 +155,11 @@ function writeEdit(siteRoot, repo, slug, catId, apply) {
   return { file };
 }
 
-// A side's listing name: unresolved slots keep the long form — "Winner of
-// 8", "1st in Pool A" — and a resolved slot appends the compact seed in
-// parens, so the team reads first with its origin beside it: Ada / Grace (7W).
-function listingSide(side, ctx) {
-  const ids = resolveSide(side, ctx);
-  if (!ids) return sideLabel(side, ctx); // includes the TBD fallback
-  const seed = side.kind === 'match' ? `${side.match}${side.result === 'winner' ? 'W' : 'L'}`
-    : side.kind === 'pool' ? `${side.pool}${side.rank}` : null;
-  const name = teamLabel(ids, ctx);
-  return seed === null ? name : `${name} (${seed})`;
-}
-
-function formatMatchLine(cid, m, ctx, tz, stage, g) {
-  const t = schedTime(m, tz);
-  const time = t === null ? C.yellow('TBD'.padStart(8)) : C.dim(fmtTime(t, tz).padStart(8));
-  const v = m.venue || 'TBD';
-  const venue = (m.venue ? C.magenta : C.yellow)(v.padEnd(g.venuew || v.length));
-  // slot shape = best-of, same as the cards: real games render, the rest are ·
-  const parts = (m.games || []).map(g => `${g.a}-${g.b}`);
-  while (parts.length < (bestOfOf(m, ctx) || 1)) parts.push('·');
-  const r = m.result;
-  const score = !r || r.status === 'played' ? C.green(parts.join(' '))
-    : C.yellow(r.status === 'void' ? 'void' : `W/O side ${r.winner}`);
-  const s0 = listingSide(m.sides[0], ctx);
-  const s1 = listingSide(m.sides[1], ctx);
-  // decided matches color the winner green — the played score column already
-  // reads green, so a green winner name and its score are one win signal;
-  // void has no winner, nothing colored. Padding is plain-text arithmetic
-  // pasted after the colored label — ANSI codes never count into widths.
-  const w = winnerIdx(m);
-  const sides = (w === 0 ? C.green(s0) : s0) + ' '.repeat(Math.max(0, g.leftw - s0.length))
-    + C.dim(' vs ') + (w === 1 ? C.green(s1) : s1) + ' '.repeat(Math.max(0, g.rightw - s1.length));
-  const stagePad = ' '.repeat(Math.max(0, g.stagew - stage.length));
-  // the ref is "<category> <id>" — the row's identity, echoed back on the arm line
-  const ref = `${cid} ${m.id}`;
-  return `${C.bold(ref.padEnd(g.idw))}  ${C.dim(stage)}${stagePad}  ${sides}  ${time}  ${venue}  ${score}`;
-}
-
-// ---------- shallow ANSI paint (TTY only — piped output stays plain) ----------
-
-const C = (() => {
-  const tty = process.stdout.isTTY; // colors are no-ops when piped — callers need no guard
-  const w = (code, s) => tty ? `\x1b[${code}m${s}\x1b[0m` : s;
-  return { bold: s => w(1, s), dim: s => w(2, s), red: s => w(31, s), yellow: s => w(33, s), green: s => w(32, s), cyan: s => w(36, s), magenta: s => w(35, s) };
-})();
-
-// the cursor row's whole-line invert, re-asserted after every inner reset:
-// segment colors and dims fight the uniform row and read illegible, so they
-// drop — the bold ref stays — and the invert holds to the line end.
-const rowAttr = (code, s) => s.includes('\x1b[')
-  ? `\x1b[${code}m${s.replace(/\x1b\[2m|\x1b\[3[0-9]m/g, '').replace(/\x1b\[0m/g, `\x1b[0m\x1b[${code}m`)}\x1b[0m`
-  : s;
-
-// ---------- the editor buffer ----------
-
-const rowKey = (cat, m) => `${cat} ${m.id}`;
-
-// The current scoreable wave as entries — the one readiness predicate live
-// and sim share, so sim's clock only drives the browser display and sim n/x
-// behave exactly like live. Computed fresh every render, per derive.js's
-// memoization law — a corrected score surfaces on the next poll.
+// The current scoreable wave as entries — the one readiness predicate the
+// admin's score-wave (and the play-through test) shares: unplayed matches with
+// resolved sides at each category's earliest scheduled time. Computed fresh
+// every call, per derive.js's memoization law — a corrected score surfaces on
+// the next pass.
 const waveEntries = tjson => {
   const out = [];
   for (const cid of Object.keys(tjson.matches || {})) {
@@ -233,79 +169,17 @@ const waveEntries = tjson => {
   return out;
 };
 
-// The playable set as row keys, for the board's ▶ flag and n/N movement.
-function livePlayable(tjson) {
-  return new Set(waveEntries(tjson).map(e => rowKey(e.cat, e.m)));
-}
+// ---------- the shared grammar ----------
 
-// One flat, time-ordered buffer of the whole tournament — the day's running
-// order; unscheduled matches go last, still editable.
-function buildRows(tjson, playable) {
-  const tz = tjson.timezone || 'UTC';
-  const rows = [];
-  for (const cid of Object.keys(tjson.matches || {})) {
-    const ctx = catCtx(tjson, cid);
-    for (const m of tjson.matches[cid] || []) {
-      if (!m) continue;
-      const t = schedTime(m, tz);
-      rows.push({ cat: cid, m, ctx, stage: matchLabel(m, ctx), t: t === null ? Infinity : t, playable: playable.has(rowKey(cid, m)) });
-    }
-  }
-  rows.sort(byMatchOrder);
-  return rows;
-}
-
-// Render every row once — the display lines and the filter corpus in the
-// same pass, so a filter can never match text the board doesn't show. The
-// corpus is the plain text: ANSI codes are formatting, not content, and a
-// search for "m" must not match every line via its reset sequence.
-const strip = l => l.replace(/\x1b\[[0-9;]*m/g, '');
-
-function renderLines(rows, tz) {
-  // column widths for the shared match-line format
-  const g = { idw: 0, stagew: 0, leftw: 0, rightw: 0, venuew: 0 };
-  for (const r of rows) {
-    g.idw = Math.max(g.idw, `${r.cat} ${r.m.id}`.length);
-    g.stagew = Math.max(g.stagew, r.stage.length);
-    g.leftw = Math.max(g.leftw, listingSide(r.m.sides[0], r.ctx).length);
-    g.rightw = Math.max(g.rightw, listingSide(r.m.sides[1], r.ctx).length);
-    g.venuew = Math.max(g.venuew, (r.m.venue || 'TBD').length);
-  }
-  return rows.map(r => formatMatchLine(r.cat, r.m, r.ctx, tz, r.stage, g));
-}
-
-// The view: rows + rendered lines + the filtered subset. The filter is a
-// case-insensitive substring over the plain rendered line — no field corpus,
-// so it covers refs, names, venues, stages, and times with one rule.
-function makeView(tjson, playable, query) {
-  const rows = buildRows(tjson, playable);
-  const lines = renderLines(rows, tjson.timezone || 'UTC');
-  const plain = lines.map(strip);
-  const q = query ? query.toLowerCase() : null;
-  const filtered = q
-    ? rows.map((r, i) => ({ r, i })).filter(({ i }) => plain[i].toLowerCase().includes(q))
-    : rows.map((r, i) => ({ r, i }));
-  return { rows, lines, filtered, query: q, tz: tjson.timezone || 'UTC' };
-}
-
-// ---------- editor grammar (pure — the shell executes actions) ----------
-
-// The cursor is an identity (cat + match id), never an index: a time edit
-// reorders the buffer, a filter narrows it, but the selected match survives.
-function cursorIndex(view, state) {
-  if (state.cursorId === null) return view.filtered.length ? 0 : -1;
-  const i = view.filtered.findIndex(e => rowKey(e.r.cat, e.r.m) === state.cursorId);
-  return i === -1 && view.filtered.length ? 0 : i;
-}
-
-// Payload grammar per verb — one grammar for the arm line and the sim.
-// Grammar errors are caught here, before any I/O; data errors (unknown venue,
-// impossible date) belong to the validator.
+// Payload grammar per edit kind — the admin daemon's result field parses with
+// it, so typed entries and shaped JSON can never drift. Grammar errors are
+// caught here, before any I/O; data errors (unknown venue, impossible date)
+// belong to the validator.
 function parsePayload(kind, tokens, tz, now) {
   if (kind === 'result') {
     // one outcome grammar: games (bare) · wo a · void · empty clears — the
     // shape rides the value, so commit kinds keep score/walkover/void
-    if (!tokens.length) return { value: { shape: 'clear' } }; // empty payload clears — the Enter-armed default
+    if (!tokens.length) return { value: { shape: 'clear' } }; // empty payload clears
     const head = tokens[0];
     if (head === 'wo') {
       const side = tokens[1];
@@ -328,7 +202,7 @@ function parsePayload(kind, tokens, tz, now) {
     return { value: tokens[0] };
   }
   if (SIDE_VERBS[kind] !== undefined) {
-    // the a/b key fixes the side; the payload is shape-only: players <ids> | pool <pool> <rank> | match <id> winner|loser —
+    // the a/b verb fixes the side; the payload is shape-only: players <ids> | pool <pool> <rank> | match <id> winner|loser —
     // validity is the validator's (unknown ids, consumed-twice, range, cycles, double-books)
     const si = SIDE_VERBS[kind];
     const shape = tokens[0];
@@ -370,8 +244,8 @@ function parsePayload(kind, tokens, tz, now) {
   return { value: iso };
 }
 
-// Side is two verbs (a key per side) so the side is known when armed — the
-// prefill can then show the slot being edited. SIDE_VERBS maps verb → side index.
+// Side is two verbs (side-a / side-b) so an edit names the side it rewrites —
+// SIDE_VERBS maps verb → side index.
 const SIDE_VERBS = { 'side-a': 0, 'side-b': 1 };
 
 // The result verb folds score / walkover / void / clear into one entry — the
@@ -390,433 +264,27 @@ function applyFor(verb, matchId, value) {
     : c => applyTime(c, matchId, value); // time — undefined unschedules
 }
 
-const VERB_KEYS = { v: 'venue', t: 'time', a: 'side-a', b: 'side-b' };
-
-// The armed payload for a verb: the current value on record, canonicalized so
-// an unedited Enter stays byte-identical (writeEdit's "unchanged" no-op) —
-// never a rendered label, which would rewrite the slot on a no-op confirm.
-// Time drops the date only when it equals the day the clock would derive, so
-// the same hh:mm round-trips; a different stored date must be shown or Enter
-// would silently move the match to today. An empty value arms an empty field.
-function prefillFor(verb, m, tz, now) {
-  if (verb === 'result') {
-    // the whole outcome serialized — Enter on it round-trips, never rewrites;
-    // an in-play match arms empty, so Enter-Enter on it is a clear-of-nothing
-    if (m.games) return m.games.map(g => `${g.a}-${g.b}`).join(' ');
-    const r = m.result;
-    if (r && r.status === 'walkover') return `wo ${r.winner}`;
-    if (r && r.status === 'void') return 'void';
-    return '';
-  }
-  if (verb === 'venue') return m.venue || '';
-  if (verb === 'time') {
-    const s = m.scheduled;
-    if (!s) return '';
-    const date = s.slice(0, 10);
-    return (date === dayKey(now, tz) ? '' : date + ' ') + s.slice(11, 16);
-  }
-  const si = SIDE_VERBS[verb];
-  if (si !== undefined) {
-    const side = m.sides && m.sides[si];
-    if (!side) return '';
-    return side.kind === 'players' ? `players ${side.ids.join(' ')}`
-      : side.kind === 'pool' ? `pool ${side.pool} ${side.rank}`
-      : side.kind === 'match' ? `match ${side.match} ${side.result}` : '';
-  }
-  return '';
-}
-
 // Conventional-commit messages per edit kind — grep-able match-day history:
 //   git log --grep='^score('
 function commitMessage(kind, slug, cat, matchId, detail) {
   return `${kind}(${slug}): ${cat}/${matchId} ${detail}`;
 }
 
-// One-line summary of what changed — mirror it in the commit message and the
-// echo. Keyed off the edit kind, never the match state, so a venue or time
+// One-line summary of what changed — mirror it in the commit message.
+// Keyed off the edit kind, never the match state, so a venue or time
 // edit on an already-decided match reports the move, not the result. side
 // carries value+ctx: the applied side's label, e.g. "side a → Winner of 8". A
 // side op on a decided match keeps the stored games/result for the NEW team,
 // so the detail flags it — history must never read as a silent rewrite.
 function editDetail(kind, m, value, ctx) {
-  return kind === 'result' ? (value.shape === 'score' ? (m.games || []).map(gg => `${gg.a}-${gg.b}`).join(' · ') // dashes — the echo mirrors the board's score column
+  return kind === 'result' ? (value.shape === 'score' ? (m.games || []).map(gg => `${gg.a}-${gg.b}`).join(' · ') // dashes — the detail reads like the board column
       : value.shape === 'walkover' ? `side ${value.winner} wins by walkover`
       : value.shape === 'void' ? 'void'
       : '→ TBD') // a clear returns the match to the board
     : kind === 'time' ? (m.scheduled === undefined ? '→ TBD' : `→ ${m.scheduled}`)
     : kind === 'venue' ? `→ ${m.venue === undefined ? 'TBD' : m.venue}`
     : kind === 'move' ? `→ ${value.time ?? 'TBD'} @ ${value.venue ?? 'TBD'}`
-    : `side ${value.si === 0 ? 'a' : 'b'} → ${sideLabel(value.side, ctx)}${isDone(m) ? ' (result kept)' : ''}`; // side — the a/b keys carry value+ctx
-}
-
-// The post-edit confirmation: sides first (so you see you touched the right
-// match), then the detail, then the short sha as a dimmed receipt. The git
-// commit message stays machine-facing and unchanged — only the echo is for eyes.
-function echoLine(kind, m, ctx, sha, value) {
-  const d = editDetail(kind, m, value, ctx);
-  const sum = `${listingSide(m.sides[0], ctx)} vs ${listingSide(m.sides[1], ctx)} → ${d}${kind === 'result' && value.shape === 'score' && isDone(m) ? ' — done' : ''}`;
-  return `${sum}  ${C.dim(`[${sha}]`)}`;
-}
-
-// The : grammar keeps only what the single keys can't: publish, use, status.
-// step() always prefixes '/', so parseCmd never sees a bare word.
-const CMDS = ['publish', 'use', 'status'];
-function parseCmd(line) {
-  const [raw, ...args] = line.trim().split(/\s+/);
-  const head = raw.startsWith('/') ? raw.slice(1) : raw;
-  return { kind: CMDS.includes(head) ? head : 'unknown', args };
-}
-
-// ---------- the editor state machine ----------
-
-function helpText(sim) {
-  const k = s => s.padEnd(12);
-  const what = v => PROMPT_HINT.arm[v].split(' — ')[0]; // the arm hint's what side — the how (keys) belongs to the hint bar only
-  const lines = [
-    C.bold('GitBracket — the match-day editor. Every line is one match.'), '',
-    C.bold('move'),
-    `  ${k('j / ↓')} down`,
-    `  ${k('k / ↑')} up`,
-    `  ${k('n / N')} next / previous playable (▶)`,
-    `  ${k('g / G')} top / bottom`, '',
-    C.bold('find'),
-    `  ${k('/')} narrow to matching lines — enter keeps, esc clears it`, '',
-    `${C.bold('act')} — keys act on the selected line`,
-    `  ${k('enter')} result: ${what('result')}`,
-    `  ${k('t')} time: ${what('time')}`,
-    `  ${k('v')} venue: ${what('venue')}`,
-    `  ${k('a / b')} side a / b: ${what('side-a')}`, '',
-    C.bold('save'),
-    `  ${k('enter')} saves — the only key that writes`,
-    `  ${k('esc')} cancels anywhere`, '',
-    C.bold('commands'),
-    ...(sim ? [] : [`  ${k(':publish')} ship site/ to the domain`]),
-    `  ${k(':status')} validator + git status`,
-    `  ${k(':use <slug>')} switch tournament`,
-  ];
-  if (sim) lines.push('', C.bold('sim'),
-    `  ${k(']')} +30 min`, // [ and ] can't take key brackets — []] / [[] would read as garbage; the key column marks them
-    `  ${k('[')} −30 min`,
-    `  ${k('x')} score the ▶ matches (a filter narrows the set)`);
-  lines.push('', C.dim('q quits — every edit validates, writes, and commits itself'));
-  return lines.join('\n');
-}
-
-// the how shared by every arm hint — the what differs per verb
-const HOW = ' — [enter] saves · [esc] cancels';
-const SIDE_HINT = `format players <ids> · pool <pool> <rank> · match <id> winner|loser${HOW}`;
-
-const PROMPT_HINT = {
-  browse: '[enter] result · [?] help · [q] quit',
-  // expected entries first — the what — enter/esc trail as the how
-  arm: { result: `format 21-19 (11-9 …) · wo a · void · empty clears${HOW}`, venue: `format venue id, e.g. court-2 · empty clears${HOW}`, time: `format hh:mm · (date hh:mm) · empty clears${HOW}`, 'side-a': SIDE_HINT, 'side-b': SIDE_HINT },
-  filter: 'type to narrow · [enter] keeps · [esc] clears',
-  cmd: '[enter] runs · [esc] cancels',
-  report: '[esc] back',
-};
-
-// One keypress in. Pure: returns the next state and, when the key completes
-// an edit or a command, the action the shell must execute. The view is fresh
-// (rebuilt before each keypress), so the playable set reflects every edit.
-function step(state, key, view, now) {
-  const ch = key.ch;
-  const name = key.name;
-  const ns = { ...state, msg: null };
-  if (key.ctrl && name === 'c') return { state: { ...ns, quit: true }, action: null };
-
-  const cur = cursorIndex(view, ns);
-  const rowAt = i => view.filtered[i] ? view.rows[view.filtered[i].i] : null;
-
-  if (ns.mode === 'report') {
-    if (ch === 'q' || name === 'escape') return { state: { ...ns, mode: 'browse', report: null }, action: null };
-    return { state: ns, action: null };
-  }
-
-  if (ns.mode === 'filter') {
-    if (name === 'escape') return { state: { ...ns, mode: 'browse', query: null }, action: null };
-    if (name === 'backspace') return { state: { ...ns, query: ns.query ? ns.query.slice(0, -1) : '' }, action: null };
-    if (name === 'return') return { state: { ...ns, mode: 'browse' }, action: null };
-    if (ch && ch.length === 1) return { state: { ...ns, query: (ns.query || '') + ch }, action: null };
-    return { state: ns, action: null };
-  }
-
-  if (ns.mode === 'cmd') {
-    if (name === 'escape') return { state: { ...ns, mode: 'browse', cmdline: '' }, action: null };
-    if (name === 'backspace') return { state: { ...ns, cmdline: ns.cmdline.slice(0, -1) }, action: null };
-    if (name === 'return') {
-      const cmd = parseCmd('/' + ns.cmdline);
-      const args = cmd.args;
-      if (cmd.kind === 'unknown') return { state: { ...ns, mode: 'browse', cmdline: '', msg: { text: `unknown command ${ns.cmdline.split(/\s+/)[0]} — [?] for help`, color: 'red' } }, action: null };
-      if (cmd.kind === 'publish') return { state: { ...ns, mode: 'browse', cmdline: '' }, action: { kind: 'publish' } };
-      if (cmd.kind === 'use') return { state: { ...ns, mode: 'browse', cmdline: '', cursorId: null }, action: { kind: 'use', slug: args[0] } };
-      if (cmd.kind === 'status') return { state: { ...ns, mode: 'browse', cmdline: '' }, action: { kind: 'status' } };
-    }
-    if (ch && ch.length === 1) return { state: { ...ns, cmdline: (ns.cmdline + ch).slice(0, 60) }, action: null };
-    return { state: ns, action: null };
-  }
-
-  if (ns.mode === 'arm') {
-    const pos = Math.min(ns.pos ?? ns.payload.length, ns.payload.length);
-    if (name === 'escape') return { state: { ...ns, mode: 'browse', verb: null, payload: '', pos: 0 }, action: null };
-    if (key.ctrl && name === 'u') return { state: { ...ns, payload: ns.payload.slice(pos), pos: 0 }, action: null }; // kill to start — clear a prefill and type fresh
-    if (key.ctrl && name === 'k') return { state: { ...ns, payload: ns.payload.slice(0, pos) }, action: null }; // kill to the end — re-type the tail
-    if (key.ctrl && name === 'w') {
-      const left = ns.payload.slice(0, pos).replace(/[^\s]+\s*$/, ''); // kill the word back — the caret may be mid-field
-      return { state: { ...ns, payload: left + ns.payload.slice(pos), pos: left.length }, action: null };
-    }
-    if (name === 'backspace') return pos > 0 ? { state: { ...ns, payload: ns.payload.slice(0, pos - 1) + ns.payload.slice(pos), pos: pos - 1 }, action: null } : { state: ns, action: null };
-    if (name === 'delete') return pos < ns.payload.length ? { state: { ...ns, payload: ns.payload.slice(0, pos) + ns.payload.slice(pos + 1) }, action: null } : { state: ns, action: null };
-    if (name === 'left') return { state: { ...ns, pos: Math.max(0, pos - 1) }, action: null };
-    if (name === 'right') return { state: { ...ns, pos: Math.min(ns.payload.length, pos + 1) }, action: null };
-    if (name === 'home' || (key.ctrl && name === 'a')) return { state: { ...ns, pos: 0 }, action: null };
-    if (name === 'end' || (key.ctrl && name === 'e')) return { state: { ...ns, pos: ns.payload.length }, action: null };
-    if (name === 'return') {
-      if (cur === -1) return { state: { ...ns, msg: { text: 'no match to edit', color: 'red' } }, action: null };
-      const row = rowAt(cur);
-      const p = parsePayload(ns.verb, ns.payload.trim().split(/\s+/).filter(Boolean), view.tz, now);
-      if (p.err) return { state: { ...ns, msg: { text: p.err, color: 'yellow' } }, action: null };
-      return { state: { ...ns, mode: 'browse', verb: null, payload: '', pos: 0 }, action: { kind: 'edit', verb: ns.verb, cat: row.cat, matchId: String(row.m.id), value: p.value } };
-    }
-    if (ch && ch.length === 1) return { state: { ...ns, payload: ns.payload.slice(0, pos) + ch + ns.payload.slice(pos), pos: pos + 1 }, action: null };
-    return { state: ns, action: null };
-  }
-
-  // browse — Esc clears the filter (the universal cancel key)
-  if (name === 'escape') return { state: { ...ns, query: null }, action: null };
-  // Enter arms the result entry — the day's primary act, one key from the
-  // target line: cursor, Enter, type, Enter. The prefill is the current
-  // outcome; an unplayed match arms empty (empty-clear = a no-op, never an
-  // error), so Enter-Enter reads a row without ever writing.
-  if (name === 'return') {
-    if (cur === -1) return { state: { ...ns, msg: { text: 'no match to edit', color: 'red' } }, action: null };
-    const m = rowAt(cur).m;
-    const pre = prefillFor('result', m, view.tz, now);
-    return { state: { ...ns, mode: 'arm', verb: 'result', payload: pre, pos: pre.length }, action: null };
-  }
-  if (name === 'down' || ch === 'j') return { state: { ...ns, cursorId: nextRow(view, ns, +1, () => true) }, action: null };
-  if (name === 'up' || ch === 'k') return { state: { ...ns, cursorId: nextRow(view, ns, -1, () => true) }, action: null };
-  if (ch === 'g') return { state: { ...ns, cursorId: view.filtered.length ? rowKey(view.rows[view.filtered[0].i].cat, view.rows[view.filtered[0].i].m) : null }, action: null };
-  if (ch === 'G') return { state: { ...ns, cursorId: view.filtered.length ? rowKey(view.rows[view.filtered[view.filtered.length - 1].i].cat, view.rows[view.filtered[view.filtered.length - 1].i].m) : null }, action: null };
-  if (ch === 'n') return { state: { ...ns, cursorId: nextRow(view, ns, +1, r => r.playable) }, action: null };
-  if (ch === 'N') return { state: { ...ns, cursorId: nextRow(view, ns, -1, r => r.playable) }, action: null };
-  if (ch === '/') return { state: { ...ns, mode: 'filter', query: '' }, action: null };
-  if (ch === ':') return { state: { ...ns, mode: 'cmd', cmdline: '' }, action: null };
-  if (ch === '?') return { state: { ...ns, mode: 'report', report: helpText(ns.sim), msg: null }, action: null };
-  if (ch === 'q') return { state: { ...ns, quit: true }, action: null };
-  if (VERB_KEYS[ch]) {
-    if (cur === -1) return { state: { ...ns, msg: { text: 'no match to edit', color: 'red' } }, action: null };
-    const m = rowAt(cur).m;
-    // arming prefills the value on record (score games, the venue, the time, a side's
-    // slot, a walkover's letter) so an edit is an amend — Enter on the untouched
-    // prefill stays a byte-identical "unchanged" no-op, never a rewrite
-    const pre = prefillFor(VERB_KEYS[ch], m, view.tz, now);
-    return { state: { ...ns, mode: 'arm', verb: VERB_KEYS[ch], payload: pre, pos: pre.length }, action: null };
-  }
-  return { state: ns, action: null };
-}
-
-// Movement in one loop: j/k walk every row, n/N stop only on a playable one —
-// the same scan, the stop predicate is the only difference.
-function nextRow(view, state, dir, stop) {
-  const n = view.filtered.length;
-  for (let k = cursorIndex(view, state) + dir; dir > 0 ? k < n : k >= 0; k += dir) {
-    const r = view.rows[view.filtered[k].i];
-    if (stop(r)) return rowKey(r.cat, r.m);
-  }
-  return state.cursorId;
-}
-
-// ---------- the board (rendering) ----------
-
-// The whole screen as text — pure, so a test can pin layout. The match list
-// is windowed to fit `rows` (the terminal pane height) so the header is never
-// cut; the chrome (header, blanks, msg, input, hint) is counted here where it
-// lives, and the input row is always reserved — drawn blank when idle — so
-// arming a verb, filter, or command never shifts the match window; msg stays
-// dynamic (multi-line error text is worth the reflow). No trailing newline
-// would scroll a full pane. The window is sized in *physical* rows (what the
-// terminal really renders after auto-wrap), so a narrow pane that wraps the
-// wide match lines still keeps the header on screen.
-
-// physical rows a rendered line occupies after auto-wrap — ANSI is stripped
-// (formatting, not width) and this board's glyphs are single-width, so plain
-// length / cols; over-reporting wide glyphs only shrinks the window, never
-// overflows it. Newlines count each of their lines honestly — a multi-line
-// msg must reserve all its rows — and every rendered line costs at least one
-// row, a blank included.
-const physLine = (s, cols) => s.split('\n').reduce((n, l) => n + Math.max(1, Math.ceil(strip(l).length / (cols || 80))), 0);
-
-// physical rows each filtered match line occupies, slot included
-function matchHeights(view, cols) {
-  return view.filtered.map((e, i) => physLine((e.r.playable ? '▶' : ' ') + ' ' + view.lines[e.i], cols));
-}
-
-// physical rows the chrome occupies (header + two blanks + msg + input + hint)
-// — input and msg slots are always reserved (blank when idle), so arming a
-// verb or acknowledging an edit never pushes a match off the window
-function listBudget(header, msg, hint, rows, cols) {
-  const chrome = physLine(header, cols) + 2 + physLine(msg, cols) + 1 + physLine(hint, cols);
-  return rows ? rows - chrome : 0;
-}
-
-// the status line as text — shared by the budget math (its wrap height counts
-// against the list) and the render, so the two can't drift
-function headerLine(info, state, view) {
-  // an active filter is a view state, so it lives on the status line — the
-  // filter input slot already echoes it while typing, so skip that mode
-  const filterNote = state.mode !== 'filter' && state.query
-    ? ` · ${C.dim('/' + state.query + ' — ' + view.filtered.length + (view.filtered.length === 1 ? ' match' : ' matches'))}`
-    : '';
-  return `${C.bold(C.cyan(info.title))} · ${info.mode} ${C.cyan(info.clock)} · ${info.played}/${info.total} played${info.note || ''}${filterNote}`;
-}
-
-// The window from an anchor, extended greedily down to fill the budget. A
-// marker row never reads 1: the lone hidden match above takes the row itself,
-// and a bottom marker's row always displaces a match (so its count is >= 2) —
-// every cue is the exact scrolled-off count, upMore + visible + downMore = n.
-function windowFrom(start, mw, budget, n) {
-  if (n === 0) return { start: 0, e: 0, upMore: 0, downMore: 0 };
-  let s = start === 1 ? 0 : start; // a lone hidden match above takes the marker's row
-  let used = s ? 1 : 0, e = s;
-  while (e < n && used + mw[e] <= budget) { used += mw[e]; e++; }
-  let downMore = n - e;
-  if (downMore > 0) { // a bottom marker wants its row — re-fit with both; the count it shows is >= 2
-    let e2 = s, used2 = (s ? 1 : 0) + 1;
-    while (e2 < n && used2 + mw[e2] <= budget) { used2 += mw[e2]; e2++; }
-    e = e2;
-    downMore = n - e;
-  }
-  return { start: s, e, upMore: s, downMore };
-}
-
-// `windowFrom` plus the one safety: a marker never hides the cursor — on a pane
-// too small for cursor + markers, drop the cues rather than lose the selection.
-function computeWindow(start, cur, mw, budget, n) {
-  let w = windowFrom(start, mw, budget, n);
-  if (cur >= w.e) {
-    // pane too small for cursor + markers — show the cursor, drop the cues
-    let e = w.start, used = 0;
-    while (e < n && used + mw[e] <= budget) { used += mw[e]; e++; }
-    w = { start: w.start, e, upMore: 0, downMore: 0 };
-  }
-  return w;
-}
-
-// Anchored scroll: keep the window put unless the cursor leaves it, then move
-// it just enough to bring the cursor back — the cursor rides the top scrolling
-// up, the bottom scrolling down, markers included — the model every pager and
-// Vim use. The simple rule the re-centering fit kept tripping over.
-function reconcileTop(winTop, cur, mw, budget, n) {
-  if (n === 0) return 0;
-  if (winTop == null) return Math.max(0, cur);
-  const s = Math.min(winTop, n - 1);
-  if (cur < s) return cur; // cursor above the window: ride the top
-  if (cur >= windowFrom(s, mw, budget, n).e) {
-    // cursor below the window: scroll down to the smallest top that shows it
-    // with its markers — the guard-free end, so the border keeps its cue.
-    // ponytail: linear scan, O(n·window) worst case — fine while a tournament
-    // is dozens of matches; bisect if it ever needs to be huge.
-    for (let s2 = s + 1; s2 < n; s2++) {
-      if (cur < windowFrom(s2, mw, budget, n).e) return s2;
-    }
-    return n - 1; // unreachable unless the pane fits less than one match
-  }
-  return s; // visible: stay put
-}
-
-function boardText(state, view, info, rows, cols) {
-  const input = inputLine(state, view);
-  const header = headerLine(info, state, view);
-  const msg = state.msg ? C[state.msg.color](state.msg.text) : '';
-  // an armed action owns the bottom of the screen — the hint brightens and the
-  // input line goes bold
-  const hint = state.mode === 'arm' ? hintLine(state) : C.dim(hintLine(state));
-
-  const lines = [header];
-  if (state.mode === 'report') {
-    lines.push('', ...(state.report || '').split('\n'));
-  } else {
-    lines.push('');
-    const cur = cursorIndex(view, state);
-    const n = view.filtered.length;
-    const mw = matchHeights(view, cols);
-    const total = mw.reduce((a, b) => a + b, 0);
-    const budget = listBudget(header, msg, hint, rows, cols);
-    // anchored window: start rides state.winTop (set by render's reconcile), so
-    // the window stays put unless the cursor leaves it — no re-centering
-    let { start, e: end, upMore, downMore } = !rows || total <= budget
-      ? { start: 0, e: n, upMore: 0, downMore: 0 }
-      : computeWindow(state.winTop == null ? cur : state.winTop, cur, mw, budget, n);
-    // the clip-edge cue: the exact scrolled-off count — never 1: a lone match
-    // above takes the marker's row, and the bottom marker's own row displaces
-    // a match before it can announce, so its count always reads 2 or more
-    if (upMore >= 2) lines.push(C.dim(`↑ ${upMore} more`));
-    for (let i = start; i < end; i++) {
-      const e = view.filtered[i];
-      const r = view.rows[e.i];
-      const here = i === cur;
-      // the one-char slot: the playable flag — the cursor line inverts
-      // whole, colors and dims dropped under the attribute so the row reads
-      // uniform and legible, the bold ref stays; played lines render as-is
-      let line = (r.playable ? '▶' : ' ') + ' ' + view.lines[e.i];
-      if (here) line = rowAttr(7, line);
-      lines.push(line);
-    }
-    if (downMore >= 2) lines.push(C.dim(`↓ ${downMore} more`));
-  }
-  const bodyEnd = lines.length; // spare height pads after the body, so the bottom block anchors to the pane
-  lines.push('');
-  if (msg) lines.push(msg);
-  // the input row is always drawn — idle it reads as the reserved blank, so a
-  // filled-in field appears in place and the hint never moves
-  lines.push(input ? (state.mode === 'arm' ? `\x1b[1m${input}\x1b[0m` : input) : ''); // bold marks the fill-in field — the ref is bold too, so it reads as one system, not two
-  lines.push(hint);
-  // spare pane height pads above the bottom block — the hint always owns the
-  // last row, and no state (msg, arm, filter) ever shifts the window
-  if (rows) {
-    const spare = rows - lines.reduce((n, l) => n + physLine(l, cols), 0);
-    if (spare > 0) lines.splice(bodyEnd, 0, ...Array(spare).fill(''));
-  }
-  return lines.join('\n');
-}
-
-function inputLine(state, view) {
-  // no caret glyph — the terminal's own cursor is shown at the caret cell in
-  // render (arm/filter/cmd only); browse stays cursorless with the inverted row
-  if (state.mode === 'arm') {
-    const cur = cursorIndex(view, state);
-    const row = cur !== -1 ? view.rows[view.filtered[cur].i] : null;
-    const vb = state.verb === 'side-a' ? 'side a' : state.verb === 'side-b' ? 'side b' : state.verb; // the arm line reads "side a", not the verb id
-    const target = row ? `${vb} ${rowKey(row.cat, row.m)} — ${listingSide(row.m.sides[0], row.ctx)} vs ${listingSide(row.m.sides[1], row.ctx)}` : `${vb} (no match)`;
-    return `${target} → ${state.payload}`;
-  }
-  if (state.mode === 'filter') {
-    const count = view.filtered.length;
-    return count === 0 ? `/ ${state.query || ''} — no match` : `/ ${state.query || ''} — ${count} match${count === 1 ? '' : 'es'}`;
-  }
-  if (state.mode === 'cmd') return `: ${state.cmdline}`;
-  return '';
-}
-
-// the native cursor's cell: the input line sits directly above the hint, and
-// both occupy physLine rows; the caret is a plain-text offset into the input
-// length, split into row + column across its wraps. The terminal draws the
-// cursor there — none is rendered in the text. ponytail: an offset exactly at
-// a row boundary (caret at the end of a full-width line) lands on the next
-// row's first cell, where typing will wrap; some terminals park at the last
-// cell until the next key — cosmetic, accept.
-function caretCell(input, hint, offset, rows, cols) {
-  const ih = physLine(input, cols), hh = physLine(hint, cols);
-  return { row: rows - hh - ih + 1 + Math.floor(offset / cols), col: offset % cols + 1 };
-}
-
-function hintLine(state) {
-  // Esc clears the filter only in browse — the static browse hint can't say so
-  if (state.mode === 'browse' && state.query) return '[enter] result · [esc] clears the filter · [?] help · [q] quit';
-  // sim keys live only in the help screen — the status line stays sparse
-  const base = PROMPT_HINT[state.mode];
-  if (typeof base === 'string') return base;
-  return base[state.verb];
+    : `side ${value.si === 0 ? 'a' : 'b'} → ${sideLabel(value.side, ctx)}${isDone(m) ? ' (result kept)' : ''}`; // side — the a/b verbs carry value+ctx
 }
 
 // ---------- git + repo I/O (thin shell, not unit-tested) ----------
@@ -828,109 +296,6 @@ function git(root, args) {
   return { code: r.status === 0 ? 0 : 1, out: r.stdout || '', err: r.stderr || '' };
 }
 
-function validateText(repo) {
-  const { errs, warns } = validateRepo(repo);
-  const lines = [...warns.map(w => C.yellow(`warn: ${w}`)), ...errs.map(e => C.red(`error: ${e}`))];
-  if (!lines.length) return C.green('validate: ok');
-  return lines.join('\n') + (errs.length ? C.red(`\n${errs.length} error(s)`) : C.yellow(` (${warns.length} warning(s))`));
-}
-
-function gitStatus(root) {
-  const lines = [];
-  const s = git(root, ['status', '-sb']);
-  if (s.code === 0 && s.out.trim()) lines.push(s.out.trim());
-  // Unpushed commits, one per line; a missing origin/main (clone, offline)
-  // silences the section the same way the prompt indicators used to.
-  const unpushed = git(root, ['log', '--oneline', 'origin/main..HEAD']);
-  if (unpushed.code === 0) for (const l of unpushed.out.trim().split('\n')) if (l) lines.push(`  ${l}`);
-  return lines.join('\n') || '(clean)';
-}
-
-// Compare the one file this session edits — tournaments/<slug>.json — with
-// what the live domain serves, so :status answers "is what I have what's
-// live?" without assuming how it got there. The file is a few KB, so a GET +
-// text compare is the whole check. Offline is "unknown", never "stale".
-async function liveText(siteRoot, slug) {
-  if (slug === null) return '';
-  let domain;
-  try { domain = fs.readFileSync(path.join(siteRoot, 'CNAME'), 'utf8').trim(); }
-  catch { return 'live: no site/CNAME — unknown'; }
-  const rel = `tournaments/${slug}.json`;
-  let body;
-  try {
-    const res = await fetch(`https://${domain}/${rel}`, { signal: AbortSignal.timeout(3000) });
-    if (!res.ok) return `live: HTTP ${res.status} for /${rel}`;
-    body = await res.text();
-  } catch {
-    return `live: can't reach ${domain} (offline — unknown)`;
-  }
-  if (body === fs.readFileSync(path.join(siteRoot, rel), 'utf8')) return `live: ${slug} is current`;
-  return `live: ${rel} differs — publish to converge`;
-}
-
-// ---------- action execution (the shell; edits commit per AGENTS.md) ----------
-
-// The edit funnel's only exit: validate, write, and (live) commit — the echo
-// or the rolled-back error becomes the board's message line.
-function execEdit(state, verb, cat, matchId, value) {
-  const { root, siteRoot, repo, slug } = state;
-  const info = repo.tournaments.get(slug);
-  const ctx = catCtx(info.tjson, cat);
-  const m = ctx.byId.get(Number(matchId)); // the same object writeEdit mutates in place
-  const preStatus = m && m.result && m.result.status; // what a clear removes — its commit kind matches it
-  const res = writeEdit(siteRoot, repo, slug, cat, applyFor(verb, matchId, value));
-  // returns carry both the render-facing text/color and the structured facts
-  // (error, errors, unchanged, sha) the admin daemon JSON-ifies
-  if (res.err) return { text: res.err, color: 'red', error: res.err };
-  if (res.errs) return { text: res.errs.join('\n') + '\nnot written — validation error(s), file rolled back', color: 'red', errors: res.errs };
-  if (res.unchanged) return { text: echoLine(verb, m, ctx, 'unchanged', value), color: 'yellow', unchanged: true }; // same data — nothing written, nothing committed
-  // the git kind names what happened: a result edit keeps its shape kind, a
-  // clear takes the kind of what it removed — greps like ^score( still find it
-  const kind = verb === 'result'
-    ? (value.shape === 'clear' ? (preStatus === 'walkover' ? 'walkover' : preStatus === 'void' ? 'void' : 'score') : value.shape)
-    : SIDE_VERBS[verb] !== undefined ? 'side' : verb;
-  if (state.commit) {
-    const file = res.file; // writeEdit's own byte-identical write target
-    const detail = editDetail(verb, m, value, ctx);
-    const msg = commitMessage(kind, slug, cat, matchId, detail);
-    git(root, ['add', path.relative(root, file)]);
-    // pathspec commit: only this edit's file rides in — anything else the
-    // operator staged stays staged, never swept into a match-day commit
-    const c = git(root, ['commit', '-m', msg, '--', path.relative(root, file)]);
-    if (c.code !== 0) {
-      const msg = `${path.relative(root, file)} written but the commit failed:\n${c.err}\n(file staged — commit it manually)`;
-      return { text: msg, color: 'red', error: msg };
-    }
-    const sha = git(root, ['rev-parse', '--short', 'HEAD']).out.trim();
-    return { text: echoLine(verb, m, ctx, sha, value), color: 'green', sha };
-  }
-  return { text: echoLine(verb, m, ctx, 'sim', value), color: 'green', sha: 'sim' }; // sim: written to the scratch copy, never committed
-}
-
-// Non-rendering command execution — exported so tests can drive :use and
-// edits the same way the loop does. Render-facing state (mode, report) is
-// returned, and the loop applies it after (a keypress must never leave the
-// report state inconsistent with an in-flight async live check).
-function execAction(state, action) {
-  if (action.kind === 'edit') return { msg: execEdit(state, action.verb, action.cat, action.matchId, action.value) };
-  if (action.kind === 'use') {
-    if (!action.slug) return { msg: { text: `tournaments: ${[...state.repo.tournaments.keys()].join(', ')}`, color: 'yellow' } };
-    const info = state.repo.tournaments.get(action.slug);
-    if (!info) return { msg: { text: `unknown tournament ${action.slug} — have: ${[...state.repo.tournaments.keys()].join(', ')}`, color: 'red' } };
-    if (!info.tjson) return { msg: { text: `tournament ${action.slug} has no readable data`, color: 'red' } };
-    return { slug: action.slug };
-  }
-  if (action.kind === 'publish') {
-    if (!state.commit) return { msg: { text: 'sim: no publish — the scratch never ships, only site/ does (and only on main)', color: 'yellow' } };
-    const { errs } = validateRepo(loadRepo(state.siteRoot)); // gate on disk, not memory — publish ships disk
-    return errs.length
-      ? { msg: { text: errs.join('\n') + '\nnot published — validation error(s)', color: 'red' } }
-      : ship(state.root) === 0 ? { msg: { text: 'published', color: 'green' } } : { msg: { text: 'not published — see the output above', color: 'red' } };
-  }
-  if (action.kind === 'status') return { report: validateText(state.repo) + '\n' + gitStatus(state.root) };
-  return {};
-}
-
 // a null file would crash every command, so skip it.
 function defaultSlug(repo) {
   if (!repo.index.length) return null;
@@ -939,140 +304,39 @@ function defaultSlug(repo) {
   return info && info.tjson ? last.slug : null;
 }
 
-// ---------- the editor loop (shared by live and sim) ----------
+// ---------- the edit funnel (edits commit per AGENTS.md) ----------
 
-// opts: { sim, slug, clock, simKey, onQuit } — sim swaps the clock and the
-// commit policy, and adds ]/[x (browse-mode keys — see the loop); the
-// playable set is the same wave either way.
-function editorMain(root, siteRoot, repo, opts) {
-  const state = {
-    root, siteRoot, repo,
-    slug: opts.slug || defaultSlug(repo),
-    mode: 'browse', cursorId: null, verb: null, payload: '', pos: 0, query: null, cmdline: '',
-    report: null, msg: null, quit: false, winTop: null, // winTop: the anchored window's first visible row
-    commit: !opts.sim, sim: !!opts.sim,
-  };
-  const clock = opts.clock;
-  const playable = livePlayable;
-
-  const tjson = () => {
-    const info = state.slug && state.repo.tournaments.get(state.slug);
-    return info && info.tjson ? info.tjson : null;
-  };
-  const tz = () => (tjson() ? tjson().timezone || 'UTC' : 'UTC');
-
-  const getView = () => {
-    const t = tjson();
-    if (!t) return null;
-    return makeView(t, playable(t), state.query);
-  };
-
-  const render = () => {
-    const view = getView();
-    const t = tjson();
-    if (!t) {
-      process.stdout.write('\x1b[?25l\x1b[2J\x1b[H' + (state.msg ? C.yellow(state.msg.text) : 'no tournament selected') + '\n\n' + C.dim(':use <slug> — ' + [...state.repo.tournaments.keys()].join(', ')) + '\n\n' + C.dim('[q] quit') + '\n');
-      return;
-    }
-    const played = Object.values(t.matches || {}).flat().filter(m => m && isDone(m)).length;
-    const total = Object.values(t.matches || {}).flat().filter(Boolean).length;
-    const rows = process.stdout.rows || 40, cols = process.stdout.columns || 80;
-    const header = {
-      title: t.name,
-      mode: state.sim ? C.yellow('SIM') : C.green('LIVE'),
-      clock: fmtTime(clock(), tz()),
-      played, total,
-      note: state.sim ? ' · scratch — never committed' : '',
-      sim: state.sim,
-    };
-    // anchored window: recompute the anchor so the cursor stays in view, once
-    // per keypress, before rendering — the window itself never re-centers
-    const msg = state.msg ? C[state.msg.color](state.msg.text) : '';
-    const hint = state.mode === 'arm' ? hintLine(state) : C.dim(hintLine(state));
-    state.winTop = reconcileTop(state.winTop, cursorIndex(view, state), matchHeights(view, cols), listBudget(headerLine(header, state, view), msg, hint, rows, cols), view.filtered.length);
-    const board = boardText(state, view, header, rows, cols);
-    // the native cursor: on an input row the terminal cursor is placed at the
-    // caret cell and shown; elsewhere the draw's leading hide-cursor stays
-    let tail = '';
-    if (state.mode === 'arm' || state.mode === 'filter' || state.mode === 'cmd') {
-      const input = inputLine(state, view);
-      // the caret offset in plain chars: arm is a real caret (pos may be
-      // mid-field — strip the suffix), filter/cmd always sit at the text end
-      const offset = state.mode === 'arm'
-        ? strip(input).length - (state.payload.length - Math.min(state.pos ?? state.payload.length, state.payload.length))
-        : 2 + (state.mode === 'filter' ? (state.query || '').length : state.cmdline.length);
-      const c = caretCell(input, hint, offset, rows, cols);
-      tail = `\x1b[${c.row};${c.col}H\x1b[?25h`;
-    }
-    process.stdout.write('\x1b[?25l\x1b[2J\x1b[H' + board + tail);
-  };
-
-  const exec = action => {
-    if (!action) return;
-    const r = execAction(state, action);
-    if (r.msg) state.msg = r.msg;
-    if (r.slug) state.slug = r.slug;
-    if (r.report) {
-      state.mode = 'report';
-      state.report = r.report;
-      // the live-vs-domain comparison is a network read — refresh the report
-      // when it lands, if the operator is still looking at it
-      liveText(state.siteRoot, state.slug).then(live => {
-        if (state.mode === 'report' && live) { state.report += '\n' + live; render(); }
-      });
-    }
-  };
-
-  const quit = () => {
-    process.stdout.write('\x1b[?25h\n'); // restore the cursor for the shell on a fresh line — the board ends without one
-    if (process.stdin.isTTY) process.stdin.setRawMode(false);
-    state.quit = true;
-    if (opts.onQuit) opts.onQuit();
-    // the keypress listener has no natural end — and the sim's server may
-    // hold the browser's idle keep-alive connections, so close() alone can
-    // hang — quit is the hard kind, exit now
-    process.exit(0);
-  };
-
-  if (!process.stdin.isTTY) {
-    console.error('editor: needs a terminal for keypresses');
-    process.exit(1);
+// The edit funnel's only exit: validate, write, and always commit — git is
+// the record, and the daemon is the only writer. The error or the rolled-back
+// validation report becomes the page's flash.
+function execEdit(state, verb, cat, matchId, value) {
+  const { root, siteRoot, repo, slug } = state;
+  const info = repo.tournaments.get(slug);
+  const ctx = catCtx(info.tjson, cat);
+  const m = ctx.byId.get(Number(matchId)); // the same object writeEdit mutates in place
+  const preStatus = m && m.result && m.result.status; // what a clear removes — its commit kind matches it
+  const res = writeEdit(siteRoot, repo, slug, cat, applyFor(verb, matchId, value));
+  // the structured facts the admin daemon JSON-ifies
+  if (res.err) return { error: res.err };
+  if (res.errs) return { errors: res.errs };
+  if (res.unchanged) return { unchanged: true }; // same data — nothing written, nothing committed
+  // the git kind names what happened: a result edit keeps its shape kind, a
+  // clear takes the kind of what it removed — greps like ^score( still find it
+  const kind = verb === 'result'
+    ? (value.shape === 'clear' ? (preStatus === 'walkover' ? 'walkover' : preStatus === 'void' ? 'void' : 'score') : value.shape)
+    : SIDE_VERBS[verb] !== undefined ? 'side' : verb;
+  const file = res.file; // writeEdit's own byte-identical write target
+  const detail = editDetail(verb, m, value, ctx);
+  const msg = commitMessage(kind, slug, cat, matchId, detail);
+  git(root, ['add', path.relative(root, file)]);
+  // pathspec commit: only this edit's file rides in — anything else the
+  // operator staged stays staged, never swept into a match-day commit
+  const c = git(root, ['commit', '-m', msg, '--', path.relative(root, file)]);
+  if (c.code !== 0) {
+    return { error: `${path.relative(root, file)} written but the commit failed:\n${c.err}\n(file staged — commit it manually)` };
   }
-  // readline parses every key to a name (arrows, home/end, delete, ctrl+letter);
-  // its default escapeCodeTimeout of 500ms is the Esc lag — 30ms is beyond
-  // perception and still catches an arrow split across writes
-  readline.emitKeypressEvents(process.stdin, { escapeCodeTimeout: 30 });
-  process.stdin.setRawMode(true);
-  process.stdout.on('resize', render);
-  process.stdin.on('keypress', (str, key) => {
-    // the editor consumes { ch, name, ctrl }: only real characters ride ch —
-    // readline hands back control bytes as str, and a bare \n is `enter`, which
-    // the byte parser used to fold into `return`
-    const cc = str && str.length === 1 ? str.charCodeAt(0) : -1;
-    const k = { ch: cc >= 32 && cc !== 127 ? str : null, name: key.name === 'enter' ? 'return' : key.name, ctrl: key.ctrl };
-    const view = getView();
-    // sim ]/[x are browse-mode keys: in filter/cmd/arm they are ordinary
-    // characters step consumes — never a sim action — and x gets the view
-    // so an active filter narrows what it scores
-    if (opts.simKey && k.ch && state.mode === 'browse') {
-      const r = opts.simKey(k.ch, view);
-      if (r) { if (typeof r === 'string') state.msg = { text: r, color: 'red' }; render(); return; }
-    }
-    const { state: ns, action } = step(state, k, view || { rows: [], lines: [], filtered: [], query: null, tz: tz() }, clock());
-    Object.assign(state, ns);
-    if (state.quit) { quit(); return; }
-    exec(action);
-    render();
-  });
-  render();
+  const sha = git(root, ['rev-parse', '--short', 'HEAD']).out.trim();
+  return { sha };
 }
 
-// CLI entry (dispatched from gb.js): root is the repo root.
-function main(root) {
-  const siteRoot = path.join(root, 'site');
-  const repo = loadRepo(siteRoot);
-  if (repo.readErrs.length) { console.error(repo.readErrs.join('\n')); process.exit(1); }
-  editorMain(root, siteRoot, repo, { sim: false, clock: () => Date.now() });
-}
-
-module.exports = { parseGame, buildScheduled, applyScore, applyResult, applyVenue, applySide, applyTime, prefillFor, writeEdit, commitMessage, editDetail, echoLine, parseCmd, rowKey, waveEntries, buildRows, makeView, parsePayload, step, execEdit, execAction, defaultSlug, editorMain, main, git, C };
+module.exports = { parseGame, buildScheduled, applyScore, applyResult, applyVenue, applySide, applyTime, writeEdit, commitMessage, editDetail, waveEntries, parsePayload, execEdit, defaultSlug, git };

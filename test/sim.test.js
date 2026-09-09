@@ -1,8 +1,8 @@
 'use strict';
-// sim.js — the pure engine. A full play-through of a generated tournament is
-// the strongest check: if the random games, the dependency ordering, or the
-// wave rule ever broke the model, the real validator (the same gate
-// writeEdit and the pre-commit hook run) complains at the end.
+// The rehearsal engine's domain invariant — a full play-through of a generated
+// tournament is the strongest check: if the random games, the dependency
+// ordering, or the wave rule ever broke the model, the real validator (the
+// same gate writeEdit and the pre-commit hook run) complains at the end.
 
 const test = require('node:test');
 const assert = require('node:assert');
@@ -10,27 +10,12 @@ const { generate } = require('../src/schedule.js');
 const { validateRepo } = require('../src/validate.js');
 const { applyScore, waveEntries } = require('../src/editor.js');
 const { makeCat, isDone, bestOfOf, schedDays, resolveSide } = require('../site/derive.js');
-const { reachedWinner } = require('../src/tools.js');
-const { makeGames, xTargets } = require('../src/sim.js');
+const { reachedWinner, makeGames } = require('../src/tools.js');
 const { MINI } = require('./helpers.js');
 
-// The play-through scores wave after wave — exactly the set the editor
-// highlights and sim's x scores: unplayed matches with resolved sides at each
-// category's earliest scheduled time, one pass per wave.
-// x's targets are the scoreable wave — narrowed by an active filter to the
-// highlighted rows, so sim's x only touches what's on screen.
-test('xTargets: a live filter narrows the wave to the highlighted rows', () => {
-  const tourney = generate(MINI);
-  const wave = waveEntries(tourney);
-  assert.ok(wave.length >= 2, 'the opening wave has several matches');
-  const keep = wave.slice(0, 1).map(e => ({ r: e, i: 0 }));
-  const targets = xTargets(tourney, { query: 'x', filtered: keep });
-  assert.deepStrictEqual(targets.map(e => e.m.id), keep.map(e => e.r.m.id), 'only the highlighted wave member is scored');
-  assert.equal(xTargets(tourney, null).length, wave.length, 'no view = the whole wave');
-  assert.equal(xTargets(tourney, { query: null, filtered: [] }).length, wave.length, 'no query = the whole wave');
-  assert.equal(xTargets(tourney, { query: 'zzz', filtered: [] }).length, 0, 'a filter that hides the wave scores nothing');
-});
-
+// The play-through scores wave after wave — exactly the set the admin's
+// score-wave drives: unplayed matches with resolved sides at each category's
+// earliest scheduled time, one pass per wave.
 test('a play-through ends complete and validates clean', () => {
   const tourney = generate(MINI);
   const tz = tourney.timezone;

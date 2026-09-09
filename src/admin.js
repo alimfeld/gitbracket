@@ -3,28 +3,40 @@
 // GitBracket admin daemon — a localhost page plus a tiny API over the repo.
 // The browser is the UI; this process is the only writer (git is the record):
 // every edit reuses the editor's writeEdit funnel — validate, write, commit —
-// so the browser can never outrun the gate. Pending = unpushed commits
-// (origin/main..HEAD); publish = validate + push + deploy; undo = reset the
-// last commit, offered only while unpushed (history is append-only once
-// pushed); redo = restore the commit the last undo dropped, live only while
-// the undo is still the last act.
+// so the browser can never outrun the gate. Pending = commits this branch's
+// own upstream hasn't seen (@{upstream}..HEAD); publish = validate + push +
+// deploy (the branch role
+// gates the target: main ships production, a branch only its scratch CNAME);
+// undo = reset the last commit, offered only while unpushed (history is
+// append-only once pushed); redo = restore the commit the last undo dropped,
+// live only while the undo is still the last act.
 // Nothing ships — site/ is untouched; the page lives under src/admin/ and the
-// daemon serves it locally, exactly as sim serves .sim/site.
+// daemon serves it locally. The rehearsal surface is `gb.js sim`, which runs
+// this same daemon against a rehearsal branch instead.
 
-const fs = require('fs');
 const http = require('http');
 const path = require('path');
-const { loadRepo, staticFile, openBrowser, catCtx, schedEntries, pairBusy, fixedPlayers, consumedSlots, descendants, slotsOverlap, feederBounds } = require('./tools.js');
-const { execEdit, defaultSlug, git, parsePayload } = require('./editor.js');
-const { matchSlotMs, schedTime } = require('../site/derive.js');
+const { loadRepo, staticFile, openBrowser, catCtx, schedEntries, pairBusy, fixedPlayers, consumedSlots, descendants, slotsOverlap, feederBounds, makeGames, branchOf, isRehearsalBranch } = require('./tools.js');
+const { execEdit, defaultSlug, git, parsePayload, waveEntries } = require('./editor.js');
+const { matchSlotMs, schedTime, bestOfOf } = require('../site/derive.js');
 const { validateRepo } = require('./validate.js');
-const { ship } = require('./publish.js');
+const { ship, deployRole } = require('./publish.js');
 
-// The unpushed commits as [{sha, msg}], empty when no remote or nothing pending.
+// The unpushed commits as [{sha, msg}], empty when nothing pending. The window
+// is the current branch's own upstream — @{upstream}..HEAD — not origin/main:
+// on main that is the director's unpushed work, on a rehearsal branch it is
+// origin/rehearsal/<name>, so a pushed score leaves the undo window exactly as
+// on main and the append-only rule the undo gate promises holds on every
+// branch (a window over origin/main would keep counting pushed rehearsal
+// commits forever and let undo strand the branch behind its own remote). No
+// upstream yet (a fresh repo, or sim's first push failed): fall back to
+// origin/main — hasRemote then still names whether a bare push could go out.
 function unpushed(root) {
-  const b = git(root, ['rev-parse', '--verify', '--quiet', 'origin/main']);
+  const up = git(root, ['rev-parse', '--verify', '--quiet', '@{upstream}']);
+  const ref = up.code === 0 ? '@{upstream}' : 'origin/main';
+  const b = git(root, ['rev-parse', '--verify', '--quiet', ref]);
   if (b.code !== 0) return { commits: [], hasRemote: false };
-  const l = git(root, ['log', '--oneline', 'origin/main..HEAD']);
+  const l = git(root, ['log', '--oneline', `${ref}..HEAD`]);
   const commits = l.code === 0 && l.out.trim()
     ? l.out.trim().split('\n').map(line => ({ sha: line.slice(0, 7), msg: line.slice(8) }))
     : [];
@@ -42,10 +54,9 @@ function gate(siteRoot) {
 // time+venue atomically: one validate, one commit — a half-moved match must
 // never land). The editor owns the funnel (execEdit); this is the JSON view.
 function doEdit(state, verb, cat, matchId, value) {
-  state.commit = true; // the daemon always commits — git is the record
   // The page's one free-text entry is the result field: the raw string arrives
-  // here and is parsed with the terminal editor's grammar (parsePayload), so
-  // the browser and the terminal can never drift. Everything else arrives
+  // here and is parsed with the editor's grammar (parsePayload), so the
+  // browser and typed entries can never drift. Everything else arrives
   // pre-shaped (venue id, side object, a move's time+venue).
   if (verb === 'result' && typeof value === 'string') {
     const info = state.repo.tournaments.get(state.slug);
@@ -57,9 +68,9 @@ function doEdit(state, verb, cat, matchId, value) {
   const r = execEdit(state, verb, cat, matchId, value);
   if (r.errors) return { ok: false, errors: r.errors };
   if (r.error) return { ok: false, error: r.error };
-  if (r.unchanged) return { ok: true, unchanged: true, text: r.text };
+  if (r.unchanged) return { ok: true, unchanged: true };
   state.redo = []; // a committed edit builds on the post-undo history — redo would replay onto it
-  return { ok: true, sha: r.sha, text: r.text };
+  return { ok: true, sha: r.sha };
 }
 
 // Both resets (undo, redo) need a pristine tree — one predicate for the mirrors.
@@ -205,6 +216,24 @@ function sideOpts(tjson, cat, matchId, si) {
   };
 }
 
+// Rehearsal-only: score the playable wave with random games through the same
+// funnel as every other edit — one wave pass per call, the set the kiosk's
+// statuses will render. Random scores are fabrication, so the gate is the
+// branch: only off-main (a rehearsal) scores anything; main is the record.
+function scoreWave(state) {
+  if (!isRehearsalBranch(branchOf(state.root))) return { ok: false, error: 'score-wave is a rehearsal tool — run it on a rehearsal branch' };
+  const info = state.repo.tournaments.get(state.slug);
+  if (!info || !info.tjson) return { ok: false, error: `unknown tournament ${state.slug}` };
+  const errors = [];
+  let scored = 0;
+  for (const e of waveEntries(info.tjson)) {
+    const r = doEdit(state, 'result', e.cat, String(e.m.id), { shape: 'score', games: makeGames(bestOfOf(e.m, e.ctx)) });
+    if (r.ok) scored++;
+    else errors.push(r.error || (r.errors || []).join('; '));
+  }
+  return { ok: true, scored, errors };
+}
+
 // Reload the repo from disk — undo (git reset) rewrites files, so the in-memory
 // view must be rebuilt or the next edit would validate against stale data.
 function reload(state) {
@@ -260,6 +289,9 @@ function serve(state) {
           : { ok: sideOpts(info.tjson, q.get('cat'), q.get('id'), +(q.get('si') || '0')) };
         return json(res, 200, body);
       }
+      if (url === '/api/meta') {
+        return json(res, 200, { sim: isRehearsalBranch(branchOf(state.root)) });
+      }
       if (url === '/api/pending') {
         const p = unpushed(state.root);
         const dirty = git(state.root, ['status', '--porcelain', '--', 'site/']);
@@ -281,9 +313,15 @@ function serve(state) {
         const r = redo(state);
         return json(res, r.error ? 400 : 200, r);
       }
+      if (url === '/api/score-wave' && req.method === 'POST') {
+        const r = scoreWave(state);
+        return json(res, r.ok ? 200 : 400, r);
+      }
       if (url === '/api/publish' && req.method === 'POST') {
         const errs = gate(state.siteRoot);
         if (errs.length) return json(res, 400, { errors: errs });
+        const role = deployRole(state.root); // the daemon's console names the failure either way — the page answers with the role's reason
+        if (!role.ok) return json(res, 400, { error: role.why });
         const p = unpushed(state.root);
         const push = p.hasRemote ? git(state.root, ['push']) : { code: 0 };
         if (push.code !== 0) return json(res, 400, { error: `push failed:\n${push.err}` });
@@ -319,4 +357,4 @@ function main(root, args) {
   return 0;
 }
 
-module.exports = { legalSlots, sideOpts, doEdit, unpushed, undo, redo, main };
+module.exports = { legalSlots, sideOpts, doEdit, unpushed, undo, redo, scoreWave, main };

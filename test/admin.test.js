@@ -15,6 +15,7 @@ const assert = require('node:assert/strict');
 const { loadRepo } = require('../src/tools.js');
 const { validateRepo } = require('../src/validate.js');
 const admin = require('../src/admin.js');
+const publish = require('../src/publish.js');
 const { FIX } = require('./helpers.js');
 
 const git = (root, args) => { const r = spawnSync('git', args, { cwd: root, encoding: 'utf8' }); return { ...r, out: r.stdout || '' }; };
@@ -22,7 +23,9 @@ const git = (root, args) => { const r = spawnSync('git', args, { cwd: root, enco
 // tests read the same shape the daemon does
 
 // A scratch repo: site copy from the sample fixture + git, with an origin so
-// unpushed() can see origin/main..HEAD (the real deployment shape).
+// unpushed() can see a base to measure against (the real deployment shape).
+// main is pushed without -u, so the daemon's @{upstream} window falls back to
+// origin/main here — exactly the shape a director's own clone has.
 function scratchWithRemote() {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gbadmin-'));
   const siteRoot = path.join(tmp, 'site');
@@ -45,7 +48,7 @@ function scratchWithRemote() {
   return { tmp, siteRoot, state: { root: tmp, siteRoot, repo, slug: 'sample', redo: [] } };
 }
 
-test('admin doEdit: a raw result string is parsed with the terminal grammar — page and terminal cannot drift', () => {
+test('admin doEdit: a raw result string is parsed with the shared grammar — page and typed entries can never drift', () => {
   const { tmp, siteRoot, state } = scratchWithRemote();
   try {
     const good = admin.doEdit(state, 'result', 'md40', '8', '21-19 21-18'); // the display form, typed raw
@@ -96,7 +99,6 @@ test('admin doEdit: a score commits with a conventional message and shows as pen
     const r = admin.doEdit(state, 'result', 'md40', '8', { shape: 'score', games: [{ a: 11, b: 5 }, { a: 11, b: 3 }] });
     assert.equal(r.ok, true, 'the edit lands');
     assert(r.sha, 'the receipt carries the short sha');
-    assert(/\[[0-9a-f]{7}\]/.test(r.text), 'the echo carries the sha receipt');
     const pend = admin.unpushed(tmp);
     assert.equal(pend.commits.length, 1, 'one pending commit');
     assert(/^score\(sample\): md40\/8 /.test(pend.commits[0].msg), 'pending list shows the commit message');
@@ -167,7 +169,7 @@ test('admin doEdit: panel clears send null through the shared funnel — time an
   }
 });
 
-test('admin doEdit clear: its commit kind mirrors what was removed (score/walkover), like the terminal', () => {
+test('admin doEdit clear: its commit kind mirrors what was removed (score/walkover), like a typed entry', () => {
   const { tmp, state } = scratchWithRemote();
   try {
     // xd/1 is a played group match with no undone consumer, so clearing is legal
@@ -227,7 +229,7 @@ test('admin redo: an out-of-band commit trips the parent guard and self-clears t
     const m = id => loadRepo(siteRoot).tournaments.get('sample').tjson.matches.md40.find(x => x.id === id);
     admin.doEdit(state, 'result', 'md40', '8', { shape: 'score', games: [{ a: 11, b: 5 }, { a: 11, b: 3 }] });
     assert.equal(admin.undo(state).error, undefined, 'the edit is undone');
-    assert.equal(git(tmp, ['commit', '--allow-empty', '-qm', 'out-of-band']).status, 0, 'a terminal commit moves HEAD behind the daemon\'s back');
+    assert.equal(git(tmp, ['commit', '--allow-empty', '-qm', 'out-of-band']).status, 0, 'an out-of-band commit moves HEAD behind the daemon\'s back');
     const r1 = admin.redo(state);
     assert.equal(r1.error, 'nothing to redo — the branch moved on', 'the guard refuses — HEAD is no longer the undone commit\'s parent');
     assert(m(8).result === undefined, 'and nothing was reset');
@@ -323,4 +325,111 @@ test('admin sideOpts: the picker greys what the gate would reject — consumed s
   assert.deepEqual(admin.sideOpts(tjson, 'md', 6, 0).busy, [], 'an unscheduled match has no window — no player is busy yet');
   // an unknown match reports nothing, never throws — same as legalSlots
   assert.deepEqual(admin.sideOpts(tjson, 'md', 999, 0), {});
+});
+
+// ---- the rehearsal surface: score-wave (off-main only) and the deploy gate ----
+// (both are branch-role decisions; the scratch repo with an origin makes the
+// branch, the anchor, and the CNAME all real)
+
+test('admin scoreWave: on main it refuses — random scores never reach the record', () => {
+  const { tmp, state } = scratchWithRemote();
+  try {
+    const r = admin.scoreWave(state);
+    assert.equal(r.ok, false, 'main refuses');
+    assert(/rehearsal branch/.test(r.error), 'the refusal names the requirement');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('admin scoreWave: off main scores the playable wave through the real funnel — every edit commits', () => {
+  const { tmp, siteRoot, state } = scratchWithRemote();
+  try {
+    git(tmp, ['checkout', '-qb', 'rehearsal/sample-x']);
+    const r = admin.scoreWave(state);
+    assert.equal(r.ok, true, 'a rehearsal branch scores');
+    assert(r.scored > 0, 'the sample opening wave scores at least one match');
+    assert(validateRepo(loadRepo(siteRoot)).errs.length === 0, 'the rehearsed repo still validates');
+    assert(admin.unpushed(tmp).commits.length >= r.scored, 'every scored match commits — the branch is the record');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('admin unpushed: the undo window is the branch\'s own upstream — a pushed rehearsal commit leaves it', () => {
+  const { tmp, state } = scratchWithRemote();
+  try {
+    git(tmp, ['checkout', '-qb', 'rehearsal/sample-x']);
+    git(tmp, ['commit', '--allow-empty', '-qm', 'chore(sim): scratch domain']);
+    git(tmp, ['push', '-qu', 'origin', 'rehearsal/sample-x']); // sim's own push -u — the rehearsal gets its upstream
+    assert.equal(admin.unpushed(tmp).commits.length, 0, 'a pushed rehearsal commit is not pending — an origin/main..HEAD window would still count it');
+    assert.equal(admin.undo(state).error, 'nothing to undo', 'undo refuses after the push — append-only holds on the rehearsal branch too');
+    admin.doEdit(state, 'result', 'md40', '8', { shape: 'score', games: [{ a: 11, b: 5 }, { a: 11, b: 3 }] });
+    assert.equal(admin.unpushed(tmp).commits.length, 1, 'a fresh score is pending against the branch\'s own upstream');
+    assert.equal(git(tmp, ['push']).status, 0, 'the bare push the daemon runs after an edit is clean — undo can never strand the branch behind its remote');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+const PROD = 'bracket.surge.sh';
+// the deploy role's anchor is origin/main's CNAME — stage + commit + push it, or the anchor never exists
+const anchorCNAME = (root, siteRoot) => {
+  fs.writeFileSync(path.join(siteRoot, 'CNAME'), PROD + '\n');
+  git(root, ['add', 'site/CNAME']);
+  git(root, ['commit', '-qm', 'cname']);
+  git(root, ['push', '-q', 'origin', 'main']);
+};
+
+test('publish deployRole: main ships production, refuses any other CNAME', () => {
+  const { tmp, siteRoot } = scratchWithRemote();
+  try {
+    anchorCNAME(tmp, siteRoot);
+    assert.deepEqual(publish.deployRole(tmp), { ok: true, domain: PROD }, 'main ships its production CNAME');
+    fs.writeFileSync(path.join(siteRoot, 'CNAME'), 'rehearsal-x.surge.sh\n'); // uncommitted — the role reads the file, not the tree
+    const r = publish.deployRole(tmp);
+    assert.equal(r.ok, false, 'a scratch CNAME on main is refused');
+    assert(/not the production domain/.test(r.why), 'the refusal names the mismatch');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('publish deployRole: off main ships only its own scratch CNAME, never production', () => {
+  const { tmp, siteRoot } = scratchWithRemote();
+  try {
+    anchorCNAME(tmp, siteRoot);
+    git(tmp, ['checkout', '-qb', 'rehearsal/sample-x']);
+    assert.equal(publish.deployRole(tmp).ok, false, 'a branch still carrying production is refused');
+    fs.writeFileSync(path.join(siteRoot, 'CNAME'), 'rehearsal-x.surge.sh\n');
+    assert.deepEqual(publish.deployRole(tmp), { ok: true, domain: 'rehearsal-x.surge.sh' }, 'its own scratch domain ships');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('publish deployRole: no origin/main anchor — a branch cannot prove itself scratch', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gbpub-'));
+  try {
+    const siteRoot = path.join(tmp, 'site');
+    fs.mkdirSync(siteRoot, { recursive: true });
+    fs.cpSync(FIX('sample'), siteRoot, { recursive: true });
+    fs.writeFileSync(path.join(siteRoot, 'CNAME'), PROD + '\n');
+    git(tmp, ['init', '-q']);
+    git(tmp, ['config', 'user.email', 't@t']);
+    git(tmp, ['config', 'user.name', 'test']);
+    git(tmp, ['add', '-A']);
+    git(tmp, ['commit', '-qm', 'init']);
+    git(tmp, ['branch', '-M', 'main']); // never pushed — no origin/main
+    assert.deepEqual(publish.deployRole(tmp), { ok: true, domain: PROD }, 'fresh main deploys what its CNAME says (bootstrap)');
+    git(tmp, ['checkout', '-qb', 'rehearsal/x']);
+    const r = publish.deployRole(tmp);
+    assert.equal(r.ok, false, 'without the anchor a branch cannot prove its domain is scratch');
+    assert(/origin\/main/.test(r.why), 'the refusal names the missing anchor');
+    git(tmp, ['checkout', '-q', 'main']);
+    git(tmp, ['checkout', '-q', '--detach']);
+    assert.equal(publish.deployRole(tmp).ok, false, 'a detached HEAD never ships');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
 });

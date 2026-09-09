@@ -1,97 +1,74 @@
 # Testing and rehearsing a tournament day
 
-## Rehearse a whole day first: the sim (no deployment, no branch)
+## The rehearsal: the real pipeline, practiced end to end
 
-`node gb.js sim [slug]` copies `site/` to the gitignored `.sim/`, serves it
-over HTTP with `Date.now` faked to a sim clock, and opens the match-day editor
-against it — every view (tournament, schedule, kiosk) tracks the rehearsal:
-`]`/`[` move the kiosk clock 30 sim-minutes (display only — it never changes
-what's scoreable), `x` scores the highlighted wave with random games through
-the real validation path, and the normal slash verbs edit manually. The
-scoreable set is the same wave the live editor highlights, so `n`/`N` and `x`
-behave exactly as they do live. Nothing is ever committed — `.sim/` is not a
-repo, and `site/` is untouched. Prereqs: Node, a browser, and a terminal (the editor needs
-keypresses).
-
-For the deployment surface the sim deliberately skips — real commits and a
-real clock, then real CDN answers — there are two recipes, both push-proof by
-construction: `gb.js publish` only ships from `main`; the probe has no git
-remote; and its scratch domain is committed, so git ops can't restore the
-production CNAME.
-
-- **Branch + local server** — real commits and clock, everything except real CDN answers (latency, 304s, HTTPS).
-- **Scratch clone + throwaway surge domain** — real CDN behaviour.
-
-## Rehearse the admin UI: a branch and the local daemon
-
-`node gb.js admin [slug]` serves the admin page — drag reschedule, click-to-
-score, pending/undo, publish. Same push-proof rule as the site recipe above:
-on a branch (or detached HEAD) the publish button is inert — the daemon only
-ships from `main`, and a branch with no upstream can't push.
+`node gb.js sim [slug]` is the one rehearsal command. It creates a
+`rehearsal/<slug>-<rand>` branch off a clean `main`, commits a generated
+scratch surge domain as `site/CNAME`, pushes the branch (so admin's publish
+can push it onward), starts the admin daemon, and prints the scratch URL.
 
 ```bash
-# ── setup (one time) ──
-git checkout -b test     # publish button inert: the daemon only ships from main
-
-# ── iterate ──
-node gb.js admin         # serves http://127.0.0.1:<port>/ and opens the browser
-# drag matches, score, undo — every edit validates and commits locally
-
-# ── cleanup ──
-git checkout main && git branch -d test
+node gb.js sim 2026-mammut60
+# → rehearsal/2026-mammut60-k3f2x, scratch domain rehearsal-2026-mammut60-k3f2x.surge.sh
+# → admin at http://127.0.0.1:<port>/ — Publish ships the scratch domain
+# → kiosk: after publishing, open https://rehearsal-<…>.surge.sh/?sim#2026-mammut60/venues
 ```
 
-Only `node gb.js admin` starts it — `src/admin.js` has no self-start. The
-daemon reads `site/` at boot, so restart it after edits made in another
-terminal.
+Every part of the day is practiced on the branch — the staging, the commits,
+the pushes, the surge deploy — against a site that can never reach the
+production domain (the publish gate proves it: production is `origin/main`'s
+CNAME, a branch may only ship a CNAME that differs from it).
 
-## Everything except CDN: a branch and a local server
+- **Score the day with the admin UI** — drag to reschedule, click to score,
+  undo/redo, pending list. On a rehearsal branch a **Score wave** button (or
+  the `x` key) scores the whole playable wave with random games through the
+  same validate-write-commit funnel, so the kiosk's statuses and board
+  progress the way a real day does.
+- **Rehearse the kiosk clock** — open the scratch site with `?sim`: the kiosk
+  runs on a rehearsal clock an operator controls — the `◀`/`▶` panel (and
+  `]`/`[`) step it ±30 minutes, reset returns to real time, and the first
+  load aims at the event's first scheduled match, so the kiosk opens on the
+  event. Statuses, auto-centering, and the board clock all track the
+  rehearsal; the clock never changes what's scoreable.
+- **Iterate** — edit in admin, hit Publish (validate + push + surge to the
+  scratch domain), watch the deployed kiosk. Every edit validates and
+  commits itself; nothing is ever lost mid-process.
 
-Serve `site/` locally on a branch. Nothing here pushes, and publish refuses
-off `main`.
+A rehearsal branch is practice, never merged — its scores are fabricated, and
+its scratch CNAME must not ride into production history. When the rehearsal
+is done:
 
 ```bash
-# ── setup (one time) ──
-git checkout -b test
-python3 -m http.server 8000 --directory site   # same files surge serves
-# open http://localhost:8000
-
-# ── iterate ──
-node gb.js               # edits commit locally; nothing ships off main
-# no reload — a visible view polls the change up by itself
-
-# ── cleanup ──
-git checkout main && git branch -d test
+node gb.js sim --teardown   # surges the scratch domain down, deletes branch (local + origin)
 ```
 
-To get test-branch changes out, merge to `main` first; the director
-publishes. Local serving matches the deployed app — same files, same relative
-fetches (`cache: no-cache`, so reloads are fresh).
+The surge domain stays hosted until torn down — teardown is the only exit,
+and it refuses to touch a non-scratch CNAME. Then the real day happens on
+`main`, where the clock is real and the scores are real.
 
-## Real CDN: a scratch clone on its own surge domain
+## The real day: admin on main
 
-Clone, swap `site/CNAME` for a throwaway domain, publish from the probe,
-teardown, delete.
+`node gb.js` (or `node gb.js admin`) starts the admin daemon — the single
+match-day interface. Drag reschedule, click-to-score/wo/void, side-entry
+picker, pending-changes panel (unpushed commits), undo, redo, and a publish
+button (validate + push + deploy). The daemon reads `site/` when it starts,
+so restart it after edits made in another terminal.
 
-```bash
-# ── setup (one time) ──
-git clone "https://github.com/$(gh api user -q .login)/gitbracket.git" /tmp/gitbracket-probe
-cd /tmp/gitbracket-probe
-git remote remove origin              # no remote → no push can leave
-echo probe-$(date +%s).surge.sh > site/CNAME   # throwaway domain
-git commit -am "probe: scratch surge domain"   # committed → git ops can't restore the live one
+The deploy gate (shared by the admin publish button and `node gb.js publish`):
 
-# ── iterate ──
-node gb.js         # edit scores → committed locally
-node gb.js publish # ships only the probe domain (main branch, validate gate)
-# open https://$(cat site/CNAME) — CDN latency, 304s, HTTPS
-
-# ── cleanup (zero trace) ──
-surge teardown "$(cat site/CNAME)"   # stays hosted until torn down — rm -rf alone leaks it
-rm -rf /tmp/gitbracket-probe
-```
+- **on `main`**: ships the domain in `site/CNAME`, which must be the
+  production domain (the one `origin/main` carries) — a scratch CNAME on main
+  refuses loudly.
+- **off `main`**: ships only if `site/CNAME` differs from production (a branch
+  carrying the production CNAME refuses), and only when `origin/main` exists
+  to prove that difference. Rehearsal branches ship their scratch domain;
+  nothing else can.
+- `site/` must be clean (no uncommitted changes) — the daemon commits every
+  edit, so a dirty tree is a hand-edit history would never see.
 
 ## Prerequisites
 
-- **Branch recipe:** Git, Node.js, any static-file server (`python3 -m http.server` or equivalent)
-- **CDN recipe:** the [surge CLI](https://surge.sh) authenticated (one-time `npm install -g surge` + `surge login`), [GitHub CLI](https://cli.github.com/) (`gh`), Git, Node.js
+- **Rehearsal:** Git, Node.js, the [surge CLI](https://surge.sh)
+  (one-time `npm install -g surge` + `surge login`), and an `origin` whose
+  `main` carries the production `site/CNAME` (push main once).
+- **Real day:** Git and Node.js — surge only when you publish.

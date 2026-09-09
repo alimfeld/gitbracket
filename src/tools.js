@@ -9,7 +9,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const { ID_RE, makeCat, schedTime, isDone, matchSlotMs } = require('../site/derive.js');
 
 // Window collision test: shared by the validator's venue-overlap rule and the
@@ -26,16 +26,11 @@ function fixedPlayers(m) {
 }
 
 // The one category context a tool pass iterates: meta + matches by category
-// id — the editor's buffer and the sim's due list used to re-type the
-// find+makeCat lookup, so it lives here.
+// id — the editor and admin daemon both build it for every category, so the
+// find+makeCat lookup lives here.
 function catCtx(tjson, cid) {
   return makeCat({ meta: (tjson.categories || []).find(c => c.id === cid), matches: (tjson.matches || {})[cid] || [] }, tjson);
 }
-
-// The day's running order, one comparator: time, then category id, then match
-// id — the editor's buffer and the sim's due list sort with the same rule so
-// the two surfaces can never present different orders.
-const byMatchOrder = (a, b) => a.t - b.t || a.cat.localeCompare(b.cat) || a.m.id - b.m.id;
 
 // The outcome rule the tools share: evidence to winner, derived the same way by
 // the validator and the editor. The site never runs it — results are stored and
@@ -53,6 +48,25 @@ function countWins(games) {
 
 // The games needed to decide, or null when the stage has no valid bestOf.
 const winTarget = b => (typeof b === 'number' && b % 2 === 1) ? (b + 1) / 2 : null;
+
+// Random games for a rehearsal score (admin's score-wave): the winner side
+// takes the target games, with the loser's wins leading so no side reaches
+// the target before the last game (the validator's match-flow rule); deuce
+// games (12+, +2) a fifth of the time.
+function makeGames(bestOf) {
+  const target = (bestOf + 1) / 2;
+  const n = target + Math.floor(Math.random() * (bestOf - target + 1));
+  const winnerIsA = Math.random() < 0.5;
+  const games = [];
+  for (let i = 0; i < n; i++) {
+    const aWins = i < n - target ? !winnerIsA : winnerIsA;
+    const deuce = Math.random() < 0.2;
+    const ws = deuce ? 12 + Math.floor(Math.random() * 5) : 11;
+    const ls = deuce ? ws - 2 : Math.floor(Math.random() * 10);
+    games.push(aWins ? { a: ws, b: ls } : { a: ls, b: ws });
+  }
+  return games;
+}
 
 // The side ('a'|'b') the games at target decide, null while undecided.
 function reachedWinner(games, target) {
@@ -127,6 +141,17 @@ function findRoot(from) {
   while (!fs.existsSync(path.join(dir, 'site', 'tournaments.json')) && dir !== path.dirname(dir)) dir = path.dirname(dir);
   return dir;
 }
+
+// The current branch name ('' on a detached HEAD) — the one predicate publish's
+// deploy role, the admin's rehearsal surface, and sim's start/teardown gate on.
+function branchOf(root) {
+  const r = spawnSync('git', ['symbolic-ref', '--short', 'HEAD'], { cwd: root, encoding: 'utf8' });
+  return r.status === 0 ? (r.stdout || '').trim() : '';
+}
+
+// Rehearsal branches are gb.js sim's making and never merge — one predicate, so
+// the admin's score-wave gate and sim's teardown agree on what a rehearsal is.
+const isRehearsalBranch = b => /^rehearsal\//.test(b);
 
 function readJson(file, errs) {
   try {
@@ -283,4 +308,4 @@ function pairBusy(a, b) {
   return kinds;
 }
 
-module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, fixedPlayers, schedEntries, pairBusy, consumedSlots, descendants, winTarget, reachedWinner, feederBounds, isRealDate, findRoot, catCtx, byMatchOrder, tournamentText, staticFile, openBrowser };
+module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, fixedPlayers, schedEntries, pairBusy, consumedSlots, descendants, winTarget, reachedWinner, makeGames, feederBounds, isRealDate, findRoot, catCtx, tournamentText, staticFile, openBrowser, branchOf, isRehearsalBranch };
