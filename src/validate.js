@@ -1,9 +1,8 @@
 'use strict';
 
-// GitBracket validator — schema + cross-file checks, run via `node gb.js
-// validate [slug]`. I/O (loadRepo in src/tools.js) is separate from checks
-// (validateRepo) so tests can run the whole validator against fixtures/ in
-// memory. Never writes — the gate stays pure.
+// GitBracket validator — schema + cross-file checks: `node gb.js validate
+// [slug]`. I/O (loadRepo) is separate from checks (validateRepo), so tests run
+// it against fixtures/ in memory. Never writes — the gate stays pure.
 
 const path = require('path');
 const { loadRepo, isRealDate, schedEntries, pairBusy, consumedSlots, winTarget, reachedWinner, feederBounds } = require('./tools.js');
@@ -11,9 +10,8 @@ const { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, poolStand
 
 const RESULTS = ['winner', 'loser'];
 const RESULT_STATUSES = ['played', 'walkover', 'void'];
-// The standings-impact contract, one rule per status (derive.js's counting is
-// the same switch): played counts win+gd/pd from games; walkover counts a win
-// only; void counts nothing and settles the match.
+// The standings-impact contract, one rule per status: played counts win + gd/pd
+// from games; walkover counts a win only; void counts nothing.
 function validateResultShape(r, hasGames, target, m, where, err) {
   if (!RESULT_STATUSES.includes(r.status)) {
     err(where, `result.status must be one of ${RESULT_STATUSES.join(', ')}, got ${JSON.stringify(r.status)}`);
@@ -85,15 +83,14 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
     err(tFile, `name ${JSON.stringify(tjson.name)} does not match the index entry ${JSON.stringify(indexName)}`);
   }
 
-  // the list shows the index copy, the page the file's — they must agree
   if (typeof tjson.location !== 'string' || !tjson.location.trim()) {
     err(tFile, 'location must be a non-empty string');
   } else if (typeof indexLocation === 'string' && tjson.location !== indexLocation) {
     err(tFile, `location ${JSON.stringify(tjson.location)} does not match the index entry ${JSON.stringify(indexLocation)}`);
   }
 
-  // the index copy must match the file's days — mirrors the name check above
-  // mjson: matches as a plain object, or null when malformed (reported above)
+  // mjson: matches as a plain object, or null when malformed (reported in the
+  // matches check below)
   const mjson = tjson.matches && typeof tjson.matches === 'object' && !Array.isArray(tjson.matches) ? tjson.matches : null;
   let tzOk = false;
   if (typeof tjson.timezone !== 'string' || !tjson.timezone) {
@@ -123,8 +120,8 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
   const categories = new Map();
   const players = new Map();
 
-  // Array-top-level shape: a non-array here used to crash the validator mid-
-  // run (forEach on a string) instead of reporting; the gate must never throw.
+  // A non-array here used to crash mid-run (forEach on a string) instead of
+  // reporting — the gate must never throw.
   const list = (v, field) => {
     if (v !== undefined && !Array.isArray(v)) err(tFile, `${field} must be an array, got ${JSON.stringify(v)}`);
     return Array.isArray(v) ? v : [];
@@ -184,12 +181,10 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
   }
 
   // ---- venue overlap on unplayed scheduled matches, across ALL categories ----
-  // Per-category scope would miss a court double-booked by two categories. A
-  // match's window is its effective slot (match slotMinutes > per-stage
-  // category slotMinutes > default), so a long final can collide with the next match
-  // even when starts are more than the default apart. The windows and the pair
-  // conflicts are schedEntries/pairBusy in tools.js — the same code the admin
-  // daemon's placement preview runs, so a preview can never disagree with the gate.
+  // Per-category scope would miss a court double-booked across categories, and
+  // a match's window is its effective slot length, so a long final can collide
+  // with the next match even when starts are further apart. schedEntries/pairBusy
+  // are the same atoms the admin's placement preview runs — no drift.
   const { entries: sched, noSlot } = schedEntries(tjson);
   for (const cid of noSlot) {
     warns.push(`${tFile} matches.${cid}: scheduled matches resolve to no slot length — set slotMinutes (per stage or per match) or the kiosk can't mark matches overdue`);
@@ -232,7 +227,7 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
     byId.set(m.id, m);
   }
 
-  const roster = new Set(players.keys()); // a side id must be a registered player — who plays what is what the matches say, nothing else to maintain
+  const roster = new Set(players.keys());
   let hasPool = false;
   let hasKnockout = false;
   const poolUses = new Map(); // pool -> Set<side sig>
@@ -270,8 +265,8 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
         if (m.pool !== undefined) {
           if (!poolUses.has(m.pool)) poolUses.set(m.pool, new Set());
           poolUses.get(m.pool).add(sig);
-          // derive.js's possibleStages assumes one pool per pair — a pair in two
-          // pools would read stage seats from whichever pool it finds first.
+          // possibleStages assumes one pool per pair — a pair in two pools would
+          // read stage seats from whichever pool it finds first.
           const prevPool = poolOfSig.get(sig);
           if (prevPool !== undefined && prevPool !== m.pool) err(where, `side ${sig} plays in two pools ${JSON.stringify(prevPool)} and ${JSON.stringify(m.pool)} — one pool per pair per category`);
           else poolOfSig.set(sig, m.pool);
@@ -344,9 +339,8 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
       err(where, `scheduled ${JSON.stringify(s)} must be local ISO-8601 wall time, e.g. 2025-07-14T09:00:00 — no offset or Z, the tournament timezone interprets it`);
       return;
     }
-    // Anchor in the tournament tz via schedTime — the one derivation, same as the site.
-    // With a bad timezone the tz error is already reported above; don't also blame
-    // every scheduled string for not parsing.
+    // schedTime anchors in the tournament tz — the one derivation, same as the
+    // site; a bad tz is already reported above, so don't also blame every string.
     if (tzOk && schedTime({ scheduled: s }, tjson.timezone) === null) err(where, `scheduled ${s} does not parse as an instant`);
     const hh = Number(s.slice(11, 13)); // Date.parse rolls 24:00 over to the next day; catch it
     if (hh > 23) err(where, `scheduled ${s} has hour ${hh} — hours run 00-23`);
@@ -398,8 +392,8 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
     const r = (m.result && typeof m.result === 'object' && !Array.isArray(m.result)) ? m.result : undefined;
     let target;
     if (hasGames) {
-      // override precedence from derive.js (match > stage) — a non-number bestOf
-      // is reported above, so winTarget's null is all this check adds
+      // match > stage override precedence, per derive.js — a bad bestOf is
+      // already reported above
       target = winTarget(bestOfOf(m, { bestOf }));
       validateGames(m.games, target, where, err);
     }
@@ -415,9 +409,9 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
     }
 
     if (m.scheduled !== undefined) checkScheduled(m.scheduled, where);
-    // Feeder timing: a bracket can't start before its sources' slots end, nor
-    // end after the matches it feeds begin — schedule.js satisfies it by
-    // construction; typed time edits and hand JSON both hit this gate.
+    // A bracket can't start before its sources end, nor end after its consumers
+    // begin — schedule.js satisfies this by construction; typed edits and hand
+    // JSON hit this gate.
     if (m.scheduled !== undefined && m.pool === undefined) {
       const fb = feederBounds(m, ctx, tjson.timezone);
       const t = schedTime(m, tjson.timezone);
@@ -434,11 +428,10 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
     }
   }
 
-  // ---- the one-final rule: a knockout stage needs exactly one match on the
-  // winner tree that no match feeds, or the bracket renders two "Final" labels
-  // and the ordinal numbering picks an arbitrary root. placementLabel excludes
-  // classification matches (they sit under loser edges), same predicate the
-  // renderer's mainFinal uses — the gate reads derive.js, never app.js.
+  // ---- the one-final rule: exactly one unfed champion-tree match, or the
+  // bracket renders two "Final" labels and ordinal numbering picks an
+  // arbitrary root. placementLabel excludes classification matches (they sit
+  // under loser edges) — same predicate the renderer's mainFinal uses.
   let finals = 0;
   for (const m of matches) {
     if (!m || typeof m !== 'object' || m.pool !== undefined || !Array.isArray(m.sides) || m.sides.length !== 2) continue;
@@ -468,10 +461,9 @@ function validateGames(games, target, where, err) {
   }
 }
 
-// validate <slug>: errors touching that tournament's file or index entry.
-// Exact matches only — a bare substring would leak tie3 errors into `validate tie`.
-// main() gates the slug by repo membership before this runs — loadRepo admits
-// only id-regex keys — so it is safe inside the regex.
+// Errors touching that tournament's file or index entry. Exact matches only —
+// a substring would leak tie3 errors into `validate tie`. main() gates the slug
+// by repo membership (loadRepo admits only id-regex keys), so the regex is safe.
 function filterErrs(errs, slug) {
   const re = new RegExp(`(?:tournaments/${slug}\.json|"${slug}"|slug ${slug}(?:\\s|$))`);
   return errs.filter(e => re.test(e));

@@ -1,9 +1,9 @@
 'use strict';
 
-// GitBracket admin page — the browser UI for the local daemon. Pure client:
-// every write goes through /api/edit, which validates + commits server-side,
-// so the browser can never outrun the gate. derive.js (a classic script above)
-// is the shared domain model — its top-level names are already page globals.
+// Admin page — the browser UI for the local daemon. Pure client: every write
+// goes through /api/edit, which validates + commits server-side, so the
+// browser can never outrun the gate. derive.js loads above as a classic script
+// — its top-level names are page globals.
 
 const $ = id => document.getElementById(id);
 
@@ -18,8 +18,8 @@ const S = {
 const cat = cid => S.cats.find(c => c.id === cid);
 const matchOf = (cid, id) => cat(cid)?.byId.get(Number(id));
 
-// the day's span a wall "HH:MM" string; the grid works in wall-clock minutes —
-// never offsets (the data is wall time; the tz only anchors it for feeder bounds)
+// wall "HH:MM" from an ISO scheduled string; the grid works in wall-clock
+// minutes — never offsets (the tz only anchors instants)
 const wallMin = iso => { const m = /T(\d{2}):(\d{2})/.exec(String(iso || '')); return m ? +m[1] * 60 + +m[2] : null; };
 const pad = n => String(n).padStart(2, '0');
 const isoOf = (day, wm) => `${day}T${pad(Math.floor(wm / 60))}:${pad(wm % 60)}:00`;
@@ -102,8 +102,8 @@ function computeDays() {
   return [...ks].sort();
 }
 
-// Fill the board's height when the day fits; floor the scale so even the smallest
-// slot is tall enough for a scored card's three rows — no clipping, no overlap.
+// Fill the board's height when the day fits; floor the scale so a scored
+// card's three rows never clip.
 function fitScale() {
   const sc = $('board');
   const avail = sc ? sc.clientHeight : 0;
@@ -158,8 +158,8 @@ function renderGrid() {
   wireGrid();
 }
 
-// The card's meta line — time · category · match id · label. The id sits on
-// the category so a feeder dropdown's "7 · QF" ids map to board cards.
+// time · category · match id · label — the id sits on the category so feeder
+// dropdown ids map to board cards.
 function cardMeta(c, m) {
   const t = schedTime(m, S.tz);
   const time = t !== null ? fmtTime(t, S.tz) : '—';
@@ -169,15 +169,14 @@ function cardMeta(c, m) {
 function cardHtml(c, m, venue) {
   const st = isDone(m) ? m.result.status : 'open';
   const stCls = st === 'open' ? '' : ' done';
-  // wall-time placement in the day's px-per-minute scale; unscheduled cards in
-  // the unscheduled column are flow-positioned (their .unsched .match rule)
+  // wall-time placement in the day's scale; unscheduled cards are
+  // flow-positioned
   const wm = (m.scheduled != null && venue) ? wallMin(m.scheduled) : null;
   const slot = matchSlotMs(m, c) / 60000;
   const pos = wm != null && Number.isFinite(slot)
     ? ` style="top:${(wm - S.dayStart) * S.pxPerMin}px;min-height:${slot * S.pxPerMin}px;"` : '';
   const k = keyOf(c, m);
-  // one side row per side, meta last; a drag grip leads — only the grip drags,
-  // and the whole card (minus grip + pencils) is the score target
+  // one side row per side, meta last; a drag grip leads — only the grip drags
   return `<article class="match${stCls}" data-key="${esc(k)}" data-venue="${esc(venue || '')}"${pos}>
     <span class="grip" draggable="true" title="Drag to move"></span>
     ${sideRow(c, m, 0)}${sideRow(c, m, 1)}
@@ -185,9 +184,9 @@ function cardHtml(c, m, venue) {
   </article>`;
 }
 
-// One row per side: the name is inert display text, the pencil is the only
-// side-edit surface, and the score rides the row (the card handles score entry).
-// The pencil sits inside .who with its name — it edits that side, never the score.
+// One row per side: the pencil is the only side-edit surface, the score rides
+// the row. The pencil sits inside .who with its name — it edits that side,
+// never the score.
 function sideRow(c, m, i) {
   const sideName = esc(teamText(m.sides[i], c));
   return `<div class="side"${winnerIdx(m) === i ? ' data-win' : ''}><span class="who"><span class="name">${sideName}</span><button type="button" class="edit-side" data-side="${i}" title="edit side ${i === 0 ? 'a' : 'b'}" aria-label="edit side ${i === 0 ? 'a' : 'b'} — ${sideName}">✎</button></span><span class="score">${scoreCell(c, m, i)}</span></div>`;
@@ -248,8 +247,8 @@ function wireGrid() {
   });
 }
 
-// The candidate (venue, wallMin) under the pointer, in raw minutes — legal
-// snapping happens against the daemon's slot list, not the old gcd-only grid.
+// The candidate (venue, wallMin) under the pointer — legal snapping happens
+// against the daemon's slot list, not the old gcd-only grid.
 function hitTest(e) {
   const grid = $('grid');
   const gr = grid.getBoundingClientRect();
@@ -262,9 +261,8 @@ function hitTest(e) {
   return { venue, wm };
 }
 
-// The nearest legal start-minute in a venue column — null when the column has
-// none, so the ghost reads "no legal slot" instead of snapping to a spot the
-// write gate would reject.
+// nearest legal start-minute — null when the column has none, so the ghost
+// never snaps to a spot the write gate would reject.
 function legalSnap(venue, wm) {
   const ticks = S.legal && S.legal.byVenue.get(venue);
   if (!ticks || !ticks.length) return null;
@@ -273,8 +271,8 @@ function legalSnap(venue, wm) {
   return best;
 }
 
-// Legal start-minutes per venue for one match, from the daemon (the gate's own
-// rules — venue/player/feeder), computed once per drag.
+// Legal start-minutes per venue from the daemon (the gate's own rules),
+// computed once per drag.
 async function loadSlots(cid, mid) {
   const r = await get(`/api/slots?slug=${S.slug}&cat=${cid}&id=${mid}&day=${S.day}&gcd=${S.gcd}`);
   S.legal = { byVenue: new Map(Object.entries((r && r.ok) || {})) };
@@ -339,16 +337,15 @@ async function sendEdit(verb, cid, mid, value) {
 }
 
 // ---- the result modal ----
-// The input is the raw result entry — bare games · wo a/b · void · empty
-// clears. The daemon parses it with the editor's own grammar and
-// names a bad entry; the modal keeps the draft for fixing.
+// raw entry — bare games · wo a/b · void · empty clears. The daemon parses it
+// with the editor's grammar; the modal keeps a rejected draft for fixing.
 
 function openResult(cid, m) {
   const ctx = cat(cid);
   const hasOutcome = !!(m.games || m.result);
   const pre = m.games ? m.games.map(g => `${g.a}-${g.b}`).join(' ') : m.result && m.result.status === 'walkover' ? `wo ${m.result.winner}` : m.result && m.result.status === 'void' ? 'void' : '';
-  // a realistic example for this match's best-of: a 2-1 (3 games) won at full length,
-  // winners alternating so the shape is legible — games 1,3,5… go A, games 2,4… go B
+  // a realistic example for this match's best-of, winners alternating so the
+  // shape is legible — games 1,3,5… go A, games 2,4… go B
   const bo = bestOfOf(m, ctx) || 1;
   const ex = Array.from({ length: bo }, (_, g) => g % 2 ? '17-21' : '21-19').join(' ');
   const modal = $('modal');
@@ -367,9 +364,9 @@ function openResult(cid, m) {
     <div class="foot"><button data-x="cancel">Cancel</button><button data-x="apply" class="primary">Apply</button></div>
   </div>`;
   const input = modal.querySelector('#scoreinput');
-  // the fill buttons set the machine token (or clear); pressed mirrors the field's
-  // trimmed content on every key — "No result" presses only when a stored outcome
-  // is exposed to removal and disables when clearing would be a no-op
+  // the fill buttons set the machine token (or clear); pressed mirrors the
+  // field on every key — "No result" presses only when an outcome is actually
+  // exposed to removal
   const btns = [...modal.querySelectorAll('.fillbtns button')];
   const sync = () => {
     const v = input.value.trim();
@@ -402,11 +399,10 @@ function openResult(cid, m) {
 }
 
 // ---- the side picker (modal) ----
-// Legality comes from /api/sideopts — the daemon's view of the gate (consumed
-// slots, busy players, acyclic feeders), the same deal as the drag's /api/slots:
-// the options the modal greys and validateRepo can't disagree. Illegal options
-// that aren't the current value are greyed; the current value stays selectable
-// so it can be moved away, and Apply blocks any selection that is still illegal.
+// Legality comes from /api/sideopts — the daemon's view of the gate, same
+// deal as the drag's /api/slots. Illegal options that aren't the current value
+// are greyed; the current value stays selectable so it can be moved away, and
+// Apply blocks anything still illegal.
 async function openSide(cid, m, si) {
   const ctx = cat(cid);
   const size = teamSize(ctx);
@@ -509,8 +505,8 @@ async function refreshPending() {
   $('publish').disabled = p.commits.length === 0 || p.dirty;
   $('publish').title = p.dirty ? 'site/ is dirty — commit or stash first' : '';
 }
-// the pending popover is a native <details> — close it when the pointer lands elsewhere
-// (the summary toggles it, so clicking it again is always an escape hatch)
+// the pending popover is a native <details> — close it when the pointer lands
+// elsewhere
 document.addEventListener('click', e => {
   const p = $('pending');
   if (p.open && !p.contains(e.target)) p.open = false;

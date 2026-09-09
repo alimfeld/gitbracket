@@ -1,8 +1,7 @@
-// GitBracket tournament generator — `node gb.js schedule specs/<slug>.json`.
-// Writes the full tournament file wholesale (skeleton + scheduled matches) and
-// keeps the index in sync; the file is never hand-edited — scores and venue
-// moves go through the editor. Specs (and the regeneration caveat) live in
-// README (Specs); specs/2026-mammut60.json is a working example.
+// Tournament generator — `node gb.js schedule specs/<slug>.json`: writes the
+// full tournament file wholesale and keeps the index in sync. The file is
+// never hand-edited — scores and venue moves go through the editor. Specs live
+// in README (Specs); specs/2026-mammut60.json is a working example.
 'use strict';
 
 const fs = require('fs');
@@ -29,10 +28,9 @@ function roundRobin(teams) {
   return rounds;
 }
 
-// Snake the strength-ordered team list across k pools (sizes differ by at most
-// one) so every pool gets a spread of seeds and the top k land one-per-pool in
-// order — keeps the bracket's "winner in pool order = top seed" premise while
-// balancing pool strength.
+// Snake the strength-ordered list across k pools (sizes differ by at most one)
+// so every pool gets a seed spread and the top k land one per pool, in order —
+// keeps "winner in pool order = top seed" while balancing pool strength.
 function splitPools(teams, poolSize) {
   const k = Math.ceil(teams.length / poolSize);
   const pools = Array.from({ length: k }, () => []);
@@ -40,17 +38,16 @@ function splitPools(teams, poolSize) {
   return pools;
 }
 
-// Placement sub-bracket for n losers (n teams from one knockout round). Pairs
-// best vs worst recursively, producing a full bracket that determines every
-// rank in the range. For n=4 QF losers: 2 semis + 5th/6th + 7th/8th = 4 matches.
-// fin (bestOf/slotMinutes) is the spec's "final" override; it lands on the
-// bronze match only — deeper placement matches use the default knockout config.
+// Placement bracket for n losers from one knockout round: pair best vs worst
+// recursively, determining every rank in range (n=4 QF losers → 2 semis +
+// 5th/6th + 7th/8th). fin is the spec's "final" override — bronze only; deeper
+// placement matches use the default config.
 function buildPlacement(losers, mid, fin) {
   const n = losers.length;
   if (n < 2) return []; // single loser: rank is implied by bracket position, no match possible
   if (n === 2) {
     const m = { id: mid(), sides: [losers[0], losers[1]] };
-    if (fin.bestOf !== undefined) m.bestOf = fin.bestOf; // fin is always {} or the spec's final object — all callers pass one
+    if (fin.bestOf !== undefined) m.bestOf = fin.bestOf;
     if (fin.slotMinutes !== undefined) m.slotMinutes = fin.slotMinutes;
     return [m];
   }
@@ -70,13 +67,11 @@ function buildPlacement(losers, mid, fin) {
   return [...r1, ...buildPlacement(winners, mid, fin), ...buildPlacement(losers2, mid, fin)];
 }
 
-// Standard S-curve bracket order for seed indices lo..hi (hi-lo+1 a power of
-// two): recurse over the top half, pairing each of its seeds against the
-// mirror seed (best vs worst) and interleaving the halves. This is the generic
-// cross-pairing — it puts seed 1 and seed 2 in opposite halves, 1-4 in
-// opposite quarters, and so on, so with k pools the pool winners can only meet
-// from round R - ceil(log2 k) + 1 (R = rounds to the final; 2 pools: final
-// only, 4 pools: no earlier than the semis).
+// S-curve order for seed indices lo..hi (power-of-two span): pair each top-half
+// seed with its mirror (best vs worst), interleaving the halves — seed 1 and 2
+// land in opposite halves, 1-4 in opposite quarters, and so on, so with k pools
+// the pool winners can only meet from round R - ceil(log2 k) + 1 (2 pools: final
+// only, 4: no earlier than the semis).
 function sCurve(lo, hi) {
   if (lo === hi) return [lo];
   const half = sCurve(lo, lo + ((hi - lo) >> 1));
@@ -85,14 +80,11 @@ function sCurve(lo, hi) {
   return out;
 }
 
-// Single elimination, everyone advances. Strength order = pool winners first,
-// then interleaved by rank. The bracket is the standard S-curve draw (see
-// sCurve), which pairs best vs worst in round 1 and keeps the top seeds apart
-// until late. The top seeds (byes = next power of two minus field size) skip
-// round 1. Winners advance, the final takes fin (the spec's per-category
-// "final" override: bestOf / slotMinutes) where present. Placement depth is
-// controlled by placements (power of 2, default 4 = 3rd/4th play-off;
-// 8 adds 5th-8th classification, etc).
+// Single elimination, everyone advances. Strength order: pool winners first,
+// then interleaved by rank; the S-curve draw pairs best vs worst in round 1
+// and keeps top seeds apart. Top seeds (byes = next power of two minus field
+// size) skip round 1. The final takes fin (the spec's "final" override);
+// placement depth follows placements (power of 2, default 4 = bronze only).
 function buildKnockout(pools, names, mid, fin, placements) {
   placements = placements || 4;
   const total = pools.reduce((s, p) => s + p.length, 0);
@@ -109,9 +101,8 @@ function buildKnockout(pools, names, mid, fin, placements) {
   const order = sCurve(0, M - 1); // seed indices in bracket position order
   // Round-1 pairs are mirror positions (p, M-1-p); the rank-major interleave
   // can land two same-pool sides on one pair (4/3/3 -> A3 vs A4). Swap the
-  // second side with the last seed that keeps both its pair and the target
-  // pair split. A pool holding more than half the field can't be split at all
-  // (5/2: every other mirror pair needs a non-pool side) — those stay as built.
+  // second side with the last seed that keeps both pairs split; a pool holding
+  // more than half the field can't be split at all (5/2) — those stay as built.
   for (let j = 0; j < order.length; j += 2) {
     const a = order[j], b = order[j + 1];
     if (b >= total || seed[a].pool !== seed[b].pool) continue;
@@ -130,9 +121,9 @@ function buildKnockout(pools, names, mid, fin, placements) {
   const ms1 = [];
   const reachOf = new Map(); // match id -> pools that could feed its winner
   let round = [];
-  // Pairs emit in position order, so round 2's adjacent pairing keeps top
-  // seeds in opposite halves; the low seed of every pair is real (a low-half
-  // index is always < total), so each pair is a match or a top-seed bye.
+  // Pairs emit in position order, keeping top seeds in opposite halves; the
+  // low seed of every pair is real (a low-half index is always < total), so
+  // each pair is a match or a bye.
   for (let j = 0; j < order.length; j += 2) {
     const a = order[j], b = order[j + 1];
     if (b < total) {
@@ -146,15 +137,13 @@ function buildKnockout(pools, names, mid, fin, placements) {
     }
   }
   rounds.push(ms1);
-  // Same-pool separation beyond round 1: the seed swap above only guards the
-  // first round, so two byed seeds of one pool can still sit adjacent in a
-  // mid round (9/10/17-team fields -> C1 vs C2 in the QF). Split every round's
-  // array before pairing, the way round 1's swap does: move the second side to
-  // a later slot that keeps both its outgoing and incoming pairs cross-pool —
-  // without ever pairing two pool winners early (the S-curve depth rule the
-  // cross-pair test pins). Entries are pool slots (pools/ranks known) or
-  // winner edges (reachOf). A field with more pool slots than cross-pool
-  // partners can't be split — those stay as built, like round 1's.
+  // Same-pool separation beyond round 1: the swap above guards only the first
+  // round, so two byed seeds of one pool can still sit adjacent in a mid round
+  // (9/10/17-team fields -> C1 vs C2 in the QF). Split every round's array
+  // before pairing: move the second side to a slot that keeps both its
+  // outgoing and incoming pairs cross-pool, without early winner-vs-winner.
+  // Entries are pool slots or winner edges (reachOf). A field with more pool
+  // slots than cross-pool partners can't be split — those stay as built.
   const poolsOf = e => e && e.kind === 'pool' ? [{ pool: e.pool, rank: e.rank }]
     : [...(reachOf.get(e && e.match) || [])].map(p => ({ pool: p, rank: -1 }));
   const splitRound = (arr) => {
@@ -162,13 +151,13 @@ function buildKnockout(pools, names, mid, fin, placements) {
       const a = poolsOf(arr[i]), b = poolsOf(arr[i + 1]);
       if (!a.some(x => b.some(y => x.pool === y.pool))) continue;
       for (let j = arr.length - 1; j >= 0; j--) {
-        if (j === i || j === i + 1) continue; // a stays; b may move either way (the last pair has no later slot)
+        if (j === i || j === i + 1) continue; // a stays; b may move either way
         const c = poolsOf(arr[j]);
-        if (c.some(x => a.some(y => x.pool === y.pool))) continue; // y cross-pool with a
+        if (c.some(x => a.some(y => x.pool === y.pool))) continue; // c must be cross-pool with a
         if (a.some(x => x.rank === 1) && c.some(x => x.rank === 1)) continue; // no early winner-vs-winner
         const partner = poolsOf(arr[j % 2 ? j - 1 : j + 1]);
         if (b.some(x => x.rank === 1) && partner.some(x => x.rank === 1)) continue;
-        if (b.some(x => partner.some(y => x.pool === y.pool))) continue; // x cross-pool at its new slot
+        if (b.some(x => partner.some(y => x.pool === y.pool))) continue; // b must be cross-pool at its new slot
         [arr[i + 1], arr[j]] = [arr[j], arr[i + 1]];
         break;
       }
@@ -177,8 +166,7 @@ function buildKnockout(pools, names, mid, fin, placements) {
   };
   splitRound(round);
   // When byes exceed round-1 matches (5/9/10/11-team fields) two byed seeds
-  // must meet in round 2 — structurally forced, nothing crashes. Ids come out
-  // in chronological order regardless of build order — renumberByTime sorts them.
+  // must meet in round 2 — structurally forced, nothing crashes.
   while (round.length > 1) {
     const next = [];
     const ms = [];
@@ -202,11 +190,9 @@ function buildKnockout(pools, names, mid, fin, placements) {
   if (fin.bestOf !== undefined) finalM.bestOf = fin.bestOf;
   if (fin.slotMinutes !== undefined) finalM.slotMinutes = fin.slotMinutes;
 
-  // Build placement matches for each round whose losers' rank range fits within placements.
-  // Rounds tracked from first to final: rounds[rounds.length-1] = final (1 match),
-  // rounds[rounds.length-2] = semis (2 matches → losers rank 3-4), etc.
-  // A round at distance dist from the final has loser range up to 2^(dist+1);
-  // only build if that fits within placements (default 4 = bronze only).
+  // Placement matches for each round whose loser band fits within placements
+  // (rounds[length-1] is the final; a round dist from it has losers up to
+  // 2^(dist+1) — default 4 = bronze only).
   for (let ri = rounds.length - 2; ri >= 0; ri--) {
     const n = rounds[ri].length; // number of losers from this round
     if (2 ** (rounds.length - ri) <= placements) {
@@ -223,9 +209,8 @@ function buildKnockout(pools, names, mid, fin, placements) {
 function buildCategory(teams, cat, poolSize) {
   const pools = splitPools(teams, poolSize);
   if (pools.some(p => p.length < 2)) {
-    // A 1-team pool plays no matches, yet the knockout draws pool slots from it
-    // — the produced file then fails its own gate with a "unknown pool" error.
-    // Name the split here, like the other spec guards do.
+    // A 1-team pool yields no matches but feeds pool slots to the knockout, so
+    // the produced file would fail its own gate — name the split here.
     throw new Error(`spec: category ${cat.id}: ${teams.length} teams at poolSize ${poolSize} split into a lone-team pool — every pool needs at least 2 teams`);
   }
   const names = pools.map((_, i) => String.fromCharCode(65 + i));
@@ -233,9 +218,8 @@ function buildCategory(teams, cat, poolSize) {
   let next = 1;
   const mid = () => next++;
 
-  // Round-major feed: all pools play round r together. Feeding pool-by-pool
-  // let early pools hog the courts — idle waves and uneven rest per pool;
-  // round-major keeps every team across pools on the same wave grid.
+  // Round-major feed: all pools play round r together. Pool-by-pool feeding
+  // let early pools hog the courts — idle waves and uneven rest.
   const rr = pools.map((pool) => roundRobin(pool));
   const maxRounds = Math.max(...rr.map((rs) => rs.length));
   for (let r = 0; r < maxRounds; r++) {
@@ -264,15 +248,12 @@ function buildCategory(teams, cat, poolSize) {
 
 // Greedy court + time assignment across all categories. Matches run in build
 // order — pools first (players known), then knockout in dependency order. A
-// match's floor is its block's start, or the end of its feeders (match slots)
-// / its pool's last match (pool slots), so brackets never start before their
-// sources. Each match takes the earliest floor-aligned slot with a free court
-// and no same-window player double-book (pool matches only — knockout sides
-// resolve only after results, so dependency order is the only handle there).
-// Occupancy is a start/end window over the match's effective slot length
-// (matchSlotMs), matching the validator's overlap rule, so the off-set
-// morning/afternoon grids can't collide. Tuples are [cat, teamList, matches] —
-// the cat and matches positions only.
+// match's floor is its block's start, or the end of its feeders / its pool's
+// last match, so brackets never start before their sources. Each match takes
+// the earliest floor-aligned slot with a free court and no same-window player
+// double-book (pool matches only — knockout sides resolve only after results).
+// Occupancy is a start/end window over the effective slot length (matchSlotMs),
+// matching the validator's overlap rule. Tuples are [cat, teamList, matches].
 function scheduleMatches(categories, venues, tz, slotCfgOf, eventDate, blockStart) {
   if (venues.length === 0) throw new Error('spec: venues must be a non-empty id -> name map');
   const offset = tzOffset(tz, eventDate);
@@ -287,7 +268,7 @@ function scheduleMatches(categories, venues, tz, slotCfgOf, eventDate, blockStar
     if (Number.isNaN(start)) throw new Error(`spec: no blocks entry for category ${cat}`);
     const catSlots = slotCfgOf.get(cat);
     for (const m of matches) {
-      const slotMs = matchSlotMs(m, { slotMinutes: catSlots }); // per stage: pools vs knockout
+      const slotMs = matchSlotMs(m, { slotMinutes: catSlots });
       const players = fixedPlayers(m);
       let t = start;
       for (const s of m.sides) {
@@ -301,9 +282,9 @@ function scheduleMatches(categories, venues, tz, slotCfgOf, eventDate, blockStar
           (w) => slotsOverlap(t, t + slotMs, w.start, w.end) && [...players].some((p) => w.players.has(p)));
         if (venue && !blocked) {
           m.venue = venue;
-          // local wall date + time in the event tz, no offset — the tz in the
-          // file interprets it. A fixed eventDate prefix would backdate a slot
-          // crossing midnight by 24h, so the day comes from the instant.
+          // Local wall date + time in the event tz, no offset. A fixed
+          // eventDate prefix would backdate a midnight-crossing slot by 24h,
+          // so the day comes from the instant.
           m.scheduled = `${dayKey(t, tz)}T${fmtTime(t, tz)}:00`;
           courtUse.set(venue, [...(courtUse.get(venue) ?? []), { start: t, end: t + slotMs }]);
           endOf.set(m.id, t + slotMs);
@@ -317,11 +298,9 @@ function scheduleMatches(categories, venues, tz, slotCfgOf, eventDate, blockStar
   }
 }
 
-// The greedy's invariants, which validate.js can't see: every match got a slot,
+// The greedy's invariants, which validate.js can't see: every match got a slot
 // and no pool match double-books a player. (Knockout sides are unknown until
-// results; same-wave knockout matches are structurally disjoint — each feeds
-// a different bracket path.)
-// results/assertSchedule tuples: [cat, teamList, matches] — only cat and matches used.
+// results; same-wave knockout matches are structurally disjoint.)
 function assertSchedule(categories, slotCfgOf, tz) {
   const sched = []; // { m, t, players }
   for (const [cat, , matches] of categories) {
@@ -352,11 +331,10 @@ function assertSchedule(categories, slotCfgOf, tz) {
   }
 }
 
-// Renumber matches so the file is in chronological order with sequential ids —
-// diffs and slot refs stay readable. Instants come from schedTime (the shared
-// derivation), never a bare Date.parse — scheduled is wall time, only the
-// tournament tz anchors it. Build order is the tie-break for simultaneous
-// slots (the same wall time on different courts), free via the stable sort.
+// Renumber matches in chronological order with sequential ids — diffs and slot
+// refs stay readable. Instants come from schedTime, never bare Date.parse —
+// scheduled is wall time, only the tournament tz anchors it. Build order
+// breaks simultaneous-slot ties via the stable sort.
 function renumberByTime(ms, tz) {
   const ordered = [...ms].sort((a, b) => schedTime(a, tz) - schedTime(b, tz));
   const remap = new Map();
@@ -395,8 +373,8 @@ function generate(spec) {
   // ---- spec surface (fail fast; the gate below would catch most of these too) ----
   if (typeof slug !== 'string' || !ID_RE.test(slug)) throw new Error(`spec: slug ${JSON.stringify(slug)} must match ${ID_RE}`);
   if (!Number.isInteger(poolSize) || poolSize < 2) throw new Error(`spec: poolSize must be an integer >= 2, got ${JSON.stringify(poolSize)}`);
-  // name/location/timezone and bestOf are checked on the produced file by the
-  // validator gate at the end — one source for those messages, no mirrors here.
+  // name/location/timezone and bestOf are checked by the validator gate at the
+  // end — one source for those messages.
   const objMap = (v, field) => {
     if (typeof v !== 'object' || v === null || Array.isArray(v)) throw new Error(`spec: ${field} must be an id -> value map, got ${JSON.stringify(v)}`);
   };
@@ -410,13 +388,13 @@ function generate(spec) {
   if (!isRealDate(yy, mm, dd)) {
     throw new Error(`spec: date ${JSON.stringify(eventDate)} is not a real calendar date`);
   }
-  // tzOffset (via scheduleMatches) returns null on a bad timezone since the
-  // derive guard; name the real cause here instead of a "no blocks entry" error.
+  // A bad timezone would surface as a "no blocks entry" error — name the real
+  // cause here.
   try { new Intl.DateTimeFormat(LOCALE, { timeZone: timezone }); }
   catch { throw new Error(`spec: timezone ${JSON.stringify(timezone)} is not a valid IANA timezone`); }
-  // The one silent failure the gate can't see: a non-object final (bestOf on a number
-  // is undefined) drops the override and still validates. Everything else (bestOf,
-  // slotMinutes, final values) lands in the file where validate.js rejects it by name.
+  // A non-object final would drop the override silently and still validate —
+  // the one spec failure the gate can't see. Everything else lands in the file
+  // where validate.js rejects it by name.
   for (const c of categories) {
     if (c.final !== undefined && (typeof c.final !== 'object' || Array.isArray(c.final))) {
       throw new Error(`spec: category ${c.id}: final must be an object { bestOf?, slotMinutes? }, got ${JSON.stringify(c.final)}`);
@@ -429,9 +407,8 @@ function generate(spec) {
         throw new Error(`spec: category ${c.id}: placements must be a power of 2 >= 2, got ${JSON.stringify(c.placements)}`);
       }
     }
-    // A missing slotMinutes is only a validator warning, yet NaNs every slot
+    // A missing slotMinutes is only a validator warning, yet it NaNs every slot
     // window and piles every match on the first court — fail fast instead.
-    // (bestOf odds are the gate's job — the validator on the produced file.)
     if (typeof c.slotMinutes !== 'number' || !Number.isInteger(c.slotMinutes) || c.slotMinutes < 1) {
       throw new Error(`spec: category ${c.id}: slotMinutes must be a positive integer, got ${JSON.stringify(c.slotMinutes)}`);
     }
@@ -478,13 +455,11 @@ function generate(spec) {
     console.log(`${cat}: ${ms.length} matches`);
   }
 
-  // The one validator gate: the produced file's shape is checked against the
-  // real validateRepo before anything is written, so schedule.main never emits
-  // a file the gate would reject (name/location/timezone and bestOf odds live
-  // here, not in guarded mirrors up top). The spec-only guards above stay:
-  // poolSize, placements, knockout, final, and the id->value maps the output
-  // never carries; slotMinutes stays a spec guard because a zero-length window
-  // never terminates the greedy.
+  // Gate the produced file with the real validateRepo before writing anything —
+  // schedule.main never emits a file the gate would reject. The spec-only
+  // guards above stay: poolSize, placements, knockout, final, the id->value
+  // maps; slotMinutes stays a spec guard because a zero-length window never
+  // terminates the greedy.
   const g = validateRepo({
     readErrs: [],
     index: [{ slug, name, location, dates: schedDays(Object.values(out.matches).flat(), timezone) }],

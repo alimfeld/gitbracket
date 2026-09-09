@@ -1,18 +1,15 @@
 'use strict';
 
-// GitBracket admin daemon — a localhost page plus a tiny API over the repo.
-// The browser is the UI; this process is the only writer (git is the record):
-// every edit reuses the editor's writeEdit funnel — validate, write, commit —
-// so the browser can never outrun the gate. Pending = commits this branch's
-// own upstream hasn't seen (@{upstream}..HEAD); publish = validate + push +
-// deploy (the branch role
-// gates the target: main ships production, a branch only its scratch CNAME);
-// undo = reset the last commit, offered only while unpushed (history is
-// append-only once pushed); redo = restore the commit the last undo dropped,
-// live only while the undo is still the last act.
-// Nothing ships — site/ is untouched; the page lives under src/admin/ and the
-// daemon serves it locally. The rehearsal surface is `gb.js sim`, which runs
-// this same daemon against a rehearsal branch instead.
+// Admin daemon — the localhost page and tiny API over the repo. The browser is
+// the UI; this process is the only writer (git is the record), and every edit
+// reuses the editor's writeEdit funnel — validate, write, commit — so the
+// browser can never outrun the gate. Pending = commits this branch's own
+// upstream hasn't seen (@{upstream}..HEAD); publish = validate + push +
+// deploy, the branch role gating the target (main: production, a branch only
+// its scratch CNAME); undo = reset the last unpushed commit; redo = restore
+// the commit the last undo dropped, live only while the undo is still the last
+// act. Nothing ships — the page lives under src/admin/ and the daemon serves
+// it locally (`gb.js sim` runs this same daemon on a rehearsal branch).
 
 const http = require('http');
 const path = require('path');
@@ -22,15 +19,11 @@ const { matchSlotMs, schedTime, bestOfOf } = require('../site/derive.js');
 const { validateRepo } = require('./validate.js');
 const { ship, deployRole } = require('./publish.js');
 
-// The unpushed commits as [{sha, msg}], empty when nothing pending. The window
-// is the current branch's own upstream — @{upstream}..HEAD — not origin/main:
-// on main that is the director's unpushed work, on a rehearsal branch it is
-// origin/rehearsal/<name>, so a pushed score leaves the undo window exactly as
-// on main and the append-only rule the undo gate promises holds on every
-// branch (a window over origin/main would keep counting pushed rehearsal
-// commits forever and let undo strand the branch behind its own remote). No
-// upstream yet (a fresh repo, or sim's first push failed): fall back to
-// origin/main — hasRemote then still names whether a bare push could go out.
+// The unpushed commits as [{sha, msg}]. The window is the current branch's own
+// upstream (@{upstream}..HEAD), not origin/main — a window over origin/main
+// would keep counting pushed rehearsal commits forever and let undo strand the
+// branch behind its remote. No upstream yet: fall back to origin/main —
+// hasRemote then still says whether a bare push could go out.
 function unpushed(root) {
   const up = git(root, ['rev-parse', '--verify', '--quiet', '@{upstream}']);
   const ref = up.code === 0 ? '@{upstream}' : 'origin/main';
@@ -49,15 +42,14 @@ function gate(siteRoot) {
   return errs;
 }
 
-// The edit funnel, one path for every verb the page can send — score/wo/void/
-// clear via 'result', venue, time, a side, or a combined 'move' (a drag sets
-// time+venue atomically: one validate, one commit — a half-moved match must
-// never land). The editor owns the funnel (execEdit); this is the JSON view.
+// One path for every verb the page can send — score/wo/void/clear via
+// 'result', venue, time, side, or a combined 'move' (a drag sets time+venue
+// atomically: one validate, one commit). The editor owns the funnel; this is
+// the JSON view.
 function doEdit(state, verb, cat, matchId, value) {
-  // The page's one free-text entry is the result field: the raw string arrives
-  // here and is parsed with the editor's grammar (parsePayload), so the
-  // browser and typed entries can never drift. Everything else arrives
-  // pre-shaped (venue id, side object, a move's time+venue).
+  // The result field is the page's one free-text entry — parsed here with the
+  // editor's grammar, so browser and typed entries can never drift. Everything
+  // else arrives pre-shaped.
   if (verb === 'result' && typeof value === 'string') {
     const info = state.repo.tournaments.get(state.slug);
     const tz = (info && info.tjson && info.tjson.timezone) || 'UTC';
@@ -78,16 +70,12 @@ function cleanTree(root) {
   return git(root, ['diff', '--quiet']).code === 0 && git(root, ['diff', '--cached', '--quiet']).code === 0;
 }
 
-// undo/redo — mirror resets across the same edge. Undo drops HEAD (the pending
-// gate below makes the dropped commit unpushed by definition); redo restores
-// it as fresh pending. Both reset --hard, so the clean check must cover the
-// whole working tree — a site/-only scope would silently wipe an in-progress
-// edit elsewhere (README, a spec); untracked files are safe (reset --hard
-// leaves them) and stay unblocking. Redo is offered only while the undo is
-// still the last act — any committed edit or publish clears the stack, and the
-// redo itself verifies HEAD is still the undone commit's parent, so the reset
-// can only move back along the exact edge the undo took: pushed history is
-// never rewritten.
+// Mirror resets across the same edge. Both reset --hard, so the clean check
+// must cover the whole working tree — a site/-only scope would silently wipe
+// an in-progress edit elsewhere (README, a spec); untracked files are safe.
+// Redo lives only while its undo is still the last act, and it verifies HEAD
+// is still the undone commit's parent, so the reset can only move back along
+// the exact edge the undo took — pushed history is never rewritten.
 function undo(state) {
   if (!cleanTree(state.root)) return { error: 'the repo has uncommitted changes — commit or stash before undoing' };
   const p = unpushed(state.root);
@@ -120,12 +108,9 @@ function redo(state) {
 }
 
 // The day's legal starts for one match, as wall-clock minutes per venue — the
-// grid ticks (0..1440 step gcd) where the move passes the gate's own rules:
-// venue/player conflicts via the validator's shared atoms (schedEntries +
-// pairBusy), feeder bounds via tools.js's feederBounds — the same functions
-// validateRepo runs, so the preview and the write gate can't disagree. The
-// dragged match is off the board during the query: its own window conflicts
-// with nothing.
+// grid ticks where the move passes the gate's own rules (schedEntries +
+// pairBusy, feederBounds), so the preview and the write gate can't disagree.
+// The dragged match is off the board during the query.
 function legalSlots(tjson, cat, matchId, day, gcd) {
   const tz = tjson.timezone || 'UTC';
   const { entries } = schedEntries(tjson);
@@ -136,13 +121,12 @@ function legalSlots(tjson, cat, matchId, day, gcd) {
   const slotMin = matchSlotMs(m, ctx) / 60000;
   const players = fixedPlayers(m);
   const fb = feederBounds(m, ctx, tz);
-  let floor = fb.floor; // m's own bound: its feeder slots' ends (match-edge + pool sides), gate-mirrored
-  let ceiling = fb.ceiling; // match-edge consumers' starts — a pool match's rank consumers are invisible to feederBounds, so the pool scan extends it
-  // A pool match carries no own bound, yet a move is gated by every scheduled
-  // knockout match holding a rank slot of its pool: such a consumer must start
-  // after the pool's last scheduled end. Only committed data reaches this daemon
-  // (every edit validates), so a move can only raise the pool end — the whole
-  // consumer set collapses to one bound, the earliest scheduled consumer's start.
+  let floor = fb.floor; // m's own bound: its feeder slots' ends, gate-mirrored
+  let ceiling = fb.ceiling; // match-edge consumers' starts — a pool's rank consumers are invisible to feederBounds, so the pool scan extends it
+  // A pool match carries no own bound, but a move is gated by every scheduled
+  // knockout match holding a rank slot of its pool. Only committed data reaches
+  // the daemon (every edit validates), so a move can only raise the pool end —
+  // the whole set collapses to the earliest scheduled consumer's start.
   if (m.pool !== undefined) {
     for (const C of ctx.matches) {
       if (!C || C.pool !== undefined || C.scheduled === undefined) continue;
@@ -164,8 +148,8 @@ function legalSlots(tjson, cat, matchId, day, gcd) {
       const slotEnd = t + slotMin * 60000;
       if (ceiling !== null && slotEnd > ceiling) continue;
       let busy = false;
-      // the candidate carries the real match — its pool and slotMinutes size
-      // the window pairBusy tests, exactly as the gate sizes the same match
+      // the candidate carries the real match so pairBusy sizes its window
+      // exactly as the gate sizes the same match
       const cand = { m: { ...m, scheduled: iso, venue }, t, ctx, players };
       for (const e of others) if (pairBusy(cand, e).length) { busy = true; break; }
       if (!busy) ticks.push(wm);
@@ -175,12 +159,10 @@ function legalSlots(tjson, cat, matchId, day, gcd) {
   return out;
 }
 
-// The side picker's legality for one side of one match, mirroring the gate's
-// own atoms (consumedSlots, schedEntries, slotsOverlap, descendants) so the
-// options the modal greys and validateRepo agree — same no-drift deal as legalSlots.
-// The side being replaced frees its own slot. Busy players come only from
-// scheduled+undone matches overlapping this one (unscheduled: no window, so
-// no player is busy yet — the drag gate protects a later slot).
+// The side picker's legality for one side, mirroring the gate's own atoms
+// (consumedSlots, schedEntries, slotsOverlap, descendants) — same no-drift
+// deal as legalSlots. The side being replaced frees its own slot; busy players
+// come only from scheduled+undone matches overlapping this one.
 function sideOpts(tjson, cat, matchId, si) {
   const ms = (tjson.matches || {})[cat] || [];
   const ctx = catCtx(tjson, cat);
@@ -194,11 +176,11 @@ function sideOpts(tjson, cat, matchId, si) {
   const mine = entries.find(e => e.cat === cat && e.m.id === Number(matchId));
   let busy = [];
   if (mine) {
-    // A player is busy when they're already scheduled in any other
-    // scheduled+undone match whose window overlaps this one — venue-blind, and
-    // independent of whether the two matches share a player, because adding any
-    // of that match's players here would double-book them. Only fixed players
-    // count (a slot side resolves later; the gate's own pairBusy is the same).
+    // A player is busy when already scheduled in any other overlapping,
+    // scheduled+undone match — venue-blind, and independent of whether the two
+    // matches share a player, because adding any of that match's players here
+    // would double-book them. Only fixed players count (a slot side resolves
+    // later).
     const mineMs = matchSlotMs(mine.m, mine.ctx);
     const busySet = new Set();
     for (const e of entries) {
@@ -217,9 +199,8 @@ function sideOpts(tjson, cat, matchId, si) {
 }
 
 // Rehearsal-only: score the playable wave with random games through the same
-// funnel as every other edit — one wave pass per call, the set the kiosk's
-// statuses will render. Random scores are fabrication, so the gate is the
-// branch: only off-main (a rehearsal) scores anything; main is the record.
+// funnel as every edit. Scores are fabrication, so the gate is the branch:
+// only off-main (a rehearsal) scores anything; main is the record.
 function scoreWave(state) {
   if (!isRehearsalBranch(branchOf(state.root))) return { ok: false, error: 'score-wave is a rehearsal tool — run it on a rehearsal branch' };
   const info = state.repo.tournaments.get(state.slug);
@@ -234,8 +215,8 @@ function scoreWave(state) {
   return { ok: true, scored, errors };
 }
 
-// Reload the repo from disk — undo (git reset) rewrites files, so the in-memory
-// view must be rebuilt or the next edit would validate against stale data.
+// Reload from disk — undo (git reset) rewrites files, or the next edit would
+// validate against stale data.
 function reload(state) {
   state.repo = loadRepo(state.siteRoot);
 }

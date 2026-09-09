@@ -1,15 +1,10 @@
 'use strict';
 
-// Publish — the only thing that ships. git is the record, surge is the
-// transport: validate the data, then upload site/ to the domain named in
-// site/CNAME. The gate is validate only — tests are the dev gate (pre-commit),
-// validate is the data gate (this); a bypassed hook can't ship.
-//
-// The deploy role follows the branch, never the operator's intent: rehearsal
-// branches publish to their own scratch domain, main only to production.
-// Production is derived, never configured: the CNAME as origin/main has it.
-// Without that anchor (a fresh repo, never pushed) no branch can prove its
-// domain is scratch, so only main deploys — to whatever its CNAME says.
+// Publish — the only thing that ships: validate, then upload site/ to the
+// domain in site/CNAME. Tests are the dev gate (pre-commit), validate the data
+// gate here — a bypassed hook can't ship. The deploy role follows the branch,
+// never the operator's intent: production is the CNAME as origin/main has it,
+// and without that anchor only main deploys.
 
 const { spawnSync } = require('child_process');
 const fs = require('fs');
@@ -17,8 +12,7 @@ const path = require('path');
 const validate = require('./validate.js');
 const { branchOf, git } = require('./tools.js');
 
-// CLI entry (dispatched from gb.js): root is the repo root. validate.main
-// exits 1 on data errors, so nothing dirty ever reaches the upload.
+// CLI entry (from gb.js): validate exits 1 on data errors, so nothing dirty ships.
 function main(root) {
   validate.main(root);
   return ship(root);
@@ -30,8 +24,8 @@ function productionCNAME(root) {
   return c.code === 0 ? c.out.trim() : null;
 }
 
-// The deploy decision, pure of I/O beyond git reads: ok + the target domain,
-// or a refusal naming the reason the admin page and the CLI can show.
+// The deploy decision: ok + the target domain, or a refusal that names the
+// reason — shown by the CLI and the admin page.
 function deployRole(root) {
   const branch = branchOf(root);
   if (!branch) return { ok: false, why: 'detached HEAD — checkout main or a rehearsal branch first' };
@@ -59,9 +53,9 @@ function deployRole(root) {
 function ship(root) {
   const role = deployRole(root);
   if (!role.ok) { console.error(`publish: ${role.why}`); return 1; }
-  // git is the record — ship only what the repo has, so a fresh clone +
-  // publish reproduces live exactly. The daemon commits every edit, so a
-  // dirty site/ is a hand-edit (or a staged file) history would never see.
+  // git is the record — ship only what the repo has, so a fresh clone + publish
+  // reproduces live exactly; the daemon commits every edit, so a dirty site/
+  // is a hand-edit history would never see.
   const st = git(root, ['status', '--porcelain', '--', 'site/']);
   const dirty = (st.code === 0 ? st.out : '').trim();
   if (dirty) {

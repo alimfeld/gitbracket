@@ -1,10 +1,9 @@
 #!/bin/sh
-# Validate + the test suite before every commit: the hook is the fast local
-# gate, gb.js publish re-runs validate before it ships, so a bypassed hook
-# can't ship. The suite reads fixtures only — never live data — so a commit
-# that stages nothing but tournament data can't change its outcome; skip it
-# then, keep the disk validate (the daemon's in-memory check can't see
-# hand-edits made after it loaded).
+# Validate + tests before every commit: the hook is the fast local gate; gb.js
+# publish re-runs validate, so a bypassed hook can't ship. The suite reads
+# fixtures only — never live data — so a data-only commit can't change its
+# outcome; skip it then, keep the disk validate (the daemon's in-memory check
+# can't see hand-edits made after it loaded).
 set -e
 cd "$(git rev-parse --show-toplevel)"
 node gb.js validate || exit 1

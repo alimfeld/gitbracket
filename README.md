@@ -177,7 +177,22 @@ spec — the single source for the schedule:
 
 ## Tools
 
-**`gb.js`** — the one CLI. `node gb.js` (or `node gb.js admin [slug]`) starts the admin daemon — the single match-day interface: a browser page with the day's calendar grid (venues across, wall-clock minutes down, matches as slot-sized blocks), drag-to-reschedule (drops snap to the day's legal starts — the daemon computes them with the gate's own venue/player/feeder rules, so the preview and the write gate can't disagree), click-to-score/wo/void, a side-entry picker, a pending-changes panel (unpushed commits), undo (reset of the last unpushed commit), redo (restore the commit the last undo dropped), and a publish button (validate + push + deploy). Every edit goes through the one edit engine — validate, write, byte-identical diff, commit — so the browser can never outrun the gate; `node gb.js validate [slug]` checks data without the daemon; `node gb.js schedule <spec>` generates a tournament file from a spec (`specs/<slug>.json`); `node gb.js publish` ships `site/` — from `main` to the production domain (proved equal to `origin/main`'s CNAME), from a branch only to its own scratch domain (proved different from it, with `origin/main` as the anchor); `node gb.js sim [slug]` rehearses the whole pipeline end to end — it creates a `rehearsal/<slug>-<rand>` branch off a clean `main`, commits a scratch surge domain as `site/CNAME`, pushes the branch, starts admin, and points you at the deployed kiosk, where `?sim` runs the site on a rehearsal clock (◀/▶ panel, `]`/`[` keys, auto-aim at the first scheduled match) and a branch-gated Score wave drives the day with random results through the same funnel — `node gb.js sim --teardown` surges the scratch domain down and deletes the branch (rehearsal branches are practice, never merged: their scores are fabricated). The commands live as modules under `src/`; `site/` stays the shipping surface.
+**`gb.js`** — the one CLI. `node gb.js` (or `node gb.js admin [slug]`) starts
+ the admin daemon — the single match-day interface: a calendar grid (venues
+ across, wall-clock minutes down, matches as slot-sized blocks),
+ drag-to-reschedule (drops snap to the gate's own legal starts), click-to-
+ score/wo/void, a side picker, a pending-changes panel (unpushed commits),
+ undo/redo, and a publish button. Every edit goes through the one edit engine
+ — validate, write, byte-identical diff, commit — so the browser can never
+ outrun the gate. `node gb.js validate [slug]` checks data;
+ `node gb.js schedule <specs/xxx.json>` generates a tournament file from a
+ spec; `node gb.js publish` ships `site/` (from `main` to the production
+ domain, proved equal to `origin/main`'s CNAME; from a branch only to its own
+ scratch domain); `node gb.js sim [slug]` rehearses the whole pipeline on a
+ `rehearsal/<slug>-<rand>` branch with a scratch surge domain and a `?sim`
+ rehearsal clock, and `--teardown` undoes it (rehearsal branches are practice,
+ never merged). Commands live as modules under `src/`; `site/` stays the
+ shipping surface.
 
 ## Development
 

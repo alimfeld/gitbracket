@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 'use strict';
 
-// GitBracket CLI — the single entry point; every command dispatches into src/.
-// Run from anywhere under the repo root (the root is found by walking up).
-// The bare `node gb.js` is the admin daemon — the one match-day interface.
+// GitBracket CLI — every command dispatches into src/. Run from anywhere under
+// the repo root; the bare `node gb.js` is the admin daemon.
 
 const { findRoot } = require('./src/tools.js');
 const validate = require('./src/validate.js');

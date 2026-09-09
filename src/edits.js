@@ -1,10 +1,9 @@
 'use strict';
 
-// GitBracket edit engine — the one write path every surface uses. The admin
-// daemon (the only editor) drives it: every edit validates, writes, and
-// commits itself, so the process can die at any instant with nothing lost.
-// The grammar (parsePayload) is shared with the daemon's result field, so
-// the browser and any typed entry can never drift.
+// Edit engine — the one write path. Every edit validates, writes, and commits
+// itself, so the process can die at any instant with nothing lost. The grammar
+// (parsePayload) is shared with the daemon's result field — browser and typed
+// entries can never drift.
 
 const fs = require('fs');
 const path = require('path');
@@ -27,10 +26,9 @@ function findMatch(matches, matchId, fn) {
   return fn(m) ?? null;
 }
 
-// Score a match: games are the evidence, and once they reach the best-of
-// target the outcome is recorded as played (winner stored, per the model — the
-// validator proves the games agree). A prefix update (games below target)
-// stays in play; re-scoring replaces any earlier result.
+// Score a match: games are the evidence; once they reach the best-of target
+// the outcome is recorded as played (the validator proves the games agree). A
+// prefix update stays in play; re-scoring replaces any earlier result.
 function applyScore(matches, matchId, games, ctx) {
   return findMatch(matches, matchId, m => {
     m.games = games;
@@ -52,8 +50,8 @@ function applyResult(matches, matchId, status, winner) {
   });
 }
 
-// The clear: games and result are one round-trip pair, so removing a score
-// removes both — the match returns to the unresolved board.
+// games and result are one round-trip pair — a clear removes both, and the
+// match returns to the unresolved board.
 function applyClear(matches, matchId) {
   return findMatch(matches, matchId, m => { delete m.games; delete m.result; return null; });
 }
@@ -65,11 +63,11 @@ function applyVenue(matches, matchId, venueId) {
   });
 }
 
-// The generic side op: rewrite one side to any validator-valid slot — players,
-// pool rank, or match edge (winner/loser). All validity is the validator's:
-// unknown ids, pair-fixing, same-set, consumed-twice, rank range, acyclicity,
-// player double-book — writeEdit validates the whole repo and rolls back. A
-// dead-tie break is just `e a players …` over a pool slot that renders TBD.
+// Rewrite one side to any validator-valid slot — players, pool rank, or match
+// edge. All validity is the validator's (unknown ids, pair-fixing, same-set,
+// consumed-twice, rank range, cycles, double-books); writeEdit validates the
+// whole repo and rolls back. A dead-tie break is just explicit players over a
+// pool slot that renders TBD.
 function applySide(matches, matchId, value) {
   return findMatch(matches, matchId, m => {
     if (!Array.isArray(m.sides) || m.sides.length !== 2) return 'match has no two sides';
@@ -83,10 +81,11 @@ function buildScheduled(hhmm, tz, date, now) {
   const [h, m] = hhmm.split(':');
   if (+h > 23 || +m > 59) return null;
   if (date !== undefined && !DATE_RE.test(date)) return null;
-  // an impossible date (2026-02-30) passes this regex — the validator gate rejects it on write, like applyVenue's unknown venues
-  // the default date is "today" — the caller's clock (the daemon's real clock; sim time never reaches an edit)
+  // An impossible date (2026-02-30) passes this regex — the validator gate
+  // rejects it on write, like applyVenue's unknown venues; the default date is
+  // the caller's clock (the daemon's real clock — sim time never reaches an edit)
   const d = date || dayKey(now ?? Date.now(), tz);
-  if (!d) return null; // dayKey: null on an unreadable timezone — never emit a "nullT…" scheduled string
+  if (!d) return null; // dayKey is null on an unreadable timezone — never emit a "nullT…" string
   return `${d}T${h.padStart(2,'0')}:${m}:00`; // wall time — the tournament tz interprets it
 }
 
@@ -94,9 +93,8 @@ function applyTime(matches, matchId, isoString) {
   return findMatch(matches, matchId, m => { if (isoString == null) delete m.scheduled; else m.scheduled = isoString; });
 }
 
-// A move sets time and venue together — one writeEdit, one commit, so a drag
-// on the admin grid can never land a half-moved match. null clears the field,
-// like applyVenue/applyTime's empty rides.
+// Time and venue together — one writeEdit, one commit, so a drag on the admin
+// grid never lands a half-moved match. null clears the field.
 function applyMove(matches, matchId, value) {
   return findMatch(matches, matchId, m => {
     if (value.time == null) delete m.scheduled; else m.scheduled = value.time;
@@ -105,12 +103,11 @@ function applyMove(matches, matchId, value) {
   });
 }
 
-// Apply an edit to one match, validate the whole repo, write — or roll the file
-// back and report the validator's errors. (writeTournament's byte-identical
-// formatting keeps the commit diff to the one edited match.) apply receives
-// the category context so score can read the best-of target. An edit whose
-// result is byte-identical to the stored file changes nothing: no write, no
-// commit — execEdit reports unchanged.
+// Apply an edit, validate the whole repo, write — or roll back and report the
+// validator's errors. (writeTournament's byte-identical formatting keeps the
+// commit diff to the one edited match.) An edit whose result is byte-identical
+// to the stored file changes nothing: no write, no commit — execEdit reports
+// unchanged.
 function writeEdit(siteRoot, repo, slug, catId, apply) {
   const info = repo.tournaments.get(slug);
   if (!info || !info.tjson) return { err: `unknown tournament ${slug}` };
@@ -126,11 +123,11 @@ function writeEdit(siteRoot, repo, slug, catId, apply) {
   const beforeJson = JSON.parse(before); // the rollback snapshot — the day guard below reads it too
   const aerr = apply(ms, ctx);
   if (aerr) return { err: aerr };
-  // The published days (the index dates) are fixed: only the schedule generator
-  // rewrites them, and that's off the table once results are in. An edit that
-  // moves a match onto another day — or clears the last match of one — would
-  // desync the index with no edit path to follow, so it's refused here with the
-  // cause named; the validator's dates-mismatch error stays for out-of-band hand edits.
+  // The published days (the index dates) are fixed: only the schedule
+  // generator rewrites them, and that's off the table once results are in. An
+  // edit that moves a match off a day — or clears the last match of one —
+  // would desync the index with no edit path to follow, so it's refused here;
+  // the validator's dates-mismatch error stays for out-of-band hand edits.
   const daysOf = tj => schedDays(Object.values(tj.matches || {}).flat(), tj.timezone || 'UTC');
   const beforeDays = daysOf(beforeJson);
   const afterDays = daysOf(tjson);
@@ -140,7 +137,7 @@ function writeEdit(siteRoot, repo, slug, catId, apply) {
     return { err: `refused: this edit changes the tournament's scheduled days (${fmtDays(beforeDays)} → ${fmtDays(afterDays)}) — the index dates are fixed once the schedule is published and no edit follows them; keep the match on a published day, or change the days by hand-editing the file and its tournaments.json entry together` };
   }
   // tjson is the single view of the data, so the validator sees exactly what
-  // writeTournament will write — the dates-vs-index and pass-B checks agree.
+  // writeTournament will write.
   const { errs } = validateRepo(repo);
   if (errs.length) {
     ms.splice(0, ms.length, ...((beforeJson.matches || {})[catId] || [])); // undo the in-memory edit too — a same-process retry must start from the original
@@ -154,11 +151,9 @@ function writeEdit(siteRoot, repo, slug, catId, apply) {
   return { file };
 }
 
-// The current scoreable wave as entries — the one readiness predicate the
-// admin's score-wave (and the play-through test) shares: unplayed matches with
-// resolved sides at each category's earliest scheduled time. Computed fresh
-// every call, per derive.js's memoization law — a corrected score surfaces on
-// the next pass.
+// The current scoreable wave as entries — unplayed matches with resolved sides
+// at each category's earliest scheduled time. Computed fresh every call, so a
+// corrected score surfaces on the next pass.
 const waveEntries = tjson => {
   const out = [];
   for (const cid of Object.keys(tjson.matches || {})) {
@@ -170,14 +165,13 @@ const waveEntries = tjson => {
 
 // ---------- the shared grammar ----------
 
-// Payload grammar per edit kind — the admin daemon's result field parses with
-// it, so typed entries and shaped JSON can never drift. Grammar errors are
-// caught here, before any I/O; data errors (unknown venue, impossible date)
-// belong to the validator.
+// Payload grammar per edit kind — the daemon's result field parses with it, so
+// typed entries and shaped JSON can never drift. Grammar errors are caught
+// here, before any I/O; data errors belong to the validator.
 function parsePayload(kind, tokens, tz, now) {
   if (kind === 'result') {
     // one outcome grammar: games (bare) · wo a · void · empty clears — the
-    // shape rides the value, so commit kinds keep score/walkover/void
+    // shape rides the value
     if (!tokens.length) return { value: { shape: 'clear' } }; // empty payload clears
     const head = tokens[0];
     if (head === 'wo') {
@@ -231,9 +225,8 @@ function parsePayload(kind, tokens, tz, now) {
   if (!hhmm) return { err: 'expected hh:mm (optionally preceded by a date) — empty clears' };
   const iso = buildScheduled(hhmm, tz, date, now);
   if (iso === null) {
-    // buildScheduled fails on a bad time — or, when the time itself is fine, on
-    // the default day the tz can't compute (an explicit date never fails here:
-    // the regex above ran, and an impossible one is the write gate's job), so
+    // buildScheduled fails on a bad time — or, when the time is fine, on the
+    // default day the tz can't compute (an explicit date never fails here), so
     // name the timezone, not the time
     const tm = /^(\d{1,2}):(\d{2})$/.exec(hhmm);
     return tm && +tm[1] <= 23 && +tm[2] <= 59
@@ -243,13 +236,11 @@ function parsePayload(kind, tokens, tz, now) {
   return { value: iso };
 }
 
-// Side is two verbs (side-a / side-b) so an edit names the side it rewrites —
-// SIDE_VERBS maps verb → side index.
+// Two verbs (side-a / side-b) so an edit names the side it rewrites.
 const SIDE_VERBS = { 'side-a': 0, 'side-b': 1 };
 
-// The result verb folds score / walkover / void / clear into one entry — the
-// value's shape dispatches to the domain applies, so the commit kinds stay
-// score / walkover / void and the history greps keep working.
+// 'result' folds score / walkover / void / clear into one entry — the shape
+// dispatches to the domain applies.
 function applyFor(verb, matchId, value) {
   if (verb === 'result') return (ms, ctx) => {
     if (value.shape === 'score') return applyScore(ms, matchId, value.games, ctx);
@@ -269,12 +260,10 @@ function commitMessage(kind, slug, cat, matchId, detail) {
   return `${kind}(${slug}): ${cat}/${matchId} ${detail}`;
 }
 
-// One-line summary of what changed — mirror it in the commit message.
-// Keyed off the edit kind, never the match state, so a venue or time
-// edit on an already-decided match reports the move, not the result. side
-// carries value+ctx: the applied side's label, e.g. "side a → Winner of 8". A
-// side op on a decided match keeps the stored games/result for the NEW team,
-// so the detail flags it — history must never read as a silent rewrite.
+// One-line summary of what changed — keyed off the edit kind, never the match
+// state, so a venue or time edit on a decided match reports the move, not the
+// result. A side op on a decided match keeps the stored games/result for the
+// NEW team, so the detail flags it — history must never read as a silent rewrite.
 function editDetail(kind, m, value, ctx) {
   return kind === 'result' ? (value.shape === 'score' ? (m.games || []).map(gg => `${gg.a}-${gg.b}`).join(' · ') // dashes — the detail reads like the board column
       : value.shape === 'walkover' ? `side ${value.winner} wins by walkover`
@@ -288,9 +277,8 @@ function editDetail(kind, m, value, ctx) {
 
 // ---------- the edit funnel (edits commit per AGENTS.md) ----------
 
-// The edit funnel's only exit: validate, write, and always commit — git is
-// the record, and the daemon is the only writer. The error or the rolled-back
-// validation report becomes the page's flash.
+// Validate, write, and always commit — git is the record and the daemon is the
+// only writer. The error or rolled-back report becomes the page's flash.
 function execEdit(state, verb, cat, matchId, value) {
   const { root, siteRoot, repo, slug } = state;
   const info = repo.tournaments.get(slug);
@@ -302,8 +290,8 @@ function execEdit(state, verb, cat, matchId, value) {
   if (res.err) return { error: res.err };
   if (res.errs) return { errors: res.errs };
   if (res.unchanged) return { unchanged: true }; // same data — nothing written, nothing committed
-  // the git kind names what happened: a result edit keeps its shape kind, a
-  // clear takes the kind of what it removed — greps like ^score( still find it
+  // a result edit keeps its shape kind; a clear takes the kind of what it
+  // removed — greps like ^score( still find it
   const kind = verb === 'result'
     ? (value.shape === 'clear' ? (preStatus === 'walkover' ? 'walkover' : preStatus === 'void' ? 'void' : 'score') : value.shape)
     : SIDE_VERBS[verb] !== undefined ? 'side' : verb;
@@ -311,8 +299,8 @@ function execEdit(state, verb, cat, matchId, value) {
   const detail = editDetail(verb, m, value, ctx);
   const msg = commitMessage(kind, slug, cat, matchId, detail);
   git(root, ['add', path.relative(root, file)]);
-  // pathspec commit: only this edit's file rides in — anything else the
-  // operator staged stays staged, never swept into a match-day commit
+  // pathspec commit — anything else the operator staged stays staged, never
+  // swept into a match-day commit
   const c = git(root, ['commit', '-m', msg, '--', path.relative(root, file)]);
   if (c.code !== 0) {
     return { error: `${path.relative(root, file)} written but the commit failed:\n${c.err}\n(file staged — commit it manually)` };

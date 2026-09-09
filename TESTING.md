@@ -14,25 +14,24 @@ node gb.js sim 2026-mammut60
 # → kiosk: after publishing, open https://rehearsal-<…>.surge.sh/?sim#2026-mammut60/venues
 ```
 
-Every part of the day is practiced on the branch — the staging, the commits,
-the pushes, the surge deploy — against a site that can never reach the
-production domain (the publish gate proves it: production is `origin/main`'s
-CNAME, a branch may only ship a CNAME that differs from it).
+Everything is practiced on the branch — the commits, the pushes, the surge
+deploy — against a site that can never reach production (the deploy gate
+below).
 
 - **Score the day with the admin UI** — drag to reschedule, click to score,
   undo/redo, pending list. On a rehearsal branch a **Score wave** button (or
   the `x` key) scores the whole playable wave with random games through the
-  same validate-write-commit funnel, so the kiosk's statuses and board
-  progress the way a real day does.
+  same validate-write-commit funnel, so the deployed kiosk progresses like a
+  real day.
 - **Rehearse the kiosk clock** — open the scratch site with `?sim`: the kiosk
   runs on a rehearsal clock an operator controls — the `◀`/`▶` panel (and
   `]`/`[`) step it ±30 minutes, reset returns to real time, and the first
-  load aims at the event's first scheduled match, so the kiosk opens on the
-  event. Statuses, auto-centering, and the board clock all track the
-  rehearsal; the clock never changes what's scoreable.
+  load aims at the event's first scheduled match. Statuses, auto-centering,
+  and the board clock all track the rehearsal; the clock never changes what's
+  scoreable.
 - **Iterate** — edit in admin, hit Publish (validate + push + surge to the
-  scratch domain), watch the deployed kiosk. Every edit validates and
-  commits itself; nothing is ever lost mid-process.
+  scratch domain), watch the deployed kiosk — every edit validates and
+  commits itself, so nothing is lost mid-process.
 
 A rehearsal branch is practice, never merged — its scores are fabricated, and
 its scratch CNAME must not ride into production history. When the rehearsal
@@ -48,11 +47,11 @@ and it refuses to touch a non-scratch CNAME. Then the real day happens on
 
 ## The real day: admin on main
 
-`node gb.js` (or `node gb.js admin`) starts the admin daemon — the single
-match-day interface. Drag reschedule, click-to-score/wo/void, side-entry
-picker, pending-changes panel (unpushed commits), undo, redo, and a publish
-button (validate + push + deploy). The daemon reads `site/` when it starts,
-so restart it after edits made in another terminal.
+`node gb.js` (or `node gb.js admin`) starts the admin daemon — the one
+match-day interface: drag reschedule, click to score/wo/void, side picker,
+pending list (unpushed commits), undo/redo, and publish (validate + push +
+deploy). The daemon reads `site/` when it starts, so restart it after edits
+made in another terminal.
 
 The deploy gate (shared by the admin publish button and `node gb.js publish`):
 

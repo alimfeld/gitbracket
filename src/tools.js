@@ -1,41 +1,34 @@
 'use strict';
 
-// Logic shared by the tools (validator, generator, editor) that the site never
-// ships — repo I/O plus tool-only domain predicates. site/ is the shipping
-// surface; anything only a tool consumes lives here, so derive.js stays
-// exactly the site's domain model. (The "site root" is the directory holding
-// tournaments.json — for a real repo that's <repo>/site, for fixtures/ it's
-// the fixture directory itself.)
+// Tool-only logic — repo I/O plus domain predicates the site never ships, so
+// derive.js stays exactly the site's model. (The "site root" is the directory
+// holding tournaments.json: <repo>/site, or a fixtures/ dir.)
 
 const fs = require('fs');
 const path = require('path');
 const { spawn, spawnSync } = require('child_process');
 const { ID_RE, makeCat, schedTime, isDone, matchSlotMs } = require('../site/derive.js');
 
-// Window collision test: shared by the validator's venue-overlap rule and the
-// generator's court/player occupancy — one predicate, no drift. (matchSlotMs,
-// its sibling that sizes a window, stays in derive.js: the site's kiosk uses it.)
+// Window collision: shared by the validator's venue rule and the generator's
+// occupancy — one predicate, no drift.
 const slotsOverlap = (a0, a1, b0, b1) => a0 < b1 && b0 < a1;
 
 // A match's known players as a Set, null when a side is a slot (match/pool) —
-// such a side resolves only after results. Shared by the validator's player
-// double-book rule and the generator's occupancy scan (same predicate, no drift).
+// such sides resolve only after results. Shared by the validator and generator.
 function fixedPlayers(m) {
   return Array.isArray(m.sides) && m.sides.length === 2 && m.sides.every(s => s && s.kind === 'players' && Array.isArray(s.ids))
     ? new Set(m.sides.flatMap(s => s.ids)) : null;
 }
 
-// The one category context a tool pass iterates: meta + matches by category
-// id — the editor and admin daemon both build it for every category, so the
-// find+makeCat lookup lives here.
+// The one category context a tool pass iterates — editor and admin both build
+// it, so the find+makeCat lookup lives here.
 function catCtx(tjson, cid) {
   return makeCat({ meta: (tjson.categories || []).find(c => c.id === cid), matches: (tjson.matches || {})[cid] || [] }, tjson);
 }
 
-// The outcome rule the tools share: evidence to winner, derived the same way by
-// the validator and the editor. The site never runs it — results are stored and
-// the renderers read the winner — so per the derive.js tenant rule it lives
-// here, not on the site's script. countWins is its private part.
+// Evidence to winner, derived the same way by validator and editor. The site
+// never runs it — renderers read the stored winner — so it lives here, not on
+// the site's script.
 function countWins(games) {
   const w = [0, 0];
   for (const g of games) {
@@ -49,10 +42,9 @@ function countWins(games) {
 // The games needed to decide, or null when the stage has no valid bestOf.
 const winTarget = b => (typeof b === 'number' && b % 2 === 1) ? (b + 1) / 2 : null;
 
-// Random games for a rehearsal score (admin's score-wave): the winner side
-// takes the target games, with the loser's wins leading so no side reaches
-// the target before the last game (the validator's match-flow rule); deuce
-// games (12+, +2) a fifth of the time.
+// Random games for a rehearsal score: the winner takes the target games, the
+// loser's wins leading so neither side reaches the target before the last
+// game (the validator's rule); deuce games a fifth of the time.
 function makeGames(bestOf) {
   const target = (bestOf + 1) / 2;
   const n = target + Math.floor(Math.random() * (bestOf - target + 1));
@@ -76,8 +68,7 @@ function reachedWinner(games, target) {
 }
 
 // A scheduled match's wall-clock slot window; null when unscheduled or the
-// slot length is uncomputable (no slotMinutes anywhere). feederBounds' private
-// helper — no site path needs the window itself, only the bounds it sizes.
+// slot length is uncomputable. feederBounds' private helper.
 function schedWindow(m, ctx, tz) {
   const t = schedTime(m, tz);
   if (t === null) return null;
@@ -85,16 +76,11 @@ function schedWindow(m, ctx, tz) {
   return Number.isNaN(ms) ? null : { start: t, end: t + ms };
 }
 
-// Feeder timing bounds on a knockout match's slot start, as wall-clock ms.
-// floor: the latest end of the match's own sources — a match-slot feeder's
-// slot, plus the feeding pool's last scheduled match (pool matches have no
-// slot relations, so the pool's end is its last match's end). ceiling: the
-// earliest start of the matches this one feeds — direct consumers only, and
-// bounds compose down the chain (M ends ≤ C starts and C ends ≤ Q starts
-// imply M ends ≤ Q starts), so a per-match direct ceiling needs no transitive
-// walk. A null bound = no scheduled relation constrains that side. Shared by
-// the validator gate and the admin daemon's slot preview, so every typed time
-// lands behind the same rule — the gate sees the lie too.
+// Feeder timing bounds on a knockout match's slot start. floor: the latest end
+// of the match's sources (its match-slot feeder, plus the pool's last
+// scheduled match). ceiling: the earliest start of what it feeds — direct
+// consumers only, since bounds compose down the chain. Null = unconstrained.
+// Shared by the validator and the admin slot preview.
 function feederBounds(m, ctx, tz) {
   if (!m || typeof m !== 'object' || !Array.isArray(m.sides)) return null;
   let floor = null, ceiling = null;
@@ -133,8 +119,7 @@ function isRealDate(y, m, d) {
   return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
 }
 
-// Repo-root discovery for the CLI entry (gb.js dispatches, this walks): find
-// the ancestor directory holding site/tournaments.json, so `node gb.js` works
+// Walk up to the ancestor holding site/tournaments.json, so `node gb.js` works
 // from anywhere under the repo.
 function findRoot(from) {
   let dir = from || process.cwd();
@@ -142,27 +127,26 @@ function findRoot(from) {
   return dir;
 }
 
-// The current branch name ('' on a detached HEAD) — the one predicate publish's
-// deploy role, the admin's rehearsal surface, and sim's start/teardown gate on.
+// The current branch name ('' on a detached HEAD) — what publish, admin, and
+// sim gate on.
 function branchOf(root) {
   const r = git(root, ['symbolic-ref', '--short', 'HEAD']);
   return r.code === 0 ? r.out.trim() : '';
 }
 
-// Rehearsal branches are gb.js sim's making and never merge — one predicate, so
-// the admin's score-wave gate and sim's teardown agree on what a rehearsal is.
+// Rehearsal branches never merge — one predicate, so admin's score-wave gate
+// and sim's teardown agree on what a rehearsal is.
 const isRehearsalBranch = b => /^rehearsal\//.test(b);
 
-// The shared git shell — spawnSync, not execSync: execSync has no argv array,
-// so args must be baked into the command string, which breaks ids with spaces
-// and quotes.
+// spawnSync, not execSync — execSync has no argv array, so args would be baked
+// into the shell string, breaking ids with spaces or quotes.
 function git(root, args) {
   const r = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
   return { code: r.status === 0 ? 0 : 1, out: r.stdout || '', err: r.stderr || '' };
 }
 
-// The daemon's default tournament — the last index entry it can actually read;
-// a null file would crash every command, so skip it.
+// The daemon's default tournament — the last index entry it can actually read
+// (a null file would crash every command).
 function defaultSlug(repo) {
   if (!repo.index.length) return null;
   const last = repo.index[repo.index.length - 1];
@@ -179,11 +163,9 @@ function readJson(file, errs) {
   }
 }
 
-// Read a site root into memory:
-// { index, tournaments: Map<slug, { tjson }>, readErrs }. The file itself is
-// the one view of the data — tjson.matches IS the matches, no parallel Map to
-// keep identical. validateRepo() runs every check on this structure; tests
-// build it from fixtures/.
+// Read a site root into memory: { index, tournaments: Map<slug, { tjson }>,
+// readErrs }. The file is the one view of the data — no parallel Map to keep
+// identical.
 function loadRepo(siteRoot) {
   const readErrs = [];
   const index = readJson(path.join(siteRoot, 'tournaments.json'), readErrs);
@@ -208,9 +190,8 @@ function writeTournament(siteRoot, slug, tjson) {
   fs.writeFileSync(path.join(siteRoot, 'tournaments', `${slug}.json`), tournamentText(tjson));
 }
 
-// Write the index in its established one-entry-per-line shape — pretty-printing
-// the whole array would reflow every line on each add, blurring per-tournament
-// diffs. Sibling of writeTournament: both byte formats are contracts.
+// One entry per line — pretty-printing the whole array would reflow every line
+// on each add, blurring per-tournament diffs.
 function writeTournamentIndex(siteRoot, entries) {
   fs.writeFileSync(path.join(siteRoot, 'tournaments.json'), '[' + entries.map((t) => `\n  ${JSON.stringify(t)}`).join(',') + '\n]\n');
 }
@@ -237,17 +218,13 @@ function staticFile(root, rel) {
   return { body: fs.readFileSync(file), type: MIME[path.extname(file)] || 'application/octet-stream' };
 }
 
-// The board's scheduled-unplayed window list — every match that can conflict
-// with a placement: {m, t, ctx, players, cat}. noSlot names categories whose
-// scheduled matches resolve to no slot length (a warn for the validator, noise
-// to a query). Shared by the validator's venue/double-book scan and the admin
-// daemon's placement preview — one definition of what is on the board.
+// The board's scheduled-unplayed windows: {m, t, ctx, players, cat}. noSlot
+// names categories with no resolvable slot length (a warn for the validator).
+// Shared by the validator's scan and the admin placement preview.
 function schedEntries(tjson) {
   const entries = [];
   const noSlot = new Set();
-  // The raw categories value may be malformed (an object, a null entry) — the
-  // validator's shape loop reports those; this scan only skips them, or the
-  // gate would crash instead of reporting (never throw).
+  // Skip malformed categories — the validator's shape loop reports them (never throw).
   for (const cat of Array.isArray(tjson.categories) ? tjson.categories : []) {
     if (!cat || typeof cat !== 'object') continue;
     const ms = tjson.matches && typeof tjson.matches === 'object' && !Array.isArray(tjson.matches) ? tjson.matches[cat.id] : undefined;
@@ -265,11 +242,10 @@ function schedEntries(tjson) {
   return { entries, noSlot };
 }
 
-// The slot sources a category's match sides consume, one entry per distinct
-// slot keyed to the first match that takes it: pool ranks ("pool:A:1") and
-// match edges ("9:winner"). First-wins, so validate's "also by <id>" names
-// the earliest owner. Shared by the validator's consumed-twice rule and the
-// admin daemon's side-picker legality — one definition of what is taken.
+// The slot sources a category's sides consume, keyed to the first match that
+// takes each: pool ranks ("pool:A:1") and match edges ("9:winner"), first-wins
+// so the validator's "also by <id>" names the earliest owner. Shared by the
+// validator and the admin side picker.
 function consumedSlots(matches) {
   const pool = new Map(), edge = new Map();
   for (const m of Array.isArray(matches) ? matches : []) {
@@ -288,13 +264,12 @@ function consumedSlots(matches) {
   return { pool, edge };
 }
 
-// The matches that (transitively) depend on `id` — everything downstream that
-// feeds off it. The admin daemon's side picker uses it to keep a feeder choice
-// acyclic: pointing `id` at any of its own downstream matches (or at itself)
-// would close a cycle. It's a forward scan from `id`'s consumers, so what
-// `id` itself points at never skews the set.
-// ponytail: O(n²) forward scan over one category — the validator's cycle DFS
-// is linear; revisit if a category ever grows past a few hundred matches.
+// Everything (transitively) downstream of `id` — the admin side picker uses it
+// to keep a feeder choice acyclic: pointing `id` at its own downstream would
+// close a cycle. A forward scan from id's consumers, so what id points at
+// never skews the set.
+// ponytail: O(n²) forward scan — revisit if a category ever grows past a few
+// hundred matches (the validator's cycle DFS is linear).
 function descendants(matches, id) {
   const out = new Set();
   const stack = [id];
@@ -311,11 +286,10 @@ function descendants(matches, id) {
   return out;
 }
 
-// The placement conflicts between two board entries, in the same window:
-// venue double-book, else player double-book (venue-blind — a player can't
-// be on two courts at once). Empty when the windows don't overlap. The one
-// definition of "busy": the validator's scan and the admin daemon's
-// placement preview both call it, so a preview can never disagree with the gate.
+// Placement conflicts between two board entries in the same window: venue
+// double-book, else player double-book (a player can't be on two courts).
+// Empty when the windows don't overlap. The one definition of "busy" — the
+// validator and the admin preview share it.
 function pairBusy(a, b) {
   const aMs = matchSlotMs(a.m, a.ctx), bMs = matchSlotMs(b.m, b.ctx);
   if (!slotsOverlap(a.t, a.t + aMs, b.t, b.t + bMs)) return [];

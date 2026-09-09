@@ -1,13 +1,9 @@
 'use strict';
 
-// GitBracket rehearsal launcher — the whole pipeline practiced end to end.
-// Creates a rehearsal/<slug>-<rand> branch off a clean main, commits a
-// scratch surge domain as site/CNAME (the deploy gate in publish.js derives
-// production from origin/main, so the scratch can never reach it), pushes the
-// branch once so admin's publish can push it onward, then starts the admin
-// daemon. The kiosk is the deployed scratch site with app.js's ?sim clock.
-// A rehearsal branch is practice, never merged: its random scores are
-// fabricated, and its scratch CNAME must not ride into production history —
+// Rehearsal launcher — the whole pipeline practiced end to end: a
+// rehearsal/<slug>-<rand> branch off clean main, a scratch surge CNAME (the
+// deploy gate derives production from origin/main, so the scratch can never
+// reach it), one push, then the admin daemon. Practice, never merged —
 // teardown deletes branch and domain, then the real day happens on main.
 
 const fs = require('fs');
@@ -24,9 +20,9 @@ function cleanTree(root) {
   return s.code === 0 && s.out.trim() === '';
 }
 
-// Teardown: the mirror of setup. surge domains stay hosted until torn down,
-// so the domain goes first; the branch lives on only as long as its CNAME is
-// readable — the branch goes last, the remote copy with it.
+// Teardown, the mirror of setup: the surge domain first (it stays hosted until
+// torn down), the branch last — it must outlive the domain so the CNAME stays
+// readable.
 function teardown(root) {
   const branch = branchOf(root);
   if (!isRehearsalBranch(branch)) {

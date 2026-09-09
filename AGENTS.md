@@ -15,20 +15,18 @@ implement them; don't treat them as style.
   the production domain, proved equal to `origin/main`'s CNAME; a branch
   ships only a CNAME proved different from it — a missing anchor (no
   `origin/main`) refuses every branch deploy. Rehearsal branches (`gb.js sim`)
-  practice the whole pipeline — commits, pushes, scratch surge deploys — on a
-  branch that is never merged: their scores are fabricated and their scratch
-  CNAME must not ride into production history (`gb.js sim --teardown` is the
-  only exit). Publishing sits outside git — last
-  write wins on the CDN, safe because one director ships, everyone else pulls
-  and reviews.
+  practice the whole pipeline on a branch that is never merged: their scores
+  are fabricated and their scratch CNAME must not ride into production history
+  (`gb.js sim --teardown` is the only exit). Publishing sits outside git —
+  last write wins on the CDN, safe because one director ships, everyone else
+  pulls and reviews.
 - **Never store what can be derived.** Results are stored as the raw facts a
   scorer records — games, scores, winner — never the aggregates built from
   them (standings, ranks, done flags); an aggregate goes silently stale the
   moment a fact is corrected, so everything downstream is recomputed at
   render. Schedules are the exception: they can't be derived, so they're
-  stored — generated from a spec for convenience, tweakable via the editor;
-  regeneration rewrites the whole file, so never run it after results are
-  in.
+  stored — generated from a spec, tweakable via the editor. Regeneration
+  rewrites the whole file, so never run it after results are in.
 - **Times are wall-clock, never offsets.** `scheduled` holds local wall time
   in the tournament's IANA `timezone` — never a UTC instant or an offset. The
   instant is derived at render, so data stays readable local time and stays
@@ -42,10 +40,10 @@ implement them; don't treat them as style.
   src/tools.js or the tool that owns it; derive.js is not the shared utility
   belt. The integrity gate never depends on renderer code, and derive.js must
   run in the browser and under node, so node-only modules stay out. Its
-  internal laws: side identity derives from the player set, never
-  from list order; memoized state resets every render, so a corrected score
-  surfaces on the next poll; resolution is cycle-proof — the validator
-  rejects cycles first, so a guard only ever prevents a hang.
+  internal laws: side identity derives from the player set, never from list
+  order; memoized state resets every render, so a corrected score surfaces on
+  the next poll; resolution is cycle-proof — the validator rejects cycles
+  first, so a guard only ever prevents a hang.
 - **Slots are category-local, consumed at most once, acyclic.**
 - **Every editor edit validates, writes, and commits itself** — the process can
   die at any instant with nothing lost.
@@ -59,15 +57,14 @@ implement them; don't treat them as style.
   elements — headings, sections, articles, tables, `details`, navs, links —
   with one small stylesheet, no framework, no presentational classes from JS.
   State rides `data-*` / `aria-current`, body classes layer per-page layout
-  (a shared trait class like `flush`, an exclusive page class like `venue`),
-  and layout is flex/grid + `em` — browser zoom scales the kiosk, and there
-  are no media queries. New markup reuses existing elements and rules;
-  a new class is a change to be justified.
+  (e.g. `venue` on the kiosk), and layout is flex/grid + `em` — browser zoom
+  scales the kiosk, so there are no media queries. New markup reuses existing
+  elements and rules; a new class is a change to be justified.
 - **Never weaken a check to make data pass — fix the data.** Pre-commit runs
-  validate + the test suite (the dev gate); a commit staging only tournament
+  validate + the test suite (the dev gate). A commit staging only tournament
   data skips the suite — it reads fixtures, never live data, so it can't
-  change with an edit — while validate always runs; `gb.js publish` re-runs
-  validate (the data gate) — a bypassed hook can't ship.
+  change with an edit — but validate always runs, and `gb.js publish` re-runs
+  it (the data gate): a bypassed hook can't ship.
 
 ## Where code lives
 
@@ -116,6 +113,5 @@ agreements; if one doesn't fit, raise it instead of breaking it silently.
   report it as such.
 - **Conventional commits** — `feat:`, `fix:`, `refactor:`, `perf:`, `ci:`,
   with a scope when it helps, as the existing history does.
-- **No package.json, no npm** — scripts run with `node` directly; tests run
-  with `node --test` in the repo root, exactly as the pre-commit hook runs
-  them.
+- **No package.json, no npm** — scripts run with `node` directly, tests with
+  `node --test` from the repo root, as the pre-commit hook runs them.

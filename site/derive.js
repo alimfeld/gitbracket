@@ -4,21 +4,18 @@ const ID_RE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-// The one display dialect: every human-visible string renders in it, so the
-// kiosk and the tests never vary with the viewer's locale.
+// One display dialect — human-visible strings never vary with the viewer's locale.
 const LOCALE = 'en-US';
 
 // Shared side identity: sorted '|'-joined ids.
 const pairSig = ids => [...ids].sort().join('|');
 
-// Per-category render cache: one bag on the context, so the freshness contract
-// (toCats rebuilds contexts every render, discarding the bag) is one boundary
-// to know, not six underscore props. Every *_build/Column memo hangs its data here.
+// Per-category render cache, one bag on the context — toCats rebuilds contexts
+// every render, so a stale memo can never outlive its render.
 const ctxMemo = ctx => ctx._memo || (ctx._memo = {});
 
-// Tournament-level facts (names, venues, tz) per file — toCats builds them
-// once and hands them to every category's context; standalone makeCat calls
-// (validate, editor, sim) build a fresh map per call.
+// Tournament-level facts (names, venues, tz) — toCats builds them once per
+// render; standalone makeCat calls build a fresh map.
 function sharedFacts(tjson) {
   const arr = x => Array.isArray(x) ? x : [];
   return {
@@ -75,10 +72,8 @@ function bestOfOf(m, ctx) {
   return m.bestOf ?? ctx.bestOf[stageOf(m)];
 }
 
-// A pool's game differential is only a real differentiator when a match can
-// span several games — a best-of-1 pool's per-match diff is always ±1, so the
-// standings' GD column would just restate W−L. One match overridden to
-// best-of-3 brings GD back.
+// In a best-of-1 pool every match's GD is ±1, so the standings' GD column
+// would just restate W−L. One match overridden to best-of-3 brings it back.
 function poolBo1(ctx, pool) {
   return ctx.matches.filter(m => m && m.pool === pool).every(m => bestOfOf(m, ctx) === 1);
 }
@@ -98,8 +93,8 @@ function isDeadTie(std, rank) {
   return !!rec && !!rec.tie; // tie cluster id: the ladder exhausted without separating it
 }
 
-// Competition ranks: a dead-tie cluster shares its first rank (1 1 3 3); the
-// flag carries its cluster id so adjacent ties don't merge.
+// A dead-tie cluster shares its first rank (1 1 3 3); the flag's cluster id
+// keeps adjacent ties from merging.
 function poolRanks(std) {
   const ranks = [];
   for (let i = 0; i < std.length; i++) {
@@ -109,8 +104,7 @@ function poolRanks(std) {
 }
 
 // Rank cells stay blank until a pool has a decided match — before that every
-// team ties at zero and a wall of 1s reads as "all ranked first". The site's
-// standings and the editor's desk sheet share the rule via this one predicate.
+// team ties at zero and a wall of 1s reads as "all ranked first".
 const poolDecided = std => std.some(r => r.wins || r.losses);
 
 function poolStandings(ctx, pool, partial) {
@@ -270,9 +264,8 @@ function playerMatches(ctx, pid) {
   return rows;
 }
 
-// The matches consuming a match's result edges — the seats a player advancing
-// from it could land in. Winner and loser edges both count: a loss drops the
-// player into the placement tree.
+// The matches consuming a match's result edges — both winner and loser edges
+// count: a loss drops the player into the placement tree.
 function koConsumers(ctx, id) {
   const out = [];
   for (const X of ctx.matches) {
@@ -285,8 +278,7 @@ function koConsumers(ctx, id) {
 }
 
 // Knockout-entry facts per pool, from stored sides only — standings never gate
-// the pool view. sigs: the pool's side count (every slot rank must be ≤ it);
-// slots: rank -> the match consuming that rank.
+// the pool view. sigs: the pool's side count; slots: rank -> the consuming match.
 function poolFacts(ctx) {
   const out = new Map();
   for (const m of ctx.matches) {
@@ -312,8 +304,7 @@ function poolFacts(ctx) {
 
 // Ranks of one pool the player could still hold: every rank while any pool
 // match is out, the dead-tie cluster once it is decided. A resolved slot is a
-// confirmed seat (handled elsewhere) and an unslotted rank is eliminated —
-// neither leaves anything possible here, so both return [].
+// confirmed seat (handled elsewhere); an unslotted rank is eliminated.
 function playerRanks(ctx, pool, pid, roster) {
   const std = poolStandings(ctx, pool);
   if (!std) {
@@ -349,9 +340,9 @@ const matchEdge = s => s && s.kind === 'match';
 const winnerEdge = s => matchEdge(s) && s.result === 'winner'; // the only edge that feeds the final
 
 // Longest winner-edge chain feeding id — 0 when nothing feeds it; koColumn
-// walks the other way, so its memo can't serve this. ponytail: O(N²) worst
-// case — fine while brackets are tiny; a reverse-edge index is the upgrade if
-// they ever grow.
+// walks the other way, so its memo can't serve this.
+// ponytail: O(N²) worst case — fine while brackets are tiny; a reverse-edge
+// index is the upgrade if they ever grow.
 function chainDepth(ctx, id, memo) {
   if (memo.has(id)) return memo.get(id);
   memo.set(id, 0);
@@ -367,13 +358,10 @@ function chainDepth(ctx, id, memo) {
 }
 
 // Possible stages: one entry per knockout round a player could still reach —
-// the certain bits (label, uniform time/court) and the uncertain one (chip:
-// the ranks or outcomes that get in). Two seat modes: a confirmed knockout
-// seat follows only the branches the outcome leaves open; a group-stage player
-// sees their pool's slots at every rank they could still hold — standings
-// never narrow a live draw, and a decided pool keeps only the dead-tie ranks.
-// One pool per category (the validator pins a pair to one), so the chips below
-// never disambiguate two pools.
+// certain bits (label, uniform time/court) plus a chip naming the ranks or
+// outcomes that get in. A confirmed knockout seat follows only the branches
+// the outcome leaves open; a group-stage player sees their pool's slots at
+// every rank they could still hold.
 function possibleStages(ctx, pid) {
   const rows = playerMatches(ctx, pid);
   const koRows = rows.filter(r => r.m.pool === undefined);
@@ -382,10 +370,9 @@ function possibleStages(ctx, pid) {
   const pool = poolRow === undefined ? null : poolRow.m.pool;
   const facts = (koRows.length || pool === null) ? null : poolFacts(ctx).get(pool);
 
-  // ---- seats and the reachable bracket -------------------------------------
-  // Seats are recorded separately from the reach BFS: one match can seat the
-  // player via several pool ranks or edges (a QF drawing two of their pool's
-  // ranks), and the seen-guard must not drop the second record.
+  // Seats recorded separately from the reach BFS — one match can seat the
+  // player via several ranks or edges, and the seen-guard must not drop the
+  // second record.
   const poolSeatsOf = new Map(); // match id -> [rank]
   const edgeSeatsOf = new Map(); // match id -> [{ kind, parent }]
   const gate = new Map();        // confirmed seat id -> opened result edges
@@ -457,11 +444,10 @@ function possibleStages(ctx, pid) {
     });
   }
   const merged = mergeTwinStages(present);
-  // The chip is the entry gates in one phrase: the direct slot ranks, then
-  // the result edges — "as 1st in Pool A or winner of the Quarterfinals" names both ways
-  // in, so a rank-1 bye can't read as "everyone gets here". Only a stage every
-  // pool rank has a slot in (no gates at all) shortens to "any rank". A
-  // merged stage's edges read once, as the seat: "via the Semifinals".
+  // The chip names the entry gates in one phrase: the direct slot ranks, then
+  // the result edges — so a rank-1 bye can't read as "everyone gets here".
+  // Only a stage every pool rank has a slot in (no gates) shortens to "any
+  // rank". A merged stage's edges read once, as the seat: "via the Semifinals".
   const chipOf = stage => {
     const chips = [];
     if (facts && stage.ranks.size) {
@@ -493,24 +479,23 @@ function possibleStages(ctx, pid) {
   return out;
 }
 
-// A stage's time/court reads uniform only when every card agrees — a mixed
-// time or court renders TBD, like any stage whose cards disagree.
+// Uniform only when every card agrees — a mixed time or court renders TBD.
 const uniformBits = (n, times, courts) => ({
   time: n > 0 && times.length === n && times.every(t => t === times[0]) ? times[0] : null,
   court: n > 0 && courts.length === n && courts.every(c => c === courts[0]) ? courts[0] : null,
 });
 
-// Two sibling classification semis of one seat ("5th–8th" + "9th–12th") name
-// their full band: "5th–16th semi" — appending ' place' would mangle a semi label.
+// Two sibling classification semis of one seat ('5th–8th' + '9th–12th') name
+// their full band ('5th–16th semi') — appending ' place' would mangle a semi
+// label.
 const bandSemiLabel = ls => {
   const rs = ls.flatMap(l => (l.match(/\d+/g) || []).map(Number));
   return `${ordinal(Math.min(...rs))}–${ordinal(Math.max(...rs))} semi`;
 };
 
-// Mutually exclusive outcomes of one seat read as one stage: the winner- and
-// loser-fed entries of the same feeder matches merge ("Final / 3rd place —
-// reached via the Semifinals"). Rank-fed stages and ambiguous gates stay separate —
-// two deciders fed by different semis are not one player's alternatives.
+// Mutually exclusive outcomes of one seat (winner- and loser-fed entries of
+// the same feeders) merge into one stage ("Final / 3rd place — reached via the
+// Semifinals"). Rank-fed stages and ambiguous gates stay separate.
 function mergeTwinStages(present) {
   const merged = new Set();
   const byGate = new Map();
@@ -562,13 +547,11 @@ function placementLabel(m, ctx) {
   return r.win ? `${ordinal(r.lo)} place` : `${ordinal(r.lo)}–${ordinal(r.hi)} semi`;
 }
 
-// Possible-rank range of every classification match, exact for bye-thinned
-// pools. One rule: a slot reaches the range of whichever match consumes that
-// edge (winner edges climb the better ranks, loser edges the worse); an edge
-// nothing consumes holds a fixed rank, stepped out from the pool's champion
-// in bracket order. So the middle loser of a 5-loser pool reaches [A, A+2],
-// not the pool's bottom, because its chain stops there — no nominal round
-// ranges, no caps, no odd-size arithmetic.
+// Possible-rank range of every classification match. One rule: a slot reaches
+// the range of whichever match consumes that edge (winner edges climb the
+// better ranks, loser edges the worse); an edge nothing consumes holds a fixed
+// rank, stepped out from the pool's champion in bracket order. So the middle
+// loser of a 5-loser pool reaches [A, A+2], not the pool's bottom.
 function plBuild(ctx) {
   const pl = new Map(); // id -> { lo, hi, win } (win: winner edge unconsumed)
   const byId = ctx.byId;
@@ -603,10 +586,9 @@ function plBuild(ctx) {
     return yes;
   };
   // Pool champion: a match nothing winner-consumes whose all-winner chain
-  // bottoms out at a main-round loser edge. The first loser edge on that chain
-  // must be the anchor — a sub-bracket final's chain passes through another
-  // classification match first, so only the pool's champion qualifies, and the
-  // walk returns the anchor round's winner depth d.
+  // bottoms out at a main-round loser edge — a sub-bracket final's chain
+  // passes through another classification match first, so only the pool's
+  // champion qualifies. Returns the anchor round's winner depth d.
   const champAnchor = (m, seen) => {
     if (seen.has(m.id) || !Array.isArray(m.sides)) return null;
     seen.add(m.id);
@@ -634,8 +616,8 @@ function plBuild(ctx) {
     const A = 2 ** d + 1; // the pool's best rank
     let next = A + 2;
     // Reachability from the champion over classification matches only — main-
-    // bracket neighbors (pools, semifinals) fail member() and stay out. Winner-
-    // edge links before loser- links so tied terminals rank in winner order.
+    // bracket neighbors fail member() and stay out; winner-edge links before
+    // loser- links so tied terminals rank in winner order.
     const seen = new Set([champ.id]);
     const queue = [champ];
     const candsOf = (N) => (adj.get(N.id) || [])
@@ -668,7 +650,7 @@ function plBuild(ctx) {
 }
 
 // Range of a classification match, null for main-bracket matches. The bronze
-// finder (winners) reads lo here — same structure the labels use.
+// finder (winners) reads lo here.
 function plRange(m, ctx) {
   const memo = ctxMemo(ctx);
   if (!memo.pl) memo.pl = plBuild(ctx);
@@ -676,11 +658,10 @@ function plRange(m, ctx) {
 }
 
 // Depth band of every classification match: the column one below its anchor's,
-// minus further loser-chain edges — a 5th/7th decider (fed by the 5th–8th
-// semis) sits one band deeper than its feeder, next to the final. Pairing by
-// edge count in and one pass records each band's distinct placement labels for
+// minus further loser-chain edges — a 5th/7th decider sits one band deeper
+// than its feeder. One pass records each band's distinct placement labels for
 // the merged headings. Byes can't skew it: the anchor is the main match whose
-// loser edge starts the chain, so a bye'd semi still anchors its column.
+// loser edge starts the chain.
 function plBands(ctx) {
   const memo = ctxMemo(ctx);
   if (!memo.plBand) {
@@ -725,8 +706,8 @@ function placementColumn(m, ctx) {
   return plBands(ctx).col.get(m && m.id) ?? null;
 }
 
-// Distinct placement labels of one band — the headings' companion. Order is
-// free: stageGroupName dedupes by content.
+// Distinct placement labels of one band — the headings' companion (order is
+// free: stageGroupName dedupes).
 function bandLabels(ctx, col) {
   return [...(plBands(ctx).labels.get(col) || [])];
 }
@@ -735,17 +716,15 @@ function bandLabels(ctx, col) {
 const bandShort = l => l.replace(/ semi$/, '');
 
 // Merged heading of a band: the round name plus its placement companions. One
-// distinct label names it exactly ("Final / 3rd place", "Semifinals / 5th–8th");
-// several fall back to the generic "Final / Placement". A band with no
-// placement companion keeps the plain round name.
+// distinct label names it exactly; several fall back to "Final / Placement";
+// none keeps the plain round name.
 function stageGroupName(round, labels) {
   const uniq = [...new Set(labels.map(bandShort))];
   return uniq.length === 1 ? `${round} / ${uniq[0]}` : uniq.length > 1 ? `${round} / Placement` : round;
 }
 
-// The placement wave: the deepest band with a playable card (both feeders
-// decided) — nextKoWave's counterpart for the classification tree. An undecided
-// semi never drags the wave to a bronze that can't fill yet.
+// The deepest band with a playable card — nextKoWave's counterpart for the
+// classification tree.
 function placeWave(ctx) {
   let best = null;
   for (const X of ctx.matches) {
@@ -758,9 +737,8 @@ function placeWave(ctx) {
   return best;
 }
 
-// Winner-edge distance to the final (0 = the final itself): the round a loser
-// edge branches from. Its own memo, not koColumn's — this is read while
-// koColumn's build is mid-flight.
+// Winner-edge distance to the final (0 = the final itself). Its own memo, not
+// koColumn's — this is read while koColumn's build is mid-flight.
 function wdOf(ctx, id) {
   const memo = ctxMemo(ctx);
   if (!memo.wd) {
@@ -770,11 +748,10 @@ function wdOf(ctx, id) {
   return memo.wd.get(id);
 }
 
-// "+02:00"-style offset for a date, noon-UTC anchor. This parses the
-// GMT±HH:MM rendering, so the locale stays pinned even if LOCALE ever changes.
-// ponytail: wall times before a same-day clock change (a DST-shift morning) get
-// the post-transition offset, off by one hour — exact per-minute offsets only
-// if a tournament ever opens on a changeover day.
+// "+02:00"-style offset for a date, noon-UTC anchor — parsed from the GMT±HH:MM
+// rendering, so the locale stays pinned.
+// ponytail: wall times before a same-day DST shift get the post-transition
+// offset, off by one hour — exact only if a tournament opens on a changeover day.
 function tzOffset(tz, date) {
   // Intl throws on a bad timezone — a guarded null keeps a malformed file from
   // crashing a render.
@@ -796,8 +773,8 @@ function fmtTime(t, tz) {
   } catch { return ''; }
 }
 
-// Y-M-D from typed parts, calendar pinned to gregory — a non-Gregorian default
-// locale (Buddhist, Hijri) would otherwise key days by a foreign year.
+// Y-M-D from typed parts, calendar pinned to gregory — a non-Gregorian locale
+// (Buddhist, Hijri) would key days by a foreign year.
 function dayKey(t, tz) {
   let p = null;
   try {
@@ -836,8 +813,8 @@ function schedDays(ms, tz) {
 }
 
 // Human span from ISO day keys (null = nothing scheduled).
-// en-US month abbreviations for the spread span — pinned to LOCALE like
-// dayLabel, but keyed off the ISO digits, never the formatted label's position.
+// Month abbreviations pinned to LOCALE like dayLabel, but keyed off the ISO
+// digits, never the formatted label's position.
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 function fmtRange(keys) {
@@ -872,9 +849,9 @@ function kioskStatus(r, now) {
   return 'upcoming';
 }
 
-// The kiosk's scroll anchor: the latest row start that has passed — the slot
-// "now" — else the first row. Pure time, never status, so a slot that finished
-// early stays centered until the next start. `times` must be ascending.
+// The latest row start that has passed — the slot "now" — else the first row.
+// Pure time, never status, so a finished-early slot stays centered until the
+// next start. `times` must be ascending.
 function currentRowIndex(times, now) {
   let i = times.length;
   while (i > 0 && times[i - 1] > now) i--;
@@ -888,19 +865,14 @@ function roundName(depthFromEnd) {
   return { 2: 'Final', 4: 'Semifinals', 8: 'Quarterfinals' }[n] || `Round of ${n}`;
 }
 
-// Column: 0 is the final, one back per winner edge. Depth-from-leaves can't
-// place a bye'd semi. Main-tree columns read ctx._memo.wd (built before this,
-// so no interleaved in-progress values); the fallback sizes classification
-// rounds and the final anchors 0. The championship final, shared with
-// koOrdinal: a knockout match no winner feeds, outside the classification tree.
+// The championship final, shared with koOrdinal: a knockout match no winner
+// feeds, outside the classification tree.
 const mainFinal = (ctx, parented) =>
   ctx.matches.find(X => X.pool === undefined && !parented.has(X.id) && placementLabel(X, ctx) === null);
 
-// Bracket parent-adjacency in one scan: winnerParent (fed id -> parent match),
-// kids (parent id -> feeder ids in side order), loserFed (loser-edge fed ids),
-// loserParent (fed id -> the match consuming its loser edge — plBuild's ranges).
-// Every bracket consumer (koColumn, koOrdinal, winners, mainFinal, plBuild)
-// reads this one map — one edge classification, no drift.
+// Bracket parent-adjacency in one scan: winnerParent (fed id -> parent), kids
+// (parent -> feeder ids, side order), loserFed, loserParent. Every bracket
+// consumer reads this one map — one edge classification, no drift.
 function parentsOf(ctx) {
   const memo = ctxMemo(ctx);
   if (!memo.parents) {
@@ -927,6 +899,10 @@ function parentsOf(ctx) {
   return memo.parents;
 }
 
+// Column: 0 is the final, one back per winner edge. Depth-from-leaves can't
+// place a bye'd semi. Main-tree columns read ctx._memo.wd (built before this,
+// so no interleaved in-progress values); the fallback sizes classification
+// rounds and the final anchors 0.
 function koColumn(m, ctx) {
   const memo = ctxMemo(ctx);
   if (!memo.koCol) {
@@ -953,11 +929,9 @@ function koColumn(m, ctx) {
   return memo.koCol.get(m.id);
 }
 
-// Ordinal within round from who each winner feeds — Final 1, its feeders 1–2
-// by side, and so on down. Reads bracket structure, never `scheduled`, so
-// editing times can't renumber anything; only rewiring the bracket does (and
-// then the label should change). 0 = off the championship tree (classification
-// rounds — placementLabel names those).
+// Ordinal within a round, from who each winner feeds — Final 1, its feeders
+// 1–2 by side, and so on down. Reads bracket structure, never `scheduled`, so
+// editing times can't renumber anything. 0 = off the championship tree.
 function koOrdinal(m, ctx) {
   const memo = ctxMemo(ctx);
   if (!memo.koOrd) {
@@ -991,29 +965,24 @@ function matchLabel(m, ctx) {
 
 // ---- Status derivation: what a category or player's line says ----------------
 
-// The wave in play: the lowest column whose undone matches are playable — a
-// scheduled final doesn't claim the status while its semifinals still decide
-// it. Falls back to all undone matches on malformed sides.
+// The lowest column whose undone matches are playable — a scheduled final
+// doesn't claim the status while its semifinals still decide it.
 function nextKoWave(ctx) {
-  // Championship-only: a placement (classification) match resolves as a consequence
-  // of the bracket above it, so it is never "the wave in play" — excluding it
-  // keeps the round label and the kiosk's jump link on the real championship round.
+  // Championship-only: a placement match resolves as a consequence of the
+  // bracket above it, so it is never the wave in play.
   const undone = ctx.matches.filter(m => m.pool === undefined && !m.result && placementLabel(m, ctx) === null);
   if (!undone.length) return null;
   const playable = undone.filter(m => !Array.isArray(m.sides) || m.sides.every(s => resolveSide(s, ctx)));
-  // ponytail: an unsettled dead tie blocks every wave — this falls back to the
-  // lowest column ("Final"), which reads wrong; the tie row is already flagged
-  // and the organizer settles it, so the mislabel is brief. Gate the fallback on
-  // pool resolution if a format ever needs the status accurate through ties.
+  // ponytail: an unsettled dead tie falls back to the lowest column ("Final"),
+  // which reads wrong — brief, since the organizer settles the flagged tie;
+  // gate the fallback on pool resolution if a format ever needs this accurate.
   return Math.min(...(playable.length ? playable : undone).map(m => koColumn(m, ctx)));
 }
 
-// The podium from played results: first/second off the championship final,
-// third off the bronze match (the semifinal losers' match), fourth off its
-// loser. Null when nothing is decided — a void final or an unresolved side
-// leaves no winner to name, and a category without a final has no podium.
-// The final and bronze are found structurally, never by rendered label — a
-// vocabulary change to "Final"/"3rd place" must not kill the podium.
+// The podium from played results: first/second off the final, third off the
+// bronze, fourth off its loser. Null when nothing is decided. Final and bronze
+// found structurally, never by rendered label — a vocabulary change to
+// "Final"/"3rd place" must not kill the podium.
 function winners(ctx) {
   const { winnerParent, loserFed } = parentsOf(ctx);
   const m = mainFinal(ctx, winnerParent); // the one knockout match nothing winner-feeds
@@ -1023,9 +992,8 @@ function winners(ctx) {
   const w = winnerIdx(m);
   const out = { first: [...a], second: [...b], third: null, fourth: null };
   if (w === 1) { out.first = [...b]; out.second = [...a]; }
-  // the bronze is the terminal match whose possible range starts at 3rd place —
-  // loserFed keeps a mid-bracket '3rd–4th semi' (range lo 3, loser edge to a
-  // decider) from being read as the decider itself
+  // the bronze is the terminal match whose possible range starts at 3rd —
+  // loserFed keeps a mid-bracket '3rd–4th semi' from being read as the decider itself
   let bronze = null;
   for (const X of ctx.matches) {
     if (!X || X.pool !== undefined || loserFed.has(X.id)) continue;
@@ -1058,14 +1026,12 @@ function catStatus(ctx) {
   const col = nextKoWave(ctx);
   const place = placeWave(ctx);
   // place: the classification wave — the main wave may be spent while a bronze
-  // or decider still reads ready; the subline links whichever is deeper. wave:
-  // that deeper of the two, the one column statusLine/anticipationLine read.
+  // still reads ready. wave: the deeper of the two.
   return { kind: 'ko', col, place, wave: col !== null ? col : place !== null ? place : null };
 }
 
-// The current playable wave: unplayed matches with both sides resolved, at the
-// earliest scheduled time — starts included, so page and editor share one
-// "scoreable now" predicate and can never disagree.
+// Unplayed matches with both sides resolved, at the earliest scheduled time —
+// starts included, so page and editor share one "scoreable now" predicate.
 function currentWave(ctx, status) {
   if (!status || status.kind === 'finished' || status.kind === 'winners') return [];
   const ready = ctx.matches.filter(m => !isDone(m) &&
@@ -1080,9 +1046,7 @@ function currentWave(ctx, status) {
 const inWord = col => col === 0 ? 'In the final' : `In ${roundName(col)}`;
 const elimWord = col => col === 0 ? 'Eliminated in the final' : `Eliminated in ${roundName(col)}`;
 
-// A player's standing in one category, as a plain word — the schedule page
-// never links it; the tournament page's wave links are category-level, not
-// per-player.
+// A player's standing in one category, as a plain word.
 function playerStatus(ctx, pid) {
   const rows = playerMatches(ctx, pid);
   if (!rows.length) return null;

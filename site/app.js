@@ -3,10 +3,8 @@
 const POLL_MS = 30000;
 const FOLLOW_MS = 60000; // the kiosk re-follows the play on this cadence, data change or not
 
-// Browser: derive.js loads first (script tag) and its top-level names are
-// already page globals — functions/vars on globalThis, consts in the shared
-// global lexical environment — so re-declaring them here duplicates a global
-// binding. Node has no script-tag sharing, so the module lands on globalThis.
+// derive.js loads first as a classic script, so its names are already page
+// globals; under node, the module lands on globalThis.
 if (typeof module !== 'undefined') {
   Object.assign(globalThis, require('./derive.js'));
 }
@@ -19,9 +17,8 @@ function esc(s) {
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-// ?sim: the offset that lands the rehearsal clock on the event's first
-// scheduled match — the earliest across every day in the file, so the kiosk
-// opens where the tournament starts. Pure — tests pin it.
+// ?sim: land the rehearsal clock on the event's first scheduled match, so the
+// kiosk opens where the tournament starts. Pure — tests pin it.
 function simAimOffset(tjson, now) {
   const tz = tjson.timezone || 'UTC';
   const ts = Object.values(tjson.matches || {}).flat().map(m => m ? schedTime(m, tz) : NaN).filter(Number.isFinite);
@@ -37,8 +34,8 @@ async function fetchJson(url) {
     // cache: 'no-cache' revalidates — 304s return 0 bytes, changes arrive fresh
     const res = await fetch(url, { cache: 'no-cache' });
     if (res.ok) return await res.json();
-    // only a gone-for-good link stops the poll — a 5xx is transient, so it
-    // returns null like any network failure and the poll retries next tick
+    // only a gone-for-good link stops the poll — a 5xx returns null like any
+    // network failure and the poll retries next tick
     if (res.status === 404 || res.status === 410) return HTTP_ERR;
     return null;
   } catch {
@@ -47,10 +44,9 @@ async function fetchJson(url) {
 }
 
 // One page, fragment routing: #<slug>[/schedule|venues][?cat=&player=&venue=].
-// Segments and param values are id-regex-checked first — raw input never reaches
-// a URL; unknown param names and bad values are ignored, never fatal. Cat is a
-// param, never a path segment: the path keeps one grammar (view names only),
-// so a category id can't shadow a view.
+// Segments and params are id-regex-checked — raw input never reaches a URL;
+// unknown names and bad values are ignored, never fatal. Cat is a param, never
+// a path segment, so a category id can't shadow a view.
 function parseRoute(hash) {
   if (hash === undefined) hash = location.hash;
   const [path, query] = String(hash).replace(/^#/, '').split('?');
@@ -71,11 +67,9 @@ function parseRoute(hash) {
   return r;
 }
 
-// Fragment URLs with params in fixed order. Each target keeps only the params
-// legal on it: cat and player are symmetric — cat picks the one category on the
-// tournament page, player the schedule, and both ride along across the two views
-// so switching keeps the focus and Schedule restores the pick. The kiosk
-// sits on its own path and carries neither.
+// Fragment URLs with params in fixed order. cat and player ride along between
+// tournament and schedule so switching keeps the focus and Schedule restores
+// the pick; the kiosk carries only venue.
 const LEGAL = { tournament: ['cat', 'player'], schedule: ['cat', 'player'], venues: ['venue'] };
 const href = (slug, view, p = {}) => {
   const q = LEGAL[view].filter(k => p[k]).map(k => `${k}=${p[k]}`).join('&');
@@ -88,7 +82,7 @@ async function loadAll(route) {
     const index = Array.isArray(raw) ? raw : [];
     return { index };
   }
-  // one file per tournament — a poll is a single atomic fetch, no index roundtrip.
+  // one file per tournament — a poll is a single atomic fetch
   const tjson = await fetchJson(`tournaments/${route.slug}.json`);
   if (tjson === HTTP_ERR) return { httpError: true };
   const t = tjson ? { slug: route.slug, name: tjson.name } : null;
@@ -123,13 +117,13 @@ function renderIndex(route, data) {
       const dates = fmtRange(e.dates); // stored ISO days -> span
       const meta = [dates, e.location].filter(Boolean).map(esc).join(' · ');
       const name = esc(e.name || e.slug);
-      // the card link opens the tournament (the installable, player view); the
-      // venue board is a sibling chip pinned to the corner — a link can't nest a link
+      // the card opens the tournament; the venue board is a sibling chip — a
+      // link can't nest a link
       return `<div class="tcard-wrap"><a class="tcard" aria-label="${name}" href="#${esc(e.slug)}"><h2>${name}</h2>${meta ? `<p>${meta}</p>` : ''}</a><a class="board-link" href="#${esc(e.slug)}/venues">Venue board</a></div>`;
     });
   if (!items.length) return `<header><h1>Tournaments</h1><p>No tournaments yet.</p></header>`;
-  // the home-screen tip lives muted in the header once — the cards carry only the two paths;
-  // .meta is the existing de-emphasis (small, muted), a new class or italics needn't exist
+  // the home-screen tip lives muted in the header once — .meta is the existing
+  // de-emphasis; a new class needn't exist
   return `<header><h1>Tournaments</h1><p class="meta">Tip: open a tournament and add it to your home screen for easy access to live results and your match schedule.</p></header><section class="stack">${items.join('')}</section>`;
 }
 
@@ -157,14 +151,9 @@ function renderTournament(route, data) {
   return parts.join('');
 }
 
-// data-only: played/unplayed + scheduled times, never the device clock —
-// the stage word links to its section (data-jump) when one exists. The wave is
-// the deepest band with a playable card: the main column, or the placement
-// wave once the championship is spent — the link names the merged group
-// ("Final / 3rd place") either way.
-// status line: progress only, plain — the page's one link lives in the
-// anticipation (Next) line. 'starts' is anticipation, not progress, so no
-// status line until a match resolves; the anticipation line carries the start.
+// The status line is progress only, plain — the page's one link lives in the
+// anticipation (Next) line. 'starts' is anticipation, so no status line until
+// a match resolves.
 const statusLine = (status, ctx) => {
   if (!status || status.kind === 'starts') return '';
   if (status.kind === 'groups') return `<p>Group stage: ${status.played} of ${status.count} played</p>`;
@@ -173,16 +162,14 @@ const statusLine = (status, ctx) => {
     return `<p>Knockout stage: ${esc(stageGroupName(roundName(status.wave), bandLabels(ctx, status.wave)))}</p>`;
   }
   if (status.kind === 'finished') return '<p data-status="finished">Finished</p>';
-  // winners: the podium is one line, third only when a bronze match decided it;
-  // the names carry the weight, Finished dims — the podium stays full
+  // winners: the podium is one line, third only when a bronze decided it
   const names = [status.first, status.second, status.third].filter(Boolean).map(ids => teamLabel(ids, ctx));
   const ranks = ['Champion', 'Runner-up', '3rd'];
   return `<p>${names.map((n, i) => `${ranks[i]} <strong>${esc(n)}</strong>`).join(' · ')}</p>`;
 };
 
-// The next wave's courts, compact: several matches start at once across courts
-// (a round plays simultaneously), so "next" is a block, not a card. Consecutive
-// numbered courts collapse ("Courts 1–5"); anything else just lists.
+// Compact court list — a round plays several matches at once, so "next" is a
+// block, not a card. Consecutive numbered courts collapse ("Courts 1–5").
 const fmtCourts = names => {
   const ns = [...new Set(names)];
   if (ns.length === 1) return ns[0];
@@ -198,11 +185,9 @@ const fmtCourts = names => {
   return ns.join(' · ');
 };
 
-// The anticipation line: the current playable wave and its courts. "Starts"
-// before anything (the opening block is already a wave), "Next:" once a match
-// has gone in — both lines jump to the wave's section (group-matches, or the
-// knockout column). data-only: scheduled times, never the clock (the page's 30s
-// poll keeps it current).
+// The anticipation line: "Starts" before anything, "Next:" once a match has
+// gone in; both jump to the wave's section. Data-only: scheduled times, never
+// the clock (the page's 30s poll keeps it current).
 const anticipationLine = (ctx, status, href, day, wave) => {
   if (!status || status.kind === 'finished' || status.kind === 'winners') return '';
   if (!wave.length) {
@@ -243,7 +228,7 @@ function catSection(ctx, opts) {
   // heading already states the date once — then the status sentence or podium
   const status = catStatus(ctx);
   // one current-wave predicate drives the card highlight, the Next line, and
-  // the editor's next — what's lit is what's playable now, opening block included
+  // the editor's next
   const wave = currentWave(ctx, status);
   const next = m => wave.includes(m);
   const lines = [];
@@ -253,8 +238,7 @@ function catSection(ctx, opts) {
   parts.push(`<section><h2>${esc(ctx.name)}</h2>${lines.join('')}`);
   if (grp.length) {
     parts.push(`<section><h3>Group stage</h3>`);
-    // pools belong to the group stage — scoreboard first, cards last; the
-    // category subline above carries the status sentence
+    // scoreboard first, cards last
     if (byPool.size) {
       parts.push('<div class="grid">');
       for (const [pool] of byPool) {
@@ -263,7 +247,6 @@ function catSection(ctx, opts) {
         const gdHead = bo1 ? '' : '<th scope="col" class="num">GD</th>';
         parts.push(`<table><thead><tr><th scope="col" class="num">#</th><th scope="col">Team</th><th scope="col" class="num">W</th><th scope="col" class="num">L</th>${gdHead}<th scope="col" class="num">PD</th></tr></thead><tbody>`);
         const std = poolStandings(ctx, pool, true); // pools come from matches, so partial standings always resolve
-        // a rank is a fact only once a match decided a record — before that every team ties at zero and a wall of 1s reads as "all ranked first"
         const ranks = poolDecided(std) ? poolRanks(std) : null;
         std.forEach((r, i) => {
           const team = teamLabel(r.ids, ctx);
@@ -288,16 +271,15 @@ const koOrder = (ms, ctx) => [...ms].sort((a, b) =>
   (koOrdinal(a, ctx) || Infinity) - (koOrdinal(b, ctx) || Infinity) ||
   (schedTime(a, ctx.tz) ?? 0) - (schedTime(b, ctx.tz) ?? 0));
 
-// Placement cards order by prize (3rd before 5th) then time — rank is
-// structural, view-stable; koOrdinal numbers only the championship tree.
+// By prize (3rd before 5th) then time — rank is structural, view-stable;
+// koOrdinal numbers only the championship tree.
 const placeOrder = ctx => (a, b) =>
   ((plRange(a, ctx) || {}).lo ?? Infinity) - ((plRange(b, ctx) || {}).lo ?? Infinity) ||
   (schedTime(a, ctx.tz) ?? 0) - (schedTime(b, ctx.tz) ?? 0);
 
-// Brackets merged by depth band: each column holds the round's matches and the
-// classification matches at the same edge count from the entry round — the
-// bronze under the Final's heading ("Final / 3rd place"), the 5th–8th semis
-// under the Semifinals' ("Semifinals / 5th–8th"), deciders one band deeper.
+// Brackets merged by depth band: each column holds the round's matches plus the
+// classification matches at the same edge count — the bronze under the Final's
+// heading ("Final / 3rd place"), the 5th–8th semis under the Semifinals'.
 function bracketHtml(ctx, ko, multi, next) {
   const main = ko.filter(m => placementLabel(m, ctx) === null);
   const placement = ko.filter(m => placementLabel(m, ctx) !== null);
@@ -326,8 +308,8 @@ function bracketHtml(ctx, ko, multi, next) {
   return parts.join('');
 }
 
-// datetime carries the instant (ISO); the label stays wall-clock — multi-day
-// tournaments prefix the date so a scrolled page keeps day context on the card
+// datetime carries the instant; the label stays wall-clock — multi-day pages
+// prefix the date
 const timeEl = (t, tz, day) => `<time datetime="${new Date(t).toISOString()}">${esc((day ? `${dayShort(t, tz)}, ` : '') + fmtTime(t, tz))}</time>`;
 
 // opts.meta picks the meta items (fixed vocabulary); opts.head is an optional
@@ -356,7 +338,7 @@ function sideRow(m, ctx, i) {
     // aria-hidden: the placeholder dot is shape-as-label, noise to a screen reader
     return `<span${game ? '' : ' class="ph" aria-hidden="true"'}>${game ? (i === 0 ? game.a : game.b) : '·'}</span>`;
   }).join('');
-  // the winning side carries the W/O mark (tennis draws put "w/o" beside the advancing name)
+  // the winning side carries the W/O mark
   const score = !r || r.status === 'played' ? slot()
     : r.status === 'void' ? '<span>void</span>'
     : sideIdx(r.winner) === i ? '<span>W/O</span>'
@@ -378,14 +360,14 @@ function renderVenue(route, data, now) {
     }
   }
   rows.sort((a, b) => a.t - b.t);
-  // courts with no matches are simply absent; the cat contexts already derived the venue names from this tjson
+  // courts with no matches are simply absent
   const shown = v ? rows.filter(r => r.m.venue === v) : rows;
   const tz = data.tjson.timezone || 'UTC';
   const today = dayKey(now, tz); // one day per screen — an overnight board must not list yesterday
   const firstDay = rows.length ? dayKey(rows[0].t, rows[0].ctx.tz) : null; // rows are time-sorted above — the first instant's day
   const lastDay = rows.length ? dayKey(rows.at(-1).t, rows.at(-1).ctx.tz) : null; // … and the last instant's
-  // no "today" inside the event's span: before day one preview day one (a screen switched on early
-  // shows the schedule); after the last day show its board — "Today · Nothing scheduled." reads stale
+  // No "today" inside the event's span: before day one preview day one, after
+  // the last day show its board — "Today · Nothing scheduled." reads stale
   const shownDay = firstDay && today < firstDay ? firstDay : lastDay && today > lastDay ? lastDay : today;
   const open = shown.filter(r => dayKey(r.t, r.ctx.tz) === shownDay); // the full day stays on the board; the scroll follows the current slot
   const cols = (data.tjson.venues || []).map(x => x.id).filter(id => open.some(r => r.m.venue === id));
@@ -394,11 +376,10 @@ function renderVenue(route, data, now) {
   // clock, aligned to the board by the shared --cols track
   const top = `<div class="kiosk-top" style="--cols: ${cols.length}">${header}${cols.map(id => `<h2>${esc((ctxs[0] && venueName(ctxs[0], id)) || id)}</h2>`).join('')}</div>`;
   if (!cols.length) return top + '<p>Nothing scheduled.</p>';
-  // columns are venues, rows are start times — every column holds the same
-  // cells, so the cards of one wave line up; holes stay empty cells. ponytail:
-  // one card per (venue, start) cell — the validator only checks unplayed
-  // pairs, so a done match squeezed into a taken slot hides its sibling; fix the
-  // data, the grid has no cell for two.
+  // Columns are venues, rows are start times — the cards of one wave line up;
+  // holes stay empty cells. ponytail: one card per (venue, start) cell — a done
+  // match squeezed into a taken slot hides its sibling; fix the data, the grid
+  // has no cell for two.
   const byVenue = new Map(cols.map(id => [id, new Map()]));
   for (const r of open) byVenue.get(r.m.venue).set(r.t, r);
   const times = [...new Set(open.map(r => r.t))];
@@ -414,26 +395,24 @@ function renderVenue(route, data, now) {
   for (const t of times) {
     for (const id of cols) {
       const r = byVenue.get(id).get(t);
-      // only the anchor row's cells carry data-current — the scroll target; a
-      // render recomputes the anchor from now, which is what the follow needs
+      // only the anchor row's cells carry data-current — the scroll target,
+      // recomputed from now each render
       cells.push(r ? (t === anchorTime ? `<div data-current="${r.t}">${card(r)}</div>` : card(r)) : '<div></div>');
     }
   }
-  // data-anchor: the board's current row start time, derived here where times and
-  // now live; the follow scrolls to the row's data-current cells
+  // data-anchor: the board's current row start time; the follow scrolls to the
+  // row's data-current cells
   return top + `<div class="board" data-anchor="${anchorTime}" style="--cols: ${cols.length}">${cells.join('')}</div>`;
 }
 
-// One tournament-wide fact, derived at render: do scheduled matches span more
-// than one wall-clock day? Gates the date on match cards — single-day pages
-// state the date once, multi-day cards carry their own. (Same derivation as
-// the index's stored dates: schedDays + dayKey — one day-key source.)
+// Do scheduled matches span more than one wall-clock day? Gates the date on
+// match cards — single-day pages state the date once. (Same day-key source as
+// the index's stored dates.)
 const multiDay = ctxs => schedDays(ctxs.flatMap(c => c.matches), (ctxs[0] && ctxs[0].tz) || 'UTC').length > 1;
 
 
 // A possible stage: the round the player could reach once the pools decide —
-// the certain bits (label, count, uniform time/court) inline, the chip
-// carrying the rank or outcome that gets in.
+// the certain bits inline, the chip carrying the rank or outcome that gets in.
 function possibleCard(stage, ctx, opts) {
   const when = stage.time !== null ? timeEl(stage.time, ctx.tz, opts.day) : '<span class="tbd">TBD</span>';
   const where = stage.court !== null ? esc(venueName(ctx, stage.court)) : '<span class="tbd">TBD</span>';
@@ -447,9 +426,9 @@ function renderPlayer(route, data) {
   const players = (data.tjson.players || []).filter(p => p && typeof p === 'object' && typeof p.id === 'string');
   const p = pid ? players.find(x => x.id === pid) : null;
   if (!p) {
-    // only participants are pickable — a pick must always render a schedule. One
-    // section per category: the picker doubles as "who is in which category", and
-    // the browser's native find covers name search — no JS search box at this size
+    // only participants are pickable — a pick must always render a schedule.
+    // One section per category: the picker doubles as "who is in which
+    // category"
     const ctxs = data.cats;
     const secs = ctxs.map(c => {
       const items = players
@@ -470,9 +449,8 @@ function renderPlayer(route, data) {
   }
   rows.sort((a, b) => (schedTime(a.m, a.ctx.tz) ?? Infinity) - (schedTime(b.m, b.ctx.tz) ?? Infinity));
   // One flat timeline under date headings — the day owns the context, so cards
-  // never repeat it; the heading swaps with each new day. Possible stages merge
-  // into it at their own time: an undecided pool leaves the knockout open, so
-  // the stage cards sit where those rounds would be, next to the match cards.
+  // never repeat it. Possible stages merge in at their own time, next to the
+  // match cards.
   const events = [];
   for (const ctx of ctxs) {
     for (const stage of possibleStages(ctx, pid)) events.push({ t: stage.time ?? Infinity, stage, ctx });
@@ -486,13 +464,11 @@ function renderPlayer(route, data) {
     if (s) statuses.push(`${esc(ctx.name || ctx.id)}: ${esc(s)}`);
   }
   // the "what's next" line names the earliest playable event — a confirmed
-  // match, or the earliest possible stage, with its condition said out loud
+  // match, or the earliest possible stage
   const nextEv = events.find(e => e.r ? !isDone(e.r.m) : true);
   let next = null;
   if (nextEv) {
-    // the whole "Next:" line is the link — a full-size tap target, and the
-    // accent color already reads as clickable, so the affordance and the
-    // emphasis agree
+    // the whole "Next:" line is the link — a full-size tap target
     const link = `<a data-jump="next" href="${esc(href(data.t.slug, 'schedule', route))}">`;
     if (nextEv.r) {
       const m = nextEv.r.m, nctx = nextEv.r.ctx;
@@ -531,9 +507,7 @@ function boot() {
   const app = document.querySelector('main');
 
   // ?sim rehearsal clock: now() rides a localStorage offset the ◀▶ panel and
-  // ]/[ keys move. The kiosk already takes `now` as a parameter (renderVenue,
-  // kioskStatus), so derive.js is untouched; without ?sim everything below is
-  // dead weight a production page never runs.
+  // ]/[ keys move. Without ?sim, the sim code below never runs.
   const SIM_KEY = 'gitbracket.sim.offset';
   const sim = new URLSearchParams(location.search).has('sim');
   const simOffset = () => Number(localStorage.getItem(SIM_KEY)) || 0;
@@ -554,15 +528,14 @@ function boot() {
   };
   let route = null;    // current fragment route — the poll reads it each tick
   let data = null;     // last good snapshot — a failed poll keeps the board up
-  let lastHtml = '';   // skip re-render when nothing changed — keeps selection/focus on the player page
-  let lastKey = '';    // view|cat — what the page shows; a change is new content, start at the top
-  let lastFollow = 0;     // last minute-tick re-follow — the kiosk tracks the play even when data never changes
+  let lastHtml = '';   // skip re-render when nothing changed (keeps selection/focus)
+  let lastKey = '';    // view|cat — a change is new content, start at the top
+  let lastFollow = 0;  // last minute-tick re-follow — tracks the play even when data never changes
   let pollTimer = null, clockTimer = null;
-  let pollOn = false;  // view whose timers should run: 'tournament' | 'schedule' | 'venues'; false on the index
+  let pollOn = false;  // view whose timers should run; false on the index
 
   // Every view but the index auto-refreshes while the tab is visible; a return
-  // to the tab fetches immediately, so results land the moment a spectator
-  // looks. The kiosk's running clock is a view, not a mode.
+  // fetches immediately. The kiosk's clock is a view, not a mode.
   const stopPoll = () => {
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
     if (clockTimer) { clearInterval(clockTimer); clockTimer = null; }
@@ -571,8 +544,8 @@ function boot() {
     stopPoll();
     pollTimer = setInterval(tick, POLL_MS + Math.random() * 5000); // jitter: no lockstep across a hall of screens
     if (pollOn === 'venues') {
-      // Clock lives in an element the change-guard never re-renders; look it up
-      // fresh each tick (the poll re-renders).
+      // Clock lives in an element the change-guard never re-renders; look it
+      // up fresh each tick.
       clockTimer = setInterval(() => {
         const t = now();
         const el = document.getElementById('clock');
@@ -582,8 +555,8 @@ function boot() {
           el.dateTime = new Date(t).toISOString(); // the instant, derived — the label stays wall clock
         }
         if (simPanel) simPanel(); // the sim panel's readout rides the kiosk tick
-        // once a minute, re-follow from the last snapshot — statuses and the anchor
-        // recompute against now, so the play is tracked through a quiet hour too
+        // once a minute, re-follow from the last snapshot — statuses and the
+        // anchor recompute against now
         if (t - lastFollow >= FOLLOW_MS && data) {
           lastFollow = t;
           render(route, data);
@@ -597,8 +570,7 @@ function boot() {
       if (route !== r) return; // superseded by a newer navigation
       if (r.view === 'index') return render(r, d); // the index never 404s the tournament file
       if (d.httpError) {
-        // a dead deep link — the file is gone for good; stop the futile poll, and
-        // keep a live board up rather than wipe it on a one-off server hiccup
+        // a dead deep link — the file is gone for good; stop the futile poll
         stopPoll();
         if (!data) app.innerHTML = BAD_LINK;
         return;
@@ -612,8 +584,8 @@ function boot() {
   };
   const tick = () => load(route);
 
-  // The kiosk follows the current slot: centre the anchor row on every render;
-  // the clock handler re-aims on its own minute, so a quiet hour still tracks.
+  // Centre the anchor row on every render; the clock handler re-aims on its
+  // own minute.
   const aim = () => {
     const cell = document.querySelector('.board [data-current]');
     if (cell) cell.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -630,9 +602,8 @@ function boot() {
     // full-width board layout keys off body.venue — present only on the venue view
     document.body.classList.toggle('venue', r.view === 'venues');
     document.title = pageTitle(r, d);
-    // a view, category, or player change is new content — start at the top;
-    // shorter pages clamp the residual scroll. A venue hop keeps the position
-    // (the kiosk re-aims itself each minute).
+    // a view, category, or player change is new content — start at the top; a
+    // venue hop keeps the position (the kiosk re-aims each minute)
     const key = `${r.view}|${r.cat || ''}|${r.player || ''}`;
     const contentChanged = key !== lastKey;
     lastKey = key;
@@ -669,7 +640,7 @@ function boot() {
   };
 
   // data-jump links keep the route — the href stays a valid fragment; a click
-  // only scrolls the target section (every jump link is same-view today)
+  // only scrolls (every jump link is same-view today)
   const jumpTo = id => {
     const el = document.getElementById(id);
     if (el) el.scrollIntoView({ block: 'start' });
@@ -716,8 +687,7 @@ function boot() {
 
   navigate();
   window.addEventListener('hashchange', navigate);
-  // a hidden tab stops polling entirely; a return fetches immediately, so the
-  // fresh data is there the moment the spectator looks
+  // a hidden tab stops polling entirely; a return fetches immediately
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) stopPoll();
     else if (pollOn) { tick(); startPoll(); }
