@@ -210,6 +210,47 @@ test('admin undo/redo: redo restores exactly the undone commits, LIFO — tree c
   }
 });
 
+test('admin undo: once the tip is on a remote ref, undo refuses — the fallback window never rewinds a pushed commit', () => {
+  const { tmp, state } = scratchWithRemote();
+  try {
+    git(tmp, ['checkout', '-qb', 'foo']); // a branch with no upstream — the @{upstream} window falls back to origin/main
+    const score = admin.doEdit(state, 'result', 'md40', '8', { shape: 'score', games: [{ a: 11, b: 5 }, { a: 11, b: 3 }] });
+    assert.equal(score.ok, true, 'the edit commits on the branch');
+    const before = git(tmp, ['rev-parse', 'HEAD']).out.trim();
+    assert.equal(admin.unpushed(tmp).commits.length, 1, 'one pending commit — undo is offered');
+    const ok = admin.undo(state);
+    assert(ok.sha, 'an unpushed commit undoes cleanly');
+    git(tmp, ['reset', '--hard', before]).status; // put the commit back
+    git(tmp, ['push', '-q', 'origin', 'foo']); // pushed without -u: origin/foo has the tip, no upstream, the fallback window still counts it
+    const refused = admin.undo(state);
+    assert(refused.error && /already pushed/.test(refused.error), `a remote-held tip refuses, got: ${refused.error}`);
+    assert.equal(git(tmp, ['rev-parse', 'HEAD']).out.trim(), before, 'HEAD untouched by the refusal');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('admin doEdit: an out-of-band hand edit is refused once, reloaded, and the retry applies onto it — nothing clobbered', () => {
+  const { tmp, siteRoot, state } = scratchWithRemote();
+  try {
+    const file = path.join(siteRoot, 'tournaments', 'sample.json');
+    const disk = JSON.parse(fs.readFileSync(file, 'utf8'));
+    disk.players[0].name = 'Hand-Edited Name'; // the operator's out-of-band fix after boot
+    fs.writeFileSync(file, JSON.stringify(disk, null, 2) + '\n');
+    const first = admin.doEdit(state, 'result', 'md40', '8', '21-19 21-18');
+    assert.equal(first.ok, false, 'the stale-memory edit is refused');
+    assert(/changed on disk/.test(first.error), `the refusal names the cause, got: ${first.error}`);
+    assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).players[0].name, 'Hand-Edited Name', 'the hand edit survives the refusal');
+    const second = admin.doEdit(state, 'result', 'md40', '8', '21-19 21-18'); // the failure reloaded the daemon's view
+    assert.equal(second.ok, true, 'the retry applies onto the reloaded state');
+    const after = loadRepo(siteRoot).tournaments.get('sample').tjson;
+    assert.equal(after.players[0].name, 'Hand-Edited Name', 'the hand edit rides into the commit');
+    assert.equal(after.matches.md40.find(m => m.id === 8).result.status, 'played', 'the score lands too');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 test('admin redo: a daemon edit after the undo clears the stack — redo reports nothing', () => {
   const { tmp, state } = scratchWithRemote();
   try {

@@ -13,7 +13,7 @@
 
 const http = require('http');
 const path = require('path');
-const { loadRepo, staticFile, openBrowser, catCtx, schedEntries, pairBusy, fixedPlayers, consumedSlots, descendants, slotsOverlap, feederBounds, makeGames, branchOf, isRehearsalBranch, git, defaultSlug } = require('./tools.js');
+const { loadRepo, staticFile, openBrowser, catCtx, schedEntries, pairBusy, fixedPlayers, consumedSlots, descendants, slotsOverlap, feederBounds, makeGames, branchOf, isRehearsalBranch, cleanTree, git, defaultSlug } = require('./tools.js');
 const { execEdit, parsePayload, waveEntries } = require('./edits.js');
 const { matchSlotMs, schedTime, bestOfOf } = require('../site/derive.js');
 const { validateRepo } = require('./validate.js');
@@ -58,16 +58,14 @@ function doEdit(state, verb, cat, matchId, value) {
     value = p.value;
   }
   const r = execEdit(state, verb, cat, matchId, value);
-  if (r.errors) return { ok: false, errors: r.errors };
-  if (r.error) return { ok: false, error: r.error };
+  // A failure can mean the disk moved since the daemon loaded it (an out-of-band
+  // hand edit) — reload so a retry applies onto the fresh state, never onto
+  // stale memory. Memory is already the written truth on success.
+  if (r.errors) { reload(state); return { ok: false, errors: r.errors }; }
+  if (r.error) { reload(state); return { ok: false, error: r.error }; }
   if (r.unchanged) return { ok: true, unchanged: true };
   state.redo = []; // a committed edit builds on the post-undo history — redo would replay onto it
   return { ok: true, sha: r.sha };
-}
-
-// Both resets (undo, redo) need a pristine tree — one predicate for the mirrors.
-function cleanTree(root) {
-  return git(root, ['diff', '--quiet']).code === 0 && git(root, ['diff', '--cached', '--quiet']).code === 0;
 }
 
 // Mirror resets across the same edge. Both reset --hard, so the clean check
@@ -80,6 +78,13 @@ function undo(state) {
   if (!cleanTree(state.root)) return { error: 'the repo has uncommitted changes — commit or stash before undoing' };
   const p = unpushed(state.root);
   if (!p.commits.length) return { error: 'nothing to undo' };
+  // The undo window falls back to origin/main when the branch has no upstream,
+  // so a branch pushed without -u would count pushed commits as pending — and
+  // resetting past one would strand the branch behind its remote, turning the
+  // next push into a loud failure. Any remote ref containing HEAD means the tip
+  // is already out: undo stays local to unpushed commits only.
+  const hosted = git(state.root, ['branch', '-r', '--contains', 'HEAD']);
+  if (hosted.code === 0 && hosted.out.trim()) return { error: 'HEAD is already pushed — undo only rewinds unpushed commits' };
   const head = git(state.root, ['rev-parse', 'HEAD']).out.trim();
   const parent = git(state.root, ['rev-parse', 'HEAD~1']).out.trim();
   const r = git(state.root, ['reset', '--hard', 'HEAD~1']);
