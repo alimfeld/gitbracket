@@ -146,6 +146,8 @@ main { flex: 1; display: flex; min-height: 0; }
 .modal .players label { display: flex; align-items: center; gap: .4rem; padding: .15rem .6rem; white-space: nowrap; cursor: pointer; }
 .modal .players label:hover { background: #0a66c21a; }
 .modal .players input { margin: 0; }
+.modal .players label.illegal { color: var(--muted); opacity: .55; cursor: not-allowed; }
+.modal .players label.illegal:hover { background: transparent; }
 .modal .foot { display: flex; gap: .4rem; justify-content: flex-end; margin-top: .8rem; }
 
 .flash { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); background: #1c1c1e; color: #fff; padding: .5rem 1rem; border-radius: .375rem; font-size: .85rem; z-index: 20; max-width: 40rem; white-space: pre-wrap; }

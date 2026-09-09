@@ -254,3 +254,40 @@ test('admin pairBusy: the validators\' conflict kinds served to the preview — 
   assert.deepEqual(pairBusy(ov[0], ov[1]), ['venue'], 'same court in the same window');
   assert.deepEqual(pairBusy(db[0], ov[0]), [], 'disjoint windows conflict with nothing');
 });
+
+test('admin sideOpts: the picker greys what the gate would reject — consumed slots, cycle feeders, busy players', () => {
+  // an in-memory mini tournament: pool A, then a knockout chain 3→4→5
+  const tjson = {
+    name: 'T', location: 'L', timezone: 'UTC', dates: ['2026-01-01'],
+    venues: [{ id: 'c1', name: 'C1' }, { id: 'c2', name: 'C2' }],
+    categories: [{ id: 'md', name: 'MD', bestOf: { groups: 3, knockout: 3 }, slotMinutes: { groups: 30, knockout: 30 } }],
+    players: [{ id: 'p1', name: 'One' }, { id: 'p2', name: 'Two' }, { id: 'p3', name: 'Three' }, { id: 'p4', name: 'Four' }],
+    matches: { md: [
+      { id: 1, pool: 'A', scheduled: '2026-01-01T09:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p1', 'p2'] }, { kind: 'players', ids: ['p3', 'p4'] }] },
+      { id: 2, pool: 'A', scheduled: '2026-01-01T09:00:00', venue: 'c2', sides: [{ kind: 'players', ids: ['p1'] }, { kind: 'players', ids: ['p3'] }] }, // p1 overlaps match 1
+      { id: 3, scheduled: '2026-01-01T11:00:00', venue: 'c1', sides: [{ kind: 'pool', pool: 'A', rank: 1 }, { kind: 'pool', pool: 'A', rank: 2 }] },
+      { id: 4, scheduled: '2026-01-01T12:00:00', venue: 'c1', sides: [{ kind: 'match', match: 3, result: 'winner' }, { kind: 'match', match: 3, result: 'loser' }] },
+      { id: 5, scheduled: '2026-01-01T13:00:00', venue: 'c1', sides: [{ kind: 'match', match: 4, result: 'winner' }, { kind: 'pool', pool: 'A', rank: 3 }] },
+      { id: 6, sides: [{ kind: 'players', ids: ['p2'] }, { kind: 'players', ids: ['p3'] }] }, // unscheduled: nothing is busy
+      { id: 7, pool: 'A', scheduled: '2026-01-01T09:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p2'] }, { kind: 'players', ids: ['p4'] }] }, // overlaps match 2, shares no player with it
+    ] },
+  };
+  // editing m5 side a (currently 4:winner): that slot is freed, the pool rank on its own side b stays taken
+  const a5 = admin.sideOpts(tjson, 'md', 5, 0);
+  assert(!a5.consumedEdges.includes('4:winner'), 'the edited side frees its own slot');
+  assert(a5.consumedEdges.includes('3:winner') && a5.consumedEdges.includes('3:loser'), 'm4 still consumes 3\'s edges');
+  assert(a5.consumedRanks.includes('pool:A:3'), 'the other side of m5 still takes pool A rank 3');
+  assert.deepEqual(a5.descendants, [], 'nothing depends on m5 yet');
+  // editing m4 side a: 3:winner freed; m5 consumes 4:winner, and m5 is downstream of m4 — a cycle if m4 fed it
+  const a4 = admin.sideOpts(tjson, 'md', 4, 0);
+  assert(a4.consumedEdges.includes('4:winner'), 'm5 takes 4:winner, so it stays greyed');
+  assert.deepEqual(a4.descendants, [5], 'm5 depends on m4 — feeding m4 into m5 would close a cycle');
+  // busy: a player is busy when they're in any overlapping scheduled match —
+  // even on another venue with no shared player with the edited side
+  const busy2 = admin.sideOpts(tjson, 'md', 2, 0).busy;
+  assert(busy2.includes('p1'), 'p1 is in the overlapping match 1 — busy');
+  assert(busy2.includes('p2'), 'p2 is in match 7, which overlaps match 2 but shares no player with it — still busy');
+  assert.deepEqual(admin.sideOpts(tjson, 'md', 6, 0).busy, [], 'an unscheduled match has no window — no player is busy yet');
+  // an unknown match reports nothing, never throws — same as legalSlots
+  assert.deepEqual(admin.sideOpts(tjson, 'md', 999, 0), {});
+});

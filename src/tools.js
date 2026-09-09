@@ -140,6 +140,52 @@ function schedEntries(tjson) {
   return { entries, noSlot };
 }
 
+// The slot sources a category's match sides consume, one entry per distinct
+// slot keyed to the first match that takes it: pool ranks ("pool:A:1") and
+// match edges ("9:winner"). First-wins, so validate's "also by <id>" names
+// the earliest owner. Shared by the validator's consumed-twice rule and the
+// admin daemon's side-picker legality — one definition of what is taken.
+function consumedSlots(matches) {
+  const pool = new Map(), edge = new Map();
+  for (const m of Array.isArray(matches) ? matches : []) {
+    if (!m || !Array.isArray(m.sides) || m.sides.length !== 2) continue;
+    m.sides.forEach((side) => {
+      if (!side || typeof side !== 'object') return;
+      if (side.kind === 'match') {
+        const key = `${side.match}:${side.result}`;
+        if (!edge.has(key)) edge.set(key, m.id);
+      } else if (side.kind === 'pool') {
+        const key = `pool:${side.pool}:${side.rank}`;
+        if (!pool.has(key)) pool.set(key, m.id);
+      }
+    });
+  }
+  return { pool, edge };
+}
+
+// The matches that (transitively) depend on `id` — everything downstream that
+// feeds off it. The admin daemon's side picker uses it to keep a feeder choice
+// acyclic: pointing `id` at any of its own downstream matches (or at itself)
+// would close a cycle. It's a forward scan from `id`'s consumers, so what
+// `id` itself points at never skews the set.
+// ponytail: O(n²) forward scan over one category — the validator's cycle DFS
+// is linear; revisit if a category ever grows past a few hundred matches.
+function descendants(matches, id) {
+  const out = new Set();
+  const stack = [id];
+  while (stack.length) {
+    const cur = stack.pop();
+    for (const m of Array.isArray(matches) ? matches : []) {
+      if (!m || m.id === id || out.has(m.id)) continue;
+      if (Array.isArray(m.sides) && m.sides.some(s => s && s.kind === 'match' && s.match === cur)) {
+        out.add(m.id);
+        stack.push(m.id);
+      }
+    }
+  }
+  return out;
+}
+
 // The placement conflicts between two board entries, in the same window:
 // venue double-book, else player double-book (venue-blind — a player can't
 // be on two courts at once). Empty when the windows don't overlap. The one
@@ -154,4 +200,4 @@ function pairBusy(a, b) {
   return kinds;
 }
 
-module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, fixedPlayers, schedEntries, pairBusy, isRealDate, findRoot, catCtx, byMatchOrder, tournamentText, staticFile };
+module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, fixedPlayers, schedEntries, pairBusy, consumedSlots, descendants, isRealDate, findRoot, catCtx, byMatchOrder, tournamentText, staticFile };

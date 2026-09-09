@@ -6,7 +6,7 @@
 // memory. Never writes — the gate stays pure.
 
 const path = require('path');
-const { loadRepo, isRealDate, schedEntries, pairBusy } = require('./tools.js');
+const { loadRepo, isRealDate, schedEntries, pairBusy, consumedSlots } = require('./tools.js');
 const { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, isDone, poolStandings, resolveSide, isDeadTie, bestOfOf, winTarget, reachedWinner, schedTime, schedDays, placementLabel, feederBounds } = require('../site/derive.js');
 
 const RESULTS = ['winner', 'loser'];
@@ -356,7 +356,7 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
   }
 
   // ---- pass B: slots, scoring, scheduling ----
-  const sources = new Map(); // slot source key -> owning match id
+  const sources = consumedSlots(matches); // slot source key -> first owning match id
   for (const m of matches) {
     if (!m || typeof m !== 'object') continue;
     const where = `${cFile} match ${m.id || '?'}`;
@@ -369,12 +369,11 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
         if (!side || typeof side !== 'object') return;
         if (side.kind === 'match') {
           const key = `${side.match}:${side.result}`;
-          if (sources.has(key)) err(where, `slot source ${key} is consumed twice (also by ${sources.get(key)})`);
-          else sources.set(key, m.id);
+          // every holder but the first is a duplicate — the gate names the first owner
+          if (sources.edge.get(key) !== m.id) err(where, `slot source ${key} is consumed twice (also by ${sources.edge.get(key)})`);
         } else if (side.kind === 'pool') {
           const key = `pool:${side.pool}:${side.rank}`;
-          if (sources.has(key)) err(where, `slot source ${key} is consumed twice (also by ${sources.get(key)})`);
-          else sources.set(key, m.id);
+          if (sources.pool.get(key) !== m.id) err(where, `slot source ${key} is consumed twice (also by ${sources.pool.get(key)})`);
           if (typeof side.pool === 'string' && typeof side.rank === 'number' && Number.isInteger(side.rank) && side.rank >= 1) {
             if (!poolUses.has(side.pool)) {
               err(where, `pool slot references unknown pool ${JSON.stringify(side.pool)} (no matches use it)`);

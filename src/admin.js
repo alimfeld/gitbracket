@@ -14,7 +14,7 @@
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
-const { loadRepo, staticFile, catCtx, schedEntries, pairBusy, fixedPlayers } = require('./tools.js');
+const { loadRepo, staticFile, catCtx, schedEntries, pairBusy, fixedPlayers, consumedSlots, descendants, slotsOverlap } = require('./tools.js');
 const { execEdit, defaultSlug, git } = require('./editor.js');
 const { matchSlotMs, feederBounds, schedTime } = require('../site/derive.js');
 const { validateRepo } = require('./validate.js');
@@ -153,6 +153,47 @@ function legalSlots(tjson, cat, matchId, day, gcd) {
   return out;
 }
 
+// The side picker's legality for one side of one match, mirroring the gate's
+// own atoms (consumedSlots, schedEntries, slotsOverlap, descendants) so the
+// options the modal greys and validateRepo agree — same no-drift deal as legalSlots.
+// The side being replaced frees its own slot. Busy players come only from
+// scheduled+undone matches overlapping this one (unscheduled: no window, so
+// no player is busy yet — the drag gate protects a later slot).
+function sideOpts(tjson, cat, matchId, si) {
+  const ms = (tjson.matches || {})[cat] || [];
+  const ctx = catCtx(tjson, cat);
+  const m = ctx.byId.get(Number(matchId));
+  if (!m) return {};
+  const { pool, edge } = consumedSlots(ms);
+  const cur = m.sides && m.sides[si];
+  if (cur && cur.kind === 'match') edge.delete(`${cur.match}:${cur.result}`);
+  else if (cur && cur.kind === 'pool') pool.delete(`pool:${cur.pool}:${cur.rank}`);
+  const { entries } = schedEntries(tjson);
+  const mine = entries.find(e => e.cat === cat && e.m.id === Number(matchId));
+  let busy = [];
+  if (mine) {
+    // A player is busy when they're already scheduled in any other
+    // scheduled+undone match whose window overlaps this one — venue-blind, and
+    // independent of whether the two matches share a player, because adding any
+    // of that match's players here would double-book them. Only fixed players
+    // count (a slot side resolves later; the gate's own pairBusy is the same).
+    const mineMs = matchSlotMs(mine.m, mine.ctx);
+    const busySet = new Set();
+    for (const e of entries) {
+      if (e.cat === cat && e.m.id === Number(matchId)) continue;
+      if (!Number.isFinite(mineMs) || !e.players) continue;
+      if (slotsOverlap(mine.t, mine.t + mineMs, e.t, e.t + matchSlotMs(e.m, e.ctx))) for (const id of e.players) busySet.add(id);
+    }
+    busy = [...busySet];
+  }
+  return {
+    busy,
+    consumedRanks: [...pool.keys()],
+    consumedEdges: [...edge.keys()],
+    descendants: [...descendants(ms, Number(matchId))],
+  };
+}
+
 // Reload the repo from disk — undo (git reset) rewrites files, so the in-memory
 // view must be rebuilt or the next edit would validate against stale data.
 function reload(state) {
@@ -209,6 +250,12 @@ function serve(state) {
         const info = state.repo.tournaments.get(q.get('slug') || state.slug);
         if (!info || !info.tjson) return json(res, 404, { error: 'unknown tournament' });
         return json(res, 200, { ok: legalSlots(info.tjson, q.get('cat'), q.get('id'), q.get('day'), +(q.get('gcd') || '15')) });
+      }
+      if (url === '/api/sideopts') {
+        const q = new URL(req.url, 'http://x').searchParams;
+        const info = state.repo.tournaments.get(q.get('slug') || state.slug);
+        if (!info || !info.tjson) return json(res, 404, { error: 'unknown tournament' });
+        return json(res, 200, { ok: sideOpts(info.tjson, q.get('cat'), q.get('id'), +(q.get('si') || '0')) });
       }
       if (url === '/api/pending') {
         const p = unpushed(state.root);
@@ -272,4 +319,4 @@ function main(root, args) {
   return 0;
 }
 
-module.exports = { legalSlots, doEdit, unpushed, undo, redo, main };
+module.exports = { legalSlots, sideOpts, doEdit, unpushed, undo, redo, main };

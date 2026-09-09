@@ -418,9 +418,21 @@ function openResult(cid, m) {
 }
 
 // ---- the side picker (modal) ----
-function openSide(cid, m, si) {
+// Legality comes from /api/sideopts — the daemon's view of the gate (consumed
+// slots, busy players, acyclic feeders), the same deal as the drag's /api/slots:
+// the options the modal greys and validateRepo can't disagree. Illegal options
+// that aren't the current value are greyed; the current value stays selectable
+// so it can be moved away, and Apply blocks any selection that is still illegal.
+async function openSide(cid, m, si) {
   const ctx = cat(cid);
   const size = teamSize(ctx);
+  const L = (await get(`/api/sideopts?cat=${cid}&id=${m.id}&si=${si}`))?.ok || {};
+  const busy = new Set(L.busy || []);
+  const consumedRanks = new Set(L.consumedRanks || []);
+  const consumedEdges = new Set(L.consumedEdges || []);
+  const descendants = new Set(L.descendants || []);
+  const other = m.sides[1 - si];
+  const otherIds = other && other.kind === 'players' && Array.isArray(other.ids) ? other.ids : [];
   const modal = $('modal');
   modal.hidden = false;
   const cur = m.sides[si];
@@ -445,7 +457,12 @@ function openSide(cid, m, si) {
       const names = new Map((S.tjson.players || []).map(p => [p.id, p.name]));
       const all = ctx.matches.flatMap(mm => (mm.sides || []).flatMap(s => (s.kind === 'players' ? s.ids : [])));
       body.innerHTML = `<p class="hint">pick ${size} player${size === 1 ? '' : 's'}</p><div class="players">` +
-        [...new Set(all)].map(id => `<label><input type="checkbox" value="${esc(id)}"${ids.includes(id) ? ' checked' : ''}><span>${esc(names.get(id) ?? id)}</span></label>`).join('') + '</div>';
+        [...new Set(all)].map(id => {
+          const checked = ids.includes(id);
+          const illegal = busy.has(id) || otherIds.includes(id);
+          const why = busy.has(id) ? 'plays in an overlapping scheduled match' : otherIds.includes(id) ? 'already on the other side' : '';
+          return `<label${illegal ? ' class="illegal"' : ''}><input type="checkbox" value="${esc(id)}"${checked ? ' checked' : ''}${illegal ? ' disabled' : ''} title="${esc(why)}"><span>${esc(names.get(id) ?? id)}</span></label>`;
+        }).join('') + '</div>';
     } else if (kind === 'pool') {
       const p = pools(ctx);
       body.innerHTML = `<p class="hint">pool slot — pool + rank</p>
@@ -457,15 +474,21 @@ function openSide(cid, m, si) {
         const n = poolFacts(ctx).get(pool)?.sigs.size || 6; // ponytail: 6 if a pool's teams can't be resolved
         const want = cur && cur.kind === 'pool' && cur.pool === pool ? cur.rank : 1;
         body.querySelector('#ranksel').innerHTML = Array.from({ length: n }, (_, i) => i + 1)
-          .map(r => `<option${r === want ? ' selected' : ''}>${r}</option>`).join('');
+          .map(r => `<option${r === want ? ' selected' : ''}${consumedRanks.has(`pool:${pool}:${r}`) ? ' disabled' : ''}>${r}</option>`).join('');
       };
       fillRanks();
       body.querySelector('#poolsel').addEventListener('change', fillRanks);
     } else {
       const undone = ctx.matches.filter(mm => !isDone(mm));
       body.innerHTML = `<p class="hint">feeder match result</p>
-        <label class="field">Match <select id="matchsel">${undone.map(mm => `<option value="${mm.id}"${cur && cur.kind === 'match' && cur.match === mm.id ? ' selected' : ''}>${mm.id} · ${esc(matchLabel(mm, ctx))}</option>`).join('')}</select></label>
-        <label class="field">Result <select id="resel"><option value="winner"${cur && cur.result === 'winner' ? ' selected' : ''}>winner</option><option value="loser"${cur && cur.result === 'loser' ? ' selected' : ''}>loser</option></select></label>`;
+        <label class="field">Match <select id="matchsel">${undone.map(mm => `<option value="${mm.id}"${cur && cur.kind === 'match' && cur.match === mm.id ? ' selected' : ''}${descendants.has(mm.id) || mm.id === m.id ? ' disabled' : ''}>${mm.id} · ${esc(matchLabel(mm, ctx))}</option>`).join('')}</select></label>
+        <label class="field">Result <select id="resel"></select></label>`;
+      const fillRes = () => {
+        const mmId = +body.querySelector('#matchsel').value;
+        body.querySelector('#resel').innerHTML = ['winner', 'loser'].map(r => `<option value="${r}"${cur && cur.kind === 'match' && cur.match === mmId && cur.result === r ? ' selected' : ''}${consumedEdges.has(`${mmId}:${r}`) ? ' disabled' : ''}>${r}</option>`).join('');
+      };
+      fillRes();
+      body.querySelector('#matchsel').addEventListener('change', fillRes);
     }
   };
   modal.querySelectorAll('.tabs button').forEach(b => b.onclick = () => setKind(b.dataset.kind));
