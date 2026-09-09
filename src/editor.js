@@ -16,8 +16,8 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const readline = require('readline');
-const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, schedDays, fmtTime, matchLabel, bestOfOf, winTarget, reachedWinner, winnerIdx, dayKey, DATE_RE, catStatus, currentWave } = require('../site/derive.js');
-const { loadRepo, writeTournament, tournamentText, catCtx, byMatchOrder } = require('./tools.js');
+const { makeCat, isDone, resolveSide, sideLabel, teamLabel, schedTime, schedDays, fmtTime, matchLabel, bestOfOf, winnerIdx, dayKey, DATE_RE, catStatus, currentWave } = require('../site/derive.js');
+const { loadRepo, writeTournament, tournamentText, catCtx, byMatchOrder, winTarget, reachedWinner } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 const { ship } = require('./publish.js');
 

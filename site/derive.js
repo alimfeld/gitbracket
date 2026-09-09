@@ -59,29 +59,7 @@ function matchSlotMs(m, ctx) {
 }
 
 
-// Raw game wins per side, target not applied.
-function countWins(games) {
-  const w = [0, 0];
-  for (const g of games) {
-    if (!g || typeof g !== 'object') continue;
-    if (g.a > g.b) w[0]++;
-    else if (g.b > g.a) w[1]++;
-  }
-  return w;
-}
-
 const sideIdx = w => w === 'a' ? 0 : 1;
-
-// The games needed to decide, or null when the stage has no valid bestOf.
-const winTarget = b => (typeof b === 'number' && b % 2 === 1) ? (b + 1) / 2 : null;
-
-// The side ('a'|'b') the games at target decide, null while undecided — the
-// validator and the editor derive the winner from the same evidence, one rule.
-function reachedWinner(games, target) {
-  if (target === null) return null;
-  const [w0, w1] = countWins(games);
-  return w0 >= target ? 'a' : w1 >= target ? 'b' : null;
-}
 
 function gameDiff(games) {
   let gd = 0, pd = 0;
@@ -857,55 +835,6 @@ function schedDays(ms, tz) {
   return [...ks].sort();
 }
 
-// A scheduled match's wall-clock slot window; null when unscheduled or the
-// slot length is uncomputable (no slotMinutes anywhere).
-function schedWindow(m, ctx, tz) {
-  const t = schedTime(m, tz);
-  if (t === null) return null;
-  const ms = matchSlotMs(m, ctx);
-  return Number.isNaN(ms) ? null : { start: t, end: t + ms };
-}
-
-// Feeder timing bounds on a knockout match's slot start, as wall-clock ms.
-// floor: the latest end of the match's own sources — a match-slot feeder's
-// slot, plus the feeding pool's last scheduled match (pool matches have no
-// slot relations, so the pool's end is its last match's end). ceiling: the
-// earliest start of the matches this one feeds — direct consumers only, and
-// bounds compose down the chain (M ends ≤ C starts and C ends ≤ Q starts
-// imply M ends ≤ Q starts), so a per-match direct ceiling needs no transitive
-// walk. A null bound = no scheduled relation constrains that side. Shared by
-// the validator gate and the editor's time picker, so a typed time edit can't
-// schedule a bracket before its sources — the gate sees the lie too.
-function feederBounds(m, ctx, tz) {
-  if (!m || typeof m !== 'object' || !Array.isArray(m.sides)) return null;
-  let floor = null, ceiling = null;
-  for (const s of m.sides) {
-    if (!s || typeof s !== 'object') continue;
-    if (s.kind === 'match') {
-      const f = ctx.byId.get(s.match);
-      if (f && f !== m) {
-        const fw = schedWindow(f, ctx, tz);
-        if (fw) floor = Math.max(floor ?? fw.end, fw.end);
-      }
-    } else if (s.kind === 'pool' && s.pool !== undefined) {
-      let pend = null;
-      for (const pm of ctx.matches) {
-        if (!pm || pm.pool !== s.pool) continue;
-        const pw = schedWindow(pm, ctx, tz);
-        if (pw) pend = Math.max(pend ?? pw.end, pw.end);
-      }
-      if (pend !== null) floor = Math.max(floor ?? pend, pend);
-    }
-  }
-  for (const d of ctx.matches) {
-    if (!d || d === m || !Array.isArray(d.sides) || d.scheduled === undefined) continue;
-    if (!d.sides.some(s => s && s.kind === 'match' && s.match === m.id)) continue;
-    const dw = schedWindow(d, ctx, tz);
-    if (dw) ceiling = ceiling === null ? dw.start : Math.min(ceiling, dw.start);
-  }
-  return { floor, ceiling };
-}
-
 // Human span from ISO day keys (null = nothing scheduled).
 // en-US month abbreviations for the spread span — pinned to LOCALE like
 // dayLabel, but keyed off the ISO digits, never the formatted label's position.
@@ -1183,5 +1112,5 @@ function playerStatus(ctx, pid) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, poolBo1, winTarget, reachedWinner, sideIdx, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, resolveSide, teamLabel, sideLabel, playerMatches, possibleStages, placementLabel, plRange, placementColumn, bandLabels, stageGroupName, fmtTime, dayKey, tzOffset, schedTime, feederBounds, schedDays, fmtRange, dayShort, dayLabel, fmtDiff, kioskStatus, currentRowIndex, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, currentWave, playerStatus };
+  module.exports = { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, poolBo1, sideIdx, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, resolveSide, teamLabel, sideLabel, playerMatches, possibleStages, placementLabel, plRange, placementColumn, bandLabels, stageGroupName, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dayShort, dayLabel, fmtDiff, kioskStatus, currentRowIndex, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, currentWave, playerStatus };
 }

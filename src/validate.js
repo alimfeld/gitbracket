@@ -6,8 +6,8 @@
 // memory. Never writes — the gate stays pure.
 
 const path = require('path');
-const { loadRepo, isRealDate, schedEntries, pairBusy, consumedSlots } = require('./tools.js');
-const { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, isDone, poolStandings, resolveSide, isDeadTie, bestOfOf, winTarget, reachedWinner, schedTime, schedDays, placementLabel, feederBounds } = require('../site/derive.js');
+const { loadRepo, isRealDate, schedEntries, pairBusy, consumedSlots, winTarget, reachedWinner, feederBounds } = require('./tools.js');
+const { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, isDone, poolStandings, resolveSide, isDeadTie, bestOfOf, schedTime, schedDays, placementLabel } = require('../site/derive.js');
 
 const RESULTS = ['winner', 'loser'];
 const RESULT_STATUSES = ['played', 'walkover', 'void'];

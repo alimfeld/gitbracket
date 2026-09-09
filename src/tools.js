@@ -36,6 +36,80 @@ function catCtx(tjson, cid) {
 // the two surfaces can never present different orders.
 const byMatchOrder = (a, b) => a.t - b.t || a.cat.localeCompare(b.cat) || a.m.id - b.m.id;
 
+// The outcome rule the tools share: evidence to winner, derived the same way by
+// the validator and the editor. The site never runs it — results are stored and
+// the renderers read the winner — so per the derive.js tenant rule it lives
+// here, not on the site's script. countWins is its private part.
+function countWins(games) {
+  const w = [0, 0];
+  for (const g of games) {
+    if (!g || typeof g !== 'object') continue;
+    if (g.a > g.b) w[0]++;
+    else if (g.b > g.a) w[1]++;
+  }
+  return w;
+}
+
+// The games needed to decide, or null when the stage has no valid bestOf.
+const winTarget = b => (typeof b === 'number' && b % 2 === 1) ? (b + 1) / 2 : null;
+
+// The side ('a'|'b') the games at target decide, null while undecided.
+function reachedWinner(games, target) {
+  if (target === null) return null;
+  const [w0, w1] = countWins(games);
+  return w0 >= target ? 'a' : w1 >= target ? 'b' : null;
+}
+
+// A scheduled match's wall-clock slot window; null when unscheduled or the
+// slot length is uncomputable (no slotMinutes anywhere). feederBounds' private
+// helper — no site path needs the window itself, only the bounds it sizes.
+function schedWindow(m, ctx, tz) {
+  const t = schedTime(m, tz);
+  if (t === null) return null;
+  const ms = matchSlotMs(m, ctx);
+  return Number.isNaN(ms) ? null : { start: t, end: t + ms };
+}
+
+// Feeder timing bounds on a knockout match's slot start, as wall-clock ms.
+// floor: the latest end of the match's own sources — a match-slot feeder's
+// slot, plus the feeding pool's last scheduled match (pool matches have no
+// slot relations, so the pool's end is its last match's end). ceiling: the
+// earliest start of the matches this one feeds — direct consumers only, and
+// bounds compose down the chain (M ends ≤ C starts and C ends ≤ Q starts
+// imply M ends ≤ Q starts), so a per-match direct ceiling needs no transitive
+// walk. A null bound = no scheduled relation constrains that side. Shared by
+// the validator gate and the admin daemon's slot preview, so every typed time
+// lands behind the same rule — the gate sees the lie too.
+function feederBounds(m, ctx, tz) {
+  if (!m || typeof m !== 'object' || !Array.isArray(m.sides)) return null;
+  let floor = null, ceiling = null;
+  for (const s of m.sides) {
+    if (!s || typeof s !== 'object') continue;
+    if (s.kind === 'match') {
+      const f = ctx.byId.get(s.match);
+      if (f && f !== m) {
+        const fw = schedWindow(f, ctx, tz);
+        if (fw) floor = Math.max(floor ?? fw.end, fw.end);
+      }
+    } else if (s.kind === 'pool' && s.pool !== undefined) {
+      let pend = null;
+      for (const pm of ctx.matches) {
+        if (!pm || pm.pool !== s.pool) continue;
+        const pw = schedWindow(pm, ctx, tz);
+        if (pw) pend = Math.max(pend ?? pw.end, pw.end);
+      }
+      if (pend !== null) floor = Math.max(floor ?? pend, pend);
+    }
+  }
+  for (const d of ctx.matches) {
+    if (!d || d === m || !Array.isArray(d.sides) || d.scheduled === undefined) continue;
+    if (!d.sides.some(s => s && s.kind === 'match' && s.match === m.id)) continue;
+    const dw = schedWindow(d, ctx, tz);
+    if (dw) ceiling = ceiling === null ? dw.start : Math.min(ceiling, dw.start);
+  }
+  return { floor, ceiling };
+}
+
 // Impossible calendar dates (2025-02-30) roll over in Date.UTC; check the
 // round-trip. Used by the validator (scheduled) and the generator (spec date).
 function isRealDate(y, m, d) {
@@ -200,4 +274,4 @@ function pairBusy(a, b) {
   return kinds;
 }
 
-module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, fixedPlayers, schedEntries, pairBusy, consumedSlots, descendants, isRealDate, findRoot, catCtx, byMatchOrder, tournamentText, staticFile };
+module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, fixedPlayers, schedEntries, pairBusy, consumedSlots, descendants, winTarget, reachedWinner, feederBounds, isRealDate, findRoot, catCtx, byMatchOrder, tournamentText, staticFile };

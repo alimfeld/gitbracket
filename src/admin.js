@@ -14,9 +14,9 @@
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
-const { loadRepo, staticFile, catCtx, schedEntries, pairBusy, fixedPlayers, consumedSlots, descendants, slotsOverlap } = require('./tools.js');
-const { execEdit, defaultSlug, git } = require('./editor.js');
-const { matchSlotMs, feederBounds, schedTime } = require('../site/derive.js');
+const { loadRepo, staticFile, catCtx, schedEntries, pairBusy, fixedPlayers, consumedSlots, descendants, slotsOverlap, feederBounds } = require('./tools.js');
+const { execEdit, defaultSlug, git, parsePayload } = require('./editor.js');
+const { matchSlotMs, schedTime } = require('../site/derive.js');
 const { validateRepo } = require('./validate.js');
 const { ship } = require('./publish.js');
 

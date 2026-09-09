@@ -9,7 +9,8 @@ const assert = require('node:assert');
 const { generate } = require('../src/schedule.js');
 const { validateRepo } = require('../src/validate.js');
 const { applyScore, waveEntries } = require('../src/editor.js');
-const { makeCat, isDone, reachedWinner, bestOfOf, schedDays, resolveSide } = require('../site/derive.js');
+const { makeCat, isDone, bestOfOf, schedDays, resolveSide } = require('../site/derive.js');
+const { reachedWinner } = require('../src/tools.js');
 const { makeGames, xTargets } = require('../src/sim.js');
 const { MINI } = require('./helpers.js');
 
