@@ -5,7 +5,9 @@
 // every edit reuses the editor's writeEdit funnel — validate, write, commit —
 // so the browser can never outrun the gate. Pending = unpushed commits
 // (origin/main..HEAD); publish = validate + push + deploy; undo = reset the
-// last commit, offered only while unpushed (history is append-only once pushed).
+// last commit, offered only while unpushed (history is append-only once
+// pushed); redo = restore the commit the last undo dropped, live only while
+// the undo is still the last act.
 // Nothing ships — site/ is untouched; the page lives under src/admin/ and the
 // daemon serves it locally, exactly as sim serves .sim/site.
 
@@ -45,7 +47,51 @@ function doEdit(state, verb, cat, matchId, value) {
   if (r.errors) return { ok: false, errors: r.errors };
   if (r.error) return { ok: false, error: r.error };
   if (r.unchanged) return { ok: true, unchanged: true, text: r.text };
+  state.redo = []; // a committed edit builds on the post-undo history — redo would replay onto it
   return { ok: true, sha: r.sha, text: r.text };
+}
+
+// undo/redo — mirror resets across the same edge. Undo drops HEAD (the pending
+// gate below makes the dropped commit unpushed by definition); redo restores
+// it as fresh pending. Both reset --hard, so the clean check must cover the
+// whole working tree — a site/-only scope would silently wipe an in-progress
+// edit elsewhere (README, a spec); untracked files are safe (reset --hard
+// leaves them) and stay unblocking. Redo is offered only while the undo is
+// still the last act — any committed edit or publish clears the stack, and the
+// redo itself verifies HEAD is still the undone commit's parent, so the reset
+// can only move back along the exact edge the undo took: pushed history is
+// never rewritten.
+function undo(state) {
+  const clean = git(state.root, ['diff', '--quiet']).code === 0 && git(state.root, ['diff', '--cached', '--quiet']).code === 0;
+  if (!clean) return { error: 'the repo has uncommitted changes — commit or stash before undoing' };
+  const p = unpushed(state.root);
+  if (!p.commits.length) return { error: 'nothing to undo' };
+  const head = git(state.root, ['rev-parse', 'HEAD']).out.trim();
+  const parent = git(state.root, ['rev-parse', 'HEAD~1']).out.trim();
+  const r = git(state.root, ['reset', '--hard', 'HEAD~1']);
+  if (r.code !== 0) return { error: `undo failed: ${r.err}` };
+  state.redo.push({ sha: head, parent, msg: p.commits[0].msg }); // the dropped commit — redo's only record of it
+  reload(state);
+  return { sha: p.commits[0].sha, msg: p.commits[0].msg };
+}
+
+// The stack is daemon memory: ponytail: it dies on restart — a refs/admin-redo
+// pointer would survive, add when an undo must outlive its session.
+function redo(state) {
+  const stack = state.redo;
+  if (!stack.length) return { error: 'nothing to redo' };
+  const clean = git(state.root, ['diff', '--quiet']).code === 0 && git(state.root, ['diff', '--cached', '--quiet']).code === 0;
+  if (!clean) return { error: 'the repo has uncommitted changes — commit or stash before redoing' };
+  const top = stack[stack.length - 1];
+  if (git(state.root, ['rev-parse', 'HEAD']).out.trim() !== top.parent) {
+    stack.length = 0; // stale — the branch moved since the undo; resetting would discard that work
+    return { error: 'nothing to redo — the branch moved on' };
+  }
+  const r = git(state.root, ['reset', '--hard', top.sha]);
+  if (r.code !== 0) return { error: `redo failed: ${r.err}` };
+  stack.pop();
+  reload(state);
+  return { sha: top.sha.slice(0, 7), msg: top.msg };
 }
 
 // The day's legal starts for one match, as wall-clock minutes per venue — the
@@ -164,7 +210,8 @@ function serve(state) {
       if (url === '/api/pending') {
         const p = unpushed(state.root);
         const dirty = git(state.root, ['status', '--porcelain', '--', 'site/']);
-        return json(res, 200, { ...p, dirty: dirty.code === 0 && dirty.out.trim().length > 0, slug: state.slug });
+        const top = state.redo && state.redo.length ? state.redo[state.redo.length - 1] : null;
+        return json(res, 200, { ...p, dirty: dirty.code === 0 && dirty.out.trim().length > 0, slug: state.slug, redo: top ? { sha: top.sha.slice(0, 7), msg: top.msg } : null });
       }
       if (url === '/api/edit' && req.method === 'POST') {
         let body;
@@ -174,18 +221,12 @@ function serve(state) {
         return json(res, r.ok ? 200 : 400, r);
       }
       if (url === '/api/undo' && req.method === 'POST') {
-        // reset --hard rewrites every tracked file, so the clean check must
-        // cover the whole working tree — a site/-only scope would silently
-        // wipe an in-progress edit elsewhere (README, a spec). Untracked files
-        // are safe (reset --hard leaves them) and stay unblocking.
-        const clean = git(state.root, ['diff', '--quiet']).code === 0 && git(state.root, ['diff', '--cached', '--quiet']).code === 0;
-        if (!clean) return json(res, 400, { error: 'the repo has uncommitted changes — commit or stash before undoing' });
-        const p = unpushed(state.root);
-        if (!p.commits.length) return json(res, 400, { error: 'nothing to undo' });
-        const r = git(state.root, ['reset', '--hard', 'HEAD~1']);
-        if (r.code !== 0) return json(res, 400, { error: `undo failed: ${r.err}` });
-        reload(state);
-        return json(res, 200, { sha: p.commits[0].sha, msg: p.commits[0].msg });
+        const r = undo(state);
+        return json(res, r.error ? 400 : 200, r);
+      }
+      if (url === '/api/redo' && req.method === 'POST') {
+        const r = redo(state);
+        return json(res, r.error ? 400 : 200, r);
       }
       if (url === '/api/publish' && req.method === 'POST') {
         const errs = gate(state.siteRoot);
@@ -193,6 +234,7 @@ function serve(state) {
         const p = unpushed(state.root);
         const push = p.hasRemote ? git(state.root, ['push']) : { code: 0 };
         if (push.code !== 0) return json(res, 400, { error: `push failed:\n${push.err}` });
+        state.redo = []; // published — the undone edge is no longer the last act; undo/redo stay local to the unpushed window
         const s = ship(state.root);
         return json(res, s === 0 ? 200 : 400, s === 0 ? { text: 'published' } : { error: 'deploy failed — see the daemon output' });
       }
@@ -214,7 +256,7 @@ function main(root, args) {
   const siteRoot = path.join(root, 'site');
   const repo = loadRepo(siteRoot);
   if (repo.readErrs.length) { console.error(repo.readErrs.join('\n')); process.exit(1); }
-  const state = { root, siteRoot, repo, slug: slug || defaultSlug(repo) };
+  const state = { root, siteRoot, repo, slug: slug || defaultSlug(repo), redo: [] };
   const server = serve(state);
   server.listen(0, '127.0.0.1', () => {
     const url = `http://127.0.0.1:${server.address().port}/`;
@@ -227,4 +269,4 @@ function main(root, args) {
   return 0;
 }
 
-module.exports = { legalSlots, doEdit, unpushed, main };
+module.exports = { legalSlots, doEdit, unpushed, undo, redo, main };

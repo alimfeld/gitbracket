@@ -487,7 +487,7 @@ function openSide(cid, m, si) {
   };
 }
 
-// ---- pending + publish + undo ----
+// ---- pending + publish + undo/redo ----
 async function refreshPending() {
   const p = await get('/api/pending');
   if (!p) return;
@@ -496,6 +496,8 @@ async function refreshPending() {
     ? p.commits.map(c => `<li>${esc(c.sha)} ${esc(c.msg)}</li>`).join('')
     : '<li class="hint">nothing pending</li>';
   $('undo').disabled = p.commits.length === 0 || p.dirty;
+  $('redo').disabled = !p.redo || p.dirty;
+  $('redo').title = p.redo ? `Redo ${p.redo.sha} ${p.redo.msg}` : '';
   $('publish').disabled = p.commits.length === 0 || p.dirty;
   $('publish').title = p.dirty ? 'site/ is dirty — commit or stash first' : '';
 }
@@ -507,6 +509,11 @@ document.addEventListener('click', e => {
 });
 $('undo').onclick = async () => {
   const r = await post('/api/undo', {});
+  if (!r.ok) { flash(r.error); return; }
+  await reload(); // setSlug refreshes pending
+};
+$('redo').onclick = async () => {
+  const r = await post('/api/redo', {});
   if (!r.ok) { flash(r.error); return; }
   await reload(); // setSlug refreshes pending
 };

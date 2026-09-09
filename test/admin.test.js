@@ -1,9 +1,10 @@
 'use strict';
 
 // admin.js: the localhost admin daemon's write funnel — doEdit (validate →
-// write → commit, one path for every verb the page sends) and unpushed (the
-// pending list). Run against a scratch git repo so the commit path is real;
-// the real repo is never touched (same rule as every suite here).
+// write → commit, one path for every verb the page sends), undo/redo (the
+// reset pair over that history) and unpushed (the pending list). Run against a
+// scratch git repo so the commit path is real; the real repo is never touched
+// (same rule as every suite here).
 
 const fs = require('fs');
 const os = require('os');
@@ -41,7 +42,7 @@ function scratchWithRemote() {
   git(tmp, ['remote', 'add', 'origin', origin]);
   git(tmp, ['push', '-q', 'origin', 'main']);
   const repo = loadRepo(siteRoot);
-  return { tmp, siteRoot, state: { root: tmp, siteRoot, repo, slug: 'sample' } };
+  return { tmp, siteRoot, state: { root: tmp, siteRoot, repo, slug: 'sample', redo: [] } };
 }
 
 test('admin unpushed: no remote reports hasRemote false — undo/publish stay off', () => {
@@ -145,6 +146,59 @@ test('admin doEdit clear: its commit kind mirrors what was removed (score/walkov
     const msgs = admin.unpushed(tmp).commits.map(c => c.msg);
     assert(/^score\(sample\)/.test(msgs[2]), 'a clear of a score commits as score');
     assert(/^walkover\(sample\)/.test(msgs[0]), 'a clear of a walkover commits as walkover');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('admin undo/redo: redo restores exactly the undone commits, LIFO — tree clean, pending returns', () => {
+  const { tmp, siteRoot, state } = scratchWithRemote();
+  try {
+    const m = id => loadRepo(siteRoot).tournaments.get('sample').tjson.matches.md40.find(x => x.id === id);
+    const score = id => admin.doEdit(state, 'result', 'md40', String(id), { shape: 'score', games: [{ a: 11, b: 5 }, { a: 11, b: 3 }] });
+    assert.equal(score(8).ok, true, 'the semifinal scores');
+    assert.equal(score(9).ok, true, 'the final scores on top (feeder 8 is now done)');
+    assert.equal(admin.unpushed(tmp).commits.length, 2, 'two pending edits');
+    assert.equal(admin.undo(state).error, undefined, 'undo drops the newest (md40/9)');
+    assert(m(9).result === undefined && m(8).result !== undefined, 'only the newest edit is gone');
+    assert.equal(admin.undo(state).error, undefined, 'second undo drops md40/8 too');
+    assert(m(8).result === undefined, 'both edits undone');
+    assert.equal(admin.redo(state).error, undefined, 'redo restores the last-undone first');
+    assert(m(8).result !== undefined && m(9).result === undefined, 'LIFO: md40/8 back, md40/9 still gone');
+    assert.equal(admin.redo(state).error, undefined, 'and the second redo restores md40/9');
+    assert(m(9).result !== undefined, 'both edits back');
+    assert.equal(admin.unpushed(tmp).commits.length, 2, 'the two commits are pending again');
+    assert.equal(git(tmp, ['status', '--porcelain']).out.trim(), '', 'working tree clean through the round trip');
+    assert(validateRepo(loadRepo(siteRoot)).errs.length === 0, 'snapshot validates after redo');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('admin redo: a daemon edit after the undo clears the stack — redo reports nothing', () => {
+  const { tmp, state } = scratchWithRemote();
+  try {
+    const score = id => admin.doEdit(state, 'result', 'md40', String(id), { shape: 'score', games: [{ a: 11, b: 5 }, { a: 11, b: 3 }] });
+    assert.equal(score(8).ok, true, 'the edit lands');
+    assert.equal(admin.undo(state).error, undefined, 'the edit is undone');
+    assert.equal(score(8).ok, true, 're-scoring is a new edit on the undone state');
+    assert.equal(admin.redo(state).error, 'nothing to redo', 'the committed edit cleared the stack — no redo across the divergence');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('admin redo: an out-of-band commit trips the parent guard and self-clears the stale stack', () => {
+  const { tmp, siteRoot, state } = scratchWithRemote();
+  try {
+    const m = id => loadRepo(siteRoot).tournaments.get('sample').tjson.matches.md40.find(x => x.id === id);
+    admin.doEdit(state, 'result', 'md40', '8', { shape: 'score', games: [{ a: 11, b: 5 }, { a: 11, b: 3 }] });
+    assert.equal(admin.undo(state).error, undefined, 'the edit is undone');
+    assert.equal(git(tmp, ['commit', '--allow-empty', '-qm', 'out-of-band']).status, 0, 'a terminal commit moves HEAD behind the daemon\'s back');
+    const r1 = admin.redo(state);
+    assert.equal(r1.error, 'nothing to redo — the branch moved on', 'the guard refuses — HEAD is no longer the undone commit\'s parent');
+    assert(m(8).result === undefined, 'and nothing was reset');
+    assert.equal(admin.redo(state).error, 'nothing to redo', 'the stale stack self-cleared');
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
