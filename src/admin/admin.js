@@ -360,6 +360,7 @@ function parseResult(s) {
 
 function openResult(cid, m) {
   const ctx = cat(cid);
+  const hasOutcome = !!(m.games || m.result);
   const pre = m.games ? m.games.map(g => `${g.a}-${g.b}`).join(' ') : m.result && m.result.status === 'walkover' ? `wo ${m.result.winner}` : m.result && m.result.status === 'void' ? 'void' : '';
   // a realistic example for this match's best-of: a 2-1 (3 games) won at full length,
   // winners alternating so the shape is legible — games 1,3,5… go A, games 2,4… go B
@@ -371,11 +372,34 @@ function openResult(cid, m) {
     <p class="kicker">Result</p>
     <h2 class="sides">${esc(teamText(m.sides[0], ctx))} vs ${esc(teamText(m.sides[1], ctx))}</h2>
     <p class="sub">${esc(cardMeta(ctx, m))}</p>
-    <input type="text" class="scoreinput" id="scoreinput" value="${esc(pre)}" aria-label="Result">
-    <p class="hint">${ex} · wo a · wo b · void · empty clears</p>
+    <input type="text" class="scoreinput" id="scoreinput" value="${esc(pre)}" aria-label="Result" placeholder="${esc(ex)}">
+    <div class="fillbtns">
+      <button type="button" data-fill="wo a">${esc(teamText(m.sides[0], ctx))} wins by walkover</button>
+      <button type="button" data-fill="wo b">${esc(teamText(m.sides[1], ctx))} wins by walkover</button>
+      <button type="button" data-fill="void">Match annulled</button>
+      <button type="button" data-fill="">No result</button>
+    </div>
     <div class="foot"><button data-x="cancel">Cancel</button><button data-x="apply" class="primary">Apply</button></div>
   </div>`;
   const input = modal.querySelector('#scoreinput');
+  // the fill buttons set the machine token (or clear); pressed mirrors the field's
+  // trimmed content on every key — "No result" presses only when a stored outcome
+  // is exposed to removal and disables when clearing would be a no-op
+  const btns = [...modal.querySelectorAll('.fillbtns button')];
+  const sync = () => {
+    const v = input.value.trim();
+    for (const b of btns) {
+      const fill = b.dataset.fill;
+      b.disabled = fill === '' && v === '' && !hasOutcome;
+      b.setAttribute('aria-pressed', String(fill === '' ? v === '' && hasOutcome : v === fill));
+    }
+  };
+  for (const b of btns) b.onclick = () => {
+    input.value = b.dataset.fill;
+    sync();
+    input.focus(); // Enter still applies — a button never commits directly
+  };
+  input.addEventListener('input', sync);
   input.focus(); input.select();
   const submit = async () => {
     const p = parseResult(input.value);
@@ -388,6 +412,7 @@ function openResult(cid, m) {
     if (e.key === 'Enter') { e.preventDefault(); submit(); }
     if (e.key === 'Escape') { e.preventDefault(); modal.hidden = true; }
   });
+  sync(); // a decided match reopens with its outcome pressed
 }
 
 // ---- the side picker (modal) ----

@@ -122,6 +122,10 @@ main { flex: 1; display: flex; min-height: 0; }
 .modal .field select { font: inherit; padding: .2rem .4rem; border: 1px solid var(--line); border-radius: .3rem; background: #fff; }
 /* the result input leads the box directly — no label wrapper between title and field */
 .scoreinput { font: inherit; width: 100%; padding: .3rem; border: 1px solid var(--line); border-radius: .3rem; font-family: ui-monospace, monospace; }
+/* the fill buttons under the score input — one row, small; pressed = the field holds that token */
+.fillbtns { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .5rem; }
+.fillbtns button { font-size: .78rem; padding: .2rem .5rem; }
+.fillbtns button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 
 /* ---- modal ---- */
 .modal {
