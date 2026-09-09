@@ -493,11 +493,11 @@ async function refreshPending() {
   if (!p) return;
   $('pendingBadge').textContent = p.commits.length ? `${p.commits.length} pending` : 'clean';
   $('pendingList').innerHTML = p.commits.length
-    ? p.commits.map(c => `<li>${esc(c.sha)} ${esc(c.msg)}</li>`).join('')
+    ? p.commits.map(c => `<li>${esc(c.msg)}</li>`).join('')
     : '<li class="hint">nothing pending</li>';
   $('undo').disabled = p.commits.length === 0 || p.dirty;
   $('redo').disabled = !p.redo || p.dirty;
-  $('redo').title = p.redo ? `Redo ${p.redo.sha} ${p.redo.msg}` : '';
+  $('redo').title = p.redo ? `Redo ${p.redo.msg}` : '';
   $('publish').disabled = p.commits.length === 0 || p.dirty;
   $('publish').title = p.dirty ? 'site/ is dirty — commit or stash first' : '';
 }
