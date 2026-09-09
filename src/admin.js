@@ -14,7 +14,7 @@
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
-const { loadRepo, staticFile, catCtx, schedEntries, pairBusy, fixedPlayers, consumedSlots, descendants, slotsOverlap, feederBounds } = require('./tools.js');
+const { loadRepo, staticFile, openBrowser, catCtx, schedEntries, pairBusy, fixedPlayers, consumedSlots, descendants, slotsOverlap, feederBounds } = require('./tools.js');
 const { execEdit, defaultSlug, git, parsePayload } = require('./editor.js');
 const { matchSlotMs, schedTime } = require('../site/derive.js');
 const { validateRepo } = require('./validate.js');
@@ -250,23 +250,15 @@ function serve(state) {
         if (state.slug) out.sort((a, b) => a.slug === state.slug ? -1 : b.slug === state.slug ? 1 : 0);
         return json(res, 200, out);
       }
-      if (url === '/api/data') {
-        const slug = new URL(req.url, 'http://x').searchParams.get('slug') || state.slug;
+      if (url === '/api/data' || url === '/api/slots' || url === '/api/sideopts') {
+        const q = new URL(req.url, 'http://x').searchParams;
+        const slug = q.get('slug') || state.slug;
         const info = state.repo.tournaments.get(slug);
         if (!info || !info.tjson) return json(res, 404, { error: `unknown tournament ${slug}` });
-        return json(res, 200, info.tjson);
-      }
-      if (url === '/api/slots') {
-        const q = new URL(req.url, 'http://x').searchParams;
-        const info = state.repo.tournaments.get(q.get('slug') || state.slug);
-        if (!info || !info.tjson) return json(res, 404, { error: 'unknown tournament' });
-        return json(res, 200, { ok: legalSlots(info.tjson, q.get('cat'), q.get('id'), q.get('day'), +(q.get('gcd') || '15')) });
-      }
-      if (url === '/api/sideopts') {
-        const q = new URL(req.url, 'http://x').searchParams;
-        const info = state.repo.tournaments.get(q.get('slug') || state.slug);
-        if (!info || !info.tjson) return json(res, 404, { error: 'unknown tournament' });
-        return json(res, 200, { ok: sideOpts(info.tjson, q.get('cat'), q.get('id'), +(q.get('si') || '0')) });
+        const body = url === '/api/data' ? info.tjson
+          : url === '/api/slots' ? { ok: legalSlots(info.tjson, q.get('cat'), q.get('id'), q.get('day'), +(q.get('gcd') || '15')) }
+          : { ok: sideOpts(info.tjson, q.get('cat'), q.get('id'), +(q.get('si') || '0')) };
+        return json(res, 200, body);
       }
       if (url === '/api/pending') {
         const p = unpushed(state.root);
@@ -322,10 +314,7 @@ function main(root, args) {
   server.listen(0, '127.0.0.1', () => {
     const url = `http://127.0.0.1:${server.address().port}/`;
     console.log(`GitBracket admin — ${state.slug || '(pick a tournament)'} — ${url}  (ctrl-c quits; every edit validates and commits)`);
-    if (process.platform === 'darwin' && !process.env.CI) {
-      const { spawn } = require('child_process');
-      spawn('open', [url], { detached: true, stdio: 'ignore' }).unref();
-    }
+    openBrowser(url);
   });
   return 0;
 }

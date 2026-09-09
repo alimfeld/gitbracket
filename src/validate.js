@@ -7,7 +7,7 @@
 
 const path = require('path');
 const { loadRepo, isRealDate, schedEntries, pairBusy, consumedSlots, winTarget, reachedWinner, feederBounds } = require('./tools.js');
-const { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, isDone, poolStandings, resolveSide, isDeadTie, bestOfOf, schedTime, schedDays, placementLabel } = require('../site/derive.js');
+const { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, poolStandings, resolveSide, isDeadTie, bestOfOf, schedTime, schedDays, placementLabel } = require('../site/derive.js');
 
 const RESULTS = ['winner', 'loser'];
 const RESULT_STATUSES = ['played', 'walkover', 'void'];

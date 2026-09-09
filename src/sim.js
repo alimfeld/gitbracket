@@ -13,9 +13,8 @@
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
-const { spawn } = require('child_process');
 const { schedTime, bestOfOf } = require('../site/derive.js');
-const { loadRepo, staticFile } = require('./tools.js');
+const { loadRepo, staticFile, openBrowser } = require('./tools.js');
 const { writeEdit, applyScore, defaultSlug, C, editorMain, waveEntries, rowKey } = require('./editor.js');
 
 const STEP = 30 * 60 * 1000;  // ]/[ move the clock in 30 sim-minutes
@@ -71,11 +70,6 @@ function serve(siteRoot, clock) {
     res.setHeader('Content-Type', f.type);
     res.end(body);
   });
-}
-
-function openBrowser(url) {
-  const cmd = process.platform === 'darwin' ? 'open' : process.platform === 'linux' ? 'xdg-open' : null;
-  if (cmd) spawn(cmd, [url], { detached: true, stdio: 'ignore' }).unref();
 }
 
 // x's targets: the whole wave by default; with a filter active, only the

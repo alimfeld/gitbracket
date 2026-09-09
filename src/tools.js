@@ -9,6 +9,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { spawn } = require('child_process');
 const { ID_RE, makeCat, schedTime, isDone, matchSlotMs } = require('../site/derive.js');
 
 // Window collision test: shared by the validator's venue-overlap rule and the
@@ -178,6 +179,14 @@ const MIME = {
   '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon',
 };
 
+// Open a URL in the platform browser — the sim's rehearsal page and the admin
+// daemon's start-up both want it; CI skips the launch (no display, a spawn
+// would only fail).
+function openBrowser(url) {
+  const cmd = process.platform === 'darwin' ? 'open' : process.platform === 'linux' ? 'xdg-open' : null;
+  if (cmd && !process.env.CI) spawn(cmd, [url], { detached: true, stdio: 'ignore' }).unref();
+}
+
 // One static GET under a serving root — MIME by extension, traversal-guarded,
 // null when missing. Shared by the sim's served site and the admin daemon page.
 function staticFile(root, rel) {
@@ -274,4 +283,4 @@ function pairBusy(a, b) {
   return kinds;
 }
 
-module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, fixedPlayers, schedEntries, pairBusy, consumedSlots, descendants, winTarget, reachedWinner, feederBounds, isRealDate, findRoot, catCtx, byMatchOrder, tournamentText, staticFile };
+module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, fixedPlayers, schedEntries, pairBusy, consumedSlots, descendants, winTarget, reachedWinner, feederBounds, isRealDate, findRoot, catCtx, byMatchOrder, tournamentText, staticFile, openBrowser };
