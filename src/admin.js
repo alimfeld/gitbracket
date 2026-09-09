@@ -16,8 +16,8 @@
 
 const http = require('http');
 const path = require('path');
-const { loadRepo, staticFile, openBrowser, catCtx, schedEntries, pairBusy, fixedPlayers, consumedSlots, descendants, slotsOverlap, feederBounds, makeGames, branchOf, isRehearsalBranch } = require('./tools.js');
-const { execEdit, defaultSlug, git, parsePayload, waveEntries } = require('./editor.js');
+const { loadRepo, staticFile, openBrowser, catCtx, schedEntries, pairBusy, fixedPlayers, consumedSlots, descendants, slotsOverlap, feederBounds, makeGames, branchOf, isRehearsalBranch, git, defaultSlug } = require('./tools.js');
+const { execEdit, parsePayload, waveEntries } = require('./edits.js');
 const { matchSlotMs, schedTime, bestOfOf } = require('../site/derive.js');
 const { validateRepo } = require('./validate.js');
 const { ship, deployRole } = require('./publish.js');

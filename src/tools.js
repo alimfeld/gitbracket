@@ -145,13 +145,30 @@ function findRoot(from) {
 // The current branch name ('' on a detached HEAD) — the one predicate publish's
 // deploy role, the admin's rehearsal surface, and sim's start/teardown gate on.
 function branchOf(root) {
-  const r = spawnSync('git', ['symbolic-ref', '--short', 'HEAD'], { cwd: root, encoding: 'utf8' });
-  return r.status === 0 ? (r.stdout || '').trim() : '';
+  const r = git(root, ['symbolic-ref', '--short', 'HEAD']);
+  return r.code === 0 ? r.out.trim() : '';
 }
 
 // Rehearsal branches are gb.js sim's making and never merge — one predicate, so
 // the admin's score-wave gate and sim's teardown agree on what a rehearsal is.
 const isRehearsalBranch = b => /^rehearsal\//.test(b);
+
+// The shared git shell — spawnSync, not execSync: execSync has no argv array,
+// so args must be baked into the command string, which breaks ids with spaces
+// and quotes.
+function git(root, args) {
+  const r = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+  return { code: r.status === 0 ? 0 : 1, out: r.stdout || '', err: r.stderr || '' };
+}
+
+// The daemon's default tournament — the last index entry it can actually read;
+// a null file would crash every command, so skip it.
+function defaultSlug(repo) {
+  if (!repo.index.length) return null;
+  const last = repo.index[repo.index.length - 1];
+  const info = last && repo.tournaments.get(last.slug);
+  return info && info.tjson ? last.slug : null;
+}
 
 function readJson(file, errs) {
   try {
@@ -308,4 +325,4 @@ function pairBusy(a, b) {
   return kinds;
 }
 
-module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, fixedPlayers, schedEntries, pairBusy, consumedSlots, descendants, winTarget, reachedWinner, makeGames, feederBounds, isRealDate, findRoot, catCtx, tournamentText, staticFile, openBrowser, branchOf, isRehearsalBranch };
+module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, fixedPlayers, schedEntries, pairBusy, consumedSlots, descendants, winTarget, reachedWinner, makeGames, feederBounds, isRealDate, findRoot, catCtx, tournamentText, staticFile, openBrowser, branchOf, isRehearsalBranch, git, defaultSlug };

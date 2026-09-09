@@ -15,7 +15,7 @@ const { spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const validate = require('./validate.js');
-const { branchOf } = require('./tools.js');
+const { branchOf, git } = require('./tools.js');
 
 // CLI entry (dispatched from gb.js): root is the repo root. validate.main
 // exits 1 on data errors, so nothing dirty ever reaches the upload.
@@ -26,8 +26,8 @@ function main(root) {
 
 // The production domain: site/CNAME as origin/main has it.
 function productionCNAME(root) {
-  const c = spawnSync('git', ['show', 'origin/main:site/CNAME'], { cwd: root, encoding: 'utf8' });
-  return c.status === 0 ? c.stdout.trim() : null;
+  const c = git(root, ['show', 'origin/main:site/CNAME']);
+  return c.code === 0 ? c.out.trim() : null;
 }
 
 // The deploy decision, pure of I/O beyond git reads: ok + the target domain,
@@ -62,8 +62,8 @@ function ship(root) {
   // git is the record — ship only what the repo has, so a fresh clone +
   // publish reproduces live exactly. The daemon commits every edit, so a
   // dirty site/ is a hand-edit (or a staged file) history would never see.
-  const st = spawnSync('git', ['status', '--porcelain', '--', 'site/'], { cwd: root, encoding: 'utf8' });
-  const dirty = (st.status === 0 ? st.stdout : '').trim();
+  const st = git(root, ['status', '--porcelain', '--', 'site/']);
+  const dirty = (st.code === 0 ? st.out : '').trim();
   if (dirty) {
     console.error(`publish: site/ is dirty — commit it first:\n${dirty.split('\n').slice(0, 5).map(l => `  ${l}`).join('\n')}${dirty.split('\n').length > 5 ? '\n  …' : ''}`);
     return 1;

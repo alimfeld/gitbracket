@@ -8,9 +8,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const { spawnSync } = require('child_process');
 const { makeCat, isDone, sideLabel, schedDays, dayKey, DATE_RE, catStatus, currentWave, bestOfOf } = require('../site/derive.js');
-const { writeTournament, tournamentText, catCtx, winTarget, reachedWinner } = require('./tools.js');
+const { writeTournament, tournamentText, catCtx, winTarget, reachedWinner, git } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 
 // ---------- pure logic (tests drive these on fixture repos) ----------
@@ -287,23 +286,6 @@ function editDetail(kind, m, value, ctx) {
     : `side ${value.si === 0 ? 'a' : 'b'} → ${sideLabel(value.side, ctx)}${isDone(m) ? ' (result kept)' : ''}`; // side — the a/b verbs carry value+ctx
 }
 
-// ---------- git + repo I/O (thin shell, not unit-tested) ----------
-
-function git(root, args) {
-  // spawnSync, not execSync: execSync has no argv array — args must be baked
-  // into the command string, which breaks ids with spaces and quotes.
-  const r = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
-  return { code: r.status === 0 ? 0 : 1, out: r.stdout || '', err: r.stderr || '' };
-}
-
-// a null file would crash every command, so skip it.
-function defaultSlug(repo) {
-  if (!repo.index.length) return null;
-  const last = repo.index[repo.index.length - 1];
-  const info = last && repo.tournaments.get(last.slug);
-  return info && info.tjson ? last.slug : null;
-}
-
 // ---------- the edit funnel (edits commit per AGENTS.md) ----------
 
 // The edit funnel's only exit: validate, write, and always commit — git is
@@ -339,4 +321,4 @@ function execEdit(state, verb, cat, matchId, value) {
   return { sha };
 }
 
-module.exports = { parseGame, buildScheduled, applyScore, applyResult, applyVenue, applySide, applyTime, writeEdit, commitMessage, editDetail, waveEntries, parsePayload, execEdit, defaultSlug, git };
+module.exports = { parseGame, buildScheduled, applyScore, applyResult, applyVenue, applySide, applyTime, writeEdit, commitMessage, editDetail, waveEntries, parsePayload, execEdit };

@@ -73,11 +73,15 @@ implement them; don't treat them as style.
 
 One question decides placement for any new function: does the browser run it?
 
-- **Yes → `site/`** (the shipping surface). Pure fetch/render/boot in
-  `app.js`; markup and styling in `index.html` / `style.css`; site
-  computations in `derive.js` so the gate and the renderer can't drift.
+- **Yes, on the shipped site → `site/`** (the shipping surface). Pure
+  fetch/render/boot in `app.js`; markup and styling in `index.html` /
+  `style.css`; site computations in `derive.js` so the gate and the renderer
+  can't drift.
+- **Yes, but never shipped → `src/<tool>/`** beside the server that serves
+  it — the admin page lives in `src/admin/`, served loopback-only by the
+  daemon. It is browser code, not site code.
 - **No → `src/`** (the tool layer, never ships). Keep it in the tool that
-  uses it (`validate.js`, `schedule.js`, `editor.js`); share via `src/tools.js`
+  uses it (`validate.js`, `schedule.js`, `edits.js`); share via `src/tools.js`
   — repo I/O and tool-only predicates already live there. Root files
   (`gb.js`, `.githooks/`) dispatch and gate only; logic lives in `src/`.
 - **Specs → `specs/`**, one file per tournament, consumed only by

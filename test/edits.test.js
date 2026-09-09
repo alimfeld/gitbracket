@@ -1,6 +1,6 @@
 'use strict';
 
-// editor.js: the edit engine — scoring eligibility, the shared grammar, edit
+// edits.js: the edit engine — scoring eligibility, the shared grammar, edit
 // applies, disk writes with validate-and-rollback, commit messages, and the
 // funnel the admin daemon drives (execEdit).
 
@@ -12,7 +12,7 @@ const assert = require('node:assert/strict');
 const { loadRepo } = require('../src/tools.js');
 const { validateRepo } = require('../src/validate.js');
 const { makeCat } = require('../site/derive.js');
-const editor = require('../src/editor.js');
+const editor = require('../src/edits.js');
 const { FIX, hasErr } = require('./helpers.js');
 
 function md40Ctx(repo) {

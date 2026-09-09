@@ -13,8 +13,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { loadRepo, branchOf, isRehearsalBranch } = require('./tools.js');
-const { defaultSlug, git } = require('./editor.js');
+const { loadRepo, branchOf, isRehearsalBranch, defaultSlug, git } = require('./tools.js');
 const { productionCNAME } = require('./publish.js');
 const admin = require('./admin.js');
 
