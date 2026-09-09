@@ -28,11 +28,13 @@ implement them; don't treat them as style.
   right if clock rules change.
 - **derive.js is the single source of the site's domain model.** Validator,
   editor, generator, and renderers all consume it — extend it, never reimplement
-  the model elsewhere. The site is its only tenant: a function the site never
-  runs — an editor grammar, an admin-page parse — stays in the tool that uses
-  it, even when another tool shares the same logic; derive.js is not the shared
-  utility belt. The integrity gate never depends on renderer code, and derive.js
-  must run in the browser and under node, so node-only modules stay out. Its
+  the model elsewhere. The site is its only tenant: every export must be
+  reachable from a shipped render path — used by the site's own code, or called
+  by another derive.js function that a render path reaches. A function only
+  node tools consume — even when several tools share it — belongs in
+  src/tools.js or the tool that owns it; derive.js is not the shared utility
+  belt. The integrity gate never depends on renderer code, and derive.js must
+  run in the browser and under node, so node-only modules stay out. Its
   internal laws: side identity derives from the player set, never
   from list order; memoized state resets every render, so a corrected score
   surfaces on the next poll; resolution is cycle-proof — the validator
