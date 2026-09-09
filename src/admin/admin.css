@@ -90,12 +90,15 @@ main { flex: 1; display: flex; min-height: 0; }
   background-size: .4rem .4rem; background-position: center;
 }
 .match .grip:hover { color: var(--accent); }
-/* one row per side: name · pencil · score; the whole card is the score target */
+/* one row per side: (name · pencil) · score; the whole card is the score target.
+   .who takes the free space as a unit so the pencil hugs its name text — it
+   edits that side, never the score — while the score stays at the right edge */
 .match .side { display: flex; align-items: center; line-height: 1.2; }
-.match .side .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.match .side .who { display: flex; flex: 1; min-width: 0; align-items: center; }
+.match .side .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .match .edit-side {
   border: 0; background: none; font: inherit; color: var(--muted); cursor: pointer;
-  padding: 0 .2rem; border-radius: .2rem; line-height: 1.2; opacity: 0;
+  padding: 0 .2rem; border-radius: .2rem; line-height: 1.2; opacity: 0; flex: none;
 }
 .match:hover .edit-side, .match .edit-side:focus-visible { opacity: 1; }
 .match .edit-side:hover, .match .edit-side:focus-visible { color: var(--accent); }

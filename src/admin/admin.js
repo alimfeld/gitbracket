@@ -186,9 +186,10 @@ function cardHtml(c, m, venue) {
 
 // One row per side: the name is inert display text, the pencil is the only
 // side-edit surface, and the score rides the row (the card handles score entry).
+// The pencil sits inside .who with its name — it edits that side, never the score.
 function sideRow(c, m, i) {
   const sideName = esc(teamText(m.sides[i], c));
-  return `<div class="side"${winnerIdx(m) === i ? ' data-win' : ''}><span class="name">${sideName}</span><button type="button" class="edit-side" data-side="${i}" title="edit side ${i === 0 ? 'a' : 'b'}" aria-label="edit side ${i === 0 ? 'a' : 'b'} — ${sideName}">✎</button><span class="score">${scoreCell(c, m, i)}</span></div>`;
+  return `<div class="side"${winnerIdx(m) === i ? ' data-win' : ''}><span class="who"><span class="name">${sideName}</span><button type="button" class="edit-side" data-side="${i}" title="edit side ${i === 0 ? 'a' : 'b'}" aria-label="edit side ${i === 0 ? 'a' : 'b'} — ${sideName}">✎</button></span><span class="score">${scoreCell(c, m, i)}</span></div>`;
 }
 
 // placeholder dots keep the best-of shape, the winner carries the W/O mark.
