@@ -158,11 +158,12 @@ function renderGrid() {
   wireGrid();
 }
 
-// The card's meta line — time · category · match label.
+// The card's meta line — time · category · match id · label. The id sits on
+// the category so a feeder dropdown's "7 · QF" ids map to board cards.
 function cardMeta(c, m) {
   const t = schedTime(m, S.tz);
   const time = t !== null ? fmtTime(t, S.tz) : '—';
-  return `${time} · ${c.name || c.id} · ${matchLabel(m, c)}`;
+  return `${time} · ${c.name || c.id} · ${m.id} · ${matchLabel(m, c)}`;
 }
 
 function cardHtml(c, m, venue) {
