@@ -214,6 +214,7 @@ test('editor parsePayload: one grammar for the arm line and the sim', () => {
   assert.deepEqual(editor.parsePayload('result', ['wo', 'b'], 'UTC').value, { shape: 'walkover', winner: 'b' }, 'the wo token names the winner');
   assert(editor.parsePayload('result', ['wo'], 'UTC').err, 'a side is required after wo');
   assert(editor.parsePayload('result', ['wo', 'c'], 'UTC').err, 'only a|b');
+  assert(editor.parsePayload('result', ['wo', 'a', 'extra'], 'UTC').err, 'wo takes nothing else — trailing tokens refused');
   assert.deepEqual(editor.parsePayload('result', ['void'], 'UTC').value, { shape: 'void' }, 'the void token emits the void shape');
   assert(editor.parsePayload('result', ['void', 'a'], 'UTC').err, 'void takes nothing else');
   assert.deepEqual(editor.parsePayload('result', [], 'UTC').value, { shape: 'clear' }, 'an empty result entry clears');

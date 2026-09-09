@@ -310,6 +310,7 @@ function parsePayload(kind, tokens, tz, now) {
     if (head === 'wo') {
       const side = tokens[1];
       if (side !== 'a' && side !== 'b') return { err: 'expected a or b after wo' };
+      if (tokens.length > 2) return { err: 'wo takes nothing else' };
       return { value: { shape: 'walkover', winner: side } };
     }
     if (head === 'void') {

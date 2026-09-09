@@ -339,26 +339,9 @@ async function sendEdit(verb, cid, mid, value) {
 }
 
 // ---- the result modal ----
-// One result grammar, same as the terminal editor: bare games · wo a/b · void ·
-// empty clears. The shape rides the value; validity past shape (target count,
-// even best-of…) is the daemon's gate, flashed back on a failed write.
-function parseResult(s) {
-  const toks = s.trim().split(/\s+/).filter(Boolean);
-  if (!toks.length) return { value: { shape: 'clear' } }; // empty input is a deliberate clear
-  if (toks[0] === 'wo') {
-    return toks.length === 2 && (toks[1] === 'a' || toks[1] === 'b')
-      ? { value: { shape: 'walkover', winner: toks[1] } }
-      : { err: 'expected a or b after wo' };
-  }
-  if (toks[0] === 'void') return toks.length > 1 ? { err: 'void takes nothing else' } : { value: { shape: 'void' } };
-  const games = [];
-  for (const t of toks) {
-    const mm = /^(\d+)[:-](\d+)$/.exec(t);
-    if (!mm) return { err: `bad score ${JSON.stringify(t)} — expected a-b` };
-    games.push({ a: +mm[1], b: +mm[2] });
-  }
-  return { value: { shape: 'score', games } };
-}
+// The input is the raw result entry — bare games · wo a/b · void · empty
+// clears. The daemon parses it with the terminal editor's own grammar and
+// names a bad entry; the modal keeps the draft for fixing.
 
 function openResult(cid, m) {
   const ctx = cat(cid);
@@ -404,9 +387,10 @@ function openResult(cid, m) {
   input.addEventListener('input', sync);
   input.focus(); input.select();
   const submit = async () => {
-    const p = parseResult(input.value);
-    if (p.err) { flash(p.err); input.focus(); input.select(); return; } // a rejection keeps the draft for fixing
-    if (await sendEdit('result', cid, m.id, p.value)) modal.hidden = true;
+    // raw text — the daemon parses with the terminal editor's grammar; a
+    // rejection keeps the draft for fixing (sendEdit flashes the daemon's words)
+    if (await sendEdit('result', cid, m.id, input.value)) modal.hidden = true;
+    else { input.focus(); input.select(); }
   };
   modal.querySelector('[data-x="cancel"]').onclick = () => { modal.hidden = true; };
   modal.querySelector('[data-x="apply"]').onclick = submit;

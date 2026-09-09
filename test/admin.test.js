@@ -45,6 +45,23 @@ function scratchWithRemote() {
   return { tmp, siteRoot, state: { root: tmp, siteRoot, repo, slug: 'sample', redo: [] } };
 }
 
+test('admin doEdit: a raw result string is parsed with the terminal grammar — page and terminal cannot drift', () => {
+  const { tmp, siteRoot, state } = scratchWithRemote();
+  try {
+    const good = admin.doEdit(state, 'result', 'md40', '8', '21-19 21-18'); // the display form, typed raw
+    assert.equal(good.ok, true, 'a raw score string lands');
+    assert(/^score\(sample\): md40\/8 /.test(admin.unpushed(tmp).commits[0].msg), 'the raw string parses into the score kind');
+    const m8 = loadRepo(siteRoot).tournaments.get('sample').tjson.matches.md40.find(m => m.id === 8);
+    assert(m8.result.status === 'played' && m8.result.winner === 'a', 'raw games apply as a played result');
+    const bad = admin.doEdit(state, 'result', 'md40', '8', 'wo a x'); // the grammar's own refusal, daemon-side
+    assert.equal(bad.ok, false, 'a bad grammar is refused');
+    assert(/wo takes nothing else/.test(bad.error), 'the refusal speaks the grammar\'s words');
+    assert.equal(admin.unpushed(tmp).commits.length, 1, 'a refused grammar never commits');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 test('admin unpushed: no remote reports hasRemote false — undo/publish stay off', () => {
   const { tmp } = scratchWithRemote();
   try {

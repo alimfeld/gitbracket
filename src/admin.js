@@ -43,6 +43,17 @@ function gate(siteRoot) {
 // never land). The editor owns the funnel (execEdit); this is the JSON view.
 function doEdit(state, verb, cat, matchId, value) {
   state.commit = true; // the daemon always commits — git is the record
+  // The page's one free-text entry is the result field: the raw string arrives
+  // here and is parsed with the terminal editor's grammar (parsePayload), so
+  // the browser and the terminal can never drift. Everything else arrives
+  // pre-shaped (venue id, side object, a move's time+venue).
+  if (verb === 'result' && typeof value === 'string') {
+    const info = state.repo.tournaments.get(state.slug);
+    const tz = (info && info.tjson && info.tjson.timezone) || 'UTC';
+    const p = parsePayload('result', value.trim().split(/\s+/).filter(Boolean), tz, Date.now());
+    if (p.err) return { ok: false, error: p.err }; // the modal keeps the draft and flashes the grammar's own words
+    value = p.value;
+  }
   const r = execEdit(state, verb, cat, matchId, value);
   if (r.errors) return { ok: false, errors: r.errors };
   if (r.error) return { ok: false, error: r.error };
@@ -100,7 +111,7 @@ function redo(state) {
 // The day's legal starts for one match, as wall-clock minutes per venue — the
 // grid ticks (0..1440 step gcd) where the move passes the gate's own rules:
 // venue/player conflicts via the validator's shared atoms (schedEntries +
-// pairBusy), feeder bounds via derive.js's feederBounds — the same functions
+// pairBusy), feeder bounds via tools.js's feederBounds — the same functions
 // validateRepo runs, so the preview and the write gate can't disagree. The
 // dragged match is off the board during the query: its own window conflicts
 // with nothing.
