@@ -10,6 +10,12 @@ const LOCALE = 'en-US';
 // Shared side identity: sorted '|'-joined ids.
 const pairSig = ids => [...ids].sort().join('|');
 
+// The one escaper for every data render — the site page and the admin page
+// both load this file, so a fix lands on both surfaces at once and a drift
+// can't leave one surface unescaped.
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
 // Per-category render cache, one bag on the context — toCats rebuilds contexts
 // every render, so a stale memo can never outlive its render.
 const ctxMemo = ctx => ctx._memo || (ctx._memo = {});
@@ -486,7 +492,7 @@ const uniformBits = (n, times, courts) => ({
 });
 
 // Two sibling classification semis of one seat ('5th–8th' + '9th–12th') name
-// their full band ('5th–16th semi') — appending ' place' would mangle a semi
+// their full band ('5th–12th semi') — appending ' place' would mangle a semi
 // label.
 const bandSemiLabel = ls => {
   const rs = ls.flatMap(l => (l.match(/\d+/g) || []).map(Number));
@@ -1076,5 +1082,5 @@ function playerStatus(ctx, pid) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, makeCat, toCats, matchSlotMs, bestOfOf, poolBo1, sideIdx, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, resolveSide, teamLabel, sideLabel, playerMatches, possibleStages, placementLabel, plRange, placementColumn, bandLabels, stageGroupName, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dayShort, dayLabel, fmtDiff, kioskStatus, currentRowIndex, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, currentWave, playerStatus };
+  module.exports = { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, esc, makeCat, toCats, matchSlotMs, bestOfOf, poolBo1, sideIdx, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, resolveSide, teamLabel, sideLabel, playerMatches, possibleStages, placementLabel, plRange, placementColumn, bandLabels, stageGroupName, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dayShort, dayLabel, fmtDiff, kioskStatus, currentRowIndex, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, currentWave, playerStatus };
 }

@@ -138,6 +138,14 @@ function branchOf(root) {
 // and sim's teardown agree on what a rehearsal is.
 const isRehearsalBranch = b => /^rehearsal\//.test(b);
 
+// A pristine tree — no staged, unstaged, or untracked changes. The admin's
+// undo/redo resets and sim's teardown both require it; one predicate, so the
+// two mirrors can't drift on what "clean" means.
+function cleanTree(root) {
+  const s = git(root, ['status', '--porcelain']);
+  return s.code === 0 && s.out.trim() === '';
+}
+
 // spawnSync, not execSync — execSync has no argv array, so args would be baked
 // into the shell string, breaking ids with spaces or quotes.
 function git(root, args) {
@@ -299,4 +307,4 @@ function pairBusy(a, b) {
   return kinds;
 }
 
-module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, fixedPlayers, schedEntries, pairBusy, consumedSlots, descendants, winTarget, reachedWinner, makeGames, feederBounds, isRealDate, findRoot, catCtx, tournamentText, staticFile, openBrowser, branchOf, isRehearsalBranch, git, defaultSlug };
+module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, fixedPlayers, schedEntries, pairBusy, consumedSlots, descendants, winTarget, reachedWinner, makeGames, feederBounds, isRealDate, findRoot, catCtx, tournamentText, staticFile, openBrowser, branchOf, isRehearsalBranch, cleanTree, git, defaultSlug };

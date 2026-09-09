@@ -43,10 +43,6 @@ function dayWindow(m, ctx) {
   return Number.isFinite(slot) ? [wm, wm + slot] : null;
 }
 
-function esc(s) {
-  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
-
 // ---- fetch helpers ----
 async function get(url) { const r = await fetch(url); return r.ok ? r.json() : null; }
 async function post(url, body) {

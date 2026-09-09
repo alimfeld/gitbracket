@@ -12,11 +12,6 @@ if (typeof module !== 'undefined') {
 // The venue's display name — a missing id (hand-edited or staged) falls back to the id.
 const venueName = (ctx, id) => ctx.venues.get(id) || id;
 
-function esc(s) {
-  return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
-
 // ?sim: land the rehearsal clock on the event's first scheduled match, so the
 // kiosk opens where the tournament starts. Pure — tests pin it.
 function simAimOffset(tjson, now) {

@@ -9,16 +9,11 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { loadRepo, branchOf, isRehearsalBranch, defaultSlug, git } = require('./tools.js');
+const { loadRepo, branchOf, isRehearsalBranch, cleanTree, defaultSlug, git } = require('./tools.js');
 const { productionCNAME } = require('./publish.js');
 const admin = require('./admin.js');
 
 const rand = () => Date.now().toString(36).slice(-5);
-
-function cleanTree(root) {
-  const s = git(root, ['status', '--porcelain']);
-  return s.code === 0 && s.out.trim() === '';
-}
 
 // Teardown, the mirror of setup: the surge domain first (it stays hosted until
 // torn down), the branch last — it must outlive the domain so the CNAME stays
