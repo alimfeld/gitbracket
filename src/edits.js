@@ -121,6 +121,15 @@ function writeEdit(siteRoot, repo, slug, catId, apply) {
   const file = path.join(siteRoot, 'tournaments', `${slug}.json`);
   const before = fs.readFileSync(file, 'utf8');
   const beforeJson = JSON.parse(before); // the rollback snapshot — the day guard below reads it too
+  // The daemon's memory snapshot can outlive an out-of-band hand edit; writing
+  // from it would silently drop that edit in the next commit (the pre-commit's
+  // disk-side validate can't see it either). Refuse — the daemon reloads on
+  // failure, so a retry applies onto the fresh state. Compared through the
+  // same normalizer, so byte-layout-only differences (a minified fixture) are
+  // not a change; data changes are.
+  if (tournamentText(beforeJson) !== tournamentText(tjson)) {
+    return { err: `the file changed on disk (${slug}.json) since it was loaded — refusing to overwrite it; reload and retry` };
+  }
   const aerr = apply(ms, ctx);
   if (aerr) return { err: aerr };
   // The published days (the index dates) are fixed: only the schedule
@@ -240,18 +249,21 @@ function parsePayload(kind, tokens, tz, now) {
 const SIDE_VERBS = { 'side-a': 0, 'side-b': 1 };
 
 // 'result' folds score / walkover / void / clear into one entry — the shape
-// dispatches to the domain applies.
+// dispatches to the domain applies; anything else is refused by name, never
+// silently treated as one of them.
 function applyFor(verb, matchId, value) {
   if (verb === 'result') return (ms, ctx) => {
     if (value.shape === 'score') return applyScore(ms, matchId, value.games, ctx);
     if (value.shape === 'walkover') return applyResult(ms, matchId, 'walkover', value.winner);
     if (value.shape === 'void') return applyResult(ms, matchId, 'void');
-    return applyClear(ms, matchId);
+    if (value.shape === 'clear') return applyClear(ms, matchId);
+    return `unknown result shape ${JSON.stringify(value.shape)}`;
   };
   return verb === 'venue' ? c => applyVenue(c, matchId, value)
     : verb === 'move' ? c => applyMove(c, matchId, value)
     : SIDE_VERBS[verb] !== undefined ? c => applySide(c, matchId, value)
-    : c => applyTime(c, matchId, value); // time — undefined unschedules
+    : verb === 'time' ? c => applyTime(c, matchId, value) // time — undefined unschedules
+    : () => `unknown edit verb ${JSON.stringify(verb)}`;
 }
 
 // Conventional-commit messages per edit kind — grep-able match-day history:

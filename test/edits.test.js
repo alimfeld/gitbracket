@@ -155,6 +155,49 @@ test('editor writeEdit: a cross-day time edit is refused with the cause named; d
   }
 });
 
+test('editor writeEdit: an out-of-band hand edit is refused by name — the stale-memory write never silently clobbers it', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gitbracket-'));
+  try {
+    const dataRoot = path.join(tmp, 'site');
+    fs.mkdirSync(dataRoot, { recursive: true });
+    fs.cpSync(FIX('sample'), dataRoot, { recursive: true });
+    const repo = loadRepo(dataRoot); // the daemon's boot snapshot — memory has the original file
+    const file = path.join(dataRoot, 'tournaments', 'sample.json');
+    const disk = JSON.parse(fs.readFileSync(file, 'utf8'));
+    disk.players[0].name = 'Hand-Edited Name'; // the operator's out-of-band fix after boot
+    fs.writeFileSync(file, JSON.stringify(disk, null, 2) + '\n');
+    const res = editor.writeEdit(dataRoot, repo, 'sample', 'md40', (c) => editor.applyVenue(c, '2', 'court-1'));
+    assert(res.err && /changed on disk/.test(res.err), `the staleness is refused with the cause named, got: ${res.err}`);
+    assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).players[0].name, 'Hand-Edited Name', 'the hand edit survives — nothing written');
+    assert.equal(repo.tournaments.get('sample').tjson.matches.md40.find(m => m.id === 2).venue, 'court-2', 'the apply never ran — no in-memory edit to roll back');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+// execEdit returns before any git call on these — an unknown verb/shape must
+// never reach the write (the old fallbacks silently cleared time or result).
+test('editor execEdit: unknown verbs and result shapes are refused by name, never a silent clear', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gitbracket-'));
+  try {
+    const dataRoot = path.join(tmp, 'site');
+    fs.mkdirSync(dataRoot, { recursive: true });
+    fs.cpSync(FIX('sample'), dataRoot, { recursive: true });
+    const repo = loadRepo(dataRoot);
+    const file = path.join(dataRoot, 'tournaments', 'sample.json');
+    const before = fs.readFileSync(file, 'utf8');
+    const state = { root: tmp, siteRoot: dataRoot, repo, slug: 'sample' };
+    const verb = editor.execEdit(state, 'tme', 'md40', '2', undefined);
+    assert(verb.error && /unknown edit verb "tme"/.test(verb.error), `a typo'd verb names the verb, got: ${verb.error}`);
+    assert(fs.readFileSync(file, 'utf8') === before, 'no write on an unknown verb');
+    const shape = editor.execEdit(state, 'result', 'md40', '2', { shape: 'bogus' });
+    assert(shape.error && /unknown result shape "bogus"/.test(shape.error), `an unknown shape names the shape, got: ${shape.error}`);
+    assert(fs.readFileSync(file, 'utf8') === before, 'no write on an unknown shape');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 test('editor parseGame', () => {
   assert(JSON.stringify(editor.parseGame('11-9')) === JSON.stringify({ a: 11, b: 9 }), 'a-b parses');
   assert(JSON.stringify(editor.parseGame('11:9')) === JSON.stringify({ a: 11, b: 9 }), 'a:b parses');
