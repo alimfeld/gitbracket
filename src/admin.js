@@ -51,6 +51,11 @@ function doEdit(state, verb, cat, matchId, value) {
   return { ok: true, sha: r.sha, text: r.text };
 }
 
+// Both resets (undo, redo) need a pristine tree — one predicate for the mirrors.
+function cleanTree(root) {
+  return git(root, ['diff', '--quiet']).code === 0 && git(root, ['diff', '--cached', '--quiet']).code === 0;
+}
+
 // undo/redo — mirror resets across the same edge. Undo drops HEAD (the pending
 // gate below makes the dropped commit unpushed by definition); redo restores
 // it as fresh pending. Both reset --hard, so the clean check must cover the
@@ -62,8 +67,7 @@ function doEdit(state, verb, cat, matchId, value) {
 // can only move back along the exact edge the undo took: pushed history is
 // never rewritten.
 function undo(state) {
-  const clean = git(state.root, ['diff', '--quiet']).code === 0 && git(state.root, ['diff', '--cached', '--quiet']).code === 0;
-  if (!clean) return { error: 'the repo has uncommitted changes — commit or stash before undoing' };
+  if (!cleanTree(state.root)) return { error: 'the repo has uncommitted changes — commit or stash before undoing' };
   const p = unpushed(state.root);
   if (!p.commits.length) return { error: 'nothing to undo' };
   const head = git(state.root, ['rev-parse', 'HEAD']).out.trim();
@@ -80,8 +84,7 @@ function undo(state) {
 function redo(state) {
   const stack = state.redo;
   if (!stack.length) return { error: 'nothing to redo' };
-  const clean = git(state.root, ['diff', '--quiet']).code === 0 && git(state.root, ['diff', '--cached', '--quiet']).code === 0;
-  if (!clean) return { error: 'the repo has uncommitted changes — commit or stash before redoing' };
+  if (!cleanTree(state.root)) return { error: 'the repo has uncommitted changes — commit or stash before redoing' };
   const top = stack[stack.length - 1];
   if (git(state.root, ['rev-parse', 'HEAD']).out.trim() !== top.parent) {
     stack.length = 0; // stale — the branch moved since the undo; resetting would discard that work

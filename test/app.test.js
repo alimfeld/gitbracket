@@ -9,7 +9,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, matchSlotMs, slotLabel, placementLabel, koColumn, koOrdinal, matchLabel, schedTime, toCats, isDeadTie, winners, catStatus, roundName } = require('../site/derive.js');
+const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, matchSlotMs, sideLabel, placementLabel, koColumn, koOrdinal, matchLabel, schedTime, toCats, isDeadTie, winners, catStatus, roundName } = require('../site/derive.js');
 const { parseRoute, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer } = require('../site/app.js');
 const { FIX, catOf, text, vals, card, cards, links } = require('./helpers.js');
 const { loadRepo } = require('../src/tools.js');
@@ -317,7 +317,9 @@ test('koOrdinal: bracket ordinals are structural — schedule edits cannot renum
   raw.find(m => m.id === 8).scheduled = t7;
   const md = makeCat({ meta: tjson.categories[0], matches: raw }, tjson);
   assert(matchLabel(md.byId.get(7), md) === 'SF1' && matchLabel(md.byId.get(8), md) === 'SF2', 'labels read who feeds the final, not the clock');
-  assert(slotLabel(md.byId.get(9).sides[0], md) === 'Winner of SF1' && slotLabel(md.byId.get(9).sides[1], md) === 'Winner of SF2', 'references hold under schedule edits');
+  // the final's open slot keeps its reference label; the decided feeder's side
+  // resolves to a team, so only the open one renders the slot form
+  assert(sideLabel(md.byId.get(9).sides[1], md) === 'Winner of SF2', 'the open feeder ref holds under schedule edits');
 });
 
 test('bracket: slot labels are plain text — no link wrapping, no trace machinery', () => {

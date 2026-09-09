@@ -9,7 +9,7 @@ const assert = require('node:assert');
 const { generate } = require('../src/schedule.js');
 const { validateRepo } = require('../src/validate.js');
 const { applyScore, waveEntries } = require('../src/editor.js');
-const { makeCat, isDone, countWins, bestOfOf, schedDays, resolveSide } = require('../site/derive.js');
+const { makeCat, isDone, reachedWinner, bestOfOf, schedDays, resolveSide } = require('../site/derive.js');
 const { makeGames, xTargets } = require('../src/sim.js');
 const { MINI } = require('./helpers.js');
 
@@ -70,7 +70,7 @@ test('a play-through ends complete and validates clean', () => {
       }
       const b = bestOfOf(m, ctx);
       assert.ok(m.games.length >= (b + 1) / 2 && m.games.length <= b, `${cid} ${m.id}: ${m.games.length} games within best of ${b}`);
-      assert.ok(Math.max(...countWins(m.games)) === (b + 1) / 2, `${cid} ${m.id}: winner reached the target`);
+      assert.ok(reachedWinner(m.games, (b + 1) / 2) !== null, `${cid} ${m.id}: winner reached the target`);
     }
   }
 });

@@ -28,9 +28,12 @@ implement them; don't treat them as style.
   right if clock rules change.
 - **derive.js is the single source of the site's domain model.** Validator,
   editor, generator, and renderers all consume it — extend it, never reimplement
-  the model elsewhere. The integrity gate never depends on renderer code, and
-  derive.js must run in the browser and under node, so node-only modules stay
-  out. Its internal laws: side identity derives from the player set, never
+  the model elsewhere. The site is its only tenant: a function the site never
+  runs — an editor grammar, an admin-page parse — stays in the tool that uses
+  it, even when another tool shares the same logic; derive.js is not the shared
+  utility belt. The integrity gate never depends on renderer code, and derive.js
+  must run in the browser and under node, so node-only modules stay out. Its
+  internal laws: side identity derives from the player set, never
   from list order; memoized state resets every render, so a corrected score
   surfaces on the next poll; resolution is cycle-proof — the validator
   rejects cycles first, so a guard only ever prevents a hang.
@@ -62,7 +65,7 @@ implement them; don't treat them as style.
 One question decides placement for any new function: does the browser run it?
 
 - **Yes → `site/`** (the shipping surface). Pure fetch/render/boot in
-  `app.js`; markup and styling in `index.html` / `style.css`; shared
+  `app.js`; markup and styling in `index.html` / `style.css`; site
   computations in `derive.js` so the gate and the renderer can't drift.
 - **No → `src/`** (the tool layer, never ships). Keep it in the tool that
   uses it (`validate.js`, `schedule.js`, `editor.js`); share via `src/tools.js`

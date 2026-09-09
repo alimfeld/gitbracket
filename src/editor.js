@@ -1058,4 +1058,4 @@ function main(root) {
   editorMain(root, siteRoot, repo, { sim: false, clock: () => Date.now() });
 }
 
-module.exports = { parseGame, buildScheduled, applyScore, applyResult, applyVenue, applySide, applyTime, applyMove, prefillFor, writeEdit, commitMessage, editDetail, echoLine, parseCmd, rowKey, waveEntries, buildRows, makeView, parsePayload, step, execEdit, execAction, defaultSlug, editorMain, main, git, C };
+module.exports = { parseGame, buildScheduled, applyScore, applyResult, applyVenue, applySide, applyTime, prefillFor, writeEdit, commitMessage, editDetail, echoLine, parseCmd, rowKey, waveEntries, buildRows, makeView, parsePayload, step, execEdit, execAction, defaultSlug, editorMain, main, git, C };
