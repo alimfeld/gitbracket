@@ -894,7 +894,9 @@ function execEdit(state, verb, cat, matchId, value) {
     const detail = editDetail(verb, m, value, ctx);
     const msg = commitMessage(kind, slug, cat, matchId, detail);
     git(root, ['add', path.relative(root, file)]);
-    const c = git(root, ['commit', '-m', msg]);
+    // pathspec commit: only this edit's file rides in — anything else the
+    // operator staged stays staged, never swept into a match-day commit
+    const c = git(root, ['commit', '-m', msg, '--', path.relative(root, file)]);
     if (c.code !== 0) {
       const msg = `${path.relative(root, file)} written but the commit failed:\n${c.err}\n(file staged — commit it manually)`;
       return { text: msg, color: 'red', error: msg };

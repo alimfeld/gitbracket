@@ -62,6 +62,22 @@ test('admin doEdit: a raw result string is parsed with the terminal grammar — 
   }
 });
 
+test('admin doEdit: the commit takes only the edited tournament file — other staged changes stay put', () => {
+  const { tmp, state } = scratchWithRemote();
+  try {
+    fs.writeFileSync(path.join(tmp, 'note.txt'), 'staged but unrelated\n');
+    git(tmp, ['add', 'note.txt']);
+    const r = admin.doEdit(state, 'result', 'md40', '8', '21-19 21-18');
+    assert.equal(r.ok, true, 'the edit lands');
+    const only = git(tmp, ['show', '--name-only', '--format=', 'HEAD']).out.trim().split('\n');
+    assert.deepEqual(only, ['site/tournaments/sample.json'], 'the commit names only the tournament file');
+    const staged = git(tmp, ['diff', '--cached', '--name-only']).out.trim().split('\n');
+    assert(staged.includes('note.txt'), 'the unrelated staged file is still staged, not swept into the commit');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 test('admin unpushed: no remote reports hasRemote false — undo/publish stay off', () => {
   const { tmp } = scratchWithRemote();
   try {
