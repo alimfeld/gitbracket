@@ -130,8 +130,15 @@ main { flex: 1; display: flex; min-height: 0; }
 /* .modal's display:flex overrides the [hidden] attribute — a hidden modal must not gray out the page */
 .modal[hidden] { display: none; }
 .modal .box { background: #fff; border-radius: .5rem; padding: 1rem; width: 24rem; max-height: 80vh; overflow-y: auto; }
-.modal .tabs { display: flex; gap: .3rem; margin-bottom: .6rem; }
-.modal .tabs button.active { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+/* a segmented control — reads as navigation, distinct from the bordered foot buttons */
+.modal .tabs { display: flex; gap: .2rem; margin-bottom: .6rem; background: var(--hairline); padding: .2rem; border-radius: .4rem; }
+.modal .tabs button { flex: 1; border: 0; background: none; padding: .3rem .6rem; border-radius: .3rem; cursor: pointer; color: var(--muted); }
+.modal .tabs button.active { background: #fff; color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px #00000022; }
+/* the player picker: rows that never break between the box and the name, bounded scroll for long rosters */
+.modal .players { margin-top: .4rem; max-height: 40vh; overflow-y: auto; border: 1px solid var(--hairline); border-radius: .3rem; padding: .2rem 0; }
+.modal .players label { display: flex; align-items: center; gap: .4rem; padding: .15rem .6rem; white-space: nowrap; cursor: pointer; }
+.modal .players label:hover { background: #0a66c21a; }
+.modal .players input { margin: 0; }
 .modal .foot { display: flex; gap: .4rem; justify-content: flex-end; margin-top: .8rem; }
 
 .flash { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); background: #1c1c1e; color: #fff; padding: .5rem 1rem; border-radius: .375rem; font-size: .85rem; z-index: 20; max-width: 40rem; white-space: pre-wrap; }

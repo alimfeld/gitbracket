@@ -396,11 +396,14 @@ function openSide(cid, m, si) {
   const size = teamSize(ctx);
   const modal = $('modal');
   modal.hidden = false;
+  const cur = m.sides[si];
+  // open on the kind the current side actually is — editing starts pre-filled, not on Players
+  const curKind = cur && (cur.kind === 'pool' || cur.kind === 'match') ? cur.kind : 'players';
   modal.innerHTML = `<div class="box">
     <p class="kicker">Side ${si === 0 ? 'A' : 'B'}</p>
     <h2>${esc(cardMeta(ctx, m))}</h2>
     <div class="tabs">
-      <button data-kind="players" class="active">Players</button>
+      <button data-kind="players">Players</button>
       <button data-kind="pool">Pool</button>
       <button data-kind="match">Match</button>
     </div>
@@ -408,27 +411,38 @@ function openSide(cid, m, si) {
     <div class="foot"><button data-x="cancel">Cancel</button><button data-x="apply" class="primary">Apply</button></div>
   </div>`;
   const body = modal.querySelector('#sidebody');
-  const cur = m.sides[si];
   const setKind = kind => {
     modal.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.kind === kind));
     if (kind === 'players') {
       const ids = cur && cur.kind === 'players' ? cur.ids : [];
-      body.innerHTML = `<p class="hint">pick ${size} player${size === 1 ? '' : 's'}</p>` +
-        ctx.matches.flatMap(mm => (mm.sides || []).flatMap(s => (s.kind === 'players' ? s.ids : [])))
-          .filter((v, i, a) => a.indexOf(v) === i)
-          .map(id => { const nm = S.tjson.players.find(p => p.id === id); return `<label><input type="checkbox" value="${esc(id)}"${ids.includes(id) ? ' checked' : ''}>${esc(nm ? nm.name : id)}</label>`; }).join('');
+      const names = new Map((S.tjson.players || []).map(p => [p.id, p.name]));
+      const all = ctx.matches.flatMap(mm => (mm.sides || []).flatMap(s => (s.kind === 'players' ? s.ids : [])));
+      body.innerHTML = `<p class="hint">pick ${size} player${size === 1 ? '' : 's'}</p><div class="players">` +
+        [...new Set(all)].map(id => `<label><input type="checkbox" value="${esc(id)}"${ids.includes(id) ? ' checked' : ''}><span>${esc(names.get(id) ?? id)}</span></label>`).join('') + '</div>';
     } else if (kind === 'pool') {
       const p = pools(ctx);
-      body.innerHTML = `<p class="hint">pool slot — pool + rank</p><label class="field">Pool <select id="poolsel">${p.map(x => `<option>${esc(x)}</option>`).join('')}</select></label>
-        <label class="field">Rank <select id="ranksel">${[1, 2, 3, 4, 5, 6].map(r => `<option>${r}</option>`).join('')}</select></label>`;
+      body.innerHTML = `<p class="hint">pool slot — pool + rank</p>
+        <label class="field">Pool <select id="poolsel">${p.map(x => `<option value="${esc(x)}"${cur && cur.pool === x ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
+        <label class="field">Rank <select id="ranksel"></select></label>`;
+      // rank range is the pool's team count — not a hardcoded 6; re-derive when the pool changes
+      const fillRanks = () => {
+        const pool = body.querySelector('#poolsel').value;
+        const n = poolFacts(ctx).get(pool)?.sigs.size || 6; // ponytail: 6 if a pool's teams can't be resolved
+        const want = cur && cur.kind === 'pool' && cur.pool === pool ? cur.rank : 1;
+        body.querySelector('#ranksel').innerHTML = Array.from({ length: n }, (_, i) => i + 1)
+          .map(r => `<option${r === want ? ' selected' : ''}>${r}</option>`).join('');
+      };
+      fillRanks();
+      body.querySelector('#poolsel').addEventListener('change', fillRanks);
     } else {
       const undone = ctx.matches.filter(mm => !isDone(mm));
-      body.innerHTML = `<p class="hint">feeder match result</p><label class="field">Match <select id="matchsel">${undone.map(mm => `<option value="${mm.id}">${mm.id} · ${esc(matchLabel(mm, ctx))}</option>`).join('')}</select></label>
-        <label class="field">Result <select id="resel"><option value="winner">winner</option><option value="loser">loser</option></select></label>`;
+      body.innerHTML = `<p class="hint">feeder match result</p>
+        <label class="field">Match <select id="matchsel">${undone.map(mm => `<option value="${mm.id}"${cur && cur.kind === 'match' && cur.match === mm.id ? ' selected' : ''}>${mm.id} · ${esc(matchLabel(mm, ctx))}</option>`).join('')}</select></label>
+        <label class="field">Result <select id="resel"><option value="winner"${cur && cur.result === 'winner' ? ' selected' : ''}>winner</option><option value="loser"${cur && cur.result === 'loser' ? ' selected' : ''}>loser</option></select></label>`;
     }
   };
   modal.querySelectorAll('.tabs button').forEach(b => b.onclick = () => setKind(b.dataset.kind));
-  setKind('players');
+  setKind(curKind);
   modal.querySelector('[data-x="cancel"]').onclick = () => { modal.hidden = true; };
   modal.querySelector('[data-x="apply"]').onclick = async () => {
     const kind = modal.querySelector('.tabs button.active').dataset.kind;
