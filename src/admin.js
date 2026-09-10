@@ -16,7 +16,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const { loadRepo, catCtx, schedEntries, pairBusy, fixedPlayers, consumedSlots, descendants, slotsOverlap, feederBounds, makeGames, branchOf, isSimBranch, cleanTree, git, defaultSlug } = require('./tools.js');
-const { execEdit, parsePayload, waveEntries } = require('./edits.js');
+const { execEdit, parseResult, waveEntries } = require('./edits.js');
 const { matchSlotMs, schedTime, bestOfOf } = require('../site/derive.js');
 const { validateRepo } = require('./validate.js');
 const { ship, deployRole } = require('./publish.js');
@@ -53,9 +53,7 @@ function doEdit(state, verb, cat, matchId, value) {
   // editor's grammar, so browser and typed entries can never drift. Everything
   // else arrives pre-shaped.
   if (verb === 'result' && typeof value === 'string') {
-    const info = state.repo.tournaments.get(state.slug);
-    const tz = (info && info.tjson && info.tjson.timezone) || 'UTC';
-    const p = parsePayload('result', value.trim().split(/\s+/).filter(Boolean), tz, Date.now());
+    const p = parseResult(value.trim().split(/\s+/).filter(Boolean));
     if (p.err) return { ok: false, error: p.err }; // the modal keeps the draft and flashes the grammar's own words
     value = p.value;
   }
@@ -120,6 +118,9 @@ function redo(state) {
 // The dragged match is off the board during the query.
 function legalSlots(tjson, cat, matchId, day, gcd) {
   const tz = tjson.timezone || 'UTC';
+  // The query param is untrusted: a non-positive step would never advance the
+  // scan below. Clamp to the page's default grid.
+  const step = Number.isInteger(gcd) && gcd > 0 ? gcd : 15;
   const { entries } = schedEntries(tjson);
   const others = entries.filter(e => !(e.cat === cat && e.m.id === Number(matchId)));
   const ctx = catCtx(tjson, cat);
@@ -146,7 +147,7 @@ function legalSlots(tjson, cat, matchId, day, gcd) {
   const out = {};
   for (const venue of (tjson.venues || []).map(v => v.id)) {
     const ticks = [];
-    for (let wm = 0; wm < 1440; wm += gcd) {
+    for (let wm = 0; wm < 1440; wm += step) {
       if (!Number.isFinite(slotMin) || wm + slotMin > 1440) continue;
       const iso = `${day}T${String(Math.floor(wm / 60)).padStart(2, '0')}:${String(wm % 60).padStart(2, '0')}:00`;
       const t = schedTime({ scheduled: iso }, tz);
@@ -279,7 +280,7 @@ function serve(state) {
     }
     if (url.startsWith('/api/')) {
       if (url === '/api/tournaments') {
-        const out = state.repo.index
+        const out = (Array.isArray(state.repo.index) ? state.repo.index : [])
           .filter(t => state.repo.tournaments.has(t.slug) && state.repo.tournaments.get(t.slug).tjson)
           .map(t => ({ slug: t.slug, name: t.name }));
         // the daemon's own default first, so the page boots on the same

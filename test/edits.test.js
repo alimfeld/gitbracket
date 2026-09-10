@@ -21,27 +21,21 @@ function md40Ctx(repo) {
   return { tjson, matches, ctx: makeCat({ meta: tjson.categories.find(c => c.id === 'md40'), matches }, tjson) };
 }
 
-test('editor parsePayload: one grammar for the admin result field and score-wave', () => {
-  assert.deepEqual(editor.parsePayload('result', ['21:19', '11:9'], 'UTC').value, { shape: 'score', games: [{ a: 21, b: 19 }, { a: 11, b: 9 }] });
-  assert(editor.parsePayload('result', ['21x9'], 'UTC').err, 'a malformed game is refused');
-  assert.deepEqual(editor.parsePayload('result', ['wo', 'b'], 'UTC').value, { shape: 'walkover', winner: 'b' }, 'the wo token names the winner');
-  assert(editor.parsePayload('result', ['wo'], 'UTC').err, 'a side is required after wo');
-  assert(editor.parsePayload('result', ['wo', 'c'], 'UTC').err, 'only a|b');
-  assert(editor.parsePayload('result', ['wo', 'a', 'extra'], 'UTC').err, 'wo takes nothing else — trailing tokens refused');
-  assert.deepEqual(editor.parsePayload('result', ['void'], 'UTC').value, { shape: 'void' }, 'the void token emits the void shape');
-  assert(editor.parsePayload('result', ['void', 'a'], 'UTC').err, 'void takes nothing else');
-  assert.deepEqual(editor.parsePayload('result', [], 'UTC').value, { shape: 'clear' }, 'an empty result entry clears');
-  assert.equal(editor.parsePayload('venue', ['court-2'], 'UTC').value, 'court-2');
-  assert.equal(editor.parsePayload('venue', [], 'UTC').value, undefined, 'an empty venue entry clears the court');
-  assert.match(editor.parsePayload('time', ['10:30'], 'UTC').value, /T10:30:00$/);
-  assert.equal(editor.parsePayload('time', [], 'UTC').value, undefined, 'an empty time entry unschedules');
-  assert(editor.parsePayload('time', ['10:99'], 'UTC').err, 'impossible minutes refused');
-  assert.match(editor.parsePayload('time', ['10:30'], 'Not/AZone').err, /bad timezone/, 'a well-formed time failing the default day names the timezone, not the time');
+test('editor parseResult: one grammar for the admin result field and score-wave', () => {
+  assert.deepEqual(editor.parseResult(['21:19', '11:9']).value, { shape: 'score', games: [{ a: 21, b: 19 }, { a: 11, b: 9 }] });
+  assert(editor.parseResult(['21x9']).err, 'a malformed game is refused');
+  assert.deepEqual(editor.parseResult(['wo', 'b']).value, { shape: 'walkover', winner: 'b' }, 'the wo token names the winner');
+  assert(editor.parseResult(['wo']).err, 'a side is required after wo');
+  assert(editor.parseResult(['wo', 'c']).err, 'only a|b');
+  assert(editor.parseResult(['wo', 'a', 'extra']).err, 'wo takes nothing else — trailing tokens refused');
+  assert.deepEqual(editor.parseResult(['void']).value, { shape: 'void' }, 'the void token emits the void shape');
+  assert(editor.parseResult(['void', 'a']).err, 'void takes nothing else');
+  assert.deepEqual(editor.parseResult([]).value, { shape: 'clear' }, 'an empty result entry clears');
 });
 
-test('editor parsePayload: the result entry speaks dashes and colons alike — the display form leads', () => {
-  assert.deepEqual(editor.parsePayload('result', ['21-19', '11:9'], 'UTC').value, { shape: 'score', games: [{ a: 21, b: 19 }, { a: 11, b: 9 }] }, 'dash and colon entries parse to the same games');
-  assert(/expected a-b/.test(editor.parsePayload('result', ['21x9'], 'UTC').err), 'the error speaks the display form');
+test('editor parseResult: the result entry speaks dashes and colons alike — the display form leads', () => {
+  assert.deepEqual(editor.parseResult(['21-19', '11:9']).value, { shape: 'score', games: [{ a: 21, b: 19 }, { a: 11, b: 9 }] }, 'dash and colon entries parse to the same games');
+  assert(/expected a-b/.test(editor.parseResult(['21x9']).err), 'the error speaks the display form');
 });
 
 test('editor applyScore: games + a played result at the target, repo still validates', () => {
@@ -86,17 +80,6 @@ test('editor applyVenue: moves a match; unknown venue is rejected by the validat
   const repo2 = loadRepo(FIX('sample'));
   editor.applyVenue(repo2.tournaments.get('sample').tjson.matches.md40, '2', 'bogus-court');
   assert(hasErr(validateRepo(repo2), /unknown venue "bogus-court"/), 'undeclared venue rejected');
-});
-
-test('editor buildScheduled: builds local ISO-8601 wall time from hh:mm and timezone', () => {
-  const r = editor.buildScheduled('09:00', 'America/New_York');
-  assert(/^\d{4}-\d{2}-\d{2}T09:00:00$/.test(r), `expected local wall time, got ${r}`);
-  const r2 = editor.buildScheduled('9:00', 'America/New_York');
-  assert(r2.includes('T09:00:00'), 'single-digit hour pads to 09');
-  assert(editor.buildScheduled('25:00', 'UTC') === null, 'bad hour returns null');
-  assert(editor.buildScheduled('09:00', 'UTC', '2026-05-03') === '2026-05-03T09:00:00', 'an explicit date wins over today');
-  assert(editor.buildScheduled('09:00', 'UTC', '2026-02-30') === '2026-02-30T09:00:00', 'a format-valid but impossible date passes — the validator gate rejects it on write');
-  assert(editor.buildScheduled('09:00', 'Not/AZone') === null, 'an unreadable timezone can\'t compute the default day — never emit a nullT… scheduled string');
 });
 
 test('editor applyTime: sets scheduled field, repo validates', () => {
@@ -276,22 +259,6 @@ test('editor writeEdit: rollback on validation failure, write on success (real d
   }
 });
 
-test('editor parsePayload: the side op parses all three shapes — the a/b verb fixes the side', () => {
-  const g = s => editor.parsePayload('side-a', s.trim().split(/\s+/), 'UTC', 0);
-  const h = s => editor.parsePayload('side-b', s.trim().split(/\s+/), 'UTC', 0);
-  assert.deepEqual(g('players p1 p2'), { value: { si: 0, side: { kind: 'players', ids: ['p1', 'p2'] } } }, 'players side');
-  assert.deepEqual(h('pool A 2'), { value: { si: 1, side: { kind: 'pool', pool: 'A', rank: 2 } } }, 'the b verb picks side 1');
-  assert.deepEqual(g('match 7 winner'), { value: { si: 0, side: { kind: 'match', match: 7, result: 'winner' } } }, 'match edge side');
-  assert.match(g('players').err, /player ids/, 'players needs ids');
-  assert.match(g('pool A').err, /pool and rank/, 'pool needs a rank');
-  assert.match(g('pool A x').err, /positive integer/, 'rank must be a number');
-  assert.match(g('match 7').err, /match id and result/, 'match edge needs a result');
-  assert.match(g('match x winner').err, /match id/, 'match id must be a number');
-  assert.match(g('match 7 maybe').err, /winner or loser/, 'result must be winner or loser');
-  assert.match(g('frobnicate p1').err, /players, pool, or match/, 'unknown shape');
-  assert.match(g('').err, /players, pool, or match/, 'empty payload names the shapes');
-});
-
 test('editor applySide: rewrites a side in place; the generic domain is the validator', () => {
   const repo = loadRepo(FIX('sample'));
   const matches = repo.tournaments.get('sample').tjson.matches.md40;
@@ -313,7 +280,7 @@ test('editor applySide: rewrites a side in place; the generic domain is the vali
   reject(ms => editor.applySide(ms, '9', { si: 0, side: { kind: 'players', ids: ['p1', 'p2'] } }), /exactly one championship final/);
 });
 
-test('editor applyVenue: - unschedules the court', () => {
+test('editor applyVenue: null unschedules the court', () => {
   const repo = loadRepo(FIX('sample'));
   const matches = repo.tournaments.get('sample').tjson.matches.md40;
   assert(editor.applyVenue(matches, '2', undefined) === null, 'clearing reports no error');

@@ -1,13 +1,13 @@
 'use strict';
 
 // Edit engine — the one write path. Every edit validates, writes, and commits
-// itself, so the process can die at any instant with nothing lost. The grammar
-// (parsePayload) is shared with the daemon's result field — browser and typed
-// entries can never drift.
+// itself, so the process can die at any instant with nothing lost. The result
+// grammar (parseResult) is shared with the daemon's result field — browser and
+// typed entries can never drift.
 
 const fs = require('fs');
 const path = require('path');
-const { isDone, sideLabel, schedDays, dayKey, DATE_RE, catStatus, currentWave, bestOfOf } = require('../site/derive.js');
+const { isDone, sideLabel, schedDays, catStatus, currentWave, bestOfOf } = require('../site/derive.js');
 const { writeTournament, tournamentText, catCtx, winTarget, reachedWinner, git } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 
@@ -76,19 +76,6 @@ function applySide(matches, matchId, value) {
   });
 }
 
-function buildScheduled(hhmm, tz, date, now) {
-  if (!/^\d{1,2}:\d{2}$/.test(hhmm)) return null;
-  const [h, m] = hhmm.split(':');
-  if (+h > 23 || +m > 59) return null;
-  if (date !== undefined && !DATE_RE.test(date)) return null;
-  // An impossible date (2026-02-30) passes this regex — the validator gate
-  // rejects it on write, like applyVenue's unknown venues; the default date is
-  // the caller's clock (the daemon's real clock — sim time never reaches an edit)
-  const d = date || dayKey(now ?? Date.now(), tz);
-  if (!d) return null; // dayKey is null on an unreadable timezone — never emit a "nullT…" string
-  return `${d}T${h.padStart(2,'0')}:${m}:00`; // wall time — the tournament tz interprets it
-}
-
 function applyTime(matches, matchId, isoString) {
   return findMatch(matches, matchId, m => { if (isoString == null) delete m.scheduled; else m.scheduled = isoString; });
 }
@@ -148,8 +135,9 @@ function writeEdit(siteRoot, repo, slug, catId, apply) {
   // writeTournament will write.
   const { errs } = validateRepo(repo);
   if (errs.length) {
-    ms.splice(0, ms.length, ...((beforeJson.matches || {})[catId] || [])); // undo the in-memory edit too — a same-process retry must start from the original
-    fs.writeFileSync(file, before);
+    // Nothing was written — writeTournament runs only past this gate — so the
+    // in-memory undo is the whole rollback.
+    ms.splice(0, ms.length, ...((beforeJson.matches || {})[catId] || []));
     return { errs };
   }
   // byte equality is data equality — "21:19" for a stored "21-9" lands on the
@@ -171,77 +159,30 @@ const waveEntries = tjson => {
   return out;
 };
 
-// ---------- the shared grammar ----------
+// ---------- the result grammar ----------
 
-// Payload grammar per edit kind — the daemon's result field parses with it, so
-// typed entries and shaped JSON can never drift. Grammar errors are caught
-// here, before any I/O; data errors belong to the validator.
-function parsePayload(kind, tokens, tz, now) {
-  if (kind === 'result') {
-    // one outcome grammar: games (bare) · wo a · void · empty clears — the
-    // shape rides the value
-    if (!tokens.length) return { value: { shape: 'clear' } }; // empty payload clears
-    const head = tokens[0];
-    if (head === 'wo') {
-      const side = tokens[1];
-      if (side !== 'a' && side !== 'b') return { err: 'expected a or b after wo' };
-      if (tokens.length > 2) return { err: 'wo takes nothing else' };
-      return { value: { shape: 'walkover', winner: side } };
-    }
-    if (head === 'void') {
-      if (tokens.length > 1) return { err: 'void takes nothing else' };
-      return { value: { shape: 'void' } };
-    }
-    // the display speaks dashes; parseGame accepts both, so colon muscle memory still works
-    const games = tokens.map(parseGame);
-    const bad = tokens.findIndex((t, i) => !games[i]);
-    if (bad !== -1) return { err: `bad score ${JSON.stringify(tokens[bad])} — expected a-b` };
-    return { value: { shape: 'score', games } };
+// The result field's one grammar — games (bare) · wo a|b · void · empty
+// clears. The shape rides the value; grammar errors are caught here, before any
+// I/O, and data errors belong to the validator. Shaped JSON skips this
+// entirely, so the browser and typed entries share the same shapes.
+function parseResult(tokens) {
+  if (!tokens.length) return { value: { shape: 'clear' } }; // empty clears
+  const head = tokens[0];
+  if (head === 'wo') {
+    const side = tokens[1];
+    if (side !== 'a' && side !== 'b') return { err: 'expected a or b after wo' };
+    if (tokens.length > 2) return { err: 'wo takes nothing else' };
+    return { value: { shape: 'walkover', winner: side } };
   }
-  if (kind === 'venue') {
-    if (!tokens.length) return { value: undefined }; // empty clears the court
-    return { value: tokens[0] };
+  if (head === 'void') {
+    if (tokens.length > 1) return { err: 'void takes nothing else' };
+    return { value: { shape: 'void' } };
   }
-  if (SIDE_VERBS[kind] !== undefined) {
-    // the a/b verb fixes the side; the payload is shape-only: players <ids> | pool <pool> <rank> | match <id> winner|loser —
-    // validity is the validator's (unknown ids, consumed-twice, range, cycles, double-books)
-    const si = SIDE_VERBS[kind];
-    const shape = tokens[0];
-    const rest = tokens.slice(1);
-    if (shape === 'players') {
-      if (!rest.length) return { err: 'expected player ids after players' };
-      return { value: { si, side: { kind: 'players', ids: rest } } };
-    }
-    if (shape === 'pool') {
-      if (rest[0] === undefined || rest[1] === undefined) return { err: 'expected pool and rank, e.g. pool A 2' };
-      if (!/^\d+$/.test(rest[1]) || +rest[1] < 1) return { err: `bad rank ${JSON.stringify(rest[1])} — expected a positive integer` };
-      return { value: { si, side: { kind: 'pool', pool: rest[0], rank: +rest[1] } } };
-    }
-    if (shape === 'match') {
-      if (rest[0] === undefined || rest[1] === undefined) return { err: 'expected match id and result, e.g. match 7 winner' };
-      if (!/^\d+$/.test(rest[0])) return { err: `bad match id ${JSON.stringify(rest[0])} — expected a number` };
-      if (rest[1] !== 'winner' && rest[1] !== 'loser') return { err: `result must be winner or loser, got ${JSON.stringify(rest[1])}` };
-      return { value: { si, side: { kind: 'match', match: +rest[0], result: rest[1] } } };
-    }
-    return { err: `expected players, pool, or match — got ${JSON.stringify(shape)}` };
-  }
-  // time: [YYYY-MM-DD] hh:mm — empty unschedules
-  if (!tokens.length) return { value: undefined };
-  const a = tokens[0], b = tokens[1];
-  const date = b !== undefined && DATE_RE.test(a) ? a : undefined;
-  const hhmm = date !== undefined ? b : a;
-  if (!hhmm) return { err: 'expected hh:mm (optionally preceded by a date) — empty clears' };
-  const iso = buildScheduled(hhmm, tz, date, now);
-  if (iso === null) {
-    // buildScheduled fails on a bad time — or, when the time is fine, on the
-    // default day the tz can't compute (an explicit date never fails here), so
-    // name the timezone, not the time
-    const tm = /^(\d{1,2}):(\d{2})$/.exec(hhmm);
-    return tm && +tm[1] <= 23 && +tm[2] <= 59
-      ? { err: `bad timezone ${JSON.stringify(tz)} — can't compute today's date` }
-      : { err: `bad time ${JSON.stringify(hhmm)} — expected hh:mm` };
-  }
-  return { value: iso };
+  // the display speaks dashes; parseGame accepts both, so colon muscle memory still works
+  const games = tokens.map(parseGame);
+  const bad = tokens.findIndex((t, i) => !games[i]);
+  if (bad !== -1) return { err: `bad score ${JSON.stringify(tokens[bad])} — expected a-b` };
+  return { value: { shape: 'score', games } };
 }
 
 // Two verbs (side-a / side-b) so an edit names the side it rewrites.
@@ -320,4 +261,4 @@ function execEdit(state, verb, cat, matchId, value) {
   return { sha };
 }
 
-module.exports = { parseGame, buildScheduled, applyScore, applyResult, applyVenue, applySide, applyTime, writeEdit, commitMessage, editDetail, waveEntries, parsePayload, execEdit };
+module.exports = { parseGame, applyScore, applyResult, applyVenue, applySide, applyTime, writeEdit, commitMessage, editDetail, waveEntries, parseResult, execEdit };
