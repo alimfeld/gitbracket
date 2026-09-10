@@ -291,16 +291,13 @@ function playerMatches(ctx, pid) {
 }
 
 // The matches consuming a match's result edges — both winner and loser edges
-// count: a loss drops the player into the placement tree.
+// count: a loss drops the player into the placement tree. Read from the
+// parentsOf index — the validator's single-consumer rule leaves at most one
+// winner and one loser parent — never a scan.
 function koConsumers(ctx, id) {
-  const out = [];
-  for (const X of ctx.matches) {
-    if (!X || X.pool !== undefined || !Array.isArray(X.sides)) continue;
-    for (const s of X.sides) {
-      if (s && s.kind === 'match' && s.match === id) { out.push(X); break; }
-    }
-  }
-  return out;
+  const { winnerParent, loserParent } = parentsOf(ctx);
+  const out = [winnerParent.get(id), loserParent.get(id)].filter(X => X && X.pool === undefined);
+  return [...new Set(out)]; // one match may consume both edges of id
 }
 
 // Knockout-entry facts per pool, from stored sides only — standings never gate
@@ -363,25 +360,7 @@ function rankRange(ranks) {
 const chipRef = label => ({ Final: 'the final', Semifinals: 'the Semifinals', Quarterfinals: 'the Quarterfinals' }[label] || `the ${label}`);
 
 const matchEdge = s => s && s.kind === 'match';
-const winnerEdge = s => matchEdge(s) && s.result === 'winner'; // the only edge that feeds the final
 
-// Longest winner-edge chain from id up to the root — 0 when nothing consumes
-// it (the final). koColumn walks the other way, so its memo can't serve this.
-// ponytail: O(N²) worst case — fine while brackets are tiny; a reverse-edge
-// index is the upgrade if they ever grow.
-function chainDepth(ctx, id, memo) {
-  if (memo.has(id)) return memo.get(id);
-  memo.set(id, 0);
-  let d = 0;
-  for (const m of ctx.matches) {
-    if (!m || !Array.isArray(m.sides)) continue;
-    for (const s of m.sides) {
-      if (winnerEdge(s) && s.match === id) d = Math.max(d, 1 + chainDepth(ctx, m.id, memo));
-    }
-  }
-  memo.set(id, d);
-  return d;
-}
 
 // Possible stages: one entry per knockout round a player could still reach —
 // certain bits (label, uniform time/court) plus a chip naming the ranks or
@@ -764,12 +743,22 @@ function placeWave(ctx) {
 }
 
 // Winner-edge distance to the final (0 = the final itself). Its own memo, not
-// koColumn's — this is read while koColumn's build is mid-flight.
+// koColumn's — this is read while koColumn's build is mid-flight. Walks the
+// winner-parent index — O(N) per build, where a per-id scan would be O(N²).
 function wdOf(ctx, id) {
   const memo = ctxMemo(ctx);
   if (!memo.wd) {
+    const { winnerParent } = parentsOf(ctx);
     const wdMap = memo.wd = new Map();
-    for (const m of ctx.matches) chainDepth(ctx, m.id, wdMap);
+    const d = (X) => {
+      if (wdMap.has(X.id)) return wdMap.get(X.id);
+      wdMap.set(X.id, 0); // in-progress: a malformed cycle reads 0, never recurses
+      const p = winnerParent.get(X.id);
+      const r = p ? 1 + d(p) : 0;
+      wdMap.set(X.id, r);
+      return r;
+    };
+    for (const m of ctx.matches) d(m);
   }
   return memo.wd.get(id);
 }

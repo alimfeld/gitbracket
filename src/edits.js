@@ -56,13 +56,6 @@ function applyClear(matches, matchId) {
   return findMatch(matches, matchId, m => { delete m.games; delete m.result; return null; });
 }
 
-function applyVenue(matches, matchId, venueId) {
-  return findMatch(matches, matchId, m => {
-    if (venueId == null) delete m.venue; // null (admin JSON) unschedules the court
-    else m.venue = venueId; // unknown venue + court double-booking are caught by validateRepo
-  });
-}
-
 // Rewrite one side to any validator-valid slot — players, pool rank, or match
 // edge. All validity is the validator's (unknown ids, pair-fixing, same-set,
 // consumed-twice, rank range, cycles, double-books); writeEdit validates the
@@ -74,10 +67,6 @@ function applySide(matches, matchId, value) {
     m.sides[value.si] = value.side;
     return null;
   });
-}
-
-function applyTime(matches, matchId, isoString) {
-  return findMatch(matches, matchId, m => { if (isoString == null) delete m.scheduled; else m.scheduled = isoString; });
 }
 
 // Time and venue together — one writeEdit, one commit, so a drag on the admin
@@ -185,12 +174,10 @@ function parseResult(tokens) {
   return { value: { shape: 'score', games } };
 }
 
-// Two verbs (side-a / side-b) so an edit names the side it rewrites.
-const SIDE_VERBS = { 'side-a': 0, 'side-b': 1 };
-
 // 'result' folds score / walkover / void / clear into one entry — the shape
 // dispatches to the domain applies; anything else is refused by name, never
-// silently treated as one of them.
+// silently treated as one of them. 'side' names the side in its value (si) —
+// the verb doesn't repeat it.
 function applyFor(verb, matchId, value) {
   if (verb === 'result') return (ms, ctx) => {
     if (value.shape === 'score') return applyScore(ms, matchId, value.games, ctx);
@@ -199,10 +186,8 @@ function applyFor(verb, matchId, value) {
     if (value.shape === 'clear') return applyClear(ms, matchId);
     return `unknown result shape ${JSON.stringify(value.shape)}`;
   };
-  return verb === 'venue' ? c => applyVenue(c, matchId, value)
-    : verb === 'move' ? c => applyMove(c, matchId, value)
-    : SIDE_VERBS[verb] !== undefined ? c => applySide(c, matchId, value)
-    : verb === 'time' ? c => applyTime(c, matchId, value) // time — undefined unschedules
+  return verb === 'move' ? c => applyMove(c, matchId, value)
+    : verb === 'side' ? c => applySide(c, matchId, value)
     : () => `unknown edit verb ${JSON.stringify(verb)}`;
 }
 
@@ -223,8 +208,6 @@ function editDetail(kind, m, value, ctx) {
     if (value.shape === 'void') return 'void';
     return '→ TBD'; // a clear returns the match to the board
   }
-  if (kind === 'time') return m.scheduled === undefined ? '→ TBD' : `→ ${m.scheduled}`;
-  if (kind === 'venue') return `→ ${m.venue === undefined ? 'TBD' : m.venue}`;
   if (kind === 'move') return `→ ${value.time ?? 'TBD'} @ ${value.venue ?? 'TBD'}`;
   // side — the a/b verbs carry value+ctx
   return `side ${value.si === 0 ? 'a' : 'b'} → ${sideLabel(value.side, ctx)}${isDone(m) ? ' (result kept)' : ''}`;
@@ -253,7 +236,7 @@ function execEdit(state, verb, cat, matchId, value) {
   // removed — greps like ^score( still find it
   const kind = verb === 'result'
     ? (value.shape === 'clear' ? (preStatus === 'walkover' ? 'walkover' : preStatus === 'void' ? 'void' : 'score') : value.shape)
-    : SIDE_VERBS[verb] !== undefined ? 'side' : verb;
+    : verb;
   const file = res.file; // writeEdit's own byte-identical write target
   const detail = editDetail(verb, m, value, ctx);
   const msg = commitMessage(kind, slug, cat, matchId, detail);
@@ -268,4 +251,4 @@ function execEdit(state, verb, cat, matchId, value) {
   return { sha };
 }
 
-module.exports = { parseGame, applyScore, applyResult, applyVenue, applySide, applyTime, writeEdit, commitMessage, editDetail, waveEntries, parseResult, execEdit };
+module.exports = { parseGame, applyScore, applyResult, applyMove, applySide, writeEdit, commitMessage, editDetail, waveEntries, parseResult, execEdit };

@@ -38,16 +38,9 @@ function unpushed(root) {
   return { commits, hasRemote: true };
 }
 
-// Validate the gate on disk (never memory) — the same guarantee publish makes.
-function gate(siteRoot) {
-  const { errs } = validateRepo(loadRepo(siteRoot));
-  return errs;
-}
-
 // One path for every verb the page can send — score/wo/void/clear via
-// 'result', venue, time, side, or a combined 'move' (a drag sets time+venue
-// atomically: one validate, one commit). The editor owns the funnel; this is
-// the JSON view.
+// 'result', side, or a combined 'move' (a drag sets time+venue atomically:
+// one validate, one commit). The editor owns the funnel; this is the JSON view.
 function doEdit(state, verb, cat, matchId, value) {
   // The result field is the page's one free-text entry — parsed here with the
   // editor's grammar, so browser and typed entries can never drift. Everything
@@ -352,7 +345,7 @@ function serve(state) {
         return json(res, r.ok ? 200 : 400, r);
       }
       if (url === '/api/publish' && req.method === 'POST') {
-        const errs = gate(state.siteRoot);
+        const errs = validateRepo(loadRepo(state.siteRoot)).errs; // the gate on disk, never memory — the same guarantee publish makes
         if (errs.length) return json(res, 400, { errors: errs });
         const role = deployRole(state.root); // the daemon's console names the failure either way — the page answers with the role's reason
         if (!role.ok) return json(res, 400, { error: role.why });

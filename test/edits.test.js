@@ -71,30 +71,24 @@ test('editor applyResult: walkover records a winner, void settles, games cleared
   assert(errs.length === 0, 'edited repo still validates: ' + errs.join('; '));
 });
 
-test('editor applyVenue: moves a match; unknown venue is rejected by the validator', () => {
+test('editor applyMove: one call sets time+venue, nulls clear, the validator owns the gate', () => {
   const repo = loadRepo(FIX('sample'));
   const matches = repo.tournaments.get('sample').tjson.matches.md40;
-  assert(editor.applyVenue(matches, '2', 'court-2') === null, 'applyVenue reports no error');
-  assert(matches.find(m => m.id === 2).venue === 'court-2', 'venue moved');
-  assert(editor.applyVenue(matches, 'nope', 'court-2') === 'unknown match nope', 'unknown match reported');
-  const repo2 = loadRepo(FIX('sample'));
-  editor.applyVenue(repo2.tournaments.get('sample').tjson.matches.md40, '2', 'bogus-court');
-  assert(hasErr(validateRepo(repo2), /unknown venue "bogus-court"/), 'undeclared venue rejected');
-});
-
-test('editor applyTime: sets scheduled field, repo validates', () => {
-  const repo = loadRepo(FIX('sample'));
-  const matches = repo.tournaments.get('sample').tjson.matches.md40;
+  const m2 = matches.find(m => m.id === 2);
   // 09:10 keeps the pool's last match at 11:15 — the feeder-timing gate stays closed
-  assert(editor.applyTime(matches, '2', '2025-07-14T09:10:00') === null, 'applyTime reports no error');
-  assert(matches.find(m => m.id === 2).scheduled === '2025-07-14T09:10:00', 'scheduled set');
-  assert(editor.applyTime(matches, 'nope', '2025-07-14T09:10:00') === 'unknown match nope', 'unknown match reported');
+  assert(editor.applyMove(matches, '2', { time: '2025-07-14T09:10:00', venue: m2.venue }) === null, 'applyMove reports no error');
+  assert(matches.find(m => m.id === 2).scheduled === '2025-07-14T09:10:00' && matches.find(m => m.id === 2).venue === m2.venue, 'time and venue land');
+  assert(editor.applyMove(matches, 'nope', { time: '2025-07-14T09:10:00' }) === 'unknown match nope', 'unknown match reported');
   const { errs } = validateRepo(repo);
   assert(errs.length === 0, 'edited repo still validates: ' + errs.join('; '));
-  assert(editor.applyTime(matches, '2', undefined) === null, 'clearing reports no error');
-  assert(matches.find(m => m.id === 2).scheduled === undefined, 'scheduled dropped — the match is unscheduled');
+  assert(editor.applyMove(matches, '2', { venue: m2.venue }) === null, 'clearing the time reports no error');
+  assert(matches.find(m => m.id === 2).scheduled === undefined && matches.find(m => m.id === 2).venue === m2.venue, 'time drops, the court stays');
   const { errs: errs2 } = validateRepo(repo);
   assert(errs2.length === 0, 'an unscheduled match still validates: ' + errs2.join('; '));
+  // the unknown venue is the validator's, not the apply's
+  const repo2 = loadRepo(FIX('sample'));
+  editor.applyMove(repo2.tournaments.get('sample').tjson.matches.md40, '2', { time: '2025-07-14T09:10:00', venue: 'bogus-court' });
+  assert(hasErr(validateRepo(repo2), /unknown venue "bogus-court"/), 'undeclared venue rejected');
 });
 
 test('editor rejects edits the validator would refuse', () => {
@@ -143,7 +137,7 @@ test('editor writeEdit: an out-of-band hand edit is refused by name — the stal
     const disk = JSON.parse(fs.readFileSync(file, 'utf8'));
     disk.players[0].name = 'Hand-Edited Name'; // the operator's out-of-band fix after boot
     fs.writeFileSync(file, JSON.stringify(disk, null, 2) + '\n');
-    const res = editor.writeEdit(dataRoot, repo, 'sample', 'md40', (c) => editor.applyVenue(c, '2', 'court-1'));
+    const res = editor.writeEdit(dataRoot, repo, 'sample', 'md40', (c) => editor.applyMove(c, '2', { time: c.find(x => x.id === 2).scheduled, venue: 'court-1' }));
     assert(res.err && /changed on disk/.test(res.err), `the staleness is refused with the cause named, got: ${res.err}`);
     assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).players[0].name, 'Hand-Edited Name', 'the hand edit survives — nothing written');
     assert.equal(repo.tournaments.get('sample').tjson.matches.md40.find(m => m.id === 2).venue, 'court-2', 'the apply never ran — no in-memory edit to roll back');
@@ -182,19 +176,16 @@ test('editor commitMessage: conventional types with tournament scope', () => {
   assert.equal(editor.commitMessage('score', '2026-mammut60', 'md40', '1', '11:9 · 11:7'), 'score(2026-mammut60): md40/1 11:9 · 11:7');
   assert.equal(editor.commitMessage('walkover', '2026-mammut60', 'xd', '7', 'side a wins by walkover'), 'walkover(2026-mammut60): xd/7 side a wins by walkover');
   assert.equal(editor.commitMessage('void', '2026-mammut60', 'xd', '7', 'void'), 'void(2026-mammut60): xd/7 void');
-  assert.equal(editor.commitMessage('venue', '2026-mammut60', 'xd', '3', '→ court-2'), 'venue(2026-mammut60): xd/3 → court-2');
-  assert.equal(editor.commitMessage('time', '2026-mammut60', 'md40', '1', '→ 2025-07-14T16:00:00-04:00'), 'time(2026-mammut60): md40/1 → 2025-07-14T16:00:00-04:00');
+  assert.equal(editor.commitMessage('move', '2026-mammut60', 'md40', '8', '→ 2025-07-14T16:00:00 @ court-2'), 'move(2026-mammut60): md40/8 → 2025-07-14T16:00:00 @ court-2');
+  assert.equal(editor.commitMessage('side', '2026-mammut60', 'md40', '8', 'side a → Ada / Ben'), 'side(2026-mammut60): md40/8 side a → Ada / Ben');
 });
 
-test('editor editDetail: venue/time edits report the move, never the match result', () => {
+test('editor editDetail: a move reports time and court, never the match result', () => {
   const repo = loadRepo(FIX('sample'));
   const { matches } = md40Ctx(repo);
   editor.applyResult(matches, '1', 'walkover', 'a'); // a decided match — the old bug mislabeled moves on these
   const m1 = matches.find(m => m.id === 1);
-  m1.venue = 'court-2';
-  assert.equal(editor.editDetail('venue', m1), '→ court-2', 'venue edit reports the venue on a decided match');
-  m1.scheduled = '2025-07-14T16:00:00';
-  assert.equal(editor.editDetail('time', m1), '→ 2025-07-14T16:00:00', 'time edit reports the time');
+  assert.equal(editor.editDetail('move', m1, { time: '2025-07-14T16:00:00', venue: 'court-2' }), '→ 2025-07-14T16:00:00 @ court-2', 'a move reports time and court on a decided match');
   assert.equal(editor.editDetail('result', m1, { shape: 'walkover', winner: 'a' }), 'side a wins by walkover', 'walkover detail from the result entry');
   assert.equal(editor.editDetail('result', {}, { shape: 'void' }), 'void', 'void detail');
   assert.equal(editor.editDetail('result', { games: [{ a: 21, b: 19 }, { a: 11, b: 5 }] }, { shape: 'score' }), '21-19 · 11-5', 'a score detail speaks dashes, mirroring the board column');
@@ -207,7 +198,7 @@ test('editor writeEdit: a cross-day edit is refused with the cause named — the
     const repo = loadRepo(dataRoot);
     const file = path.join(dataRoot, 'tournaments', 'sample.json');
     const before = fs.readFileSync(file, 'utf8');
-    const res = editor.writeEdit(dataRoot, repo, 'sample', 'md40', (c) => editor.applyTime(c, '2', '2025-07-15T09:00:00'));
+    const res = editor.writeEdit(dataRoot, repo, 'sample', 'md40', (c) => editor.applyMove(c, '2', { time: '2025-07-15T09:00:00', venue: c.find(x => x.id === 2).venue }));
     assert(res.err && /changes the tournament's scheduled days \(2025-07-14 → 2025-07-14, 2025-07-15\)/.test(res.err), `the refusal names the day change, got: ${res.err}`);
     assert(fs.readFileSync(file, 'utf8') === before, 'rejected edit rolls the file back byte-identical');
     const m2 = repo.tournaments.get('sample').tjson.matches.md40.find(m => m.id === 2);
@@ -223,13 +214,14 @@ test('editor writeEdit/execEdit: an edit already on record writes and commits no
     const repo = loadRepo(dataRoot);
     const file = path.join(dataRoot, 'tournaments', 'sample.json');
     const before = fs.readFileSync(file, 'utf8');
-    // md40 8 already sits on court-2 — re-setting it changes nothing
-    const noop = editor.writeEdit(dataRoot, repo, 'sample', 'md40', (c) => editor.applyVenue(c, '8', 'court-2'));
+    // md40 8 already sits on court-2 at its own time — re-setting it changes nothing
+    const noop = editor.writeEdit(dataRoot, repo, 'sample', 'md40', (c) => editor.applyMove(c, '8', { time: c.find(x => x.id === 8).scheduled, venue: 'court-2' }));
     assert(noop.unchanged && !noop.file, 'a byte-identical edit reports unchanged, writes nothing');
     assert(fs.readFileSync(file, 'utf8') === before, 'the file is untouched');
     // commit on a non-git tmp dir would fail loudly — the unchanged path must return before any git call
     const state = { root: tmp, siteRoot: dataRoot, repo, slug: 'sample' };
-    const r = editor.execEdit(state, 'venue', 'md40', '8', 'court-2');
+    const m8 = repo.tournaments.get('sample').tjson.matches.md40.find(m => m.id === 8);
+    const r = editor.execEdit(state, 'move', 'md40', '8', { time: m8.scheduled, venue: m8.venue });
     assert.equal(r.unchanged, true, 'the no-op reports unchanged without a git call');
     assert(fs.readFileSync(file, 'utf8') === before, 'still nothing written');
   } finally {
@@ -280,18 +272,11 @@ test('editor applySide: rewrites a side in place; the generic domain is the vali
   reject(ms => editor.applySide(ms, '9', { si: 0, side: { kind: 'players', ids: ['p1', 'p2'] } }), /exactly one championship final/);
 });
 
-test('editor applyVenue: null unschedules the court', () => {
-  const repo = loadRepo(FIX('sample'));
-  const matches = repo.tournaments.get('sample').tjson.matches.md40;
-  assert(editor.applyVenue(matches, '2', undefined) === null, 'clearing reports no error');
-  assert(matches.find(m => m.id === 2).venue === undefined, 'venue dropped — the match is courtless');
-  assert(validateRepo(repo).errs.length === 0, 'a courtless match still validates: ' + validateRepo(repo).errs.join('; '));
-});
-
-test('editor feeder timing: a time edit can\'t schedule a bracket before its feeders or past its consumers', () => {
+test('editor feeder timing: a time move can\'t schedule a bracket before its feeders or past its consumers', () => {
   const applyAt = (id, hhmm) => {
     const repo = loadRepo(FIX('sample'));
-    editor.applyTime(repo.tournaments.get('sample').tjson.matches.md40, String(id), `2025-07-14T${hhmm}:00`);
+    const ms = repo.tournaments.get('sample').tjson.matches.md40;
+    editor.applyMove(ms, String(id), { time: `2025-07-14T${hhmm}:00`, venue: ms.find(x => x.id === id).venue });
     return validateRepo(repo);
   };
   // m9 (12:15, fed by m7/m8 ending 12:00) moved to 11:00 — before its feeders
@@ -304,16 +289,16 @@ test('editor feeder timing: a time edit can\'t schedule a bracket before its fee
   assert(applyAt(8, '11:15').errs.length === 0, 'exactly at the pool end is fine: ' + applyAt(8, '11:15').errs.join('; '));
 });
 
-test('editor editDetail: the side op reports the applied slot label; a cleared venue reports TBD', () => {
+test('editor editDetail: the side op reports the applied slot label; a move reports the court', () => {
   const repo = loadRepo(FIX('sample'));
   const { ctx } = md40Ctx(repo);
   const m9 = repo.tournaments.get('sample').tjson.matches.md40.find(m => m.id === 9);
-  const d = editor.editDetail('side-a', m9, { si: 0, side: { kind: 'match', match: 8, result: 'winner' } }, ctx);
+  const d = editor.editDetail('side', m9, { si: 0, side: { kind: 'match', match: 8, result: 'winner' } }, ctx);
   assert(/^side a → Winner of /.test(d), `expected the applied slot label, got ${d}`);
   const m = repo.tournaments.get('sample').tjson.matches.xd.find(x => x.id === 1);
-  assert.equal(editor.editDetail('venue', m), '→ court-1', 'a venue edit on an undecided match reports the court');
-  assert.equal(editor.editDetail('side-b', m9, { si: 1, side: { kind: 'players', ids: ['p1', 'p2'] } }, ctx), 'side b → Ada Lovelace / Grace Hopper', 'a players side labels the team');
+  assert.equal(editor.editDetail('move', m, { time: m.scheduled, venue: m.venue }), `→ ${m.scheduled} @ ${m.venue}`, 'a move reports the court on an undecided match');
+  assert.equal(editor.editDetail('side', m9, { si: 1, side: { kind: 'players', ids: ['p1', 'p2'] } }, ctx), 'side b → Ada Lovelace / Grace Hopper', 'a players side labels the team');
   const done = repo.tournaments.get('sample').tjson.matches.md40.find(m => m.id === 1);
-  const d2 = editor.editDetail('side-a', done, { si: 0, side: { kind: 'players', ids: ['p3', 'p4'] } }, ctx);
+  const d2 = editor.editDetail('side', done, { si: 0, side: { kind: 'players', ids: ['p3', 'p4'] } }, ctx);
   assert(/result kept/.test(d2), 'a side op on a decided match flags the kept result — history never reads as a silent rewrite');
 });

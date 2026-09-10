@@ -473,7 +473,7 @@ async function openSide(cid, m, si) {
       side = { kind: 'match', match: +modal.querySelector('#matchsel').value, result: modal.querySelector('#resel').value };
     }
     modal.hidden = true;
-    await sendEdit(si === 0 ? 'side-a' : 'side-b', cid, m.id, { si, side });
+    await sendEdit('side', cid, m.id, { si, side });
   };
 }
 

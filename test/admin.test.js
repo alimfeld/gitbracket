@@ -121,7 +121,8 @@ test('admin doEdit: an invalid edit is rejected with the validator errors and no
   try {
     const gitHead = git(tmp, ['rev-parse', 'HEAD']).out.trim();
     const before = fs.readFileSync(path.join(siteRoot, 'tournaments', 'sample.json'), 'utf8');
-    const r = admin.doEdit(state, 'venue', 'md40', '8', 'bogus-court');
+    const m8t = loadRepo(siteRoot).tournaments.get('sample').tjson.matches.md40.find(m => m.id === 8).scheduled;
+    const r = admin.doEdit(state, 'move', 'md40', '8', { time: m8t, venue: 'bogus-court' });
     assert.equal(r.ok, false);
     assert(r.errors && r.errors.some(e => /unknown venue/.test(e)), 'the validator message comes back');
     assert.equal(git(tmp, ['rev-parse', 'HEAD']).out.trim(), gitHead, 'no new commit');
@@ -153,16 +154,15 @@ test('admin doEdit move: clearing time+venue is one atomic commit, a real move i
   }
 });
 
-test('admin doEdit: panel clears send null through the shared funnel — time and venue both land', () => {
+test('admin doEdit: a move clears time and venue in one atomic commit — the panel clears send the same shared funnel as a drag', () => {
   const { tmp, siteRoot, state } = scratchWithRemote();
   try {
     const m8 = () => loadRepo(siteRoot).tournaments.get('sample').tjson.matches.md40.find(m => m.id === 8);
     assert(m8().scheduled && m8().venue, 'precondition: md40/8 is scheduled on a court');
-    assert.equal(admin.doEdit(state, 'time', 'md40', '8', null).ok, true, 'a null time clears the slot');
-    assert.equal(m8().scheduled, undefined, 'scheduled drops — nothing is written as null');
-    assert.equal(admin.doEdit(state, 'venue', 'md40', '8', null).ok, true, 'a null venue clears the court');
+    assert.equal(admin.doEdit(state, 'move', 'md40', '8', { time: null, venue: null }).ok, true, 'the clears land — nothing is written as null');
+    assert.equal(m8().scheduled, undefined, 'scheduled drops');
     assert.equal(m8().venue, undefined, 'venue drops');
-    assert.equal(admin.unpushed(tmp).commits.length, 2, 'two atomic commits');
+    assert.equal(admin.unpushed(tmp).commits.length, 1, 'one atomic commit');
     assert(validateRepo(loadRepo(siteRoot)).errs.length === 0, 'cleared snapshot validates');
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
