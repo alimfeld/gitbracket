@@ -486,18 +486,73 @@ function renderPlayer(route, data) {
   return parts.join('');
 }
 
+// The sim clock: while the offset key exists, now() rides it — the ◀▶ panel
+// and ]/[ keys move it, the toggle in the corner clears it. No key, real time.
+// The panel lives outside main, so no render touches it, and it reads the
+// current page through tjsonOf.
+function mountSimClock({ tjsonOf, onChange }) {
+  const SIM_KEY = 'gitbracket.sim.offset';
+  const simOffset = () => Number(localStorage.getItem(SIM_KEY)) || 0;
+  const simOn = () => localStorage.getItem(SIM_KEY) !== null;
+  const now = () => Date.now() + simOffset();
+
+  const aside = document.createElement('aside');
+  aside.id = 'sim-clock';
+  aside.setAttribute('role', 'group');
+  aside.setAttribute('aria-label', 'sim clock');
+  const toggle = document.createElement('button'); toggle.type = 'button';
+  const back = document.createElement('button'); back.type = 'button'; back.textContent = '◀'; back.setAttribute('aria-label', 'sim clock 30 minutes back');
+  const fwd = document.createElement('button'); fwd.type = 'button'; fwd.textContent = '▶'; fwd.setAttribute('aria-label', 'sim clock 30 minutes forward');
+  const readout = document.createElement('span'); readout.setAttribute('aria-live', 'polite');
+  const steps = [back, readout, fwd]; // shown only while the clock is on
+
+  const panel = () => {
+    const on = simOn();
+    // the box belongs to the controls; at rest the chip is bare
+    aside.toggleAttribute('data-sim', on);
+    // the one chip is both: ● LIVE at rest, ✕ while the sim clock runs
+    toggle.textContent = on ? '✕' : '● LIVE';
+    toggle.setAttribute('aria-label', on ? 'turn the sim clock off' : '');
+    toggle.setAttribute('aria-pressed', String(on));
+    for (const el of steps) el.hidden = !on;
+    if (!on) return;
+    const t = now();
+    const tz = (tjsonOf() || {}).timezone || 'UTC';
+    readout.textContent = `${dayShort(t, tz)} · ${fmtTime(t, tz)}`;
+  };
+  // a clock change re-renders the board — statuses and the anchor recompute
+  const apply = () => { panel(); onChange(); };
+  const step = ms => { localStorage.setItem(SIM_KEY, String(simOffset() + ms)); apply(); };
+  toggle.onclick = () => {
+    if (simOn()) localStorage.removeItem(SIM_KEY);
+    else {
+      const tjson = tjsonOf();
+      localStorage.setItem(SIM_KEY, String((tjson && simAimOffset(tjson, Date.now())) || 0));
+    }
+    apply();
+  };
+  back.onclick = () => step(-30 * 60000);
+  fwd.onclick = () => step(30 * 60000);
+  aside.append(toggle, back, readout, fwd);
+  window.addEventListener('keydown', e => {
+    if (!simOn() || !aside.parentNode) return; // the keys move the board's clock, and only where it is
+    if (e.key === '[') { e.preventDefault(); step(-30 * 60000); }
+    else if (e.key === ']') { e.preventDefault(); step(30 * 60000); }
+  });
+  return { aside, panel, now };
+}
+
 // The index loads once; every tournament view polls while the tab is visible,
 // so results land on their own — no reload, no manual refresh.
 function boot() {
   const app = document.querySelector('main');
 
-  // The sim clock: while the offset key exists, now() rides it — the ◀▶ panel
-  // and ]/[ keys move it, the toggle in the corner clears it. No key, real time.
-  const SIM_KEY = 'gitbracket.sim.offset';
-  const simOffset = () => Number(localStorage.getItem(SIM_KEY)) || 0;
-  const simOn = () => localStorage.getItem(SIM_KEY) !== null;
-  const now = () => Date.now() + simOffset();
-  let simPanel = null;
+  // The sim clock drives now() and the venue board's corner panel.
+  const sim = mountSimClock({
+    tjsonOf: () => data && data.tjson,
+    onChange: () => { if (data && route) render(route, data); },
+  });
+  const now = sim.now;
 
   const renderers = { index: renderIndex, tournament: renderTournament, venues: (r, d) => renderVenue(r, d, now()), schedule: renderPlayer };
   const pageTitle = (r, d) => {
@@ -539,7 +594,7 @@ function boot() {
           el.textContent = `${dayShort(t, tz)} · ${fmtTime(t, tz)}`; // the kiosk clock carries its date
           el.dateTime = new Date(t).toISOString(); // the instant, derived — the label stays wall clock
         }
-        if (simPanel) simPanel(); // the sim panel's readout rides the kiosk tick
+        sim.panel(); // the sim panel's readout rides the kiosk tick
         // once a minute, re-follow from the last snapshot — statuses and the
         // anchor recompute against now
         if (t - lastFollow >= FOLLOW_MS && data) {
@@ -605,8 +660,8 @@ function boot() {
   const navigate = () => {
     const r = parseRoute();
     // the sim clock is the venue board's alone — attached there, gone elsewhere
-    if (!r || r.view !== 'venues') aside.remove();
-    else if (!aside.parentNode) document.body.appendChild(aside);
+    if (!r || r.view !== 'venues') sim.aside.remove();
+    else if (!sim.aside.parentNode) document.body.appendChild(sim.aside);
     if (!r) {
       route = null;
       pollOn = false; stopPoll();
@@ -638,50 +693,7 @@ function boot() {
     jumpTo(a.dataset.jump);
   });
 
-  // The sim panel: the toggle turns the sim clock on — aimed at the board's
-  // first match — and off; ◀ readout ▶ step it, ] and [ mirror the buttons. It
-  // lives outside main, so no render touches it, and navigate attaches it to
-  // the venue board alone — nowhere else reads the clock.
-  const aside = document.createElement('aside');
-  aside.id = 'sim-clock';
-  aside.setAttribute('role', 'group');
-  aside.setAttribute('aria-label', 'sim clock');
-  const toggle = document.createElement('button'); toggle.type = 'button';
-  const back = document.createElement('button'); back.type = 'button'; back.textContent = '◀'; back.setAttribute('aria-label', 'sim clock 30 minutes back');
-  const fwd = document.createElement('button'); fwd.type = 'button'; fwd.textContent = '▶'; fwd.setAttribute('aria-label', 'sim clock 30 minutes forward');
-  const readout = document.createElement('span'); readout.setAttribute('aria-live', 'polite');
-  const steps = [back, readout, fwd]; // shown only while the clock is on
-  simPanel = () => {
-    const on = simOn();
-    // the box belongs to the controls; at rest the chip is bare
-    aside.toggleAttribute('data-sim', on);
-    // the one chip is both: ● LIVE at rest, ✕ while the sim clock runs
-    toggle.textContent = on ? '✕' : '● LIVE';
-    toggle.setAttribute('aria-label', on ? 'turn the sim clock off' : '');
-    toggle.setAttribute('aria-pressed', String(on));
-    for (const el of steps) el.hidden = !on;
-    if (!on) return;
-    const t = now();
-    const tz = (data && data.tjson && data.tjson.timezone) || 'UTC';
-    readout.textContent = `${dayShort(t, tz)} · ${fmtTime(t, tz)}`;
-  };
-  // a clock change re-renders the board — statuses and the anchor recompute
-  const apply = () => { simPanel(); if (data && route) render(route, data); };
-  const step = ms => { localStorage.setItem(SIM_KEY, String(simOffset() + ms)); apply(); };
-  toggle.onclick = () => {
-    if (simOn()) localStorage.removeItem(SIM_KEY);
-    else localStorage.setItem(SIM_KEY, String((data && data.tjson && simAimOffset(data.tjson, Date.now())) || 0));
-    apply();
-  };
-  back.onclick = () => step(-30 * 60000);
-  fwd.onclick = () => step(30 * 60000);
-  aside.append(toggle, back, readout, fwd);
-  simPanel();
-  window.addEventListener('keydown', e => {
-    if (!simOn() || !aside.parentNode) return; // the keys move the board's clock, and only where it is
-    if (e.key === '[') { e.preventDefault(); step(-30 * 60000); }
-    else if (e.key === ']') { e.preventDefault(); step(30 * 60000); }
-  });
+  sim.panel(); // the corner chip's first paint
 
   navigate();
   window.addEventListener('hashchange', navigate);
