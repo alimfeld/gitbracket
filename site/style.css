@@ -439,8 +439,8 @@ article[data-status="possible"] .head {
   text-decoration: underline dotted;
 }
 
-/* the sim clock's panel — created by app.js outside the render tree, so it
-   styles by id, not by the render classes a normal pass would carry */
+/* the sim clock — a bare LIVE chip at rest, a bordered panel of controls while
+   the sim runs. Created by app.js outside the render tree, so it styles by id */
 #sim-clock {
   position: fixed;
   right: 1em;
@@ -449,22 +449,25 @@ article[data-status="possible"] .head {
   display: flex;
   gap: .4em;
   align-items: center;
+  padding: 0;
+  border: none;
+  background: none;
+  font: 14px/1.2 system-ui, sans-serif;
+}
+
+/* the panel: box and border appear only with the controls */
+#sim-clock[data-sim] {
   padding: var(--space) .7em;
   background: var(--page);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  font: 14px/1.2 system-ui, sans-serif;
 }
 
-/* the state chip: unpressed (LIVE, the first button) reads green; pressed (SIM)
-   rides the accent fill below — first-child so no class rides the markup */
-#sim-clock button:first-child {
+/* the rest-state chip reads green and bare — it reports the state, it is not a
+   button; first-child keeps the class off the markup */
+#sim-clock:not([data-sim]) button:first-child {
+  border: none;
+  background: none;
+  padding: 0;
   color: var(--due);
-}
-
-/* the toggle reads its own state: pressed means the board clock is the sim one */
-#sim-clock button[aria-pressed="true"] {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--on-accent);
 }

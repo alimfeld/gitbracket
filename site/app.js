@@ -645,7 +645,11 @@ function boot() {
   const steps = [back, readout, fwd]; // shown only while the clock is on
   simPanel = () => {
     const on = simOn();
-    toggle.textContent = on ? '● SIM' : '● LIVE'; // the chip reports its state
+    // the box belongs to the controls; at rest the chip is bare
+    aside.toggleAttribute('data-sim', on);
+    // the one chip is both: ● LIVE at rest, ✕ while the sim clock runs
+    toggle.textContent = on ? '✕' : '● LIVE';
+    toggle.setAttribute('aria-label', on ? 'turn the sim clock off' : '');
     toggle.setAttribute('aria-pressed', String(on));
     for (const el of steps) el.hidden = !on;
     if (!on) return;

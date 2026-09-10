@@ -25,10 +25,11 @@ admin's tournament picker chooses which one you work on.
   validate-write-commit funnel, so the deployed kiosk progresses like a real
   day.
 - **Sim the kiosk clock** — open a venue board on the scratch site and press
-  the `LIVE` chip in the lower-right corner (it appears only there, and reads
-  `LIVE` until pressed): the board runs on a sim clock an operator controls — the `◀`/`▶` controls (and `]`/`[`)
-  step it ±30 minutes, turning it on aims at the event's first scheduled match,
-  and turning it off returns the board to real time. Statuses, auto-centering,
+  the bare `LIVE` chip in the lower-right corner (it appears only there): the
+  board runs on a sim clock an operator controls — the `◀`/`▶` controls (and
+  `]`/`[`) step it ±30 minutes, turning it on aims at the event's first
+  scheduled match,
+  and the `✕` closes it back to LIVE and real time. Statuses, auto-centering,
   and the board clock all track the sim; the clock never changes what's
   scoreable.
 - **Iterate** — edit in admin, hit Publish (validate + push + surge to the
