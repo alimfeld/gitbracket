@@ -234,6 +234,10 @@ function editDetail(kind, m, value, ctx) {
 function execEdit(state, verb, cat, matchId, value) {
   const { root, siteRoot, repo, slug } = state;
   const info = repo.tournaments.get(slug);
+  // An unknown slug is a report, never a throw: the daemon's request handler is
+  // the one caller that can be handed a stale or hostile slug, and writeEdit's
+  // own guard runs too late to save this lookup.
+  if (!info || !info.tjson) return { error: `unknown tournament ${slug}` };
   const ctx = catCtx(info.tjson, cat);
   const m = ctx.byId.get(Number(matchId)); // the same object writeEdit mutates in place
   const preStatus = m && m.result && m.result.status; // what a clear removes — its commit kind matches it

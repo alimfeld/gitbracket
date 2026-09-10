@@ -484,3 +484,58 @@ test('publish deployRole: no origin/main anchor — a branch cannot prove itself
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+// ---- the HTTP layer ----------------------------------------------------------
+// serve() is the daemon's one untrusted surface: the request body and the
+// Origin header are the only foreign input in the system. A malformed request
+// must be answered, never thrown — an unhandled rejection out of the async
+// handler kills the match-day daemon mid-tournament.
+function listen(server) {
+  return new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(`http://127.0.0.1:${server.address().port}`)));
+}
+const postJson = (base, path, body, origin) => fetch(base + path, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', ...(origin ? { Origin: origin } : {}) },
+  body,
+});
+function withServer(t, state) {
+  const server = admin.serve(state);
+  return listen(server).then(base => {
+    t.after(() => { server.closeAllConnections(); server.close(); });
+    return base;
+  });
+}
+
+test('admin HTTP: an unknown slug is refused, the daemon survives, and state is never repointed', async t => {
+  const { tmp, state } = scratchWithRemote();
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  const base = await withServer(t, state);
+  const bad = await postJson(base, '/api/edit', JSON.stringify({ slug: 'does-not-exist', verb: 'result', cat: 'md40', matchId: '8', value: 'wo a' }));
+  assert.equal(bad.status, 400, 'an unknown slug is a refusal, not a crash');
+  assert(/unknown tournament/.test((await bad.json()).error), 'the refusal names the slug');
+  assert.equal(state.slug, 'sample', 'a bogus slug never repoints the daemon');
+  assert.equal((await fetch(base + '/api/pending')).status, 200, 'the daemon still answers');
+});
+
+test('admin HTTP: a null or non-object JSON body is refused before any field is read', async t => {
+  const { tmp, state } = scratchWithRemote();
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  const base = await withServer(t, state);
+  for (const body of ['null', '"x"', '[]']) {
+    assert.equal((await postJson(base, '/api/edit', body)).status, 400, `body ${body} is refused`);
+  }
+  assert.equal((await fetch(base + '/api/pending')).status, 200, 'the daemon still answers');
+});
+
+test('admin HTTP: a cross-origin POST is refused, a same-origin edit still commits', async t => {
+  const { tmp, siteRoot, state } = scratchWithRemote();
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  const base = await withServer(t, state);
+  const edit = JSON.stringify({ slug: 'sample', verb: 'result', cat: 'md40', matchId: '8', value: 'wo a' });
+  assert.equal((await postJson(base, '/api/edit', edit, 'http://evil.example')).status, 403, 'a stray page cannot write through the daemon');
+  const good = await postJson(base, '/api/edit', edit, base);
+  assert.equal(good.status, 200, 'the same-origin path is unaffected');
+  assert.equal((await good.json()).ok, true);
+  const m = loadRepo(siteRoot).tournaments.get('sample').tjson.matches.md40.find(x => x.id === 8);
+  assert.equal(m.result.status, 'walkover', 'the edit really reached the funnel');
+});

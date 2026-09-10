@@ -15,7 +15,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
-const { loadRepo, catCtx, schedEntries, pairBusy, fixedPlayers, consumedSlots, descendants, slotsOverlap, feederBounds, makeGames, branchOf, isSimBranch, cleanTree, git, defaultSlug } = require('./tools.js');
+const { loadRepo, catCtx, schedEntries, pairBusy, fixedPlayers, consumedSlots, descendants, slotsOverlap, feederBounds, branchOf, isSimBranch, cleanTree, git, defaultSlug } = require('./tools.js');
 const { execEdit, parseResult, waveEntries } = require('./edits.js');
 const { matchSlotMs, schedTime, bestOfOf } = require('../site/derive.js');
 const { validateRepo } = require('./validate.js');
@@ -206,6 +206,24 @@ function sideOpts(tjson, cat, matchId, si) {
   };
 }
 
+// Random games for a sim score: the winner takes the target games, the loser's
+// wins leading so neither side reaches the target before the last game (the
+// validator's rule); deuce games a fifth of the time. Sim-only, like scoreWave.
+function makeGames(bestOf) {
+  const target = (bestOf + 1) / 2;
+  const n = target + Math.floor(Math.random() * (bestOf - target + 1));
+  const winnerIsA = Math.random() < 0.5;
+  const games = [];
+  for (let i = 0; i < n; i++) {
+    const aWins = i < n - target ? !winnerIsA : winnerIsA;
+    const deuce = Math.random() < 0.2;
+    const ws = deuce ? 12 + Math.floor(Math.random() * 5) : 11;
+    const ls = deuce ? ws - 2 : Math.floor(Math.random() * 10);
+    games.push(aWins ? { a: ws, b: ls } : { a: ls, b: ws });
+  }
+  return games;
+}
+
 // Sim-only: score the playable wave with random games through the same
 // funnel as every edit. Scores are fabrication, so the gate is the branch:
 // only off-main (a sim) scores anything; main is the record.
@@ -310,7 +328,14 @@ function serve(state) {
       if (url === '/api/edit' && req.method === 'POST') {
         let body;
         try { body = JSON.parse(await readBody(req)); } catch { return json(res, 400, { error: 'bad JSON' }); }
-        if (body.slug && body.slug !== state.slug) { state.slug = body.slug; reload(state); }
+        // Untrusted input, two ways: JSON.parse admits null/"x"/[], and a stale
+        // page or a stray local process can name any slug. Refuse both — a body
+        // dereference here throws out of the async handler and kills the daemon.
+        if (!body || typeof body !== 'object' || Array.isArray(body)) return json(res, 400, { error: 'bad JSON body' });
+        if (body.slug) {
+          if (!state.repo.tournaments.has(body.slug)) return json(res, 400, { error: `unknown tournament ${body.slug}` });
+          if (body.slug !== state.slug) { state.slug = body.slug; reload(state); }
+        }
         const r = doEdit(state, body.verb, body.cat, String(body.matchId), body.value);
         return json(res, r.ok ? 200 : 400, r);
       }
@@ -366,4 +391,4 @@ function main(root, args) {
   return 0;
 }
 
-module.exports = { legalSlots, sideOpts, doEdit, unpushed, undo, redo, scoreWave, main };
+module.exports = { legalSlots, sideOpts, doEdit, unpushed, undo, redo, scoreWave, serve, makeGames, main };
