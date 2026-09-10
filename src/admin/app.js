@@ -241,6 +241,15 @@ function legalSnap(venue, wm) {
   return best;
 }
 
+// The gate's fixed-days rule, client-side: an edit that empties a calendar day
+// is refused, so the sole match of its day can't be dropped to Unscheduled.
+function soleOnDay(m) {
+  const t = schedTime(m, S.tz);
+  if (t === null) return false;
+  const d = dayKey(t, S.tz);
+  return !S.cats.some(c => c.matches.some(x => x && x !== m && schedTime(x, S.tz) !== null && dayKey(schedTime(x, S.tz), S.tz) === d));
+}
+
 // Legal start-minutes per venue from the daemon (the gate's own rules),
 // computed once per drag.
 async function loadSlots(cid, mid) {
@@ -262,9 +271,11 @@ function ghost(e) {
   if (!Number.isFinite(slot)) return;
   const col = $('grid').querySelector(`.col[data-venue="${CSS.escape(ht.venue)}"]`);
   if (!col) return;
-  if (ht.venue === '__none') { // unscheduled is always legal — the daemon never receives a placement
+  if (ht.venue === '__none') { // unscheduled — legal unless it would empty the match's published day, which the gate refuses
+    const sole = soleOnDay(m);
     const g = document.createElement('div');
-    g.className = 'ghost';
+    g.className = 'ghost' + (sole ? ' invalid' : '');
+    g.title = sole ? 'the only match on its published day — the gate refuses to empty a day' : '';
     g.style.top = '.5rem'; g.style.height = '2.5rem';
     col.appendChild(g); S.ghost = g; return;
   }
