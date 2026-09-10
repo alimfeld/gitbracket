@@ -146,18 +146,22 @@ function buildKnockout(pools, names, mid, fin, placements) {
   // slots than cross-pool partners can't be split — those stay as built.
   const poolsOf = e => e && e.kind === 'pool' ? [{ pool: e.pool, rank: e.rank }]
     : [...(reachOf.get(e && e.match) || [])].map(p => ({ pool: p, rank: -1 }));
+  const sharesPool = (x, y) => x.some(a => y.some(b => a.pool === b.pool));
+  const isWinner = x => x.some(a => a.rank === 1);
+  // One swap is legal when nothing collides after it: the moved entry must be
+  // cross-pool with its new pair (both sides), and no two pool winners may meet
+  // early. A field with no such partner can't be split — those stay as built.
+  const canSwap = (a, b, c, partner) =>
+    !sharesPool(c, a) && !sharesPool(b, partner)
+    && !(isWinner(a) && isWinner(c)) && !(isWinner(b) && isWinner(partner));
   const splitRound = (arr) => {
     for (let i = 0; i + 1 < arr.length; i += 2) {
       const a = poolsOf(arr[i]), b = poolsOf(arr[i + 1]);
-      if (!a.some(x => b.some(y => x.pool === y.pool))) continue;
+      if (!sharesPool(a, b)) continue;
       for (let j = arr.length - 1; j >= 0; j--) {
         if (j === i || j === i + 1) continue; // a stays; b may move either way
-        const c = poolsOf(arr[j]);
-        if (c.some(x => a.some(y => x.pool === y.pool))) continue; // c must be cross-pool with a
-        if (a.some(x => x.rank === 1) && c.some(x => x.rank === 1)) continue; // no early winner-vs-winner
         const partner = poolsOf(arr[j % 2 ? j - 1 : j + 1]);
-        if (b.some(x => x.rank === 1) && partner.some(x => x.rank === 1)) continue;
-        if (b.some(x => partner.some(y => x.pool === y.pool))) continue; // b must be cross-pool at its new slot
+        if (!canSwap(a, b, poolsOf(arr[j]), partner)) continue;
         [arr[i + 1], arr[j]] = [arr[j], arr[i + 1]];
         break;
       }
