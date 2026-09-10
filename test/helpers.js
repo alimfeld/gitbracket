@@ -3,12 +3,24 @@
 // Shared helpers for the test suites: fixture paths + repo loading.
 // Auto-discovery runs this file too; it defines no tests, which is fine.
 
+const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { loadRepo } = require('../src/tools.js');
 const { validateRepo } = require('../src/validate.js');
 const { makeCat } = require('../site/derive.js');
 
 const FIX = (...parts) => path.join(__dirname, '..', 'fixtures', ...parts);
+
+// A scratch copy of a fixture tree for disk-writing tests; the caller's
+// try/finally rms it.
+function scratchSite(name) {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gitbracket-'));
+  const dataRoot = path.join(tmp, 'site');
+  fs.mkdirSync(dataRoot, { recursive: true });
+  fs.cpSync(FIX(name), dataRoot, { recursive: true });
+  return { tmp, dataRoot };
+}
 
 // Shared between the schedule and sim suites: a spec that generates both
 // pools (3+2 teams) and a knockout with pool-rank and match-winner feeders.
@@ -70,4 +82,4 @@ const links = html => [...html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/g)].map(m =
   text: text(m[2]),
 }));
 
-module.exports = { FIX, MINI, hasErr, hasWarn, validateFixture, catOf, text, vals, card, cards, links };
+module.exports = { FIX, MINI, hasErr, hasWarn, validateFixture, catOf, scratchSite, text, vals, card, cards, links };

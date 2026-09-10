@@ -145,11 +145,11 @@ function poolStandings(ctx, pool, partial) {
       r1.gd -= gd; r1.pd -= pd;
     }
   }
-  return poolLadder([...recs.values()], ms, ctx);
+  return poolLadder([...recs.values()], ms);
 }
 
 // Head-to-head over the set's mutual matches only (walkovers carry no differential).
-function mutualKeys(list, ms, ctx) {
+function mutualKeys(list, ms) {
   const h = new Map(list.map(r => [r.sig, { hw: 0, hg: 0, hp: 0 }]));
   for (const m of ms) {
     if (!Array.isArray(m.sides)) continue;
@@ -171,12 +171,12 @@ function mutualKeys(list, ms, ctx) {
 
 // Ladder: wins, then per wins-block h2h wins/gd/pd, then overall gd/pd. A rung
 // that splits a cluster recurses on it; a still-tied block is a dead tie (renders TBD).
-function poolLadder(list, ms, ctx) {
+function poolLadder(list, ms) {
   const out = [];
   let tieCluster = 0; // one id per dead-tie cluster — poolRanks shares a rank only within it
   const order = (set) => {
     if (set.length <= 1) { out.push(...set); return; }
-    const h = mutualKeys(set, ms, ctx);
+    const h = mutualKeys(set, ms);
     const cmp = (a, b) => {
       const ka = [h.get(a.sig).hw, h.get(a.sig).hg, h.get(a.sig).hp, a.gd, a.pd];
       const kb = [h.get(b.sig).hw, h.get(b.sig).hg, h.get(b.sig).hp, b.gd, b.pd];
@@ -533,7 +533,7 @@ function mergeTwinStages(present) {
     if (!byGate.has(key)) byGate.set(key, []);
     byGate.get(key).push(stage);
   }
-  const twin = key => byGate.get(key.endsWith('|w') ? key.replace(/\|w$/, '|l') : key.replace(/\|l$/, '|w'));
+  const twin = key => byGate.get(key.replace(/\|w$/, '|l'));
   for (const [key, list] of byGate) {
     if (key.endsWith('|l') || list.length !== 1) continue;
     const other = twin(key);
@@ -1101,5 +1101,5 @@ function playerStatus(ctx, pid) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, esc, makeCat, toCats, matchSlotMs, bestOfOf, poolBo1, sideIdx, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, resolveSide, teamLabel, sideLabel, scoreCells, playerMatches, possibleStages, placementLabel, plRange, placementColumn, bandLabels, stageGroupName, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dayShort, dayLabel, fmtDiff, kioskStatus, currentRowIndex, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, currentWave, playerStatus };
+  module.exports = { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, esc, makeCat, toCats, matchSlotMs, bestOfOf, poolBo1, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, resolveSide, teamLabel, sideLabel, scoreCells, playerMatches, possibleStages, placementLabel, plRange, placementColumn, bandLabels, stageGroupName, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dayShort, dayLabel, fmtDiff, kioskStatus, currentRowIndex, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, currentWave, playerStatus };
 }

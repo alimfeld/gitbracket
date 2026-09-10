@@ -13,7 +13,7 @@ const { loadRepo } = require('../src/tools.js');
 const { validateRepo } = require('../src/validate.js');
 const { makeCat } = require('../site/derive.js');
 const editor = require('../src/edits.js');
-const { FIX, hasErr } = require('./helpers.js');
+const { FIX, hasErr, scratchSite } = require('./helpers.js');
 
 function md40Ctx(repo) {
   const tjson = repo.tournaments.get('sample').tjson;
@@ -127,11 +127,8 @@ test('editor rejects edits the validator would refuse', () => {
 });
 
 test('editor writeEdit: a cross-day time edit is refused with the cause named; days-unchanged edits still apply', () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gitbracket-'));
+  const { tmp, dataRoot } = scratchSite('multiday');
   try {
-    const dataRoot = path.join(tmp, 'site');
-    fs.mkdirSync(dataRoot, { recursive: true });
-    fs.cpSync(FIX('multiday'), dataRoot, { recursive: true });
     const repo = loadRepo(dataRoot);
     const slug = 'multiday';
     const tjson = () => repo.tournaments.get(slug).tjson;
@@ -156,11 +153,8 @@ test('editor writeEdit: a cross-day time edit is refused with the cause named; d
 });
 
 test('editor writeEdit: an out-of-band hand edit is refused by name — the stale-memory write never silently clobbers it', () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gitbracket-'));
+  const { tmp, dataRoot } = scratchSite('sample');
   try {
-    const dataRoot = path.join(tmp, 'site');
-    fs.mkdirSync(dataRoot, { recursive: true });
-    fs.cpSync(FIX('sample'), dataRoot, { recursive: true });
     const repo = loadRepo(dataRoot); // the daemon's boot snapshot — memory has the original file
     const file = path.join(dataRoot, 'tournaments', 'sample.json');
     const disk = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -178,11 +172,8 @@ test('editor writeEdit: an out-of-band hand edit is refused by name — the stal
 // execEdit returns before any git call on these — an unknown verb/shape must
 // never reach the write (the old fallbacks silently cleared time or result).
 test('editor execEdit: unknown verbs and result shapes are refused by name, never a silent clear', () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gitbracket-'));
+  const { tmp, dataRoot } = scratchSite('sample');
   try {
-    const dataRoot = path.join(tmp, 'site');
-    fs.mkdirSync(dataRoot, { recursive: true });
-    fs.cpSync(FIX('sample'), dataRoot, { recursive: true });
     const repo = loadRepo(dataRoot);
     const file = path.join(dataRoot, 'tournaments', 'sample.json');
     const before = fs.readFileSync(file, 'utf8');
@@ -228,11 +219,8 @@ test('editor editDetail: venue/time edits report the move, never the match resul
 });
 
 test('editor writeEdit: a cross-day edit is refused with the cause named — the index dates only change via the generator', () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gitbracket-'));
+  const { tmp, dataRoot } = scratchSite('sample');
   try {
-    const dataRoot = path.join(tmp, 'site');
-    fs.mkdirSync(dataRoot, { recursive: true });
-    fs.cpSync(FIX('sample'), dataRoot, { recursive: true });
     const repo = loadRepo(dataRoot);
     const file = path.join(dataRoot, 'tournaments', 'sample.json');
     const before = fs.readFileSync(file, 'utf8');
@@ -247,11 +235,8 @@ test('editor writeEdit: a cross-day edit is refused with the cause named — the
 });
 
 test('editor writeEdit/execEdit: an edit already on record writes and commits nothing — the unchange reports', () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gitbracket-'));
+  const { tmp, dataRoot } = scratchSite('sample');
   try {
-    const dataRoot = path.join(tmp, 'site');
-    fs.mkdirSync(dataRoot, { recursive: true });
-    fs.cpSync(FIX('sample'), dataRoot, { recursive: true });
     const repo = loadRepo(dataRoot);
     const file = path.join(dataRoot, 'tournaments', 'sample.json');
     const before = fs.readFileSync(file, 'utf8');
@@ -270,11 +255,8 @@ test('editor writeEdit/execEdit: an edit already on record writes and commits no
 });
 
 test('editor writeEdit: rollback on validation failure, write on success (real disk)', () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gitbracket-'));
+  const { tmp, dataRoot } = scratchSite('sample');
   try {
-    const dataRoot = path.join(tmp, 'site');
-    fs.mkdirSync(dataRoot, { recursive: true });
-    fs.cpSync(FIX('sample'), dataRoot, { recursive: true });
     const repo = loadRepo(dataRoot);
     const file = path.join(dataRoot, 'tournaments', 'sample.json');
     const before = fs.readFileSync(file, 'utf8');

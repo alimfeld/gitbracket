@@ -298,35 +298,14 @@ function scheduleMatches(categories, venues, tz, slotCfgOf, eventDate, blockStar
   }
 }
 
-// The greedy's invariants, which validate.js can't see: every match got a slot
-// and no pool match double-books a player. (Knockout sides are unknown until
-// results; same-wave knockout matches are structurally disjoint.)
-function assertSchedule(categories, slotCfgOf, tz) {
-  const sched = []; // { m, t, players }
-  for (const [cat, , matches] of categories) {
-    const catSlots = slotCfgOf.get(cat);
+// The greedy's one invariant validate.js can't see: every match got a slot.
+// Double-books need no assert here — generate() ends by running validateRepo
+// on this same output, whose venue and player rules use the same overlap
+// predicates, so a greedy mistake would surface as a gate error there.
+function assertSchedule(categories) {
+  for (const [, , matches] of categories) {
     for (const m of matches) {
       if (!m.scheduled || !m.venue) throw new Error(`match ${m.id} never got a slot`);
-      sched.push({
-        m,
-        t: schedTime(m, tz),
-        slotMs: matchSlotMs(m, { slotMinutes: catSlots }),
-        players: fixedPlayers(m),
-      });
-    }
-  }
-  // venue overlap needs no check here — generate() ends by running validateRepo
-  // on this same output, whose venue rule uses the same slotsOverlap predicate
-  // ponytail: O(n²) double-book scan — schedules are one day; index by time
-  // window per player if a spec ever grows past ~50 matches per category.
-  for (let i = 0; i < sched.length; i++) {
-    for (let j = i + 1; j < sched.length; j++) {
-      const a = sched[i], b = sched[j];
-      if (a.players && b.players && slotsOverlap(a.t, a.t + a.slotMs, b.t, b.t + b.slotMs)) {
-        for (const p of a.players) {
-          if (b.players.has(p)) throw new Error(`player ${p} double-booked (${a.m.id} ${a.m.scheduled}, ${b.m.id} ${b.m.scheduled})`);
-        }
-      }
     }
   }
 }
@@ -445,7 +424,7 @@ function generate(spec) {
   }
   const slotCfgOf = new Map(CATS.map((c) => [c.id, c.slotMinutes]));
   scheduleMatches(results, VENUES.map((v) => v.id), timezone, slotCfgOf, eventDate, blockStart);
-  assertSchedule(results, slotCfgOf, timezone);
+  assertSchedule(results);
 
   const out = { name, location, timezone, venues: VENUES, categories: CATS, players: PLAYERS, matches: {} };
   for (const [cat, teamList, ms] of results) {

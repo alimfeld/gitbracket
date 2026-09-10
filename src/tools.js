@@ -6,7 +6,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { spawn, spawnSync } = require('child_process');
+const { spawnSync } = require('child_process');
 const { ID_RE, makeCat, schedTime, isDone, matchSlotMs } = require('../site/derive.js');
 
 // Window collision: shared by the validator's venue rule and the generator's
@@ -211,28 +211,6 @@ function writeTournamentIndex(siteRoot, entries) {
   fs.writeFileSync(path.join(siteRoot, 'tournaments.json'), '[' + entries.map((t) => `\n  ${JSON.stringify(t)}`).join(',') + '\n]\n');
 }
 
-const MIME = {
-  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8',
-  '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon',
-};
-
-// Open a URL in the platform browser — the sim's rehearsal page and the admin
-// daemon's start-up both want it; CI skips the launch (no display, a spawn
-// would only fail).
-function openBrowser(url) {
-  const cmd = process.platform === 'darwin' ? 'open' : process.platform === 'linux' ? 'xdg-open' : null;
-  if (cmd && !process.env.CI) spawn(cmd, [url], { detached: true, stdio: 'ignore' }).unref();
-}
-
-// One static GET under a serving root — MIME by extension, traversal-guarded,
-// null when missing. Shared by the sim's served site and the admin daemon page.
-function staticFile(root, rel) {
-  const file = path.join(root, rel === '' ? 'index.html' : rel);
-  if (path.relative(root, file).startsWith('..') || !fs.existsSync(file) || fs.statSync(file).isDirectory()) return null;
-  return { body: fs.readFileSync(file), type: MIME[path.extname(file)] || 'application/octet-stream' };
-}
-
 // The board's scheduled-unplayed windows: {m, t, ctx, players, cat}. noSlot
 // names categories with no resolvable slot length (a warn for the validator).
 // Shared by the validator's scan and the admin placement preview.
@@ -314,4 +292,4 @@ function pairBusy(a, b) {
   return kinds;
 }
 
-module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, fixedPlayers, schedEntries, pairBusy, consumedSlots, descendants, winTarget, reachedWinner, makeGames, feederBounds, isRealDate, findRoot, catCtx, tournamentText, staticFile, openBrowser, cnameOf, branchOf, isRehearsalBranch, cleanTree, git, defaultSlug };
+module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, fixedPlayers, schedEntries, pairBusy, consumedSlots, descendants, winTarget, reachedWinner, makeGames, feederBounds, isRealDate, findRoot, catCtx, tournamentText, cnameOf, branchOf, isRehearsalBranch, cleanTree, git, defaultSlug };

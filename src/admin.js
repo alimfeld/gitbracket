@@ -12,8 +12,10 @@
 // it locally (`gb.js sim` runs this same daemon on a rehearsal branch).
 
 const http = require('http');
+const fs = require('fs');
 const path = require('path');
-const { loadRepo, staticFile, openBrowser, catCtx, schedEntries, pairBusy, fixedPlayers, consumedSlots, descendants, slotsOverlap, feederBounds, makeGames, branchOf, isRehearsalBranch, cleanTree, git, defaultSlug } = require('./tools.js');
+const { spawn } = require('child_process');
+const { loadRepo, catCtx, schedEntries, pairBusy, fixedPlayers, consumedSlots, descendants, slotsOverlap, feederBounds, makeGames, branchOf, isRehearsalBranch, cleanTree, git, defaultSlug } = require('./tools.js');
 const { execEdit, parsePayload, waveEntries } = require('./edits.js');
 const { matchSlotMs, schedTime, bestOfOf } = require('../site/derive.js');
 const { validateRepo } = require('./validate.js');
@@ -239,6 +241,26 @@ function readBody(req) {
     req.on('end', () => resolve(b));
     req.on('error', () => resolve(''));
   });
+}
+
+const MIME = {
+  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+};
+
+// One static GET under a serving root — MIME by extension, traversal-guarded,
+// null when missing.
+function staticFile(root, rel) {
+  const file = path.join(root, rel === '' ? 'index.html' : rel);
+  if (path.relative(root, file).startsWith('..') || !fs.existsSync(file) || fs.statSync(file).isDirectory()) return null;
+  return { body: fs.readFileSync(file), type: MIME[path.extname(file)] || 'application/octet-stream' };
+}
+
+// Open the admin page in the platform browser; CI skips the launch (no
+// display, a spawn would only fail).
+function openBrowser(url) {
+  const cmd = process.platform === 'darwin' ? 'open' : process.platform === 'linux' ? 'xdg-open' : null;
+  if (cmd && !process.env.CI) spawn(cmd, [url], { detached: true, stdio: 'ignore' }).unref();
 }
 
 // Serve the admin page (src/admin/) plus site/derive.js (the shared domain model).
