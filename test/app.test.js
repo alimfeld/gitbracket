@@ -11,7 +11,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, matchSlotMs, sideLabel, placementLabel, koColumn, koOrdinal, matchLabel, schedTime, toCats, isDeadTie, winners, catStatus, roundName } = require('../site/derive.js');
 const { parseRoute, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset } = require('../site/app.js');
-const { FIX, catOf, text, vals, card, cards, links } = require('./helpers.js');
+const { FIX, catOf, pageData, repoPage, withTjson, text, vals, card, cards, links } = require('./helpers.js');
 const { loadRepo } = require('../src/tools.js');
 
 const sameRecord = (a, b) => a.wins === b.wins && a.gd === b.gd && a.pd === b.pd; // test-only — derive.js doesn't ship it
@@ -32,7 +32,7 @@ test('schedTime: an invalid timezone reads as unparseable — never throws', () 
 
 test('renderers: a tournament with no categories renders empty — never throws', () => {
   const tjson = { name: 'Empty', location: 'Hall', timezone: 'UTC', venues: [], players: [], categories: [], matches: {} };
-  const data = { index: [], t: { slug: 'empty', name: 'Empty' }, tjson, cats: toCats(tjson) };
+  const data = pageData(tjson, 'empty');
   const html = renderTournament({ slug: 'empty', view: 'tournament' }, data);
   assert(typeof html === 'string' && html.includes('<h1>') && text(html).includes('Empty'), 'semantic title: the tournament shell still renders');
   assert(!html.includes('<h2'), 'semantic: no category heading when none exist'); // heading levels are the a11y outline, not presentation
@@ -51,14 +51,14 @@ test('renderers: a null category entry is skipped, never throws', () => {
 
 test('renderers: a null venue entry is skipped on the board, never throws', () => {
   const tjson = { name: 'Bad', location: 'Hall', timezone: 'UTC', venues: [null, { id: 'c1', name: 'Court 1' }], players: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }], categories: [{ id: 't', name: 'T', bestOf: { groups: 1, knockout: 1 }, slotMinutes: { groups: 30, knockout: 30 } }], matches: { t: [{ id: 1, pool: 'A', scheduled: '2026-05-02T09:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p1'] }, { kind: 'players', ids: ['p2'] }] }] } };
-  const data = { index: [], t: { slug: 'bad', name: 'Bad' }, tjson, cats: toCats(tjson) };
+  const data = pageData(tjson, 'bad');
   const html = renderVenue({ slug: 'bad', view: 'venues' }, data, Date.parse('2026-05-02T10:00:00Z'));
   assert(text(html).includes('Court 1'), 'the real court renders');
 });
 
 test('renderers: an invalid timezone renders TBD, never throws', () => {
   const bad = { name: 'Bad', location: 'Hall', timezone: 'Mars/Olympus', venues: [{ id: 'c1', name: 'Court 1' }], players: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }], categories: [{ id: 't', name: 'T', bestOf: { groups: 1, knockout: 1 }, slotMinutes: { groups: 30, knockout: 30 } }], matches: { t: [{ id: 1, pool: 'A', scheduled: '2026-05-02T09:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p1'] }, { kind: 'players', ids: ['p2'] }] }] } };
-  const data = { index: [], t: { slug: 'bad', name: 'Bad' }, tjson: bad, cats: toCats(bad) };
+  const data = pageData(bad, 'bad');
   assert.doesNotThrow(() => renderTournament({ slug: 'bad', view: 'tournament' }, data), 'tournament page');
   assert.doesNotThrow(() => renderVenue({ slug: 'bad', view: 'venues' }, data, Date.now()), 'venue board');
   assert.doesNotThrow(() => renderPlayer({ slug: 'bad', view: 'schedule', player: 'p1' }, data), 'player page');
@@ -283,9 +283,7 @@ test('result statuses: walkover counts a win, void counts nothing, pool complete
 });
 
 test('result statuses render: W/O and void on cards, settled matches stay on the board', () => {
-  const repo = loadRepo(FIX('result'));
-  const info = repo.tournaments.get('result');
-  const data = { index: repo.index, t: repo.index[0], tjson: info.tjson, cats: toCats(info.tjson) };
+  const data = repoPage('result');
   const st = renderTournament({ slug: 'result', view: 'tournament' }, data);
   assert(text(st).includes('void') && text(st).includes('W/O'), 'void and walkover statuses render on their cards');
   const venue = renderVenue({ slug: 'result', view: 'venues' }, data, Date.parse('2026-05-02T09:30:00Z'));
@@ -348,11 +346,7 @@ test('koOrdinal: bracket ordinals are structural — schedule edits cannot renum
 });
 
 test('bracket: slot labels are plain text — no link wrapping, no trace machinery', () => {
-  const data = (() => {
-    const repo = loadRepo(FIX('sample'));
-    const info = repo.tournaments.get('sample');
-    return { repo, data: { index: repo.index, t: repo.index[0], tjson: info.tjson, cats: toCats(info.tjson) } };
-  })().data;
+  const data = repoPage('sample');
   const html = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' }, data);
   assert(text(html).includes('Winner of SF2') && !html.includes('<a href="#m-'), 'slot labels are plain text, not anchors');
   assert(!html.includes('data-feeders') && !html.includes('id="m-'), 'cards are static nodes — the trace graph shipped nothing');
@@ -403,7 +397,7 @@ test('the next card is one card: a second category sharing the match id must not
   xd.id = 9;
   delete xd.result;
   delete xd.games;
-  const data = { index: [], t: { slug: 'sample', name: tjson.name }, tjson, cats: toCats(tjson) };
+  const data = pageData(tjson, 'sample');
   const ppage = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p1' }, data);
   assert.equal(cards(ppage, 'id', 'next').length, 1, 'exactly one next card despite a shared id');
   // the header line carries its own next flag — one more flagged element is the card
@@ -411,12 +405,7 @@ test('the next card is one card: a second category sharing the match id must not
 });
 
 test('renderers: escapes, a11y state, and behavioral hooks — the shipped surface, not its copy', () => {
-  const dataOf = name => {
-    const repo = loadRepo(FIX(name));
-    const info = repo.tournaments.get(name);
-    return { index: repo.index, t: repo.index[0], tjson: info.tjson, cats: toCats(info.tjson) };
-  };
-  const data = dataOf('sample');
+  const data = repoPage('sample');
   const clone = () => JSON.parse(JSON.stringify(data.tjson));
   const standings = renderTournament({ slug: 'sample', view: 'tournament' }, data);
   const evil = clone();
@@ -425,12 +414,12 @@ test('renderers: escapes, a11y state, and behavioral hooks — the shipped surfa
   assert(out.includes('&lt;b&gt;Ada&lt;/b&gt; &amp; &quot;Co&quot;') && !out.includes('<b>Ada</b>'), 'player name is escaped');
   const evilPool = clone();
   evilPool.matches.md40[0].pool = 'A" onclick="alert(1)';
-  const ph = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' }, { ...data, tjson: evilPool, cats: toCats(evilPool) });
+  const ph = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' }, withTjson(data, evilPool));
   assert(!ph.includes('Pool A" onclick='), 'the injected handler never lands in the DOM');
   assert(ph.includes('A&quot; onclick=&quot;alert(1)'), 'the pool string renders entity-encoded');
   const evilVenue = clone();
   evilVenue.venues.find(v => v.id === 'court-2').name = '<b>Court 2</b>';
-  const evh = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' }, { ...data, tjson: evilVenue, cats: toCats(evilVenue) });
+  const evh = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' }, withTjson(data, evilVenue));
   assert(!evh.includes('<b>Court 2</b>') && evh.includes('&lt;b&gt;Court 2&lt;/b&gt;'), 'the venue name renders entity-encoded');
   assert(standings.includes('aria-hidden="true"'), 'unplayed best-of slots are placeholders, hidden from screen readers');
   assert((standings.match(/<h2\b/g) || []).length === 1, 'one category heading per page');
@@ -443,12 +432,12 @@ test('renderers: escapes, a11y state, and behavioral hooks — the shipped surfa
   assert(card(standings, 'data-status', 'next').includes('SF2'), 'the highlighted card is the unresolved semifinal');
   const midJson = clone();
   midJson.matches.md40[0].result = undefined;
-  const mid = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' }, { ...data, tjson: midJson, cats: toCats(midJson) });
+  const mid = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' }, withTjson(data, midJson));
   assert(vals(mid, 'data-jump').includes('group-matches'), 'running groups: the Next line links the group matches');
   assert.equal(vals(mid, 'data-status').filter(s => s === 'next').length, 1, 'groups in play: only the one unscored group match carries the accent');
   const preJson = clone();
   for (const ms of Object.values(preJson.matches)) for (const m of ms) { delete m.result; delete m.games; }
-  const pre = renderTournament({ slug: 'sample', view: 'tournament' }, { ...data, tjson: preJson, cats: toCats(preJson) });
+  const pre = renderTournament({ slug: 'sample', view: 'tournament' }, withTjson(data, preJson));
   assert(text(pre).includes('Ada Lovelace / Grace Hopper') && !text(pre).includes('1 Ada Lovelace'), 'roster renders before any result, no phantom rank 1s');
   const sLink = links(pre).find(l => l.text.startsWith('Starts'));
   assert(sLink && sLink.jump === 'group-matches' && sLink.href === '#sample', 'the Starts line is a link to the opening block, like the Next line');
@@ -482,7 +471,7 @@ test('renderers: escapes, a11y state, and behavioral hooks — the shipped surfa
   assert(text(idx).indexOf('Wide') < text(idx).indexOf('Sample') && text(idx).indexOf('Sample') < text(idx).indexOf('Later'), 'sorted by start date descending, undated last');
   assert(!idx.includes('undefined') && !idx.includes('null'), 'no date renders clean, no null payload');
   assert(links(idx).filter(l => l.href === '#sample/venues').length === 1, 'venue board appears once per tournament');
-  const tdata = dataOf('tie');
+  const tdata = repoPage('tie');
   const tieHtml = renderTournament({ slug: 'tie', view: 'tournament' }, tdata);
   assert(!text(tieHtml).includes('†') && text(tieHtml).includes('1 A') && text(tieHtml).includes('1 B'), 'tied teams share rank 1, no dagger');
 });
@@ -490,13 +479,13 @@ test('renderers: escapes, a11y state, and behavioral hooks — the shipped surfa
 test('possible stages render as cards: a status flag per stage, and the next header goes conditional', () => {
   const repo = loadRepo(FIX('byes'));
   const info = repo.tournaments.get('byes');
-  const data = { index: repo.index, t: { slug: 'byes', name: info.tjson.name }, tjson: info.tjson, cats: toCats(info.tjson) };
+  const data = pageData(info.tjson, 'byes', repo.index);
   const page = renderPlayer({ slug: 'byes', view: 'schedule', player: 'p4' }, data);
   assert.equal(vals(page, 'data-status').filter(s => s === 'possible').length, 3, 'p4 (pool open): three possible stages — QF, SF, and the merged final/bronze');
   // next points at the earliest possible stage when no confirmed match is left
   const tjson = JSON.parse(JSON.stringify(info.tjson));
   for (const id of [1, 4, 7, 10, 13]) tjson.matches.t.find(m => m.id === id).result = { status: 'walkover', winner: 'a' };
-  const page2 = renderPlayer({ slug: 'byes', view: 'schedule', player: 'p1' }, { ...data, tjson, cats: toCats(tjson) });
+  const page2 = renderPlayer({ slug: 'byes', view: 'schedule', player: 'p1' }, withTjson(data, tjson));
   assert(text(page2).includes('Next'), 'the next header line names the earliest possible stage');
   assert(vals(page2, 'datetime').includes('2026-07-12T10:30:00.000Z'), 'the next line carries the instant in a semantic time element');
   assert(card(page2, 'id', 'next').includes('Quarterfinals'), 'the earliest possible card is the jump target, never carrying the confirmed accent');
@@ -506,14 +495,13 @@ test('possible stages render as cards: a status flag per stage, and the next hea
 test('multi-day kiosk: one day at a time, previewing day one early, falling back to the last day', () => {
   const repo = loadRepo(FIX('multiday'));
   const info = repo.tournaments.get('multiday');
-  const data = { index: repo.index, t: { slug: 'multiday', name: info.tjson.name }, tjson: info.tjson, cats: toCats(info.tjson) };
+  const data = pageData(info.tjson, 'multiday', repo.index);
   const page = renderTournament({ slug: 'multiday', view: 'tournament' }, data);
   assert(vals(page, 'data-jump').includes('group-matches'), 'the Next line links the running group stage');
   // moving a match to another day just re-dates its card — no divider machinery
   const split = JSON.parse(JSON.stringify(info.tjson));
   split.matches.md40[5].scheduled = '2026-07-12T15:00:00'; // m6 (pool) -> Sunday
-  const spage = renderTournament({ slug: 'multiday', view: 'tournament' },
-    { index: repo.index, t: data.t, tjson: split, cats: toCats(split) });
+  const spage = renderTournament({ slug: 'multiday', view: 'tournament' }, pageData(split, 'multiday', repo.index));
   assert(vals(spage, 'datetime').includes('2026-07-12T19:00:00.000Z'), 'a rescheduled pool match carries its new day on the card');
   // kiosk: strict same-day in the tournament timezone, from the device clock instant
   const at = iso => Date.parse(iso);
@@ -528,9 +516,7 @@ test('multi-day kiosk: one day at a time, previewing day one early, falling back
 });
 
 test('routing: cat and player ride along between tournament and schedule — applied on their home view only', () => {
-  const repo = loadRepo(FIX('sample'));
-  const info = repo.tournaments.get('sample');
-  const data = { index: repo.index, t: { slug: 'sample', name: info.tjson.name }, tjson: info.tjson, cats: toCats(info.tjson) };
+  const data = repoPage('sample');
   const t = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' }, data);
   const lk = (html, label) => links(html).find(x => x.text === label);
   assert(lk(t, 'Schedule').href === '#sample/schedule?cat=md40', 'tournament page carries cat onto the schedule link');
@@ -548,7 +534,7 @@ test('routing: cat and player ride along between tournament and schedule — app
 test('knockout wave link names the merged band: the main wave, and the placement wave once the championship is spent', () => {
   const base = () => JSON.parse(JSON.stringify(require(FIX('sample', 'tournaments', 'sample.json'))));
   const render = tjson => {
-    const data = { index: [{ slug: 'sample', name: tjson.name, location: tjson.location }], t: { slug: 'sample', name: tjson.name }, tjson, cats: toCats(tjson) };
+    const data = pageData(tjson, 'sample', [{ slug: 'sample', name: tjson.name, location: tjson.location }]);
     return renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' }, data);
   };
   // as-is: semis (m8) and final (m9) open, bronze (m10) open — wave is the Semifinals, not the bronze
@@ -570,7 +556,7 @@ test('knockout wave link names the merged band: the main wave, and the placement
 test('ko wave accent also flags playable placement matches — the bronze lights up with the final', () => {
   const base = () => JSON.parse(JSON.stringify(require(FIX('sample', 'tournaments', 'sample.json'))));
   const render = tjson => {
-    const data = { index: [{ slug: 'sample', name: tjson.name, location: tjson.location }], t: { slug: 'sample', name: tjson.name }, tjson, cats: toCats(tjson) };
+    const data = pageData(tjson, 'sample', [{ slug: 'sample', name: tjson.name, location: tjson.location }]);
     return renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' }, data);
   };
   // both semis decided, final + bronze open: the Final wave flags both — they are both playable

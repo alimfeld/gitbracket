@@ -8,7 +8,7 @@ const os = require('os');
 const path = require('path');
 const { loadRepo } = require('../src/tools.js');
 const { validateRepo } = require('../src/validate.js');
-const { makeCat } = require('../site/derive.js');
+const { makeCat, toCats } = require('../site/derive.js');
 
 const FIX = (...parts) => path.join(__dirname, '..', 'fixtures', ...parts);
 
@@ -57,6 +57,17 @@ function catOf(name, catId) {
   return makeCat({ meta: info.tjson.categories.find(c => c.id === catId), matches: (info.tjson.matches || {})[catId] || [] }, info.tjson);
 }
 
+// The data object every renderer takes: { index, t, tjson, cats }. pageData
+// wraps a hand-built tjson (index defaults empty); repoPage loads the fixture's
+// own tournament file through the same loadRepo as real checkouts.
+const pageData = (tjson, slug, index = []) => ({ index, t: { slug, name: tjson.name }, tjson, cats: toCats(tjson) });
+function repoPage(name) {
+  const repo = loadRepo(FIX(name));
+  return pageData(repo.tournaments.get(name).tjson, name, repo.index);
+}
+// The same page around another tjson — a mutated or hand-built copy.
+const withTjson = (data, tjson) => ({ ...data, tjson, cats: toCats(tjson) });
+
 // Renderer smoke-check helpers: assert what the page SAYS (text) and its
 // behavioral hooks (data-*/aria attrs, link hrefs) — never the tags, classes,
 // or separators that carry them. A presentational change (tag, class, middot)
@@ -82,4 +93,4 @@ const links = html => [...html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/g)].map(m =
   text: text(m[2]),
 }));
 
-module.exports = { FIX, MINI, hasErr, hasWarn, validateFixture, catOf, scratchSite, text, vals, card, cards, links };
+module.exports = { FIX, MINI, hasErr, hasWarn, validateFixture, catOf, scratchSite, pageData, repoPage, withTjson, text, vals, card, cards, links };
