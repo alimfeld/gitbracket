@@ -407,25 +407,30 @@ function possibleCard(stage, ctx, opts) {
 
 function renderPlayer(route, data) {
   if (!data.tjson) return MISSING;
-  const pid = route.player;
   const players = (data.tjson.players || []).filter(p => p && typeof p === 'object' && typeof p.id === 'string');
-  const p = pid ? players.find(x => x.id === pid) : null;
-  if (!p) {
-    // only participants are pickable — a pick must always render a schedule.
-    // One section per category: the picker doubles as "who is in which
-    // category"
-    const ctxs = data.cats;
-    const secs = ctxs.map(c => {
-      const items = players
-        .filter(pl => playerMatches(c, pl.id).length)
-        .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id))
-        .map(pl => `<li><a href="${esc(href(data.t.slug, 'schedule', { cat: route.cat, player: pl.id }))}">${esc(pl.name || pl.id)}</a></li>`)
-        .join('');
-      return items ? `<section><h2>${esc(c.name || c.id)}</h2><ul>${items}</ul></section>` : '';
-    }).join('');
-    if (!secs) return `${segmentBar(route)}<header><h1>Pick a player</h1></header><p>No players yet.</p>`;
-    return `${segmentBar(route)}<header><h1>Pick a player</h1></header>${secs}`;
-  }
+  const p = route.player ? players.find(x => x.id === route.player) : null;
+  return p ? playerSchedule(route, data, p) : playerPicker(route, data, players);
+}
+
+// Only participants are pickable — a pick must always render a schedule. One
+// section per category: the picker doubles as "who is in which category".
+function playerPicker(route, data, players) {
+  const secs = data.cats.map(c => {
+    const items = players
+      .filter(pl => playerMatches(c, pl.id).length)
+      .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id))
+      .map(pl => `<li><a href="${esc(href(data.t.slug, 'schedule', { cat: route.cat, player: pl.id }))}">${esc(pl.name || pl.id)}</a></li>`)
+      .join('');
+    return items ? `<section><h2>${esc(c.name || c.id)}</h2><ul>${items}</ul></section>` : '';
+  }).join('');
+  const head = `${segmentBar(route)}<header><h1>Pick a player</h1></header>`;
+  return secs ? head + secs : head + '<p>No players yet.</p>';
+}
+
+// One flat timeline for the picked player — confirmed matches and possible
+// stages, under date headings.
+function playerSchedule(route, data, p) {
+  const pid = p.id;
   const rows = [];
   const ctxs = data.cats;
   const multi = multiDay(ctxs); // the stage times need their date on multi-day pages
