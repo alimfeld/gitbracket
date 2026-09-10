@@ -42,24 +42,6 @@ function countWins(games) {
 // The games needed to decide, or null when the stage has no valid bestOf.
 const winTarget = b => (typeof b === 'number' && b % 2 === 1) ? (b + 1) / 2 : null;
 
-// Random games for a sim score: the winner takes the target games, the
-// loser's wins leading so neither side reaches the target before the last
-// game (the validator's rule); deuce games a fifth of the time.
-function makeGames(bestOf) {
-  const target = (bestOf + 1) / 2;
-  const n = target + Math.floor(Math.random() * (bestOf - target + 1));
-  const winnerIsA = Math.random() < 0.5;
-  const games = [];
-  for (let i = 0; i < n; i++) {
-    const aWins = i < n - target ? !winnerIsA : winnerIsA;
-    const deuce = Math.random() < 0.2;
-    const ws = deuce ? 12 + Math.floor(Math.random() * 5) : 11;
-    const ls = deuce ? ws - 2 : Math.floor(Math.random() * 10);
-    games.push(aWins ? { a: ws, b: ls } : { a: ls, b: ws });
-  }
-  return games;
-}
-
 // The side ('a'|'b') the games at target decide, null while undecided.
 function reachedWinner(games, target) {
   if (target === null) return null;
@@ -292,4 +274,4 @@ function pairBusy(a, b) {
   return kinds;
 }
 
-module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, fixedPlayers, schedEntries, pairBusy, consumedSlots, descendants, winTarget, reachedWinner, makeGames, feederBounds, isRealDate, findRoot, catCtx, tournamentText, cnameOf, branchOf, isSimBranch, cleanTree, git, defaultSlug };
+module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, fixedPlayers, schedEntries, pairBusy, consumedSlots, descendants, winTarget, reachedWinner, feederBounds, isRealDate, findRoot, catCtx, tournamentText, cnameOf, branchOf, isSimBranch, cleanTree, git, defaultSlug };

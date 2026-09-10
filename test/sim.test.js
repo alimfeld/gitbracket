@@ -10,7 +10,8 @@ const { generate } = require('../src/schedule.js');
 const { validateRepo } = require('../src/validate.js');
 const { applyScore, waveEntries } = require('../src/edits.js');
 const { makeCat, isDone, bestOfOf, schedDays, resolveSide } = require('../site/derive.js');
-const { reachedWinner, makeGames } = require('../src/tools.js');
+const { reachedWinner } = require('../src/tools.js');
+const { makeGames } = require('../src/admin.js'); // sim-only, beside the scoreWave that drives it
 const { MINI } = require('./helpers.js');
 
 // The play-through scores wave after wave — exactly the set the admin's
