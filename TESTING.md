@@ -1,41 +1,42 @@
-# Testing and rehearsing a tournament day
+# Testing and simulating a tournament day
 
-## The rehearsal: the real pipeline, practiced end to end
+## The sim: the real pipeline, practiced end to end
 
-`node gb.js sim [slug]` is the one rehearsal command. It creates a
-`rehearsal/<slug>-<rand>` branch off a clean `main`, commits a generated
-scratch surge domain as `site/CNAME`, pushes the branch (so admin's publish
-can push it onward), starts the admin daemon, and prints the scratch URL.
+`node gb.js sim` is the one sim command. It creates a `sim/<rand>` branch off a
+clean `main`, commits a generated scratch surge domain as `site/CNAME`, pushes
+the branch (so admin's publish can push it onward), and prints the next steps.
+Starting the daemon is yours.
 
 ```bash
-node gb.js sim 2026-mammut60
-# → rehearsal/2026-mammut60-k3f2x, scratch domain rehearsal-2026-mammut60-k3f2x.surge.sh
-# → admin at http://127.0.0.1:<port>/ — Publish ships the scratch domain
-# → kiosk: after publishing, open https://rehearsal-<…>.surge.sh/?sim#2026-mammut60/venues
+node gb.js sim
+# → sim/k3f2x, scratch domain bracket-sim-k3f2x.surge.sh
+# → start the daemon: node gb.js admin
+# → kiosk: after publishing, open https://bracket-sim-<…>.surge.sh/ and press sim in the corner
 ```
 
 Everything is practiced on the branch — the commits, the pushes, the surge
 deploy — against a site that can never reach production (the deploy gate
-below).
+below). A sim is site-wide: the branch carries every tournament, and the
+admin's tournament picker chooses which one you work on.
 
 - **Score the day with the admin UI** — drag to reschedule, click to score,
-  undo/redo, pending list. On a rehearsal branch a **Score wave** button (or
-  the `x` key) scores the whole playable wave with random games through the
-  same validate-write-commit funnel, so the deployed kiosk progresses like a
-  real day.
-- **Rehearse the kiosk clock** — open the scratch site with `?sim`: the kiosk
-  runs on a rehearsal clock an operator controls — the `◀`/`▶` panel (and
-  `]`/`[`) step it ±30 minutes, reset returns to real time, and the first
-  load aims at the event's first scheduled match. Statuses, auto-centering,
-  and the board clock all track the rehearsal; the clock never changes what's
+  undo/redo, pending list. On a sim branch a **Score wave** button (or the `x`
+  key) scores the whole playable wave with random games through the same
+  validate-write-commit funnel, so the deployed kiosk progresses like a real
+  day.
+- **Sim the kiosk clock** — open a venue board on the scratch site and press
+  the `LIVE` chip in the lower-right corner (it appears only there, and reads
+  `LIVE` until pressed): the board runs on a sim clock an operator controls — the `◀`/`▶` controls (and `]`/`[`)
+  step it ±30 minutes, turning it on aims at the event's first scheduled match,
+  and turning it off returns the board to real time. Statuses, auto-centering,
+  and the board clock all track the sim; the clock never changes what's
   scoreable.
 - **Iterate** — edit in admin, hit Publish (validate + push + surge to the
   scratch domain), watch the deployed kiosk — every edit validates and
   commits itself, so nothing is lost mid-process.
 
-A rehearsal branch is practice, never merged — its scores are fabricated, and
-its scratch CNAME must not ride into production history. When the rehearsal
-is done:
+A sim branch is practice, never merged — its scores are fabricated, and its
+scratch CNAME must not ride into production history. When the sim is done:
 
 ```bash
 node gb.js sim --teardown   # surges the scratch domain down, deletes branch (local + origin)
@@ -60,14 +61,14 @@ The deploy gate (shared by the admin publish button and `node gb.js publish`):
   refuses loudly.
 - **off `main`**: ships only if `site/CNAME` differs from production (a branch
   carrying the production CNAME refuses), and only when `origin/main` exists
-  to prove that difference. Rehearsal branches ship their scratch domain;
+  to prove that difference. Sim branches ship their scratch domain;
   nothing else can.
 - `site/` must be clean (no uncommitted changes) — the daemon commits every
   edit, so a dirty tree is a hand-edit history would never see.
 
 ## Prerequisites
 
-- **Rehearsal:** Git, Node.js, the [surge CLI](https://surge.sh)
+- **Sim:** Git, Node.js, the [surge CLI](https://surge.sh)
   (one-time `npm install -g surge` + `surge login`), and an `origin` whose
   `main` carries the production `site/CNAME` (push main once).
 - **Real day:** Git and Node.js — surge only when you publish.

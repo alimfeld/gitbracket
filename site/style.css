@@ -439,7 +439,7 @@ article[data-status="possible"] .head {
   text-decoration: underline dotted;
 }
 
-/* the ?sim rehearsal clock — created by app.js outside the render tree, so it
+/* the sim clock's panel — created by app.js outside the render tree, so it
    styles by id, not by the render classes a normal pass would carry */
 #sim-clock {
   position: fixed;
@@ -454,4 +454,17 @@ article[data-status="possible"] .head {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   font: 14px/1.2 system-ui, sans-serif;
+}
+
+/* the state chip: unpressed (LIVE, the first button) reads green; pressed (SIM)
+   rides the accent fill below — first-child so no class rides the markup */
+#sim-clock button:first-child {
+  color: var(--due);
+}
+
+/* the toggle reads its own state: pressed means the board clock is the sim one */
+#sim-clock button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
 }

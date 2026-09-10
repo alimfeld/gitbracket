@@ -188,11 +188,10 @@ spec — the single source for the schedule:
  `node gb.js schedule <specs/xxx.json>` generates a tournament file from a
  spec; `node gb.js publish` ships `site/` (from `main` to the production
  domain, proved equal to `origin/main`'s CNAME; from a branch only to its own
- scratch domain); `node gb.js sim [slug]` rehearses the whole pipeline on a
- `rehearsal/<slug>-<rand>` branch with a scratch surge domain and a `?sim`
- rehearsal clock, and `--teardown` undoes it (rehearsal branches are practice,
- never merged). Commands live as modules under `src/`; `site/` stays the
- shipping surface.
+ scratch domain); `node gb.js sim` practices the whole pipeline on a
+ `sim/<rand>` branch with a scratch surge domain and a kiosk sim clock, and
+ `--teardown` undoes it (sim branches are practice, never merged). Commands
+ live as modules under `src/`; `site/` stays the shipping surface.
 
 ## Development
 
