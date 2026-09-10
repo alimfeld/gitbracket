@@ -59,7 +59,8 @@ The deploy gate (shared by the admin publish button and `node gb.js publish`):
 
 - **on `main`**: ships the domain in `site/CNAME`, which must be the
   production domain (the one `origin/main` carries) — a scratch CNAME on main
-  refuses loudly.
+  refuses loudly, and with no `origin/main` nothing can prove production, so
+  every deploy refuses until main is pushed once.
 - **off `main`**: ships only if `site/CNAME` differs from production (a branch
   carrying the production CNAME refuses), and only when `origin/main` exists
   to prove that difference. Sim branches ship their scratch domain;
@@ -72,4 +73,6 @@ The deploy gate (shared by the admin publish button and `node gb.js publish`):
 - **Sim:** Git, Node.js, the [surge CLI](https://surge.sh)
   (one-time `npm install -g surge` + `surge login`), and an `origin` whose
   `main` carries the production `site/CNAME` (push main once).
-- **Real day:** Git and Node.js — surge only when you publish.
+- **Real day:** Git and Node.js — surge only when you publish; push main once so
+  `origin/main` anchors the production domain (without it every deploy refuses: a
+  publish can't prove what production is).

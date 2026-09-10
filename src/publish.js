@@ -32,7 +32,10 @@ function deployRole(root) {
   if (cname === null) return { ok: false, why: 'no site/CNAME — nothing to ship to' };
   const prod = productionCNAME(root);
   if (branch === 'main') {
-    if (prod !== null && cname !== prod) {
+    if (prod === null) {
+      return { ok: false, why: 'no origin/main — the production domain is unanchored; push main once so publish can prove site/CNAME against it' };
+    }
+    if (cname !== prod) {
       return { ok: false, why: `site/CNAME (${cname}) is not the production domain (${prod}) — a scratch domain must not ride main; fix site/CNAME and commit` };
     }
     return { ok: true, domain: cname };

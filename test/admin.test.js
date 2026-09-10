@@ -322,6 +322,14 @@ test('admin legalSlots: a match without sides never throws — the daemon report
   assert.deepEqual(admin.legalSlots(tjson, 't', '2', '2026-05-02', 30), {}, 'sides-less match 2 gets no offers and no crash');
 });
 
+test('admin legalSlots: a non-positive gcd step clamps to the default — it can never spin the loop', () => {
+  const tjson = loadRepo(FIX('sample')).tournaments.get('sample').tjson;
+  // 0 and negatives would never advance the wall-clock scan — the daemon must
+  // fall back instead of hanging the board.
+  assert(admin.legalSlots(tjson, 'md40', '9', '2025-07-14', 0)['court-1'].length > 0, 'gcd 0 clamps to the default step');
+  assert(admin.legalSlots(tjson, 'md40', '9', '2025-07-14', -45)['court-1'].length > 0, 'negative gcd clamps too');
+});
+
 test('admin pairBusy: the validators\' conflict kinds served to the preview — the same code the gate runs', () => {
   const { schedEntries, pairBusy } = require('../src/tools.js');
   const db = schedEntries(loadRepo(FIX('bad-player-doublebook')).tournaments.get('bad-player-doublebook').tjson).entries;
@@ -462,7 +470,9 @@ test('publish deployRole: no origin/main anchor — a branch cannot prove itself
     git(tmp, ['add', '-A']);
     git(tmp, ['commit', '-qm', 'init']);
     git(tmp, ['branch', '-M', 'main']); // never pushed — no origin/main
-    assert.deepEqual(publish.deployRole(tmp), { ok: true, domain: PROD }, 'fresh main deploys what its CNAME says (bootstrap)');
+    assert.equal(publish.deployRole(tmp).ok, false, 'without the anchor even main cannot prove its CNAME is production');
+    const fresh = publish.deployRole(tmp);
+    assert(/origin\/main/.test(fresh.why), 'the refusal names the missing anchor');
     git(tmp, ['checkout', '-qb', 'sim/x']);
     const r = publish.deployRole(tmp);
     assert.equal(r.ok, false, 'without the anchor a branch cannot prove its domain is scratch');
