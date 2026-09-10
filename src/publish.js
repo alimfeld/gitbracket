@@ -27,7 +27,7 @@ function productionCNAME(root) {
 // reason — shown by the CLI and the admin page.
 function deployRole(root) {
   const branch = branchOf(root);
-  if (!branch) return { ok: false, why: 'detached HEAD — checkout main or a rehearsal branch first' };
+  if (!branch) return { ok: false, why: 'detached HEAD — checkout main or a sim branch first' };
   const cname = cnameOf(root);
   if (cname === null) return { ok: false, why: 'no site/CNAME — nothing to ship to' };
   const prod = productionCNAME(root);

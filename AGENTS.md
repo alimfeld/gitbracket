@@ -14,7 +14,7 @@ implement them; don't treat them as style.
   deploy role follows the branch, never the operator's intent: `main` ships
   the production domain, proved equal to `origin/main`'s CNAME; a branch
   ships only a CNAME proved different from it — a missing anchor (no
-  `origin/main`) refuses every branch deploy. Rehearsal branches (`gb.js sim`)
+  `origin/main`) refuses every branch deploy. Sim branches (`gb.js sim`)
   practice the whole pipeline on a branch that is never merged: their scores
   are fabricated and their scratch CNAME must not ride into production history
   (`gb.js sim --teardown` is the only exit). Publishing sits outside git —

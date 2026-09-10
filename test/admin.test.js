@@ -368,7 +368,7 @@ test('admin sideOpts: the picker greys what the gate would reject — consumed s
   assert.deepEqual(admin.sideOpts(tjson, 'md', 999, 0), {});
 });
 
-// ---- the rehearsal surface: score-wave (off-main only) and the deploy gate ----
+// ---- the sim surface: score-wave (off-main only) and the deploy gate ----
 // (both are branch-role decisions; the scratch repo with an origin makes the
 // branch, the anchor, and the CNAME all real)
 
@@ -377,7 +377,7 @@ test('admin scoreWave: on main it refuses — random scores never reach the reco
   try {
     const r = admin.scoreWave(state);
     assert.equal(r.ok, false, 'main refuses');
-    assert(/rehearsal branch/.test(r.error), 'the refusal names the requirement');
+    assert(/sim branch/.test(r.error), 'the refusal names the requirement');
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
@@ -386,25 +386,25 @@ test('admin scoreWave: on main it refuses — random scores never reach the reco
 test('admin scoreWave: off main scores the playable wave through the real funnel — every edit commits', () => {
   const { tmp, siteRoot, state } = scratchWithRemote();
   try {
-    git(tmp, ['checkout', '-qb', 'rehearsal/sample-x']);
+    git(tmp, ['checkout', '-qb', 'sim/sample-x']);
     const r = admin.scoreWave(state);
-    assert.equal(r.ok, true, 'a rehearsal branch scores');
+    assert.equal(r.ok, true, 'a sim branch scores');
     assert(r.scored > 0, 'the sample opening wave scores at least one match');
-    assert(validateRepo(loadRepo(siteRoot)).errs.length === 0, 'the rehearsed repo still validates');
+    assert(validateRepo(loadRepo(siteRoot)).errs.length === 0, 'the sim repo still validates');
     assert(admin.unpushed(tmp).commits.length >= r.scored, 'every scored match commits — the branch is the record');
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
 
-test('admin unpushed: the undo window is the branch\'s own upstream — a pushed rehearsal commit leaves it', () => {
+test('admin unpushed: the undo window is the branch\'s own upstream — a pushed sim commit leaves it', () => {
   const { tmp, state } = scratchWithRemote();
   try {
-    git(tmp, ['checkout', '-qb', 'rehearsal/sample-x']);
+    git(tmp, ['checkout', '-qb', 'sim/sample-x']);
     git(tmp, ['commit', '--allow-empty', '-qm', 'chore(sim): scratch domain']);
-    git(tmp, ['push', '-qu', 'origin', 'rehearsal/sample-x']); // sim's own push -u — the rehearsal gets its upstream
-    assert.equal(admin.unpushed(tmp).commits.length, 0, 'a pushed rehearsal commit is not pending — an origin/main..HEAD window would still count it');
-    assert.equal(admin.undo(state).error, 'nothing to undo', 'undo refuses after the push — append-only holds on the rehearsal branch too');
+    git(tmp, ['push', '-qu', 'origin', 'sim/sample-x']); // sim's own push -u — the sim gets its upstream
+    assert.equal(admin.unpushed(tmp).commits.length, 0, 'a pushed sim commit is not pending — an origin/main..HEAD window would still count it');
+    assert.equal(admin.undo(state).error, 'nothing to undo', 'undo refuses after the push — append-only holds on the sim branch too');
     admin.doEdit(state, 'result', 'md40', '8', { shape: 'score', games: [{ a: 11, b: 5 }, { a: 11, b: 3 }] });
     assert.equal(admin.unpushed(tmp).commits.length, 1, 'a fresh score is pending against the branch\'s own upstream');
     assert.equal(git(tmp, ['push']).status, 0, 'the bare push the daemon runs after an edit is clean — undo can never strand the branch behind its remote');
@@ -427,7 +427,7 @@ test('publish deployRole: main ships production, refuses any other CNAME', () =>
   try {
     anchorCNAME(tmp, siteRoot);
     assert.deepEqual(publish.deployRole(tmp), { ok: true, domain: PROD }, 'main ships its production CNAME');
-    fs.writeFileSync(path.join(siteRoot, 'CNAME'), 'rehearsal-x.surge.sh\n'); // uncommitted — the role reads the file, not the tree
+    fs.writeFileSync(path.join(siteRoot, 'CNAME'), 'bracket-sim-x.surge.sh\n'); // uncommitted — the role reads the file, not the tree
     const r = publish.deployRole(tmp);
     assert.equal(r.ok, false, 'a scratch CNAME on main is refused');
     assert(/not the production domain/.test(r.why), 'the refusal names the mismatch');
@@ -440,10 +440,10 @@ test('publish deployRole: off main ships only its own scratch CNAME, never produ
   const { tmp, siteRoot } = scratchWithRemote();
   try {
     anchorCNAME(tmp, siteRoot);
-    git(tmp, ['checkout', '-qb', 'rehearsal/sample-x']);
+    git(tmp, ['checkout', '-qb', 'sim/sample-x']);
     assert.equal(publish.deployRole(tmp).ok, false, 'a branch still carrying production is refused');
-    fs.writeFileSync(path.join(siteRoot, 'CNAME'), 'rehearsal-x.surge.sh\n');
-    assert.deepEqual(publish.deployRole(tmp), { ok: true, domain: 'rehearsal-x.surge.sh' }, 'its own scratch domain ships');
+    fs.writeFileSync(path.join(siteRoot, 'CNAME'), 'bracket-sim-x.surge.sh\n');
+    assert.deepEqual(publish.deployRole(tmp), { ok: true, domain: 'bracket-sim-x.surge.sh' }, 'its own scratch domain ships');
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
@@ -463,7 +463,7 @@ test('publish deployRole: no origin/main anchor — a branch cannot prove itself
     git(tmp, ['commit', '-qm', 'init']);
     git(tmp, ['branch', '-M', 'main']); // never pushed — no origin/main
     assert.deepEqual(publish.deployRole(tmp), { ok: true, domain: PROD }, 'fresh main deploys what its CNAME says (bootstrap)');
-    git(tmp, ['checkout', '-qb', 'rehearsal/x']);
+    git(tmp, ['checkout', '-qb', 'sim/x']);
     const r = publish.deployRole(tmp);
     assert.equal(r.ok, false, 'without the anchor a branch cannot prove its domain is scratch');
     assert(/origin\/main/.test(r.why), 'the refusal names the missing anchor');

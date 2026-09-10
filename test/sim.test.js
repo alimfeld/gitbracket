@@ -1,5 +1,5 @@
 'use strict';
-// The rehearsal engine's domain invariant — a full play-through of a generated
+// The sim engine's domain invariant — a full play-through of a generated
 // tournament is the strongest check: if the random games, the dependency
 // ordering, or the wave rule ever broke the model, the real validator (the
 // same gate writeEdit and the pre-commit hook run) complains at the end.

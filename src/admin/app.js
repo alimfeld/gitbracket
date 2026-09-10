@@ -498,7 +498,7 @@ $('publish').onclick = async () => {
   await reload(); // setSlug refreshes pending
 };
 
-// ---- rehearsal (off-main only; the daemon says which side of the gate it is on) ----
+// ---- sim (off-main only; the daemon says which side of the gate it is on) ----
 async function scoreWave() {
   const r = await post('/api/score-wave', {});
   if (!r.ok) return flash(r.error || 'score-wave refused');
@@ -506,7 +506,7 @@ async function scoreWave() {
   flash(`scored ${r.scored} match${r.scored === 1 ? '' : 'es'}` + (r.errors && r.errors.length ? ` — ${r.errors.length} skipped` : ''));
   await reload(); // re-fetch the grid — the wave the daemon just scored must render played
 }
-// the button appears only on a rehearsal branch; x scores the wave from the
+// the button appears only on a sim branch; x scores the wave from the
 // keyboard, never while typing in the result field (the modal's one input)
 async function initSim() {
   const meta = await get('/api/meta');

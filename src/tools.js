@@ -42,7 +42,7 @@ function countWins(games) {
 // The games needed to decide, or null when the stage has no valid bestOf.
 const winTarget = b => (typeof b === 'number' && b % 2 === 1) ? (b + 1) / 2 : null;
 
-// Random games for a rehearsal score: the winner takes the target games, the
+// Random games for a sim score: the winner takes the target games, the
 // loser's wins leading so neither side reaches the target before the last
 // game (the validator's rule); deuce games a fifth of the time.
 function makeGames(bestOf) {
@@ -141,9 +141,9 @@ function branchOf(root) {
   return r.code === 0 ? r.out.trim() : '';
 }
 
-// Rehearsal branches never merge — one predicate, so admin's score-wave gate
-// and sim's teardown agree on what a rehearsal is.
-const isRehearsalBranch = b => /^rehearsal\//.test(b);
+// Sim branches never merge — one predicate, so admin's score-wave gate and
+// sim's teardown agree on what a sim is.
+const isSimBranch = b => /^sim\//.test(b);
 
 // A pristine tree — no staged, unstaged, or untracked changes. The admin's
 // undo/redo resets and sim's teardown both require it; one predicate, so the
@@ -292,4 +292,4 @@ function pairBusy(a, b) {
   return kinds;
 }
 
-module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, fixedPlayers, schedEntries, pairBusy, consumedSlots, descendants, winTarget, reachedWinner, makeGames, feederBounds, isRealDate, findRoot, catCtx, tournamentText, cnameOf, branchOf, isRehearsalBranch, cleanTree, git, defaultSlug };
+module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, fixedPlayers, schedEntries, pairBusy, consumedSlots, descendants, winTarget, reachedWinner, makeGames, feederBounds, isRealDate, findRoot, catCtx, tournamentText, cnameOf, branchOf, isSimBranch, cleanTree, git, defaultSlug };

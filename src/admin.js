@@ -9,13 +9,13 @@
 // its scratch CNAME); undo = reset the last unpushed commit; redo = restore
 // the commit the last undo dropped, live only while the undo is still the last
 // act. Nothing ships — the page lives under src/admin/ and the daemon serves
-// it locally (`gb.js sim` runs this same daemon on a rehearsal branch).
+// it locally (`gb.js sim` runs this same daemon on a sim branch).
 
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
-const { loadRepo, catCtx, schedEntries, pairBusy, fixedPlayers, consumedSlots, descendants, slotsOverlap, feederBounds, makeGames, branchOf, isRehearsalBranch, cleanTree, git, defaultSlug } = require('./tools.js');
+const { loadRepo, catCtx, schedEntries, pairBusy, fixedPlayers, consumedSlots, descendants, slotsOverlap, feederBounds, makeGames, branchOf, isSimBranch, cleanTree, git, defaultSlug } = require('./tools.js');
 const { execEdit, parsePayload, waveEntries } = require('./edits.js');
 const { matchSlotMs, schedTime, bestOfOf } = require('../site/derive.js');
 const { validateRepo } = require('./validate.js');
@@ -23,7 +23,7 @@ const { ship, deployRole } = require('./publish.js');
 
 // The unpushed commits as [{sha, msg}]. The window is the current branch's own
 // upstream (@{upstream}..HEAD), not origin/main — a window over origin/main
-// would keep counting pushed rehearsal commits forever and let undo strand the
+// would keep counting pushed sim commits forever and let undo strand the
 // branch behind its remote. No upstream yet: fall back to origin/main —
 // hasRemote then still says whether a bare push could go out.
 function unpushed(root) {
@@ -205,11 +205,11 @@ function sideOpts(tjson, cat, matchId, si) {
   };
 }
 
-// Rehearsal-only: score the playable wave with random games through the same
+// Sim-only: score the playable wave with random games through the same
 // funnel as every edit. Scores are fabrication, so the gate is the branch:
-// only off-main (a rehearsal) scores anything; main is the record.
+// only off-main (a sim) scores anything; main is the record.
 function scoreWave(state) {
-  if (!isRehearsalBranch(branchOf(state.root))) return { ok: false, error: 'score-wave is a rehearsal tool — run it on a rehearsal branch' };
+  if (!isSimBranch(branchOf(state.root))) return { ok: false, error: 'score-wave is a sim tool — run it on a sim branch' };
   const info = state.repo.tournaments.get(state.slug);
   if (!info || !info.tjson) return { ok: false, error: `unknown tournament ${state.slug}` };
   const errors = [];
@@ -298,7 +298,7 @@ function serve(state) {
         return json(res, 200, body);
       }
       if (url === '/api/meta') {
-        return json(res, 200, { sim: isRehearsalBranch(branchOf(state.root)) });
+        return json(res, 200, { sim: isSimBranch(branchOf(state.root)) });
       }
       if (url === '/api/pending') {
         const p = unpushed(state.root);

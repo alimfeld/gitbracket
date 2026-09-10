@@ -9,7 +9,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { loadRepo, branchOf, isRehearsalBranch, cleanTree, defaultSlug, git, cnameOf } = require('./tools.js');
+const { loadRepo, branchOf, isSimBranch, cleanTree, defaultSlug, git, cnameOf } = require('./tools.js');
 const { productionCNAME } = require('./publish.js');
 const admin = require('./admin.js');
 
@@ -20,8 +20,8 @@ const rand = () => Date.now().toString(36).slice(-5);
 // readable.
 function teardown(root) {
   const branch = branchOf(root);
-  if (!isRehearsalBranch(branch)) {
-    console.error(`sim: not on a rehearsal branch (on ${branch || 'a detached HEAD'}) — nothing to tear down`);
+  if (!isSimBranch(branch)) {
+    console.error(`sim: not on a sim branch (on ${branch || 'a detached HEAD'}) — nothing to tear down`);
     process.exit(1);
   }
   if (!cleanTree(root)) {

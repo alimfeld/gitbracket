@@ -16,7 +16,7 @@ const { loadRepo } = require('../src/tools.js');
 
 const sameRecord = (a, b) => a.wins === b.wins && a.gd === b.gd && a.pd === b.pd; // test-only — derive.js doesn't ship it
 
-test('simAimOffset: ?sim aims the rehearsal clock at the event\'s first scheduled match', () => {
+test('simAimOffset: the sim clock aims at the event\'s first scheduled match', () => {
   const tjson = { timezone: 'UTC', matches: { md: [
     { id: 1, scheduled: '2026-05-02T09:00:00' },
     { id: 2, scheduled: '2026-05-02T13:00:00' } ] } };
