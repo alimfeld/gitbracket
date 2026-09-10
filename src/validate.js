@@ -359,14 +359,21 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
     }
 
     if (Array.isArray(m.sides) && m.sides.length === 2) {
+      // consumedSlots records this match as the owner of every source it holds,
+      // so the cross-match test below is blind to one source used on both sides.
+      const seen = new Set();
       m.sides.forEach((side, si) => {
         if (!side || typeof side !== 'object') return;
         if (side.kind === 'match') {
           const key = `${side.match}:${side.result}`;
+          if (seen.has(key)) err(where, `slot source ${key} is consumed twice by this match`);
+          seen.add(key);
           // every holder but the first is a duplicate — the gate names the first owner
           if (sources.edge.get(key) !== m.id) err(where, `slot source ${key} is consumed twice (also by ${sources.edge.get(key)})`);
         } else if (side.kind === 'pool') {
           const key = `pool:${side.pool}:${side.rank}`;
+          if (seen.has(key)) err(where, `slot source ${key} is consumed twice by this match`);
+          seen.add(key);
           if (sources.pool.get(key) !== m.id) err(where, `slot source ${key} is consumed twice (also by ${sources.pool.get(key)})`);
           if (typeof side.pool === 'string' && typeof side.rank === 'number' && Number.isInteger(side.rank) && side.rank >= 1) {
             if (!poolUses.has(side.pool)) {
@@ -402,9 +409,16 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
     } else if (hasGames && reachedWinner(m.games, target) !== null) {
       err(where, 'games reach the best-of target — record a result (status + winner)');
     }
-    if ((r !== undefined || hasGames) && Array.isArray(m.sides) && m.sides.length === 2) {
-      if (!resolveSide(m.sides[0], ctx) || !resolveSide(m.sides[1], ctx)) {
+    // Two sides that resolve to one team is a self-match — the static player-set
+    // check can't see a pool/match edge, so resolve both. A scored match must
+    // resolve both; an unresolved one waits (the gate reports, never guesses).
+    if (Array.isArray(m.sides) && m.sides.length === 2) {
+      const a = resolveSide(m.sides[0], ctx);
+      const b = resolveSide(m.sides[1], ctx);
+      if ((r !== undefined || hasGames) && (!a || !b)) {
         err(where, 'scored match must have both sides resolved to players — check the pool or match feeding the unresolved side');
+      } else if (a && b && a.size === b.size && [...a].every(id => b.has(id))) {
+        err(where, `both sides resolve to the same team (${[...a].join(', ')}) — a match needs two distinct sides`);
       }
     }
 
