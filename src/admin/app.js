@@ -257,8 +257,19 @@ async function loadSlots(cid, mid) {
   S.legal = { byVenue: new Map(Object.entries((r && r.ok) || {})) };
 }
 
+// One ghost element — the drop target's preview; invalid shrinks to a red marker.
+function addGhost(col, { invalid, title, top, height }) {
+  const g = document.createElement('div');
+  g.className = 'ghost' + (invalid ? ' invalid' : '');
+  g.title = title;
+  g.style.top = top;
+  g.style.height = height;
+  col.appendChild(g);
+  S.ghost = g;
+}
+
 // Live ghost preview of the drop target — position by the pointer, legality by
-// the daemon's slot list; invalid targets shrink to a red marker.
+// the daemon's slot list.
 function ghost(e) {
   const src = S.dragSource;
   if (!src) return;
@@ -273,22 +284,13 @@ function ghost(e) {
   if (!col) return;
   if (ht.venue === '__none') { // unscheduled — legal unless it would empty the match's published day, which the gate refuses
     const sole = soleOnDay(m);
-    const g = document.createElement('div');
-    g.className = 'ghost' + (sole ? ' invalid' : '');
-    g.title = sole ? 'the only match on its published day — the gate refuses to empty a day' : '';
-    g.style.top = '.5rem'; g.style.height = '2.5rem';
-    col.appendChild(g); S.ghost = g; return;
+    addGhost(col, { invalid: sole, title: sole ? 'the only match on its published day — the gate refuses to empty a day' : '', top: '.5rem', height: '2.5rem' });
+    return;
   }
   // the slot list may still be in flight from dragstart — a neutral ghost then
   const wm = S.legal ? legalSnap(ht.venue, ht.wm) : Math.round(ht.wm / S.gcd) * S.gcd;
   const ok = S.legal ? wm !== null : true;
-  const g = document.createElement('div');
-  g.className = 'ghost' + (ok ? '' : ' invalid');
-  g.style.top = (wm - S.dayStart) * S.pxPerMin + 'px';
-  g.style.height = (ok ? slot : 2.5) * S.pxPerMin + 'px';
-  g.title = ok ? '' : 'no legal slot here';
-  col.appendChild(g);
-  S.ghost = g;
+  addGhost(col, { invalid: !ok, title: ok ? '' : 'no legal slot here', top: (wm - S.dayStart) * S.pxPerMin + 'px', height: (ok ? slot : 2.5) * S.pxPerMin + 'px' });
 }
 function clearGhost() { if (S.ghost) { S.ghost.remove(); S.ghost = null; } }
 
@@ -324,7 +326,10 @@ async function sendEdit(verb, cid, mid, value) {
 function openResult(cid, m) {
   const ctx = cat(cid);
   const hasOutcome = !!(m.games || m.result);
-  const pre = m.games ? m.games.map(g => `${g.a}-${g.b}`).join(' ') : m.result && m.result.status === 'walkover' ? `wo ${m.result.winner}` : m.result && m.result.status === 'void' ? 'void' : '';
+  let pre = '';
+  if (m.games) pre = m.games.map(g => `${g.a}-${g.b}`).join(' ');
+  else if (m.result && m.result.status === 'walkover') pre = `wo ${m.result.winner}`;
+  else if (m.result && m.result.status === 'void') pre = 'void';
   // a realistic example for this match's best-of, winners alternating so the
   // shape is legible — games 1,3,5… go A, games 2,4… go B
   const bo = bestOfOf(m, ctx) || 1;

@@ -217,14 +217,17 @@ function commitMessage(kind, slug, cat, matchId, detail) {
 // result. A side op on a decided match keeps the stored games/result for the
 // NEW team, so the detail flags it — history must never read as a silent rewrite.
 function editDetail(kind, m, value, ctx) {
-  return kind === 'result' ? (value.shape === 'score' ? (m.games || []).map(gg => `${gg.a}-${gg.b}`).join(' · ') // dashes — the detail reads like the board column
-      : value.shape === 'walkover' ? `side ${value.winner} wins by walkover`
-      : value.shape === 'void' ? 'void'
-      : '→ TBD') // a clear returns the match to the board
-    : kind === 'time' ? (m.scheduled === undefined ? '→ TBD' : `→ ${m.scheduled}`)
-    : kind === 'venue' ? `→ ${m.venue === undefined ? 'TBD' : m.venue}`
-    : kind === 'move' ? `→ ${value.time ?? 'TBD'} @ ${value.venue ?? 'TBD'}`
-    : `side ${value.si === 0 ? 'a' : 'b'} → ${sideLabel(value.side, ctx)}${isDone(m) ? ' (result kept)' : ''}`; // side — the a/b verbs carry value+ctx
+  if (kind === 'result') {
+    if (value.shape === 'score') return (m.games || []).map(gg => `${gg.a}-${gg.b}`).join(' · '); // dashes — the detail reads like the board column
+    if (value.shape === 'walkover') return `side ${value.winner} wins by walkover`;
+    if (value.shape === 'void') return 'void';
+    return '→ TBD'; // a clear returns the match to the board
+  }
+  if (kind === 'time') return m.scheduled === undefined ? '→ TBD' : `→ ${m.scheduled}`;
+  if (kind === 'venue') return `→ ${m.venue === undefined ? 'TBD' : m.venue}`;
+  if (kind === 'move') return `→ ${value.time ?? 'TBD'} @ ${value.venue ?? 'TBD'}`;
+  // side — the a/b verbs carry value+ctx
+  return `side ${value.si === 0 ? 'a' : 'b'} → ${sideLabel(value.side, ctx)}${isDone(m) ? ' (result kept)' : ''}`;
 }
 
 // ---------- the edit funnel (edits commit per AGENTS.md) ----------

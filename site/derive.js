@@ -269,10 +269,9 @@ function scoreCells(m, i, ctx) {
     // aria-hidden: the placeholder dot is shape-as-label, noise to a screen reader
     return `<span${game ? '' : ' class="ph" aria-hidden="true"'}>${game ? (i === 0 ? game.a : game.b) : '·'}</span>`;
   }).join('');
-  return !r || r.status === 'played' ? slot()
-    : r.status === 'void' ? '<span>void</span>'
-    : sideIdx(r.winner) === i ? '<span>W/O</span>'
-    : slot();
+  if (!r || r.status === 'played') return slot();
+  if (r.status === 'void') return '<span>void</span>';
+  return sideIdx(r.winner) === i ? '<span>W/O</span>' : slot();
 }
 
 // Confirmed only: a side must resolve to the player — undecided slots stay off.
@@ -1054,7 +1053,7 @@ function catStatus(ctx) {
   const place = placeWave(ctx);
   // place: the classification wave — the main wave may be spent while a bronze
   // still reads ready. wave: the deeper of the two.
-  return { kind: 'ko', col, place, wave: col !== null ? col : place !== null ? place : null };
+  return { kind: 'ko', col, place, wave: col ?? place };
 }
 
 // Unplayed matches with both sides resolved, at the earliest scheduled time —
