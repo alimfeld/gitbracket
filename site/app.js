@@ -523,7 +523,7 @@ function boot() {
   };
   const startPoll = () => {
     stopPoll();
-    pollTimer = setInterval(tick, POLL_MS + Math.random() * 5000); // jitter: no lockstep across a hall of screens
+    pollTimer = setInterval(tick, POLL_MS);
     if (pollOn === 'venues') {
       // Clock lives in an element the change-guard never re-renders; look it
       // up fresh each tick.
