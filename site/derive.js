@@ -51,7 +51,9 @@ function makeCat(c, tjson, shared) {
 function toCats(tjson) {
   const byCat = (tjson && tjson.matches && typeof tjson.matches === 'object') ? tjson.matches : {};
   const cats = (tjson && Array.isArray(tjson.categories)) ? tjson.categories : [];
-  return cats.map(c => makeCat({ meta: c, matches: Array.isArray(byCat[c.id]) ? byCat[c.id] : [] }, tjson, sharedFacts(tjson)));
+  const shared = sharedFacts(tjson); // once per render — every category's context shares the one map
+  // A non-object entry renders as absent — the gate reports it, the page never throws.
+  return cats.filter(c => c && typeof c === 'object').map(c => makeCat({ meta: c, matches: Array.isArray(byCat[c.id]) ? byCat[c.id] : [] }, tjson, shared));
 }
 
 const stageOf = m => m?.pool !== undefined ? 'groups' : 'knockout';
@@ -364,8 +366,8 @@ const chipRef = label => ({ Final: 'the final', Semifinals: 'the Semifinals', Qu
 const matchEdge = s => s && s.kind === 'match';
 const winnerEdge = s => matchEdge(s) && s.result === 'winner'; // the only edge that feeds the final
 
-// Longest winner-edge chain feeding id — 0 when nothing feeds it; koColumn
-// walks the other way, so its memo can't serve this.
+// Longest winner-edge chain from id up to the root — 0 when nothing consumes
+// it (the final). koColumn walks the other way, so its memo can't serve this.
 // ponytail: O(N²) worst case — fine while brackets are tiny; a reverse-edge
 // index is the upgrade if they ever grow.
 function chainDepth(ctx, id, memo) {
@@ -1101,5 +1103,5 @@ function playerStatus(ctx, pid) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, esc, makeCat, toCats, matchSlotMs, bestOfOf, poolBo1, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, resolveSide, teamLabel, sideLabel, scoreCells, playerMatches, possibleStages, placementLabel, plRange, placementColumn, bandLabels, stageGroupName, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dayShort, dayLabel, fmtDiff, kioskStatus, currentRowIndex, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, currentWave, playerStatus };
+  module.exports = { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, esc, makeCat, toCats, matchSlotMs, bestOfOf, poolBo1, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, poolFacts, resolveSide, teamLabel, sideLabel, scoreCells, playerMatches, possibleStages, placementLabel, plRange, placementColumn, bandLabels, stageGroupName, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dayShort, dayLabel, fmtDiff, kioskStatus, currentRowIndex, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, currentWave, playerStatus };
 }

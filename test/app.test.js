@@ -40,6 +40,22 @@ test('renderers: a tournament with no categories renders empty — never throws'
   assert.doesNotThrow(() => renderPlayer({ slug: 'empty', view: 'schedule' }, data), 'player picker too');
 });
 
+test('renderers: a null category entry is skipped, never throws', () => {
+  const tjson = { name: 'Bad', location: 'Hall', timezone: 'UTC', venues: [], players: [], categories: [null, { id: 't', name: 'T', bestOf: { groups: 1, knockout: 1 }, slotMinutes: { groups: 30, knockout: 30 } }], matches: {} };
+  const cats = toCats(tjson);
+  assert.equal(cats.length, 1, 'the non-object entry renders as absent');
+  const data = { index: [], t: { slug: 'bad', name: 'Bad' }, tjson, cats };
+  const html = renderTournament({ slug: 'bad', view: 'tournament' }, data);
+  assert(text(html).includes('Bad') && text(html).includes('T'), 'the shell and the one real category render');
+});
+
+test('renderers: a null venue entry is skipped on the board, never throws', () => {
+  const tjson = { name: 'Bad', location: 'Hall', timezone: 'UTC', venues: [null, { id: 'c1', name: 'Court 1' }], players: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }], categories: [{ id: 't', name: 'T', bestOf: { groups: 1, knockout: 1 }, slotMinutes: { groups: 30, knockout: 30 } }], matches: { t: [{ id: 1, pool: 'A', scheduled: '2026-05-02T09:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p1'] }, { kind: 'players', ids: ['p2'] }] }] } };
+  const data = { index: [], t: { slug: 'bad', name: 'Bad' }, tjson, cats: toCats(tjson) };
+  const html = renderVenue({ slug: 'bad', view: 'venues' }, data, Date.parse('2026-05-02T10:00:00Z'));
+  assert(text(html).includes('Court 1'), 'the real court renders');
+});
+
 test('renderers: an invalid timezone renders TBD, never throws', () => {
   const bad = { name: 'Bad', location: 'Hall', timezone: 'Mars/Olympus', venues: [{ id: 'c1', name: 'Court 1' }], players: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }], categories: [{ id: 't', name: 'T', bestOf: { groups: 1, knockout: 1 }, slotMinutes: { groups: 30, knockout: 30 } }], matches: { t: [{ id: 1, pool: 'A', scheduled: '2026-05-02T09:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p1'] }, { kind: 'players', ids: ['p2'] }] }] } };
   const data = { index: [], t: { slug: 'bad', name: 'Bad' }, tjson: bad, cats: toCats(bad) };

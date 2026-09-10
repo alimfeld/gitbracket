@@ -96,6 +96,10 @@ const MISSING = '<p>No tournament data yet — check back soon.</p>';
 // fragment route, or a slug whose tournament file is a permanent 404.
 const BAD_LINK = '<p>This link doesn\'t look right.</p><p><a href="#">All tournaments</a></p>';
 
+// The one failed-render message, verbatim in the renderer's catch and the
+// load path — data the model can't digest never blanks the page.
+const FAILED = '<p>Something went wrong displaying this page.</p>';
+
 
 const matchGrid = (ms, ctx, day, next) => `<div class="grid">${ms.map(m => matchCard(m, ctx, { meta: ['label', 'court', 'time'], day, status: next && next(m) ? 'next' : undefined })).join('')}</div>`;
 
@@ -351,7 +355,7 @@ function renderVenue(route, data, now) {
   // the last day show its board — "Today · Nothing scheduled." reads stale
   const shownDay = firstDay && today < firstDay ? firstDay : lastDay && today > lastDay ? lastDay : today;
   const open = shown.filter(r => dayKey(r.t, r.ctx.tz) === shownDay); // the full day stays on the board; the scroll follows the current slot
-  const cols = (data.tjson.venues || []).map(x => x.id).filter(id => open.some(r => r.m.venue === id));
+  const cols = (data.tjson.venues || []).filter(v => v && typeof v === 'object').map(v => v.id).filter(id => open.some(r => r.m.venue === id));
   const header = `<header><div><h1>${esc(data.t.name)}</h1><p>${shownDay === today ? 'Today' : dayLabel(shownDay)}</p></div><time id="clock"></time></header>`;
   // header and venue titles stick as one block — the titles ride the running
   // clock, aligned to the board by the shared --cols track
@@ -561,6 +565,10 @@ function boot() {
         return;
       }
       render(r, d);
+    }, e => {
+      // loadAll rejects only on repo data its model can't digest — degrade, never blank
+      console.error(e);
+      if (!data) app.innerHTML = FAILED;
     });
   };
   const tick = () => load(route);
@@ -587,7 +595,7 @@ function boot() {
       if (html !== lastHtml) { app.innerHTML = html; lastHtml = html; }
       if (contentChanged) window.scrollTo(0, 0);
     } catch (e) {
-      app.innerHTML = '<p>Something went wrong displaying this page.</p>';
+      app.innerHTML = FAILED;
       console.error(e);
     }
     aim();
