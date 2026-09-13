@@ -315,6 +315,7 @@ test('result statuses render: W/O and void on cards, settled matches stay on the
   const data = repoPage('result');
   const st = renderTournament({ slug: 'result', view: 'tournament' }, data);
   assert(text(st).includes('void') && text(st).includes('W/O'), 'void and walkover statuses render on their cards');
+  assert(st.includes('aria-hidden="true">✓</span>'), 'the winning side rows a visual check, hidden from assistive tech');
   const venue = renderVenue({ slug: 'result', view: 'venues' }, data, Date.parse('2026-05-02T09:30:00Z'));
   assert(text(venue).includes('P1') && text(venue).includes('P3'), 'the board carries every court-1 slot');
   assert(vals(venue, 'data-status').includes('done') && text(venue).includes('void') && text(venue).includes('W/O'), 'settled matches — played, walkover, void — all stay on the full-day board');
