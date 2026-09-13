@@ -21,7 +21,7 @@ function md40Ctx(repo) {
   return { tjson, matches, ctx: makeCat({ meta: tjson.categories.find(c => c.id === 'md40'), matches }, tjson) };
 }
 
-test('editor parseResult: one grammar for the admin result field and score-wave', () => {
+test('editor parseResult: one grammar for the admin result field', () => {
   assert.deepEqual(editor.parseResult(['21:19', '11:9']).value, { shape: 'score', games: [{ a: 21, b: 19 }, { a: 11, b: 9 }] });
   assert(editor.parseResult(['21x9']).err, 'a malformed game is refused');
   assert.deepEqual(editor.parseResult(['wo', 'b']).value, { shape: 'walkover', winner: 'b' }, 'the wo token names the winner');

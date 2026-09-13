@@ -376,34 +376,7 @@ test('admin sideOpts: the picker greys what the gate would reject — consumed s
   assert.deepEqual(admin.sideOpts(tjson, 'md', 999, 0), {});
 });
 
-// ---- the sim surface: score-wave (off-main only) and the deploy gate ----
-// (both are branch-role decisions; the scratch repo with an origin makes the
-// branch, the anchor, and the CNAME all real)
-
-test('admin scoreWave: on main it refuses — random scores never reach the record', () => {
-  const { tmp, state } = scratchWithRemote();
-  try {
-    const r = admin.scoreWave(state);
-    assert.equal(r.ok, false, 'main refuses');
-    assert(/sim branch/.test(r.error), 'the refusal names the requirement');
-  } finally {
-    fs.rmSync(tmp, { recursive: true, force: true });
-  }
-});
-
-test('admin scoreWave: off main scores the playable wave through the real funnel — every edit commits', () => {
-  const { tmp, siteRoot, state } = scratchWithRemote();
-  try {
-    git(tmp, ['checkout', '-qb', 'sim/sample-x']);
-    const r = admin.scoreWave(state);
-    assert.equal(r.ok, true, 'a sim branch scores');
-    assert(r.scored > 0, 'the sample opening wave scores at least one match');
-    assert(validateRepo(loadRepo(siteRoot)).errs.length === 0, 'the sim repo still validates');
-    assert(admin.unpushed(tmp).commits.length >= r.scored, 'every scored match commits — the branch is the record');
-  } finally {
-    fs.rmSync(tmp, { recursive: true, force: true });
-  }
-});
+// ---- branch-role: the undo window is the branch's own upstream ----
 
 test('admin unpushed: the undo window is the branch\'s own upstream — a pushed sim commit leaves it', () => {
   const { tmp, state } = scratchWithRemote();

@@ -123,8 +123,8 @@ function branchOf(root) {
   return r.code === 0 ? r.out.trim() : '';
 }
 
-// Sim branches never merge — one predicate, so admin's score-wave gate and
-// sim's teardown agree on what a sim is.
+// Sim branches never merge — one predicate, so sim's teardown agrees on
+// what a sim is.
 const isSimBranch = b => /^sim\//.test(b);
 
 // A pristine tree — no staged, unstaged, or untracked changes. The admin's

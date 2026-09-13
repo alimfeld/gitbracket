@@ -22,8 +22,8 @@ function scratchSite(name) {
   return { tmp, dataRoot };
 }
 
-// Shared between the schedule and sim suites: a spec that generates both
-// pools (3+2 teams) and a knockout with pool-rank and match-winner feeders.
+// Shared with the schedule suite: a spec that generates both pools (3+2
+// teams) and a knockout with pool-rank and match-winner feeders.
 const MINI = {
   slug: 'mini',
   name: 'Mini Open',

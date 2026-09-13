@@ -19,10 +19,9 @@ node gb.js sim
 # → after publishing, open the scratch site and press the LIVE chip on a venue board
 ```
 
-- **Score the day in the admin** — drag to reschedule, click to score. The
-  **Score wave** button (or the `x` key) scores the whole playable wave with
-  random games, through the same validate-write-commit funnel as every other
-  edit, so the deployed kiosk progresses like a real day.
+- **Score the day in the admin** — drag to reschedule, click to score, through
+  the same validate-write-commit funnel as every other edit, so the deployed
+  kiosk progresses like a real day.
 - **Sim the kiosk clock** — on a venue board, the bare `LIVE` chip in the
   lower-right corner (it appears only there) toggles the sim clock: `◀`/`▶`
   (or `]`/`[`) step it ±30 minutes, switching it on aims it at the event's

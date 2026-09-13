@@ -514,30 +514,6 @@ $('publish').onclick = async () => {
   await reload(); // setSlug refreshes pending
 };
 
-// ---- sim (off-main only; the daemon says which side of the gate it is on) ----
-async function scoreWave() {
-  const r = await post('/api/score-wave', {});
-  if (!r.ok) return flash(r.error || 'score-wave refused');
-  if (!r.scored) return flash(r.errors && r.errors.length ? r.errors[0] : 'no playable wave'); // an all-refused wave names its first refusal, never a false "nothing to do"
-  flash(`scored ${r.scored} match${r.scored === 1 ? '' : 'es'}` + (r.errors && r.errors.length ? ` — ${r.errors.length} skipped` : ''));
-  await reload(); // re-fetch the grid — the wave the daemon just scored must render played
-}
-// the button appears only on a sim branch; x scores the wave from the
-// keyboard, never while typing in the result field (the modal's one input)
-async function initSim() {
-  const meta = await get('/api/meta');
-  if (!meta || !meta.sim) return;
-  const btn = $('scoreWave');
-  btn.hidden = false;
-  btn.onclick = () => scoreWave();
-  document.addEventListener('keydown', e => {
-    if (e.key !== 'x' && e.key !== 'X') return;
-    const t = e.target;
-    if (t && (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement || t.isContentEditable)) return;
-    if (!t.closest('#modal')) scoreWave();
-  });
-}
-
 // ---- boot ----
 $('slug').addEventListener('change', e => { setSlug(e.target.value); });
 $('day').addEventListener('change', e => { S.day = e.target.value; renderGrid(); });
@@ -547,6 +523,5 @@ async function boot() {
   if (slugs.length) await setSlug(slugs[0].slug);
   window.addEventListener('resize', () => { if (S.tjson) renderGrid(); });
   setInterval(refreshPending, 4000);
-  initSim();
 }
 boot();

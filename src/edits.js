@@ -7,7 +7,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { isDone, sideLabel, schedDays, catStatus, currentWave, bestOfOf } = require('../site/derive.js');
+const { isDone, sideLabel, schedDays, catStatus, bestOfOf } = require('../site/derive.js');
 const { writeTournament, tournamentText, catCtx, winTarget, reachedWinner, git } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 
@@ -136,18 +136,6 @@ function writeEdit(siteRoot, repo, slug, catId, apply) {
   return { file };
 }
 
-// The current scoreable wave as entries — unplayed matches with resolved sides
-// at each category's earliest scheduled time. Computed fresh every call, so a
-// corrected score surfaces on the next pass.
-const waveEntries = tjson => {
-  const out = [];
-  for (const cid of Object.keys(tjson.matches || {})) {
-    const ctx = catCtx(tjson, cid);
-    for (const m of currentWave(ctx, catStatus(ctx))) out.push({ cat: cid, m, ctx });
-  }
-  return out;
-};
-
 // ---------- the result grammar ----------
 
 // The result field's one grammar — games (bare) · wo a|b · void · empty
@@ -251,4 +239,4 @@ function execEdit(state, verb, cat, matchId, value) {
   return { sha };
 }
 
-module.exports = { parseGame, applyScore, applyResult, applyMove, applySide, writeEdit, commitMessage, editDetail, waveEntries, parseResult, execEdit };
+module.exports = { parseGame, applyScore, applyResult, applyMove, applySide, writeEdit, commitMessage, editDetail, parseResult, execEdit };

@@ -9,15 +9,15 @@
 // its scratch CNAME); undo = reset the last unpushed commit; redo = restore
 // the commit the last undo dropped, live only while the undo is still the last
 // act. Nothing ships — the page lives under src/admin/ and the daemon serves
-// it locally (`gb.js sim` runs this same daemon on a sim branch).
+// it locally.
 
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
-const { loadRepo, catCtx, schedEntries, pairBusy, fixedPlayers, consumedSlots, descendants, slotsOverlap, feederBounds, branchOf, isSimBranch, cleanTree, git, defaultSlug } = require('./tools.js');
-const { execEdit, parseResult, waveEntries } = require('./edits.js');
-const { matchSlotMs, schedTime, bestOfOf } = require('../site/derive.js');
+const { loadRepo, catCtx, schedEntries, pairBusy, fixedPlayers, consumedSlots, descendants, slotsOverlap, feederBounds, branchOf, cleanTree, git, defaultSlug } = require('./tools.js');
+const { execEdit, parseResult } = require('./edits.js');
+const { matchSlotMs, schedTime } = require('../site/derive.js');
 const { validateRepo } = require('./validate.js');
 const { ship, deployRole } = require('./publish.js');
 
@@ -199,41 +199,6 @@ function sideOpts(tjson, cat, matchId, si) {
   };
 }
 
-// Random games for a sim score: the winner takes the target games, the loser's
-// wins leading so neither side reaches the target before the last game (the
-// validator's rule); deuce games a fifth of the time. Sim-only, like scoreWave.
-function makeGames(bestOf) {
-  const target = (bestOf + 1) / 2;
-  const n = target + Math.floor(Math.random() * (bestOf - target + 1));
-  const winnerIsA = Math.random() < 0.5;
-  const games = [];
-  for (let i = 0; i < n; i++) {
-    const aWins = i < n - target ? !winnerIsA : winnerIsA;
-    const deuce = Math.random() < 0.2;
-    const ws = deuce ? 12 + Math.floor(Math.random() * 5) : 11;
-    const ls = deuce ? ws - 2 : Math.floor(Math.random() * 10);
-    games.push(aWins ? { a: ws, b: ls } : { a: ls, b: ws });
-  }
-  return games;
-}
-
-// Sim-only: score the playable wave with random games through the same
-// funnel as every edit. Scores are fabrication, so the gate is the branch:
-// only off-main (a sim) scores anything; main is the record.
-function scoreWave(state) {
-  if (!isSimBranch(branchOf(state.root))) return { ok: false, error: 'score-wave is a sim tool — run it on a sim branch' };
-  const info = state.repo.tournaments.get(state.slug);
-  if (!info || !info.tjson) return { ok: false, error: `unknown tournament ${state.slug}` };
-  const errors = [];
-  let scored = 0;
-  for (const e of waveEntries(info.tjson)) {
-    const r = doEdit(state, 'result', e.cat, String(e.m.id), { shape: 'score', games: makeGames(bestOfOf(e.m, e.ctx)) });
-    if (r.ok) scored++;
-    else errors.push(r.error || (r.errors || []).join('; '));
-  }
-  return { ok: true, scored, errors };
-}
-
 // Reload from disk — undo (git reset) rewrites files, or the next edit would
 // validate against stale data.
 function reload(state) {
@@ -309,9 +274,6 @@ function serve(state) {
           : { ok: sideOpts(info.tjson, q.get('cat'), q.get('id'), +(q.get('si') || '0')) };
         return json(res, 200, body);
       }
-      if (url === '/api/meta') {
-        return json(res, 200, { sim: isSimBranch(branchOf(state.root)) });
-      }
       if (url === '/api/pending') {
         const p = unpushed(state.root);
         const dirty = git(state.root, ['status', '--porcelain', '--', 'site/']);
@@ -339,10 +301,6 @@ function serve(state) {
       if (url === '/api/redo' && req.method === 'POST') {
         const r = redo(state);
         return json(res, r.error ? 400 : 200, r);
-      }
-      if (url === '/api/score-wave' && req.method === 'POST') {
-        const r = scoreWave(state);
-        return json(res, r.ok ? 200 : 400, r);
       }
       if (url === '/api/publish' && req.method === 'POST') {
         const errs = validateRepo(loadRepo(state.siteRoot)).errs; // the gate on disk, never memory — the same guarantee publish makes
@@ -384,4 +342,4 @@ function main(root, args) {
   return 0;
 }
 
-module.exports = { legalSlots, sideOpts, doEdit, unpushed, undo, redo, scoreWave, serve, makeGames, main };
+module.exports = { legalSlots, sideOpts, doEdit, unpushed, undo, redo, serve, main };
