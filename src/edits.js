@@ -7,7 +7,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { isDone, sideLabel, schedDays, catStatus, bestOfOf } = require('../site/derive.js');
+const { isDone, sideLabel, schedDays, bestOfOf } = require('../site/derive.js');
 const { writeTournament, tournamentText, catCtx, winTarget, reachedWinner, git } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 
