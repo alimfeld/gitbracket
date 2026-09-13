@@ -479,7 +479,7 @@ function validateGames(games, target, where, err) {
 // a substring would leak tie3 errors into `validate tie`. main() gates the slug
 // by repo membership (loadRepo admits only id-regex keys), so the regex is safe.
 function filterErrs(errs, slug) {
-  const re = new RegExp(`(?:tournaments/${slug}\.json|"${slug}"|slug ${slug}(?:\\s|$))`);
+  const re = new RegExp(`(?:tournaments/${slug}\\.json|"${slug}"|slug ${slug}(?:\\s|$))`);
   return errs.filter(e => re.test(e));
 }
 
