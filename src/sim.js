@@ -60,8 +60,9 @@ function main(root, args) {
     console.error('sim: the tree is dirty — commit or stash before branching');
     process.exit(1);
   }
-  const name = `sim/${rand()}`;
-  const cname = `bracket-sim-${rand()}.surge.sh`;
+  const nonce = rand();
+  const name = `sim/${nonce}`;
+  const cname = `bracket-sim-${nonce}.surge.sh`;
   const checkout = git(root, ['checkout', '-b', name]);
   if (checkout.code !== 0) { console.error(`sim: checkout ${name} failed:\n${checkout.err}`); process.exit(1); }
   fs.writeFileSync(path.join(root, 'site', 'CNAME'), cname + '\n');
