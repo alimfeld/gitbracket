@@ -366,8 +366,13 @@ function renderVenue(route, data, now) {
   // match squeezed into a taken slot hides its sibling; fix the data, the grid
   // has no cell for two.
   const byVenue = new Map(cols.map(id => [id, new Map()]));
-  for (const r of open) byVenue.get(r.m.venue).set(r.t, r);
-  const times = [...new Set(open.map(r => r.t))];
+  // a column holds only declared courts — a match on a venue the file never
+  // declares (the gate reports it) renders absent, never a crash
+  for (const r of open) {
+    const cell = byVenue.get(r.m.venue);
+    if (cell) cell.set(r.t, r);
+  }
+  const times = [...new Set(cols.flatMap(id => [...byVenue.get(id).keys()]))];
   const card = r => {
     const status = kioskStatus(r, now);
     const when = timeEl(r.t, r.ctx.tz);

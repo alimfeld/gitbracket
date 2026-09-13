@@ -56,6 +56,20 @@ test('renderers: a null venue entry is skipped on the board, never throws', () =
   assert(text(html).includes('Court 1'), 'the real court renders');
 });
 
+test('renderers: a match on an undeclared venue renders absent on the board — never throws', () => {
+  const tjson = { name: 'Bad', location: 'Hall', timezone: 'UTC', venues: [{ id: 'c1', name: 'Court 1' }],
+    players: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }, { id: 'p3', name: 'P3' }, { id: 'p4', name: 'P4' }],
+    categories: [{ id: 't', name: 'T', bestOf: { groups: 1, knockout: 1 }, slotMinutes: { groups: 30, knockout: 30 } }],
+    matches: { t: [
+      { id: 1, pool: 'A', scheduled: '2026-05-02T09:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p1'] }, { kind: 'players', ids: ['p2'] }] },
+      { id: 2, pool: 'A', scheduled: '2026-05-02T10:00:00', venue: 'ghost', sides: [{ kind: 'players', ids: ['p3'] }, { kind: 'players', ids: ['p4'] }] },
+    ] } };
+  const data = pageData(tjson, 'bad');
+  const html = renderVenue({ slug: 'bad', view: 'venues' }, data, Date.parse('2026-05-02T10:00:00Z'));
+  assert(text(html).includes('Court 1'), 'the declared court still renders');
+  assert(!text(html).includes('P3') && !text(html).includes('P4'), 'the ghost-venue match renders absent, never a throw');
+});
+
 test('renderers: an invalid timezone renders TBD, never throws', () => {
   const bad = { name: 'Bad', location: 'Hall', timezone: 'Mars/Olympus', venues: [{ id: 'c1', name: 'Court 1' }], players: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }], categories: [{ id: 't', name: 'T', bestOf: { groups: 1, knockout: 1 }, slotMinutes: { groups: 30, knockout: 30 } }], matches: { t: [{ id: 1, pool: 'A', scheduled: '2026-05-02T09:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p1'] }, { kind: 'players', ids: ['p2'] }] }] } };
   const data = pageData(bad, 'bad');
