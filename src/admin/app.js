@@ -511,6 +511,9 @@ async function openSide(cid, m, si) {
 }
 
 // ---- pending + publish + undo/redo ----
+// set while /api/publish is in flight — the response can take minutes (push +
+// surge deploy), so the button must not be re-enabled by the pending poll
+let publishing = false;
 async function refreshPending() {
   const p = await get('/api/pending');
   if (!p) return;
@@ -521,7 +524,7 @@ async function refreshPending() {
   $('undo').disabled = p.commits.length === 0 || p.dirty;
   $('redo').disabled = !p.redo || p.dirty;
   $('redo').title = p.redo ? `Redo ${p.redo.msg}` : '';
-  $('publish').disabled = p.commits.length === 0 || p.dirty;
+  $('publish').disabled = publishing || p.commits.length === 0 || p.dirty;
   $('publish').title = p.dirty ? 'site/ is dirty — commit or stash first' : '';
 }
 // the pending popover is a native <details> — close it when the pointer lands
@@ -541,10 +544,23 @@ $('redo').onclick = async () => {
   await reload(); // setSlug refreshes pending
 };
 $('publish').onclick = async () => {
-  const r = await post('/api/publish', {});
-  if (!r.ok) { flash(r.errors ? r.errors.join('\n') : r.error); return; }
-  flash('published');
-  await reload(); // setSlug refreshes pending
+  if (publishing) return;
+  publishing = true;
+  const btn = $('publish');
+  btn.disabled = true;
+  btn.setAttribute('aria-busy', 'true');
+  btn.textContent = 'Publishing…';
+  try {
+    const r = await post('/api/publish', {});
+    if (!r.ok) { flash(r.errors ? r.errors.join('\n') : r.error); return; }
+    flash('published');
+    await reload(); // setSlug refreshes pending
+  } finally {
+    publishing = false;
+    btn.removeAttribute('aria-busy');
+    btn.textContent = 'Publish';
+    await refreshPending(); // the poll was blocked for the whole deploy
+  }
 };
 
 // ---- boot ----

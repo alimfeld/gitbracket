@@ -36,6 +36,14 @@ h2 { font-size: .95rem; margin: 0 0 .5rem; }
 button { font: inherit; padding: .3rem .7rem; border: 1px solid var(--line); background: #fff; border-radius: .375rem; cursor: pointer; }
 button.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 button:disabled { opacity: .5; cursor: default; }
+/* publish blocks for the whole push + deploy — spin while it runs */
+#publish[aria-busy="true"] { opacity: .7; }
+#publish[aria-busy="true"]::before {
+  content: ''; display: inline-block; width: .7em; height: .7em; margin-right: .4em;
+  vertical-align: -.05em; border: 2px solid #ffffff88; border-top-color: #fff;
+  border-radius: 50%; animation: spin .6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 
 main { flex: 1; display: flex; min-height: 0; }
 .board { flex: 1; min-width: 0; overflow-y: auto; background: #fff; }
