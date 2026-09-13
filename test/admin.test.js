@@ -500,6 +500,20 @@ test('admin HTTP: a null or non-object JSON body is refused before any field is 
   assert.equal((await fetch(base + '/api/pending')).status, 200, 'the daemon still answers');
 });
 
+test('admin HTTP: a non-object edit value is refused with a 400 — never a hang or a crash', async t => {
+  const { tmp, state } = scratchWithRemote();
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  const base = await withServer(t, state);
+  // the old crash: null/undefined value threw TypeError out of the async
+  // handler — an unhandled rejection that killed the match-day daemon
+  for (const value of [null, 5, 'x', []]) {
+    const r = await postJson(base, '/api/edit', JSON.stringify({ slug: 'sample', verb: 'move', cat: 'md40', matchId: '8', value }));
+    assert.equal(r.status, 400, `value ${JSON.stringify(value)} is refused with a response, not hung`);
+    assert(/value object/.test((await r.json()).error), 'the refusal names the required shape');
+  }
+  assert.equal((await fetch(base + '/api/pending')).status, 200, 'the daemon still answers');
+});
+
 test('admin HTTP: a cross-origin POST is refused, a same-origin edit still commits', async t => {
   const { tmp, siteRoot, state } = scratchWithRemote();
   t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));

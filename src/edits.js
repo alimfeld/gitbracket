@@ -167,6 +167,15 @@ function parseResult(tokens) {
 // silently treated as one of them. 'side' names the side in its value (si) —
 // the verb doesn't repeat it.
 function applyFor(verb, matchId, value) {
+  // The daemon's value is untrusted: a body can name any verb with any value,
+  // and move/side/result dereference the value — a non-object would throw out
+  // of the async handler and kill the match-day daemon. Refuse the shape here,
+  // before any field is read; the page always sends shaped objects.
+  if (verb === 'result' || verb === 'move' || verb === 'side') {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+      return () => `${verb} edits carry a value object — got ${JSON.stringify(value)}`;
+    }
+  }
   if (verb === 'result') return (ms, ctx) => {
     if (value.shape === 'score') return applyScore(ms, matchId, value.games, ctx);
     if (value.shape === 'walkover') return applyResult(ms, matchId, 'walkover', value.winner);

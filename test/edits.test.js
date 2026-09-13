@@ -166,6 +166,29 @@ test('editor execEdit: unknown verbs and result shapes are refused by name, neve
   }
 });
 
+// execEdit returns before any git call on these — a non-object value must
+// never reach a dereference that kills the daemon (the old crash: null/undefined
+// value threw TypeError out of the async request handler).
+test('editor execEdit: non-object values are refused by name, never dereferenced', () => {
+  const { tmp, dataRoot } = scratchSite('sample');
+  try {
+    const repo = loadRepo(dataRoot);
+    const file = path.join(dataRoot, 'tournaments', 'sample.json');
+    const before = fs.readFileSync(file, 'utf8');
+    const state = { root: tmp, siteRoot: dataRoot, repo, slug: 'sample' };
+    for (const [verb, value] of [['move', null], ['side', undefined], ['result', 5], ['move', []], ['result', null]]) {
+      const r = editor.execEdit(state, verb, 'md40', '2', value);
+      assert(r.error && /value object/.test(r.error), `${verb} with ${JSON.stringify(value)} names the required shape, got: ${r.error}`);
+    }
+    assert(fs.readFileSync(file, 'utf8') === before, 'no write on any refused value');
+    // a shaped object still flows through (and the unknown-verb refusal still names the verb)
+    assert(/unknown edit verb/.test(editor.execEdit(state, 'tme', 'md40', '2', {}).error), 'typo verb still named');
+    assert(/unknown result shape/.test(editor.execEdit(state, 'result', 'md40', '2', { shape: 'bogus' }).error), 'bad shape still named');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 test('editor parseGame', () => {
   assert(JSON.stringify(editor.parseGame('11-9')) === JSON.stringify({ a: 11, b: 9 }), 'a-b parses');
   assert(JSON.stringify(editor.parseGame('11:9')) === JSON.stringify({ a: 11, b: 9 }), 'a:b parses');
