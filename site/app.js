@@ -2,6 +2,7 @@
 
 const POLL_MS = 30000;
 const FOLLOW_MS = 60000; // the kiosk re-follows the play on this cadence, data change or not
+const RECENT_MS = 2 * 60 * 1000; // how long a completed result stays on the kiosk's latest line
 
 // derive.js loads first as a classic script, so its names are already page
 // globals; under node, the module lands on globalThis.
@@ -359,7 +360,14 @@ function renderVenue(route, data, now) {
   const shownDay = firstDay && today < firstDay ? firstDay : lastDay && today > lastDay ? lastDay : today;
   const open = shown.filter(r => dayKey(r.t, r.ctx.tz) === shownDay); // the full day stays on the board; the scroll follows the current slot
   const cols = (data.tjson.venues || []).filter(v => v && typeof v === 'object').map(v => v.id).filter(id => open.some(r => r.m.venue === id));
-  const header = `<header><div><h1>${esc(data.t.name)}</h1><p>${shownDay === today ? 'Today' : dayLabel(shownDay)}</p></div><time id="clock"></time></header>`;
+  // the header's foot: a real-time freshness stamp (never the sim clock) and
+  // the latest results — the board must not look live while polls fail, and
+  // results announce themselves to assistive tech
+  const rec = venueRecency(data, data.cats);
+  const recText = rec.length ? rec.slice(0, 3).map(e => e.text).join(' · ') + (rec.length > 3 ? ` · +${rec.length - 3} more` : '') : '';
+  const stale = Date.now() - lastPoll > POLL_MS * 2;
+  const stamp = `Updated ${fmtTime(lastPoll, tz)}${stale ? ' · reconnecting…' : ''}`;
+  const header = `<header><div><h1>${esc(data.t.name)}</h1><p>${shownDay === today ? 'Today' : dayLabel(shownDay)}</p><p class="meta"${stale ? ' data-status="stale"' : ''}>${esc(stamp)}</p><p class="meta" aria-live="polite">${esc(recText)}</p></div><time id="clock"></time></header>`;
   // header and venue titles stick as one block — the titles ride the running
   // clock, aligned to the board by the shared --cols track
   const top = `<div class="kiosk-top" style="--cols: ${cols.length}">${header}${cols.map(id => `<h2>${esc(venueName(ctxs[0], id))}</h2>`).join('')}</div>`;
@@ -403,6 +411,41 @@ function renderVenue(route, data, now) {
 // the index's stored dates.)
 const multiDay = ctxs => schedDays(ctxs.flatMap(c => c.matches), (ctxs[0] && ctxs[0].tz) || 'UTC').length > 1;
 
+
+// ---- the kiosk's freshness + latest-results state. Renderer bookkeeping, not
+// domain — module state the venue view owns; per-slug reset keeps tournament
+// hops from diffing one file against another.
+let lastPoll = 0; // real time of the last successful fetch — never the sim clock
+let lastSnap = null; // { slug, done } — the previous poll's done-ness per match
+let recent = []; // [{ text, at }] — completed results, pruned at render
+
+// One completed match's announcement: court · wall time · winner (or annulled).
+const resultText = (ctx, m) => {
+  const t = schedTime(m, ctx.tz);
+  const when = t !== null ? fmtTime(t, ctx.tz) : 'TBD';
+  const where = m.venue ? venueName(ctx, m.venue) : 'TBD';
+  const w = winnerIdx(m);
+  return w === null ? `${where} · ${when} · annulled` : `${where} · ${when} · ${sideLabel(m.sides[w], ctx)} won`;
+};
+
+// Matches that completed since the last poll, merged into the rolling window.
+function venueRecency(data, cats) {
+  const slug = data.t.slug;
+  if (!lastSnap || lastSnap.slug !== slug) { lastSnap = { slug, done: new Map() }; recent = []; }
+  const done = new Map();
+  const fresh = [];
+  for (const c of cats) for (const m of c.matches) {
+    if (!m) continue;
+    const k = `${c.id}:${m.id}`;
+    const d = isDone(m);
+    done.set(k, d);
+    if (!lastSnap.done.get(k) && d) fresh.push(resultText(c, m));
+  }
+  lastSnap.done = done;
+  const at = Date.now();
+  recent = [...recent.filter(e => at - e.at < RECENT_MS), ...fresh.map(text => ({ text, at }))];
+  return recent;
+}
 
 // A possible stage: the round the player could reach once the pools decide —
 // the certain bits inline, the chip carrying the rank or outcome that gets in.
@@ -632,6 +675,7 @@ function boot() {
         if (!data) app.innerHTML = MISSING + '<p>Reload the page to try again.</p>';
         return;
       }
+      lastPoll = Date.now(); // the freshness stamp reads the last success, never the sim clock
       render(r, d);
     }, e => {
       // loadAll rejects only on repo data its model can't digest — degrade, never blank
