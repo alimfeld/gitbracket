@@ -9,8 +9,9 @@
   --line: #d9d9d6;
   --hairline: #eee;
   --hover: #00000014;
-  --overdue: #b3261e;
-  --due: #15803d;
+  /* role, not status — a match state and a board state share each hue */
+  --alert: #b3261e;
+  --live: #15803d;
   /* one sticky nav bar's total height — segments stick at 0, cats below it,
   and jump targets clear one bar (player page) or two (tournament page).
   ponytail: padding + 1.5rem line + link padding + border — revisit on font change */
@@ -386,19 +387,19 @@ body.venue header {
 }
 
 article[data-status="overdue"] {
-  border-color: var(--overdue);
+  border-color: var(--alert);
 }
 
 article[data-status="overdue"] .head span {
-  color: var(--overdue);
+  color: var(--alert);
 }
 
 article[data-status="due"] {
-  border-color: var(--due);
+  border-color: var(--live);
 }
 
 article[data-status="due"] .head span {
-  color: var(--due);
+  color: var(--live);
 }
 
 article[data-status="done"] {
@@ -422,7 +423,7 @@ p[data-status="finished"] {
 }
 
 p[data-status="stale"] {
-  color: var(--overdue);
+  color: var(--alert);
 }
 
 /* possible stages: a dashed, muted card that reads "not a match yet"; the
@@ -472,5 +473,5 @@ article[data-status="possible"] .head {
   border: none;
   background: none;
   padding: 0;
-  color: var(--due);
+  color: var(--live);
 }

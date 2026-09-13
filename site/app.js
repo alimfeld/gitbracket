@@ -372,14 +372,16 @@ function renderVenue(route, data, now) {
   const shownDay = firstDay && today < firstDay ? firstDay : lastDay && today > lastDay ? lastDay : today;
   const open = shown.filter(r => dayKey(r.t, r.ctx.tz) === shownDay); // the full day stays on the board; the scroll follows the current slot
   const cols = (data.tjson.venues || []).filter(v => v && typeof v === 'object').map(v => v.id).filter(id => open.some(r => r.m.venue === id));
-  // the header's foot: a real-time freshness stamp (never the sim clock) and
-  // the latest results — the board must not look live while polls fail, and
-  // results announce themselves to assistive tech
+  // the header's foot: one line, the freshness stamp (never the sim clock)
+  // holding the latest results — the board must not look live while polls
+  // fail; the live region stays scoped to the ticker, so the stamp, which
+  // churns every poll, never announces itself
   const rec = venueRecency(data, data.cats);
   const recText = rec.length ? rec.slice(0, 3).map(e => e.text).join(' · ') + (rec.length > 3 ? ` · +${rec.length - 3} more` : '') : '';
   const stale = Date.now() - lastPoll > POLL_MS * 2;
   const stamp = `Updated ${fmtTime(lastPoll, tz)}${stale ? ' · reconnecting…' : ''}`;
-  const header = `<header><div><h1>${esc(data.t.name)}</h1><p>${shownDay === today ? 'Today' : dayLabel(shownDay)}</p><p class="meta"${stale ? ' data-status="stale"' : ''}>${esc(stamp)}</p><p class="meta" aria-live="polite">${esc(recText)}</p></div><time id="clock"></time></header>`;
+  const ticker = `<span aria-live="polite">${recText ? ` · ${esc(recText)}` : ''}</span>`;
+  const header = `<header><div><h1>${esc(data.t.name)}</h1><p>${shownDay === today ? 'Today' : dayLabel(shownDay)}</p><p class="meta"${stale ? ' data-status="stale"' : ''}>${esc(stamp)}${ticker}</p></div><time id="clock"></time></header>`;
   // header and venue titles stick as one block — the titles ride the running
   // clock, aligned to the board by the shared --cols track
   const top = `<div class="kiosk-top" style="--cols: ${cols.length}">${header}${cols.map(id => `<h2>${esc(venueName(ctxs[0], id))}</h2>`).join('')}</div>`;
