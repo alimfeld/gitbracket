@@ -98,7 +98,7 @@ main { flex: 1; display: flex; min-height: 0; }
 .match .side .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .match .edit-side {
   border: 0; background: none; font: inherit; color: var(--muted); cursor: pointer;
-  padding: 0 .2rem; border-radius: .2rem; line-height: 1.2; opacity: 0; flex: none;
+  padding: 0 .2rem; border-radius: .2rem; line-height: 1.2; opacity: .35; flex: none;
 }
 .match:hover .edit-side, .match .edit-side:focus-visible { opacity: 1; }
 .match .edit-side:hover, .match .edit-side:focus-visible { color: var(--accent); }
