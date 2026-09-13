@@ -135,6 +135,18 @@ const catNav = (slug, ctxs, route) => ctxs.map((c, i) => {
   return `<a href="${esc(href(slug, 'tournament', p))}"${active ? ' aria-current="true"' : ''}>${esc(c.name || c.id)}</a>`;
 }).join('');
 
+// The tournament views' change cue: a poll that actually changed the file
+// flashes "Updated HH:MM" for one cycle — proof the page refreshes itself,
+// gone the moment nothing changed. One baseline per slug.
+let viewSnap = null; // { slug, hash, changedAt }
+function updatedLine(data, tz) {
+  const hash = JSON.stringify(data.tjson);
+  const now = Date.now();
+  if (!viewSnap || viewSnap.slug !== data.t.slug) { viewSnap = { slug: data.t.slug, hash, changedAt: 0 }; return ''; }
+  if (viewSnap.hash !== hash) { viewSnap.hash = hash; viewSnap.changedAt = now; }
+  return now - viewSnap.changedAt < POLL_MS ? `<p class="meta">Updated ${fmtTime(viewSnap.changedAt, tz)}</p>` : '';
+}
+
 function renderTournament(route, data) {
   if (!data.tjson) return MISSING;
   const tz = data.tjson.timezone || 'UTC';
@@ -144,7 +156,7 @@ function renderTournament(route, data) {
   const parts = [segmentBar(route), `<header><h1>${esc(data.t.name)}</h1>`];
   // the heading states the span and the location once — single-day cards never repeat the date
   const range = fmtRange(schedDays(ctxs.flatMap(c => c.matches), tz));
-  parts.push(`<p>${[range, esc(data.tjson.location)].filter(Boolean).join(' · ')}</p></header>`);
+  parts.push(`<p>${[range, esc(data.tjson.location)].filter(Boolean).join(' · ')}</p>${updatedLine(data, tz)}</header>`);
   parts.push(`<nav class="cats" aria-label="Categories">${catNav(data.t.slug, ctxs, route)}</nav>`);
   // a tournament with no categories (hand-edited or staged) renders the shell — "missing data renders empty", never a throw
   if (show) parts.push(catSection(show, { multi, href: href(data.t.slug, 'tournament', route) }));
@@ -520,7 +532,7 @@ function playerSchedule(route, data, p) {
       next = `${link}Next: ${esc(stage.label)}${stage.time !== null ? ' · ' + timeEl(stage.time, nctx.tz, multi) : ''}${stage.chip ? ` (${esc(stage.chip)})` : ''}</a>`;
     }
   }
-  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}<a href="${esc(href(data.t.slug, 'schedule', { cat: route.cat }))}">Change</a></h1>${statuses.length ? `<p>${statuses.join(' · ')}</p>` : ''}${next ? `<p data-status="next">${next}</p>` : ''}</header>`];
+  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}<a href="${esc(href(data.t.slug, 'schedule', { cat: route.cat }))}">Change</a></h1>${statuses.length ? `<p>${statuses.join(' · ')}</p>` : ''}${next ? `<p data-status="next">${next}</p>` : ''}${updatedLine(data, data.tjson.timezone || 'UTC')}</header>`];
   const out = [];
   let curDay = null;
   for (const e of events) {

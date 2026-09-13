@@ -563,6 +563,21 @@ test('kiosk: the header stamps freshness and announces completed results via a l
   assert(text(done).includes('Court 1') && text(done).includes('won'), 'a completed match lands on the latest line');
 });
 
+test('tournament views: a poll that changed the file flashes an updated stamp, an unchanged one stays quiet', () => {
+  const tjson = () => ({
+    name: 'Cue', location: 'Hall', timezone: 'UTC', venues: [{ id: 'c1', name: 'Court 1' }],
+    players: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }],
+    categories: [{ id: 't', name: 'T', bestOf: { groups: 1, knockout: 1 }, slotMinutes: { groups: 30, knockout: 30 } }],
+    matches: { t: [{ id: 1, pool: 'A', scheduled: '2026-05-02T09:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p1'] }, { kind: 'players', ids: ['p2'] }] }] },
+  });
+  const rt = { slug: 'updated-cue', view: 'tournament' };
+  assert(!renderTournament(rt, pageData(tjson(), 'updated-cue')).includes('Updated'), 'the first render is a baseline, not a change');
+  assert(!renderTournament(rt, pageData(tjson(), 'updated-cue')).includes('Updated'), 'an unchanged poll stays quiet');
+  const t2 = tjson();
+  t2.matches.t[0].result = { status: 'played', winner: 'a' };
+  assert(renderTournament(rt, pageData(t2, 'updated-cue')).includes('Updated'), 'a poll that changed the file flashes the stamp');
+});
+
 test('routing: cat and player ride along between tournament and schedule — applied on their home view only', () => {
   const data = repoPage('sample');
   const t = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' }, data);
