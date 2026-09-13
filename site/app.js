@@ -542,7 +542,7 @@ function playerSchedule(route, data, p) {
     const day = Number.isFinite(t) ? dayKey(t, e.ctx.tz) : null;
     if (day !== curDay) {
       curDay = day;
-      out.push(`<h2>${esc(day === null ? 'Unscheduled' : dayLabel(day))}</h2>`);
+      out.push(`<h2>${esc(day === null ? 'Time TBD' : dayLabel(day))}</h2>`);
     }
     // the row itself, not the match id — ids are per-category, two cats can share one
     const isNext = e === nextEv;
