@@ -828,9 +828,11 @@ function schedDays(ms, tz) {
 }
 
 // Human span from ISO day keys (null = nothing scheduled).
-// Month abbreviations pinned to LOCALE like dayLabel, but keyed off the ISO
-// digits, never the formatted label's position.
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+// Weekday/month abbreviations pinned to LOCALE like dayLabel, but from their
+// own UTC formats, never another label's position.
+const dayPart = (k, f) => f.format(new Date(k + 'T00:00:00Z'));
+const WK = new Intl.DateTimeFormat(LOCALE, { timeZone: 'UTC', weekday: 'short' });
+const MO = new Intl.DateTimeFormat(LOCALE, { timeZone: 'UTC', month: 'short' });
 
 function fmtRange(keys) {
   const ks = (Array.isArray(keys) ? keys : []).filter(k => DATE_RE.test(k));
@@ -844,10 +846,9 @@ function fmtRange(keys) {
   else {
     const [, m0, d0] = ks[0].split('-');
     const [, m1, d1] = ks.at(-1).split('-');
-    const wd = x => x.slice(0, 3); // the weekday is dayLabel's leading token in this dialect
-    out = `${wd(dayLabel(ks[0]))}–${wd(dayLabel(ks.at(-1)))}, ` + (m0 === m1
-      ? `${MONTHS[+m0 - 1]} ${+d0}–${+d1}` // same month, month repeated once: "Sat–Sun, Jul 11–12"
-      : `${MONTHS[+m0 - 1]} ${+d0} – ${MONTHS[+m1 - 1]} ${+d1}`); // month boundary keeps both: "Wed–Sat, Dec 30 – Jan 2"
+    out = `${dayPart(ks[0], WK)}–${dayPart(ks.at(-1), WK)}, ` + (m0 === m1
+      ? `${dayPart(ks[0], MO)} ${+d0}–${+d1}` // same month, month repeated once: "Sat–Sun, Jul 11–12"
+      : `${dayPart(ks[0], MO)} ${+d0} – ${dayPart(ks.at(-1), MO)} ${+d1}`); // month boundary keeps both: "Wed–Sat, Dec 30 – Jan 2"
   }
   return ks[0].slice(0, 4) !== ks.at(-1).slice(0, 4) ? `${out}, ${ks.at(-1).slice(0, 4)}` : out;
 }
