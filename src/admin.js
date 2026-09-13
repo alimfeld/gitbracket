@@ -165,6 +165,9 @@ function legalSlots(tjson, cat, matchId, day, gcd) {
 // deal as legalSlots. The side being replaced frees its own slot; busy players
 // come only from scheduled+undone matches overlapping this one.
 function sideOpts(tjson, cat, matchId, si) {
+  // The param is untrusted: a NaN or out-of-range side would free no current
+  // slot and grey nothing — clamp to the two sides the grid renders.
+  si = si === 1 ? 1 : 0;
   const ms = (tjson.matches || {})[cat] || [];
   const ctx = catCtx(tjson, cat);
   const m = ctx.byId.get(Number(matchId));

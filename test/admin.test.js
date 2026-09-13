@@ -372,6 +372,7 @@ test('admin sideOpts: the picker greys what the gate would reject — consumed s
   assert(busy2.includes('p1'), 'p1 is in the overlapping match 1 — busy');
   assert(busy2.includes('p2'), 'p2 is in match 7, which overlaps match 2 but shares no player with it — still busy');
   assert.deepEqual(admin.sideOpts(tjson, 'md', 6, 0).busy, [], 'an unscheduled match has no window — no player is busy yet');
+  assert.deepEqual(admin.sideOpts(tjson, 'md', 5, NaN), a5, 'an out-of-range side clamps to side a — a hostile param frees no nonexistent side');
   // an unknown match reports nothing, never throws — same as legalSlots
   assert.deepEqual(admin.sideOpts(tjson, 'md', 999, 0), {});
 });
