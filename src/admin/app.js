@@ -314,7 +314,7 @@ async function dropAt(e) {
 // ---- edits ----
 async function sendEdit(verb, cid, mid, value) {
   const r = await post('/api/edit', { slug: S.slug, verb, cat: cid, matchId: mid, value });
-  if (!r.ok) { flash(r.errors ? r.errors.join('\n') : r.error); return false; }
+  if (!r.ok) { const msg = r.errors ? r.errors.join('\n') : (r.error || 'edit refused'); flash(msg); return msg; }
   await reload(); // setSlug re-renders the grid + editor and refreshes pending
   return true;
 }
@@ -347,14 +347,19 @@ function openResult(cid, m) {
       <button type="button" data-fill="void">Match annulled</button>
       <button type="button" data-fill="">No result</button>
     </div>
+    <p class="err" id="resulterr" hidden></p>
     <div class="foot"><button data-x="cancel">Cancel</button><button data-x="apply" class="primary">Apply</button></div>
   </div>`;
   const input = modal.querySelector('#scoreinput');
+  // the inline error parks the daemon's words under the input — the corner
+  // toast fades, this line stays until the draft changes
+  const errEl = modal.querySelector('#resulterr');
   // the fill buttons set the machine token (or clear); pressed mirrors the
   // field on every key — "No result" presses only when an outcome is actually
   // exposed to removal
   const btns = [...modal.querySelectorAll('.fillbtns button')];
   const sync = () => {
+    errEl.hidden = true; // any edit makes the last rejection stale
     const v = input.value.trim();
     for (const b of btns) {
       const fill = b.dataset.fill;
@@ -371,9 +376,10 @@ function openResult(cid, m) {
   input.focus(); input.select();
   const submit = async () => {
     // raw text — the daemon parses with the editor's shared grammar; a
-    // rejection keeps the draft for fixing (sendEdit flashes the daemon's words)
-    if (await sendEdit('result', cid, m.id, input.value)) modal.hidden = true;
-    else { input.focus(); input.select(); }
+    // rejection keeps the draft and parks the daemon's words under the input
+    const msg = await sendEdit('result', cid, m.id, input.value);
+    if (msg === true) modal.hidden = true;
+    else { errEl.textContent = msg; errEl.hidden = false; input.focus(); input.select(); }
   };
   modal.querySelector('[data-x="cancel"]').onclick = () => { modal.hidden = true; };
   modal.querySelector('[data-x="apply"]').onclick = submit;

@@ -129,6 +129,8 @@ main { flex: 1; display: flex; min-height: 0; }
 .fillbtns { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .5rem; }
 .fillbtns button { font-size: .78rem; padding: .2rem .5rem; }
 .fillbtns button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+/* the result modal's rejection line — the daemon's words, parked until edited */
+.modal .err { color: var(--danger); font-size: .78rem; margin: .4rem 0 0; white-space: pre-wrap; }
 
 /* ---- modal ---- */
 .modal {
