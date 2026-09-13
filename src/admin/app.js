@@ -58,6 +58,17 @@ function flash(msg) {
   clearTimeout(flashTimer);
   flashTimer = setTimeout(() => { el.hidden = true; }, 3500);
 }
+let modalTrigger = null; // { key } — the card that opened the modal; focus returns there
+// A modal closes and its trigger regains focus — by key, because apply
+// reloads rebuild the cards under it (a captured node would be detached).
+function closeModal() {
+  $('modal').close();
+  if (modalTrigger) {
+    const el = $('grid').querySelector(`[data-key="${modalTrigger.key}"]`);
+    (el || $('grid')).focus();
+    modalTrigger = null;
+  }
+}
 
 // ---- data loading ----
 function teamSize(ctx) {
@@ -193,12 +204,14 @@ function wireGrid() {
   grid.querySelectorAll('.match').forEach(el => {
     el.querySelectorAll('.edit-side').forEach(btn => btn.addEventListener('click', e => {
       const [cid, mid] = keyParts(el.dataset.key);
+      modalTrigger = { key: el.dataset.key };
       openSide(cid, matchOf(cid, mid), +btn.dataset.side);
     }));
     // the whole card is the score target; the grip and the per-side pencils are not
     el.addEventListener('click', e => {
       if (e.target.closest('.grip, .edit-side')) return;
       const [cid, mid] = keyParts(el.dataset.key);
+      modalTrigger = { key: el.dataset.key };
       openResult(cid, matchOf(cid, mid));
     });
     el.addEventListener('dragstart', e => {
@@ -335,7 +348,7 @@ function openResult(cid, m) {
   const bo = bestOfOf(m, ctx) || 1;
   const ex = Array.from({ length: bo }, (_, g) => g % 2 ? '17-21' : '21-19').join(' ');
   const modal = $('modal');
-  modal.hidden = false;
+  modal.showModal();
   modal.innerHTML = `<div class="box">
     <p class="kicker">Result</p>
     <h2 class="sides">${esc(sideLabel(m.sides[0], ctx))} vs ${esc(sideLabel(m.sides[1], ctx))}</h2>
@@ -378,14 +391,13 @@ function openResult(cid, m) {
     // raw text — the daemon parses with the editor's shared grammar; a
     // rejection keeps the draft and parks the daemon's words under the input
     const msg = await sendEdit('result', cid, m.id, input.value);
-    if (msg === true) modal.hidden = true;
+    if (msg === true) closeModal();
     else { errEl.textContent = msg; errEl.hidden = false; input.focus(); input.select(); }
   };
-  modal.querySelector('[data-x="cancel"]').onclick = () => { modal.hidden = true; };
+  modal.querySelector('[data-x="cancel"]').onclick = closeModal;
   modal.querySelector('[data-x="apply"]').onclick = submit;
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); submit(); }
-    if (e.key === 'Escape') { e.preventDefault(); modal.hidden = true; }
   });
   sync(); // a decided match reopens with its outcome pressed
 }
@@ -406,7 +418,7 @@ async function openSide(cid, m, si) {
   const other = m.sides[1 - si];
   const otherIds = other && other.kind === 'players' && Array.isArray(other.ids) ? other.ids : [];
   const modal = $('modal');
-  modal.hidden = false;
+  modal.showModal();
   const cur = m.sides[si];
   // open on the kind the current side actually is — editing starts pre-filled, not on Players
   const curKind = cur && (cur.kind === 'pool' || cur.kind === 'match') ? cur.kind : 'players';
@@ -470,10 +482,9 @@ async function openSide(cid, m, si) {
   };
   modal.querySelectorAll('.tabs button').forEach(b => b.onclick = () => setKind(b.dataset.kind));
   setKind(curKind);
-  // keyboard parity with the result modal — Escape cancels, Enter applies;
-  // Enter never hijacks a select (dropdown), a checkbox (space toggles) or a
-  // foot button (its native click would apply twice)
-  const cancel = () => { modal.hidden = true; };
+  // Enter applies without hijacking a select (dropdown), a checkbox (space
+  // toggles) or a foot button (its native click would apply twice); Escape is
+  // the dialog's native cancel
   const apply = async () => {
     const kind = modal.querySelector('.tabs button.active').dataset.kind;
     let side;
@@ -486,14 +497,13 @@ async function openSide(cid, m, si) {
     } else {
       side = { kind: 'match', match: +modal.querySelector('#matchsel').value, result: modal.querySelector('#resel').value };
     }
-    modal.hidden = true;
+    closeModal();
     await sendEdit('side', cid, m.id, { si, side });
   };
-  modal.querySelector('[data-x="cancel"]').onclick = cancel;
+  modal.querySelector('[data-x="cancel"]').onclick = closeModal;
   modal.querySelector('[data-x="apply"]').onclick = apply;
   modal.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { e.preventDefault(); cancel(); }
-    else if (e.key === 'Enter' && !e.target.matches('select, input, button')) { e.preventDefault(); apply(); }
+    if (e.key === 'Enter' && !e.target.matches('select, input, button')) { e.preventDefault(); apply(); }
   });
   modal.querySelector('.tabs button.active').focus(); // open inside the dialog, not behind it
 }

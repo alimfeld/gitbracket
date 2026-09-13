@@ -63,6 +63,7 @@ main { flex: 1; display: flex; min-height: 0; }
 .pending ul li { padding: .15rem .75rem; font-size: .8rem; }
 
 .grid { position: relative; display: grid; }
+#grid:focus { outline: none; } /* the modal's focus returns to the board — no ring around it */
 .col { position: relative; border-left: 1px solid var(--hairline); min-width: 9rem; }
 .colhead { position: sticky; top: 0; background: #fff; z-index: 3; padding: .35rem .5rem; font-size: .8rem; color: var(--muted); border-bottom: 1px solid var(--line); }
 .ruler { position: relative; }
@@ -133,11 +134,11 @@ main { flex: 1; display: flex; min-height: 0; }
 .modal .err { color: var(--danger); font-size: .78rem; margin: .4rem 0 0; white-space: pre-wrap; }
 
 /* ---- modal ---- */
-.modal {
-  position: fixed; inset: 0; background: #00000055; display: flex; align-items: center; justify-content: center; z-index: 10;
-}
-/* .modal's display:flex overrides the [hidden] attribute — a hidden modal must not gray out the page */
-.modal[hidden] { display: none; }
+/* a native dialog — [open] gates display, ::backdrop is the overlay, and the
+   browser traps focus and returns it on cancel: no JS for any of that */
+.modal { position: fixed; inset: 0; z-index: 10; }
+.modal[open] { display: flex; align-items: center; justify-content: center; }
+.modal::backdrop { background: #00000055; }
 .modal .box { background: #fff; border-radius: .5rem; padding: 1rem; width: 24rem; max-height: 80vh; overflow-y: auto; }
 /* a segmented control — reads as navigation, distinct from the bordered foot buttons */
 .modal .tabs { display: flex; gap: .2rem; margin-bottom: .6rem; background: var(--hairline); padding: .2rem; border-radius: .4rem; }
