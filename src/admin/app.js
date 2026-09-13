@@ -24,10 +24,11 @@ const wallMin = iso => { const m = /T(\d{2}):(\d{2})/.exec(String(iso || '')); r
 const pad = n => String(n).padStart(2, '0');
 const isoOf = (day, wm) => `${day}T${pad(Math.floor(wm / 60))}:${pad(wm % 60)}:00`;
 
-function gcd(a, b) { a = Math.abs(a); b = Math.abs(b); while (b) { [a, b] = [b, a % b]; } return a || 1; }
+// ponytail: Math.gcd needs Chrome 133+/Safari 18.4+ — the admin page runs in the
+// operator's own browser, and the site (kiosk) never runs this grid.
 function gridGcd(tjson) {
   let g = 0;
-  const add = n => { if (Number.isInteger(n) && n > 0) g = gcd(g, n); };
+  const add = n => { if (Number.isInteger(n) && n > 0) g = Math.gcd(g, n); };
   for (const c of (tjson.categories || [])) { const sm = c.slotMinutes || {}; add(sm.groups); add(sm.knockout); }
   for (const cid of Object.keys(tjson.matches || {}))
     for (const m of tjson.matches[cid] || []) if (m) add(m.slotMinutes);
