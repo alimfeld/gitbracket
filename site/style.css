@@ -411,7 +411,7 @@ article[data-status="done"] .head span {
 }
 
 article[data-status="next"] {
-  border-color: var(--accent);
+  border-left: 3px solid var(--accent);
 }
 
 p[data-status="next"] {
