@@ -23,6 +23,8 @@ const matchOf = (cid, id) => cat(cid)?.byId.get(Number(id));
 const wallMin = iso => { const m = /T(\d{2}):(\d{2})/.exec(String(iso || '')); return m ? +m[1] * 60 + +m[2] : null; };
 const pad = n => String(n).padStart(2, '0');
 const isoOf = (day, wm) => `${day}T${pad(Math.floor(wm / 60))}:${pad(wm % 60)}:00`;
+// ms from derive.js; the grid works in wall-clock minutes
+const slotMinOf = (m, ctx) => matchSlotMs(m, ctx) / 60000;
 
 const gcd = (a, b) => { while (b) [a, b] = [b, a % b]; return a; };
 function gridGcd(tjson) {
@@ -39,7 +41,7 @@ function dayWindow(m, ctx) {
   if (m.scheduled == null) return null;
   const wm = wallMin(m.scheduled);
   if (wm == null) return null;
-  const slot = matchSlotMs(m, ctx) / 60000;
+  const slot = slotMinOf(m, ctx);
   return Number.isFinite(slot) ? [wm, wm + slot] : null;
 }
 
@@ -169,7 +171,7 @@ function cardHtml(c, m, venue) {
   // wall-time placement in the day's scale; unscheduled cards are
   // flow-positioned
   const wm = (m.scheduled != null && venue) ? wallMin(m.scheduled) : null;
-  const slot = matchSlotMs(m, c) / 60000;
+  const slot = slotMinOf(m, c);
   const pos = wm != null && Number.isFinite(slot)
     ? ` style="top:${(wm - S.dayStart) * S.pxPerMin}px;min-height:${slot * S.pxPerMin}px;"` : '';
   const k = keyOf(c, m);
@@ -291,7 +293,7 @@ function ghost(e) {
   const ht = hitTest(e);
   clearGhost();
   if (!ht) return;
-  const slot = matchSlotMs(m, ctx) / 60000;
+  const slot = slotMinOf(m, ctx);
   if (!Number.isFinite(slot)) return;
   const col = $('grid').querySelector(`.col[data-venue="${CSS.escape(ht.venue)}"]`);
   if (!col) return;
