@@ -772,7 +772,7 @@ function tzOffset(tz, date) {
   // crashing a render.
   let parts;
   try {
-    parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'longOffset' })
+    parts = new Intl.DateTimeFormat(LOCALE, { timeZone: tz, timeZoneName: 'longOffset' })
       .formatToParts(new Date(date + 'T12:00:00Z'));
   } catch {
     return null;
