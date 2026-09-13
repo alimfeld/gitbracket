@@ -182,23 +182,6 @@ const statusLine = (status, ctx) => {
   return `<p>${names.map((n, i) => `${ranks[i]} <strong>${esc(n)}</strong>`).join(' · ')}</p>`;
 };
 
-// Compact court list — a round plays several matches at once, so "next" is a
-// block, not a card. Consecutive numbered courts collapse ("Courts 1–5").
-const fmtCourts = names => {
-  const ns = [...new Set(names)];
-  if (ns.length === 1) return ns[0];
-  const m = ns.map(n => /^(.*?)\s*(\d+)$/.exec(n));
-  if (m.every(x => x && x[1] === m[0][1])) {
-    const head = m[0][1];
-    const nums = m.map(x => +x[2]).sort((a, b) => a - b);
-    if (new Set(nums).size === nums.length &&
-        nums[nums.length - 1] - nums[0] === nums.length - 1) {
-      return `${head}s ${nums[0]}–${nums[nums.length - 1]}`;
-    }
-  }
-  return ns.join(' · ');
-};
-
 // The anticipation line: "Starts" before anything, "Next:" once a match has
 // gone in; both jump to the wave's section. Data-only: scheduled times, never
 // the clock (the page's 30s poll keeps it current).
@@ -211,8 +194,8 @@ const anticipationLine = (ctx, status, href, day, wave) => {
   }
   const m0 = wave[0];
   const courts = [...new Set(wave.map(m => m.venue ? venueName(ctx, m.venue) : null).filter(Boolean))];
-  // fmtCourts is repo data — the same esc contract as every other name on the page
-  const where = courts.length ? ` · ${esc(fmtCourts(courts))}` : '';
+  // venue names are repo data — the same esc contract as every other name on the page
+  const where = courts.length ? ` · ${esc(courts.join(' · '))}` : '';
   const starts = status.kind === 'starts';
   // the jump target is the section the wave lives in: starts derives it from
   // the opening block, groups and ko keep the committed rule
@@ -415,9 +398,8 @@ function renderVenue(route, data, now) {
       cells.push(r ? (t === anchorTime ? `<div data-current="${r.t}">${card(r)}</div>` : card(r)) : '<div></div>');
     }
   }
-  // data-anchor: the board's current row start time; the follow scrolls to the
-  // row's data-current cells
-  return top + `<div class="board" data-anchor="${anchorTime}" style="--cols: ${cols.length}">${cells.join('')}</div>`;
+  // data-current: the scroll target for the follow, recomputed from now each render
+  return top + `<div class="board" style="--cols: ${cols.length}">${cells.join('')}</div>`;
 }
 
 // Do scheduled matches span more than one wall-clock day? Gates the date on
