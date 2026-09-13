@@ -578,6 +578,25 @@ test('tournament views: a poll that changed the file flashes an updated stamp, a
   assert(renderTournament(rt, pageData(t2, 'updated-cue')).includes('Updated'), 'a poll that changed the file flashes the stamp');
 });
 
+test('category tabs: play in progress earns the live dot, a settled category stays bare', () => {
+  const side = (a, b) => [{ kind: 'players', ids: [a] }, { kind: 'players', ids: [b] }];
+  const played = { games: [{ a: 11, b: 9 }], result: { status: 'played', winner: 'a' } };
+  const cat = (id, name) => ({ id, name, bestOf: { groups: 1, knockout: 1 }, slotMinutes: { groups: 30, knockout: 30 } });
+  const m = (id, a, b, extra = {}) => ({ id, pool: 'A', scheduled: '2026-05-02T09:00:00', venue: 'c1', sides: side(a, b), ...extra });
+  const tjson = {
+    name: 'Tabs', location: 'Hall', timezone: 'UTC', venues: [{ id: 'c1', name: 'Court 1' }],
+    players: ['p1', 'p2', 'p3', 'p4'].map(id => ({ id, name: id.toUpperCase() })),
+    categories: [cat('live', 'Live'), cat('done', 'Done')],
+    matches: {
+      live: [m(1, 'p1', 'p2', played), m(2, 'p3', 'p4')], // one result in — group play running
+      done: [m(1, 'p1', 'p2', played)],
+    },
+  };
+  const html = renderTournament({ slug: 'tabs', view: 'tournament' }, pageData(tjson, 'tabs'));
+  assert(html.includes('<span class="live" aria-hidden="true">●</span> Live'), 'the running category tab carries the dot');
+  assert(!html.includes('</span> Done'), 'the settled category tab stays bare');
+});
+
 test('routing: cat and player ride along between tournament and schedule — applied on their home view only', () => {
   const data = repoPage('sample');
   const t = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' }, data);

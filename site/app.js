@@ -128,11 +128,13 @@ function renderIndex(route, data) {
 }
 
 // One category per page; the switcher is the navigation — the first category
-// stays canonical at the bare slug, the rest select via ?cat=.
+// stays canonical at the bare slug, the rest select via ?cat=. The dot flags
+// the category with play in progress — group stage or knockout running.
 const catNav = (slug, ctxs, route) => ctxs.map((c, i) => {
   const p = { ...route, cat: i === 0 ? undefined : c.id };
   const active = (route.cat || ctxs[0].id) === c.id;
-  return `<a href="${esc(href(slug, 'tournament', p))}"${active ? ' aria-current="true"' : ''}>${esc(c.name || c.id)}</a>`;
+  const live = ['groups', 'ko'].includes((catStatus(c) || {}).kind);
+  return `<a href="${esc(href(slug, 'tournament', p))}"${active ? ' aria-current="true"' : ''}>${live ? '<span class="live" aria-hidden="true">●</span> ' : ''}${esc(c.name || c.id)}</a>`;
 }).join('');
 
 // The tournament views' change cue: a poll that actually changed the file

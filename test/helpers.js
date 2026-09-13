@@ -75,8 +75,13 @@ const withTjson = (data, tjson) => ({ ...data, tjson, cats: toCats(tjson) });
 // no-machinery negatives still assert on the raw HTML — that's the contract.
 const ENT = { lt: '<', gt: '>', amp: '&', quot: '"', '#39': "'" };
 const decode = s => s.replace(/&(lt|gt|amp|quot|#39);/g, (_, k) => ENT[k]);
-// plain page text: tags become spaces (attributes — datetimes, hrefs — drop), entities decode
-const text = html => decode(html.replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim();
+// plain page text: tags become spaces (attributes — datetimes, hrefs — drop),
+// entities decode; aria-hidden content is not spoken text — it drops too,
+// mirroring what a screen reader resolves
+const text = html => {
+  const visible = html.replace(/<([a-z][a-z0-9]*)[^>]*aria-hidden="true"[^>]*>[\s\S]*?<\/\1>/g, '');
+  return decode(visible.replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim();
+};
 // ordered values of one attribute, e.g. every data-status on the page
 const vals = (html, attr) => [...html.matchAll(new RegExp(`${attr}="([^"]*)"`, 'g'))].map(m => m[1]);
 // text of every element carrying attr="value" — tag-agnostic via a backreference,

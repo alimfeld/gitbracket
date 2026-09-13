@@ -150,6 +150,15 @@ p {
   color: var(--on-accent);
 }
 
+/* the in-play category's dot — accent on the bar, on-accent on the current tab */
+.cats .live {
+  color: var(--accent);
+}
+
+.cats a[aria-current] .live {
+  color: var(--on-accent);
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
