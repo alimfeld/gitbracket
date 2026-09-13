@@ -70,6 +70,21 @@ test('renderers: a match on an undeclared venue renders absent on the board — 
   assert(!text(html).includes('P3') && !text(html).includes('P4'), 'the ghost-venue match renders absent, never a throw');
 });
 
+test('renderers: a sideless match renders TBD rows, never throws', () => {
+  const tjson = { name: 'Bad', location: 'Hall', timezone: 'UTC', venues: [{ id: 'c1', name: 'Court 1' }],
+    players: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }, { id: 'p3', name: 'P3' }, { id: 'p4', name: 'P4' }],
+    categories: [{ id: 't', name: 'T', bestOf: { groups: 1, knockout: 1 }, slotMinutes: { groups: 30, knockout: 30 } }],
+    matches: { t: [
+      { id: 1, pool: 'A', scheduled: '2026-05-02T09:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p1'] }, { kind: 'players', ids: ['p2'] }] },
+      { id: 2, pool: 'A', scheduled: '2026-05-02T10:00:00', venue: 'c1' },
+    ] } };
+  const data = pageData(tjson, 'bad');
+  assert.doesNotThrow(() => renderTournament({ slug: 'bad', view: 'tournament' }, data), 'tournament page');
+  const html = renderVenue({ slug: 'bad', view: 'venues' }, data, Date.parse('2026-05-02T10:30:00Z'));
+  assert(text(html).includes('P1') && text(html).includes('P2'), 'the whole-match card still renders');
+  assert(text(html).includes('TBD'), 'the sideless match renders a TBD row — one card, never the board');
+});
+
 test('renderers: an invalid timezone renders TBD, never throws', () => {
   const bad = { name: 'Bad', location: 'Hall', timezone: 'Mars/Olympus', venues: [{ id: 'c1', name: 'Court 1' }], players: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }], categories: [{ id: 't', name: 'T', bestOf: { groups: 1, knockout: 1 }, slotMinutes: { groups: 30, knockout: 30 } }], matches: { t: [{ id: 1, pool: 'A', scheduled: '2026-05-02T09:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p1'] }, { kind: 'players', ids: ['p2'] }] }] } };
   const data = pageData(bad, 'bad');

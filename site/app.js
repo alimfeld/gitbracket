@@ -328,7 +328,10 @@ function matchCard(m, ctx, opts = {}) {
 
 function sideRow(m, ctx, i) {
   const w = winnerIdx(m);
-  return `<div class="side"${w === i ? ' data-win' : ''}><span>${esc(sideLabel(m.sides[i], ctx))}</span><span class="score">${scoreCells(m, i, ctx)}</span></div>`;
+  // a malformed match (missing sides) renders TBD rows — the gate reports the
+  // file, the renderer must never take the board down with it
+  const side = m.sides && m.sides[i];
+  return `<div class="side"${w === i ? ' data-win' : ''}><span>${esc(sideLabel(side, ctx))}</span><span class="score">${scoreCells(m, i, ctx)}</span></div>`;
 }
 
 function renderVenue(route, data, now) {
