@@ -470,8 +470,11 @@ async function openSide(cid, m, si) {
   };
   modal.querySelectorAll('.tabs button').forEach(b => b.onclick = () => setKind(b.dataset.kind));
   setKind(curKind);
-  modal.querySelector('[data-x="cancel"]').onclick = () => { modal.hidden = true; };
-  modal.querySelector('[data-x="apply"]').onclick = async () => {
+  // keyboard parity with the result modal — Escape cancels, Enter applies;
+  // Enter never hijacks a select (dropdown), a checkbox (space toggles) or a
+  // foot button (its native click would apply twice)
+  const cancel = () => { modal.hidden = true; };
+  const apply = async () => {
     const kind = modal.querySelector('.tabs button.active').dataset.kind;
     let side;
     if (kind === 'players') {
@@ -486,6 +489,13 @@ async function openSide(cid, m, si) {
     modal.hidden = true;
     await sendEdit('side', cid, m.id, { si, side });
   };
+  modal.querySelector('[data-x="cancel"]').onclick = cancel;
+  modal.querySelector('[data-x="apply"]').onclick = apply;
+  modal.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+    else if (e.key === 'Enter' && !e.target.matches('select, input, button')) { e.preventDefault(); apply(); }
+  });
+  modal.querySelector('.tabs button.active').focus(); // open inside the dialog, not behind it
 }
 
 // ---- pending + publish + undo/redo ----
