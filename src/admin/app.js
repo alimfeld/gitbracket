@@ -446,8 +446,13 @@ async function openSide(cid, m, si) {
       body.querySelector('#poolsel').addEventListener('change', fillRanks);
     } else {
       const undone = ctx.matches.filter(mm => !isDone(mm));
+      // the current feeder may already be decided — it must stay an option so
+      // the select represents the value being edited (Apply on an untouched
+      // modal must no-op, not re-seat to the first undone match)
+      const curFeeder = cur && cur.kind === 'match' ? ctx.matches.find(X => X && X.id === cur.match) : null;
+      const feeders = curFeeder && !undone.includes(curFeeder) ? [...undone, curFeeder] : undone;
       body.innerHTML = `<p class="hint">feeder match result</p>
-        <label class="field">Match <select id="matchsel">${undone.map(mm => `<option value="${mm.id}"${cur && cur.kind === 'match' && cur.match === mm.id ? ' selected' : ''}${descendants.has(mm.id) || mm.id === m.id ? ' disabled' : ''}>${mm.id} · ${esc(matchLabel(mm, ctx))}</option>`).join('')}</select></label>
+        <label class="field">Match <select id="matchsel">${feeders.map(mm => `<option value="${mm.id}"${cur && cur.kind === 'match' && cur.match === mm.id ? ' selected' : ''}${descendants.has(mm.id) || mm.id === m.id ? ' disabled' : ''}>${mm.id} · ${esc(matchLabel(mm, ctx))}</option>`).join('')}</select></label>
         <label class="field">Result <select id="resel"></select></label>`;
       const fillRes = () => {
         const mmId = +body.querySelector('#matchsel').value;
