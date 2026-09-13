@@ -6,7 +6,7 @@
 
 const path = require('path');
 const { loadRepo, isRealDate, schedEntries, pairBusy, consumedSlots, winTarget, reachedWinner, feederBounds } = require('./tools.js');
-const { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, poolStandings, resolveSide, isDeadTie, bestOfOf, schedTime, schedDays, placementLabel } = require('../site/derive.js');
+const { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, poolStandings, resolveSide, isDeadTie, bestOfOf, schedTime, schedDays, placementLabel, parentsOf } = require('../site/derive.js');
 
 const RESULTS = ['winner', 'loser'];
 const RESULT_STATUSES = ['played', 'walkover', 'void'];
@@ -444,16 +444,13 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
 
   // ---- the one-final rule: exactly one unfed champion-tree match, or the
   // bracket renders two "Final" labels and ordinal numbering picks an
-  // arbitrary root. placementLabel excludes classification matches (they sit
-  // under loser edges) — same predicate the renderer's mainFinal uses.
-  let finals = 0;
-  for (const m of matches) {
-    if (!m || typeof m !== 'object' || m.pool !== undefined || !Array.isArray(m.sides) || m.sides.length !== 2) continue;
-    if (placementLabel(m, ctx) !== null) continue;
-    if (matches.some(X => X && Array.isArray(X.sides)
-      && X.sides.some(s => s && s.kind === 'match' && s.result === 'winner' && s.match === m.id))) continue;
-    finals++;
-  }
+  // arbitrary root. winnerParent is derive's own edge index — the same
+  // classification mainFinal reads, so the gate can't drift from the renderer.
+  // placementLabel excludes classification matches (they sit under loser edges).
+  const { winnerParent } = parentsOf(ctx);
+  const finals = matches.filter(m => m && typeof m === 'object' && m.pool === undefined
+    && Array.isArray(m.sides) && m.sides.length === 2
+    && placementLabel(m, ctx) === null && !winnerParent.has(m.id)).length;
   if (finals > 1) err(cFile, `${finals} unfed knockout matches — exactly one championship final is allowed`);
 }
 
