@@ -128,13 +128,11 @@ function renderIndex(route, data) {
 }
 
 // One category per page; the switcher is the navigation — the first category
-// stays canonical at the bare slug, the rest select via ?cat=. The dot flags
-// the category with play in progress — group stage or knockout running.
+// stays canonical at the bare slug, the rest select via ?cat=.
 const catNav = (slug, ctxs, route) => ctxs.map((c, i) => {
   const p = { ...route, cat: i === 0 ? undefined : c.id };
   const active = (route.cat || ctxs[0].id) === c.id;
-  const live = ['groups', 'ko'].includes((catStatus(c) || {}).kind);
-  return `<a href="${esc(href(slug, 'tournament', p))}"${active ? ' aria-current="true"' : ''}>${live ? '<span class="live" aria-hidden="true">●</span> ' : ''}${esc(c.name || c.id)}</a>`;
+  return `<a href="${esc(href(slug, 'tournament', p))}"${active ? ' aria-current="true"' : ''}>${esc(c.name || c.id)}</a>`;
 }).join('');
 
 // The tournament views' change cue: a poll that actually changed the file
@@ -346,7 +344,7 @@ function sideRow(m, ctx, i) {
   // a malformed match (missing sides) renders TBD rows — the gate reports the
   // file, the renderer must never take the board down with it
   const side = m.sides && m.sides[i];
-  return `<div class="side"${w === i ? ' data-win' : ''}><span>${esc(sideLabel(side, ctx))}</span><span class="score">${scoreCells(m, i, ctx)}${w === i ? '<span aria-hidden="true">✓</span>' : ''}</span></div>`;
+  return `<div class="side"${w === i ? ' data-win' : ''}><span>${esc(sideLabel(side, ctx))}</span><span class="score">${scoreCells(m, i, ctx)}</span></div>`;
 }
 
 function renderVenue(route, data, now) {
