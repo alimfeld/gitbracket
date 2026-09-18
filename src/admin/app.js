@@ -507,6 +507,10 @@ let publishing = false;
 async function refreshPending() {
   const p = await get('/api/pending');
   if (!p) return;
+  const site = $('siteLink');
+  site.href = `https://${p.domain}/#${S.slug}`;
+  $('kioskLink').href = `${site.href}/venues`;
+  $('links').hidden = !(p.domain && S.slug); // the CNAME is where the last publish went — without it there is nothing to link to
   $('pendingBadge').textContent = p.commits.length ? `${p.commits.length} pending` : 'clean';
   $('pendingList').innerHTML = p.commits.length
     ? p.commits.map(c => `<li>${esc(c.msg)}</li>`).join('')

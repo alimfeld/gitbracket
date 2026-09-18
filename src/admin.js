@@ -15,7 +15,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
-const { loadRepo, catCtx, schedEntries, pairBusy, fixedPlayers, consumedSlots, descendants, slotsOverlap, feederBounds, cleanTree, git, defaultSlug } = require('./tools.js');
+const { loadRepo, catCtx, schedEntries, pairBusy, fixedPlayers, consumedSlots, descendants, slotsOverlap, feederBounds, cleanTree, git, cnameOf, defaultSlug } = require('./tools.js');
 const { execEdit, parseResult } = require('./edits.js');
 const { matchSlotMs, schedTime } = require('../site/derive.js');
 const { validateRepo } = require('./validate.js');
@@ -281,7 +281,7 @@ function serve(state) {
         const p = unpushed(state.root);
         const dirty = git(state.root, ['status', '--porcelain', '--', 'site/']);
         const top = state.redo && state.redo.length ? state.redo[state.redo.length - 1] : null;
-        return json(res, 200, { ...p, dirty: dirty.code === 0 && dirty.out.trim().length > 0, slug: state.slug, redo: top ? { sha: top.sha.slice(0, 7), msg: top.msg } : null });
+        return json(res, 200, { ...p, dirty: dirty.code === 0 && dirty.out.trim().length > 0, slug: state.slug, domain: cnameOf(state.root), redo: top ? { sha: top.sha.slice(0, 7), msg: top.msg } : null });
       }
       if (url === '/api/edit' && req.method === 'POST') {
         let body;

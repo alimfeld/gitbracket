@@ -32,6 +32,9 @@ h2 { font-size: .95rem; margin: 0 0 .5rem; }
 }
 .picks { display: flex; gap: 1rem; }
 .picks label { color: var(--muted); font-size: .8rem; }
+.links { display: flex; gap: .75rem; font-size: .8rem; }
+.links a { color: var(--accent); text-decoration: none; }
+.links a:hover { text-decoration: underline; }
 .actions { margin-left: auto; display: flex; gap: .5rem; align-items: center; }
 button { font: inherit; padding: .3rem .7rem; border: 1px solid var(--line); background: #fff; border-radius: .375rem; cursor: pointer; }
 button.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
