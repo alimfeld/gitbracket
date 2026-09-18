@@ -1075,14 +1075,14 @@ function playerStatus(ctx, pid) {
     }
     return inWord(Math.max(...koRows.map(r => koColumn(r.m, ctx))));
   }
-  if (ctx.matches.every(isDone)) {
-    const w = winners(ctx);
-    if (w) {
-      if (w.first.includes(pid)) return 'Champion';
-      if (w.second.includes(pid)) return 'Runner-up';
-      if (w.third && w.third.includes(pid)) return '3rd';
-      if (w.fourth && w.fourth.includes(pid)) return '4th';
-    }
+  // The podium is decided by its own matches — gating on the last category match
+  // would demote finalists to "Out in groups"/"Eliminated in the final".
+  const w = winners(ctx);
+  if (w) {
+    if (w.first.includes(pid)) return 'Champion';
+    if (w.second.includes(pid)) return 'Runner-up';
+    if (w.third && w.third.includes(pid)) return '3rd';
+    if (w.fourth && w.fourth.includes(pid)) return '4th';
   }
   const lost = rows.filter(r => { const w = winnerIdx(r.m); return w !== null && w !== r.i; }); // void settles, counts nothing
   const koLost = lost.filter(r => r.m.pool === undefined && placementLabel(r.m, ctx) === null);

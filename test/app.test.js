@@ -9,7 +9,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, matchSlotMs, sideLabel, placementLabel, koColumn, koOrdinal, matchLabel, schedTime, toCats, isDeadTie, winners, catStatus, roundName } = require('../site/derive.js');
+const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, matchSlotMs, sideLabel, placementLabel, koColumn, koOrdinal, matchLabel, schedTime, toCats, isDeadTie, winners, catStatus, roundName, playerStatus } = require('../site/derive.js');
 const { parseRoute, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset } = require('../site/app.js');
 const { FIX, catOf, pageData, repoPage, withTjson, text, vals, card, cards, links } = require('./helpers.js');
 const { loadRepo } = require('../src/tools.js');
@@ -269,6 +269,15 @@ test('winners: first/second off the final, third/fourth off the bronze; voids ki
   bjson.matches.t.find(m => m.id === 20).result = { status: 'void' };
   const bw = winners(place8Ctx(bjson));
   assert(bw.first.join() === 'p1' && bw.second.join() === 'p2' && bw.third === null, 'a void bronze drops the third-place prize, keeps the podium');
+});
+
+test('playerStatus: the podium lands the moment the final is played, not when the category wraps', () => {
+  const tjson = JSON.parse(JSON.stringify(require(FIX('place8', 'tournaments', 'place8.json'))));
+  tjson.matches.t.find(m => m.id === 20).result = undefined; // bronze still to play
+  const ctx = place8Ctx(tjson);
+  assert(playerStatus(ctx, 'p1') === 'Champion', 'the final winner is already champion with a bronze pending');
+  assert(playerStatus(ctx, 'p2') === 'Runner-up', 'the final loser is runner-up, not eliminated');
+  assert(playerStatus(ctx, 'p5') === 'In placement', 'a bronze-pending player stays in placement');
 });
 
 test('playerMatches: only matches the player is actually in, not potential slots', () => {
