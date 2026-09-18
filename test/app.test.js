@@ -329,7 +329,43 @@ test('result statuses render: W/O and void on cards, settled matches stay on the
   assert(text(venue).includes('P1') && text(venue).includes('P3'), 'the board carries every court-1 slot');
   assert(vals(venue, 'data-status').includes('done') && text(venue).includes('void') && text(venue).includes('W/O'), 'settled matches — played, walkover, void — all stay on the full-day board');
   assert(vals(venue, 'data-status').includes('upcoming'), 'the open 11:00 final is still upcoming at 09:30');
-  assert(vals(venue, 'data-current').length >= 1, 'the board marks its anchor row for the follow');
+  assert(venue.includes('id="now-line"'), 'the board carries the now-line as the follow target');
+});
+
+test('kiosk calendar: cards sit by wall-clock top — a slot only on a late venue never drops below earlier times', () => {
+  // The old row-union ordered rows by per-venue insertion, so a 12:00 match on
+  // the second court only landed after the whole afternoon. The calendar has
+  // no row order to misalign: position is wall-clock, so 12:00 must fall
+  // between 11:30 and 14:00 no matter which venue carries it.
+  const tjson = {
+    name: 'Cal', location: 'Hall', timezone: 'UTC',
+    venues: [{ id: 'c1', name: 'Court 1' }, { id: 'c2', name: 'Court 2' }],
+    players: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }, { id: 'p3', name: 'P3' }, { id: 'p4', name: 'P4' }, { id: 'p5', name: 'P5' }, { id: 'p6', name: 'P6' }],
+    categories: [{ id: 't', name: 'T', bestOf: { groups: 1, knockout: 1 }, slotMinutes: { groups: 30, knockout: 30 } }],
+    matches: { t: [
+      { id: 1, pool: 'A', scheduled: '2026-05-02T11:30:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p1'] }, { kind: 'players', ids: ['p2'] }] },
+      { id: 2, pool: 'A', scheduled: '2026-05-02T12:00:00', venue: 'c2', sides: [{ kind: 'players', ids: ['p3'] }, { kind: 'players', ids: ['p4'] }] },
+      { id: 3, pool: 'A', scheduled: '2026-05-02T14:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p5'] }, { kind: 'players', ids: ['p6'] }] },
+    ] },
+  };
+  const html = renderVenue({ slug: 'cal', view: 'venues' }, pageData(tjson, 'cal'), Date.parse('2026-05-02T12:05:00Z'));
+  const topOf = {};
+  for (const m of html.matchAll(/<div class="bcard"[^>]* style="top:([\d.]+)px[^"]*">([\s\S]*?)<\/article>/g)) {
+    const time = /<time[^>]*>([^<]*)<\/time>/.exec(m[2]);
+    if (time) topOf[time[1]] = +m[1];
+  }
+  assert(topOf['11:30'] < topOf['12:00'] && topOf['12:00'] < topOf['14:00'], 'the 12:00 card sits between 11:30 and 14:00 — placement is wall-clock, not venue order');
+  assert(html.includes('class="hour"'), 'the day grid carries an hour ruler');
+  assert(html.includes('class="col" style="grid-column: 1"'), 'the first court column starts at the board edge — cards sit under their heading');
+  assert(/id="now-line" style="top:[\d.]+px/.test(html), 'the board carries the now-line, placed at the render instant');
+  // a clock on another day has no wall minute in this board — before the day
+  // the line pins to the board top (the follow rests at the day's start), after
+  // it to the bottom
+  const early = renderVenue({ slug: 'cal', view: 'venues' }, pageData(tjson, 'cal'), Date.parse('2026-05-01T20:00:00Z'));
+  assert(/id="now-line" style="top:0px/.test(early), 'a clock before the shown day pins the now-line to the board top');
+  const late = renderVenue({ slug: 'cal', view: 'venues' }, pageData(tjson, 'cal'), Date.parse('2026-05-03T09:00:00Z'));
+  const dayH = +/--day-h: (\d+)/.exec(late)[1];
+  assert(late.includes(`id="now-line" style="top:${dayH}px"`), 'a clock after the shown day pins the now-line to the board bottom');
 });
 
 test('bracket walkers tolerate a sideless match: report, never throw', () => {

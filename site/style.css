@@ -337,7 +337,7 @@ body.venue {
 .kiosk-top {
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 1; /* the board's cards and lines stick under it; the sim chip (10) stays on top */
   display: grid;
   grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
   column-gap: calc(var(--space)*4);
@@ -372,11 +372,57 @@ body.venue header {
 }
 
 .board {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
-  row-gap: calc(var(--space)*2);
+  grid-auto-rows: 1fr;
   column-gap: calc(var(--space)*4);
   margin-top: calc(var(--space)*2);
+  height: calc(var(--day-h) * 1px);
+}
+
+/* hour lines overlay the whole board — the scale of the day; the lines never
+   intercept a tap. Cards carry their own times, so there are no labels. */
+.ruler {
+  position: absolute;
+  inset: 0;
+  grid-column: 1 / -1;
+  pointer-events: none;
+}
+
+.hour {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dotted var(--line);
+}
+
+/* where the day is right now: the renderer places it at the wall-minute y;
+   the per-minute re-render advances it with the clock */
+.now {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 2px solid var(--live);
+}
+
+.board .col {
+  position: relative;
+}
+
+/* one card per slot, placed by wall clock: top = its start, the slot's
+   minutes are its height — a longer slot reads as a taller block */
+.bcard {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.bcard > article {
+  flex: 1;
+  background: var(--page); /* cards overlay the hour lines — opaque, so no line reads through */
 }
 
 #clock {

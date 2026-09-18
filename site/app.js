@@ -3,6 +3,12 @@
 const POLL_MS = 30000;
 const FOLLOW_MS = 60000; // the kiosk re-follows the play on this cadence, data change or not
 const RECENT_MS = 2 * 60 * 1000; // how long a completed result stays on the kiosk's latest line
+// The dense-day floor for the kiosk calendar: one card-height per shortest
+// slot, so a 10-min slot day renders as a walkable strip, a 60-min day as a
+// screen. 135px is the card's measured height at base zoom — under-tune it
+// and cards overlap their next slot. ponytail: re-tune on the wall screen
+// with the 1.6px/min floor and the 140px header allowance beside it.
+const CARD_PX = 135;
 
 // derive.js loads first as a classic script, so its names are already page
 // globals; under node, the module lands on globalThis.
@@ -12,6 +18,13 @@ if (typeof module !== 'undefined') {
 
 // The venue's display name — a missing id (hand-edited or staged) falls back to the id.
 const venueName = (ctx, id) => ctx.venues.get(id) || id;
+
+// Wall-clock minutes of an instant — the day grid and the now-line both live
+// in wall minutes, never offsets.
+const wallClockMin = (t, tz) => {
+  const f = fmtTime(t, tz).split(':');
+  return f.length === 2 ? +f[0] * 60 + +f[1] : null;
+};
 
 // The sim clock's aim: land it on the event's first scheduled match, so the
 // kiosk opens where the tournament starts. Pure — tests pin it.
@@ -386,18 +399,46 @@ function renderVenue(route, data, now) {
   // clock, aligned to the board by the shared --cols track
   const top = `<div class="kiosk-top" style="--cols: ${cols.length}">${header}${cols.map(id => `<h2>${esc(venueName(ctxs[0], id))}</h2>`).join('')}</div>`;
   if (!cols.length) return top + '<p>Nothing scheduled.</p>';
-  // Columns are venues, rows are start times — the cards of one wave line up;
-  // holes stay empty cells. ponytail: one card per (venue, start) cell — a done
-  // match squeezed into a taken slot hides its sibling; fix the data, the grid
-  // has no cell for two.
-  const byVenue = new Map(cols.map(id => [id, new Map()]));
+  // Wall-clock minutes drive the day's layout — never instants or offsets, so
+  // the board stays right if DST rules change. One window per row (start +
+  // slot end) feeds the frame, the scale, and the placement alike. A missing
+  // slot length (hand-edited data — the gate tolerates it) leaves e null.
+  const win = open.map(r => {
+    const s = wallClockMin(r.t, r.ctx.tz);
+    const sl = matchSlotMs(r.m, r.ctx) / 60000;
+    return { r, s, e: Number.isFinite(sl) ? s + sl : null };
+  });
   // a column holds only declared courts — a match on a venue the file never
   // declares (the gate reports it) renders absent, never a crash
-  for (const r of open) {
-    const cell = byVenue.get(r.m.venue);
-    if (cell) cell.set(r.t, r);
+  const byVenue = new Map(cols.map(id => [id, []]));
+  for (const w of win) {
+    const list = byVenue.get(w.r.m.venue);
+    if (list) list.push(w);
   }
-  const times = [...new Set(cols.flatMap(id => [...byVenue.get(id).keys()]))];
+  // The day's frame: first start to last slot end, padded to a quarter-hour so
+  // the ruler and the first/last cards breathe.
+  let dayStart = Math.min(...win.map(w => w.s));
+  const endMax = Math.max(...win.map(w => w.e ?? -Infinity));
+  let dayEnd = Number.isFinite(endMax) ? endMax : dayStart + 60;
+  dayStart = Math.floor((dayStart - 15) / 15) * 15;
+  dayEnd = Math.ceil((dayEnd + 15) / 15) * 15;
+  if (dayStart < 0) dayStart = 0;
+  // Scale: sparse days spread to the screen, dense days to one card per slot —
+  // one rule for any slot length, so a 60-min match reads six times a 10-min
+  // one and the shortest card always fits. (30: no known slot lengths)
+  const sShort = Math.min(...win.filter(w => w.e !== null).map(w => w.e - w.s), 30);
+  const total = dayEnd - dayStart; // ≥ 30 by the quarter-hour padding — never 0
+  const avail = typeof document !== 'undefined' ? document.documentElement.clientHeight : 0;
+  const ppm = Math.max(1.6, avail ? (avail - 140) / total : 0, CARD_PX / sShort);
+  const y = min => (min - dayStart) * ppm;
+  // hour lines trace the day's scale, cards carry their own times — so the
+  // lines render without labels, only within the board's frame: no negative
+  // tops below a mid-hour dayStart, no lines past-midnight on an overrun slot
+  const hour0 = Math.max(0, Math.ceil(dayStart / 60) * 60);
+  const ruler = [];
+  for (let hm = hour0; hm < Math.min(1440, dayEnd); hm += 60) {
+    ruler.push(`<div class="hour" style="top:${y(hm)}px"></div>`);
+  }
   const card = r => {
     const status = kioskStatus(r, now);
     const when = timeEl(r.t, r.ctx.tz);
@@ -405,18 +446,24 @@ function renderVenue(route, data, now) {
     return matchCard(r.m, r.ctx, { meta: ['catName', 'label'],
       head: [{ html: when }, { html: flag }], status });
   };
-  const cells = [];
-  const anchorTime = times[currentRowIndex(times, now)];
-  for (const t of times) {
-    for (const id of cols) {
-      const r = byVenue.get(id).get(t);
-      // only the anchor row's cells carry data-current — the scroll target,
-      // recomputed from now each render
-      cells.push(r ? (t === anchorTime ? `<div data-current="${r.t}">${card(r)}</div>` : card(r)) : '<div></div>');
-    }
+  // Cards sit at their wall-clock top; ordering can't drift. The follow's
+  // scroll target is the now-line — the render places it at the wall-minute y.
+  const placed = w => {
+    const { r, s, e } = w;
+    return `<div class="bcard" style="top:${y(s)}px; min-height:${e !== null ? (e - s) * ppm : CARD_PX}px">${card(r)}</div>`;
+  };
+  const dayH = Math.ceil(total * ppm);
+  const nowMin = wallClockMin(now, tz);
+  // The line sits at the wall-minute y while the clock is in the shown day;
+  // a clock on any other day has no wall minute here, so the line pins to the
+  // day's top (before) or bottom (after) — the follow rests at the day's
+  // start or end instead of wandering mid-board on a stray date.
+  const nowDay = dayKey(now, tz);
+  let nowY = null;
+  if (nowMin !== null && nowDay !== null) {
+    nowY = nowDay === shownDay ? Math.min(Math.max(y(nowMin), 0), dayH) : nowDay < shownDay ? 0 : dayH;
   }
-  // data-current: the scroll target for the follow, recomputed from now each render
-  return top + `<div class="board" style="--cols: ${cols.length}">${cells.join('')}</div>`;
+  return top + `<div class="board" style="--cols: ${cols.length}; --day-h: ${dayH}"><div class="ruler">${ruler.join('')}${nowY !== null ? `<div class="now" id="now-line" style="top:${nowY}px"></div>` : ''}</div>${cols.map((id, i) => `<div class="col" style="grid-column: ${i + 1}">${byVenue.get(id).map(placed).join('')}</div>`).join('')}</div>`;
 }
 
 // Do scheduled matches span more than one wall-clock day? Gates the date on
@@ -589,7 +636,7 @@ function mountSimClock({ tjsonOf, onChange }) {
     const tz = (tjsonOf() || {}).timezone || 'UTC';
     readout.textContent = `${dayShort(t, tz)} · ${fmtTime(t, tz)}`;
   };
-  // a clock change re-renders the board — statuses and the anchor recompute
+  // a clock change re-renders the board — statuses and the now-line recompute
   const apply = () => { panel(); onChange(); };
   const step = ms => { localStorage.setItem(SIM_KEY, String(simOffset() + ms)); apply(); };
   toggle.onclick = () => {
@@ -657,15 +704,15 @@ function boot() {
       // up fresh each tick.
       clockTimer = setInterval(() => {
         const t = now();
+        const tz = (data && data.tjson && data.tjson.timezone) || 'UTC';
         const el = document.getElementById('clock');
         if (el) {
-          const tz = (data && data.tjson && data.tjson.timezone) || 'UTC';
           el.textContent = `${dayShort(t, tz)} · ${fmtTime(t, tz)}`; // the kiosk clock carries its date
           el.dateTime = new Date(t).toISOString(); // the instant, derived — the label stays wall clock
         }
         sim.panel(); // the sim panel's readout rides the kiosk tick
         // once a minute, re-follow from the last snapshot — statuses and the
-        // anchor recompute against now
+        // now-line recompute against now
         if (t - lastFollow >= FOLLOW_MS && data) {
           lastFollow = t;
           render(route, data);
@@ -698,11 +745,11 @@ function boot() {
   };
   const tick = () => load(route);
 
-  // Centre the anchor row on every render; the clock handler re-aims on its
+  // Centre the now-line on every render; the clock handler re-aims on its
   // own minute.
   const aim = () => {
-    const cell = document.querySelector('.board [data-current]');
-    if (cell) cell.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    const ln = document.getElementById('now-line');
+    if (ln) ln.scrollIntoView({ block: 'center', behavior: 'smooth' });
   };
 
   const render = (r, d) => {
