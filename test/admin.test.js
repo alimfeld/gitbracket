@@ -141,6 +141,7 @@ test('admin doEdit move: clearing time+venue is one atomic commit, a real move i
     assert.equal(r.ok, true, 'unscheduling lands');
     assert(m8().scheduled === undefined && m8().venue === undefined, 'both keys drop — atomic');
     assert.equal(admin.unpushed(tmp).commits.length, 1, 'exactly one commit for the pair');
+    assert(validateRepo(loadRepo(siteRoot)).errs.length === 0, 'cleared snapshot validates');
     // and a real move — md40/9 is the final: feeders 7/8 end at 12:00 (45-min
     // group slots), nothing consumes it, court-1 is free at 12:00 exactly; the
     // 45-min grid makes 12:00 the slot before its own 12:15
@@ -149,21 +150,6 @@ test('admin doEdit move: clearing time+venue is one atomic commit, a real move i
     assert.equal(m9().scheduled, '2025-07-14T12:00:00', 'time set');
     assert.equal(m9().venue, 'court-1', 'venue set');
     assert(validateRepo(loadRepo(siteRoot)).errs.length === 0, 'moved snapshot validates');
-  } finally {
-    fs.rmSync(tmp, { recursive: true, force: true });
-  }
-});
-
-test('admin doEdit: a move clears time and venue in one atomic commit — the panel clears send the same shared funnel as a drag', () => {
-  const { tmp, siteRoot, state } = scratchWithRemote();
-  try {
-    const m8 = () => loadRepo(siteRoot).tournaments.get('sample').tjson.matches.md40.find(m => m.id === 8);
-    assert(m8().scheduled && m8().venue, 'precondition: md40/8 is scheduled on a court');
-    assert.equal(admin.doEdit(state, 'move', 'md40', '8', { time: null, venue: null }).ok, true, 'the clears land — nothing is written as null');
-    assert.equal(m8().scheduled, undefined, 'scheduled drops');
-    assert.equal(m8().venue, undefined, 'venue drops');
-    assert.equal(admin.unpushed(tmp).commits.length, 1, 'one atomic commit');
-    assert(validateRepo(loadRepo(siteRoot)).errs.length === 0, 'cleared snapshot validates');
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

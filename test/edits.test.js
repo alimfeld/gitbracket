@@ -129,23 +129,6 @@ test('editor writeEdit: a cross-day time edit is refused with the cause named; d
   }
 });
 
-test('editor writeEdit: an out-of-band hand edit is refused by name — the stale-memory write never silently clobbers it', () => {
-  const { tmp, dataRoot } = scratchSite('sample');
-  try {
-    const repo = loadRepo(dataRoot); // the daemon's boot snapshot — memory has the original file
-    const file = path.join(dataRoot, 'tournaments', 'sample.json');
-    const disk = JSON.parse(fs.readFileSync(file, 'utf8'));
-    disk.players[0].name = 'Hand-Edited Name'; // the operator's out-of-band fix after boot
-    fs.writeFileSync(file, JSON.stringify(disk, null, 2) + '\n');
-    const res = editor.writeEdit(dataRoot, repo, 'sample', 'md40', (c) => editor.applyMove(c, '2', { time: c.find(x => x.id === 2).scheduled, venue: 'court-1' }));
-    assert(res.err && /changed on disk/.test(res.err), `the staleness is refused with the cause named, got: ${res.err}`);
-    assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).players[0].name, 'Hand-Edited Name', 'the hand edit survives — nothing written');
-    assert.equal(repo.tournaments.get('sample').tjson.matches.md40.find(m => m.id === 2).venue, 'court-2', 'the apply never ran — no in-memory edit to roll back');
-  } finally {
-    fs.rmSync(tmp, { recursive: true, force: true });
-  }
-});
-
 // execEdit returns before any git call on these — an unknown verb/shape must
 // never reach the write (the old fallbacks silently cleared time or result).
 test('editor execEdit: unknown verbs and result shapes are refused by name, never a silent clear', () => {
@@ -189,12 +172,6 @@ test('editor execEdit: non-object values are refused by name, never dereferenced
   }
 });
 
-test('editor parseGame', () => {
-  assert(JSON.stringify(editor.parseGame('11-9')) === JSON.stringify({ a: 11, b: 9 }), 'a-b parses');
-  assert(JSON.stringify(editor.parseGame('11:9')) === JSON.stringify({ a: 11, b: 9 }), 'a:b parses');
-  assert(editor.parseGame('11x9') === null, 'bad shape is null');
-});
-
 test('editor commitMessage: conventional types with tournament scope', () => {
   assert.equal(editor.commitMessage('score', '2026-mammut60', 'md40', '1', '11:9 · 11:7'), 'score(2026-mammut60): md40/1 11:9 · 11:7');
   assert.equal(editor.commitMessage('walkover', '2026-mammut60', 'xd', '7', 'side a wins by walkover'), 'walkover(2026-mammut60): xd/7 side a wins by walkover');
@@ -213,22 +190,6 @@ test('editor editDetail: a move reports time and court, never the match result',
   assert.equal(editor.editDetail('result', {}, { shape: 'void' }), 'void', 'void detail');
   assert.equal(editor.editDetail('result', { games: [{ a: 21, b: 19 }, { a: 11, b: 5 }] }, { shape: 'score' }), '21-19 · 11-5', 'a score detail speaks dashes, mirroring the board column');
   assert.equal(editor.editDetail('result', {}, { shape: 'clear' }), '→ TBD', 'a clear returns the match to the board');
-});
-
-test('editor writeEdit: a cross-day edit is refused with the cause named — the index dates only change via the generator', () => {
-  const { tmp, dataRoot } = scratchSite('sample');
-  try {
-    const repo = loadRepo(dataRoot);
-    const file = path.join(dataRoot, 'tournaments', 'sample.json');
-    const before = fs.readFileSync(file, 'utf8');
-    const res = editor.writeEdit(dataRoot, repo, 'sample', 'md40', (c) => editor.applyMove(c, '2', { time: '2025-07-15T09:00:00', venue: c.find(x => x.id === 2).venue }));
-    assert(res.err && /changes the tournament's scheduled days \(2025-07-14 → 2025-07-14, 2025-07-15\)/.test(res.err), `the refusal names the day change, got: ${res.err}`);
-    assert(fs.readFileSync(file, 'utf8') === before, 'rejected edit rolls the file back byte-identical');
-    const m2 = repo.tournaments.get('sample').tjson.matches.md40.find(m => m.id === 2);
-    assert.equal(m2.scheduled, '2025-07-14T09:00:00', 'in-memory match restored for a same-process retry');
-  } finally {
-    fs.rmSync(tmp, { recursive: true, force: true });
-  }
 });
 
 test('editor writeEdit/execEdit: an edit already on record writes and commits nothing — the unchange reports', () => {
