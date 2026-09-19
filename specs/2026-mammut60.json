@@ -41,6 +41,7 @@
     "phoebe": "Phoebe",
     "reto": "Reto",
     "stephen": "Stephen",
+    "suzi": "Suzi",
     "tom": "Tom"
   },
   "categories": [
@@ -159,6 +160,10 @@
       [
         "marc",
         "phoebe"
+      ],
+      [
+        "gerry",
+        "suzi"
       ],
       [
         "charles",
