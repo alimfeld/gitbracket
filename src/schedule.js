@@ -207,7 +207,7 @@ function buildKnockout(pools, names, mid, fin, placements) {
     }
   }
 
-  return matches;
+  return { matches, rounds };
 }
 
 function buildCategory(teams, cat, poolSize) {
@@ -243,9 +243,11 @@ function buildCategory(teams, cat, poolSize) {
   }
 
   if (cat.knockout !== false && (pools.length > 1 || cat.knockout === true)) {
-    matches.push(...buildKnockout(pools, names, mid, cat.final || {}, cat.placements));
+    const ko = buildKnockout(pools, names, mid, cat.final || {}, cat.placements);
+    matches.push(...ko.matches);
+    return { matches, rounds: ko.rounds }; // rounds: champion-tree rounds, leaves to the final — scheduling aligns each round
   }
-  return matches;
+  return { matches, rounds: [] };
 }
 
 // ---------- scheduling ----------
@@ -253,11 +255,16 @@ function buildCategory(teams, cat, poolSize) {
 // Greedy court + time assignment across all categories. Matches run in build
 // order — pools first (players known), then knockout in dependency order. A
 // match's floor is its block's start, or the end of its feeders / its pool's
-// last match, so brackets never start before their sources. Each match takes
-// the earliest floor-aligned slot with a free court and no same-window player
-// double-book (pool matches only — knockout sides resolve only after results).
-// Occupancy is a start/end window over the effective slot length (matchSlotMs),
-// matching the validator's overlap rule. Tuples are [cat, teamList, matches].
+// last match, so brackets never start before their sources. One bracket rule
+// rides on top: every match of a champion-tree round shares the round's latest
+// feeder end — a play-in bracket plays all its QFs together instead of
+// staggering the play-in's quarter a slot behind the others. Placement matches
+// (loser-fed) keep own-feeder floors; their feeders are aligned rounds, so
+// they land aligned too. Each match takes the earliest floor-aligned slot with
+// a free court and no same-window player double-book (pool matches only —
+// knockout sides resolve only after results). Occupancy is a start/end window
+// over the effective slot length (matchSlotMs), matching the validator's
+// overlap rule. Tuples are [cat, teamList, matches, rounds].
 function scheduleMatches(categories, venues, tz, slotCfgOf, eventDate, blockStart) {
   if (venues.length === 0) throw new Error('spec: venues must be a non-empty id -> name map');
   const offset = tzOffset(tz, eventDate);
@@ -267,17 +274,25 @@ function scheduleMatches(categories, venues, tz, slotCfgOf, eventDate, blockStar
   const endOf = new Map(); // match id -> end ms (feeder floor)
   const poolDone = new Map(); // pool -> end ms (pool-slot floor)
 
-  for (const [cat, , matches] of categories) {
+  for (const [cat, , matches, rounds] of categories) {
     const start = startOf(cat);
     if (Number.isNaN(start)) throw new Error(`spec: no blocks entry for category ${cat}`);
     const catSlots = slotCfgOf.get(cat);
+    // A play-in bracket must not stagger its quarters: every match of a
+    // champion-tree round shares the round's latest feeder end.
+    const roundOf = new Map(); // match id -> its round's matches
+    rounds.forEach((rs) => { for (const m of rs) roundOf.set(m.id, rs); });
     for (const m of matches) {
       const slotMs = matchSlotMs(m, { slotMinutes: catSlots });
       const players = fixedPlayers(m);
       let t = start;
-      for (const s of m.sides) {
-        if (s.kind === 'match') t = Math.max(t, endOf.get(s.match) ?? start);
-        else if (s.kind === 'pool') t = Math.max(t, poolDone.get(s.pool) ?? start);
+      // whole-round floor: pools/placement use the match itself, knockout its round
+      const grp = roundOf.get(m.id) ?? [m];
+      for (const fm of grp) {
+        for (const s of fm.sides) {
+          if (s.kind === 'match') t = Math.max(t, endOf.get(s.match) ?? start);
+          else if (s.kind === 'pool') t = Math.max(t, poolDone.get(s.pool) ?? start);
+        }
       }
       for (;;) {
         const free = (v) => !(courtUse.get(v) ?? []).some((w) => slotsOverlap(t, t + slotMs, w.start, w.end));
@@ -424,7 +439,8 @@ function generate(spec) {
       console.log(`${cat}: skipped (${teamList.length} team)`);
       continue;
     }
-    results.push([cat, teamList, buildCategory(teamList, catById.get(cat), poolSize)]);
+    const built = buildCategory(teamList, catById.get(cat), poolSize);
+    results.push([cat, teamList, built.matches, built.rounds]);
   }
   const slotCfgOf = new Map(CATS.map((c) => [c.id, c.slotMinutes]));
   scheduleMatches(results, VENUES.map((v) => v.id), timezone, slotCfgOf, eventDate, blockStart);
