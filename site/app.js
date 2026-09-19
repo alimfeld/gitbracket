@@ -487,7 +487,10 @@ const resultText = (ctx, m) => {
   const when = t !== null ? fmtTime(t, ctx.tz) : 'TBD';
   const where = m.venue ? venueName(ctx, m.venue) : 'TBD';
   const w = winnerIdx(m);
-  return w === null ? `${where} · ${when} · annulled` : `${where} · ${when} · ${sideLabel(m.sides[w], ctx)} won`;
+  // a scored match with no sides (invalid via the gate, but the recency line
+  // must not die on it — bad-sides-knockout's played m5 has none)
+  const s = m.sides && m.sides[w];
+  return w === null ? `${where} · ${when} · annulled` : `${where} · ${when} · ${s ? sideLabel(s, ctx) : 'the match'} won`;
 };
 
 // Matches that completed since the last poll, merged into the rolling window.
