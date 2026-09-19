@@ -381,29 +381,14 @@ body.venue header {
   height: calc(var(--day-h) * 1px);
 }
 
-/* hour lines overlay the whole board — the scale of the day; the lines never
-   intercept a tap. Cards carry their own times, so there are no labels. */
-.ruler {
-  position: absolute;
-  inset: 0;
-  grid-column: 1 / -1;
-  pointer-events: none;
-}
-
-.hour {
-  position: absolute;
-  left: 0;
-  right: 0;
-  border-top: 1px dotted var(--line);
-}
-
 /* where the day is right now: the renderer places it at the wall-minute y;
-   the per-minute re-render advances it with the clock */
+   the per-minute re-render advances it with the clock; it never intercepts a tap */
 .now {
   position: absolute;
   left: 0;
   right: 0;
   border-top: 2px solid var(--live);
+  pointer-events: none;
 }
 
 .board .col {
@@ -422,7 +407,7 @@ body.venue header {
 
 .bcard > article {
   flex: 1;
-  background: var(--page); /* cards overlay the hour lines — opaque, so no line reads through */
+  background: var(--page); /* cards are opaque — nothing overlays them, ever */
 }
 
 #clock {

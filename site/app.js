@@ -418,7 +418,7 @@ function renderVenue(route, data, now) {
     if (list) list.push(w);
   }
   // The day's frame: first start to last slot end, padded to a quarter-hour so
-  // the ruler and the first/last cards breathe.
+  // the first/last cards breathe.
   let dayStart = Math.min(...win.map(w => w.s));
   const endMax = Math.max(...win.map(w => w.e ?? -Infinity));
   let dayEnd = Number.isFinite(endMax) ? endMax : dayStart + 60;
@@ -433,14 +433,6 @@ function renderVenue(route, data, now) {
   const avail = typeof document !== 'undefined' ? document.documentElement.clientHeight : 0;
   const ppm = Math.max(1.6, avail ? (avail - 140) / total : 0, CARD_PX / sShort);
   const y = min => (min - dayStart) * ppm;
-  // hour lines trace the day's scale, cards carry their own times — so the
-  // lines render without labels, only within the board's frame: no negative
-  // tops below a mid-hour dayStart, no lines past-midnight on an overrun slot
-  const hour0 = Math.max(0, Math.ceil(dayStart / 60) * 60);
-  const ruler = [];
-  for (let hm = hour0; hm < Math.min(1440, dayEnd); hm += 60) {
-    ruler.push(`<div class="hour" style="top:${y(hm)}px"></div>`);
-  }
   const card = r => {
     const status = kioskStatus(r, now);
     const when = timeEl(r.t, r.ctx.tz);
@@ -465,7 +457,7 @@ function renderVenue(route, data, now) {
   if (nowMin !== null && nowDay !== null) {
     nowY = nowDay === shownDay ? Math.min(Math.max(y(nowMin), 0), dayH) : nowDay < shownDay ? 0 : dayH;
   }
-  return top + `<div class="board" style="--cols: ${cols.length}; --day-h: ${dayH}"><div class="ruler">${ruler.join('')}${nowY !== null ? `<div class="now" id="now-line" style="top:${nowY}px"></div>` : ''}</div>${cols.map((id, i) => `<div class="col" style="grid-column: ${i + 1}">${byVenue.get(id).map(placed).join('')}</div>`).join('')}</div>`;
+  return top + `<div class="board" style="--cols: ${cols.length}; --day-h: ${dayH}">${nowY !== null ? `<div class="now" id="now-line" style="top:${nowY}px"></div>` : ''}${cols.map((id, i) => `<div class="col" style="grid-column: ${i + 1}">${byVenue.get(id).map(placed).join('')}</div>`).join('')}</div>`;
 }
 
 // Do scheduled matches span more than one wall-clock day? Gates the date on
