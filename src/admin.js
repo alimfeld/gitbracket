@@ -217,7 +217,15 @@ function json(res, code, obj) {
 function readBody(req) {
   return new Promise((resolve) => {
     let b = '';
-    req.on('data', c => { b += c; if (b.length > 1e6) req.destroy(); });
+    let over = false;
+    req.on('data', c => {
+      if (over) return;
+      b += c;
+      // An oversized body is refused by killing the connection — the caller
+      // must not hang on a promise that will never get its 'end' (resolve
+      // here; the handler's response write on the dead socket is a no-op).
+      if (b.length > 1e6) { over = true; req.destroy(); resolve(''); }
+    });
     req.on('end', () => resolve(b));
     req.on('error', () => resolve(''));
   });
@@ -255,6 +263,9 @@ function serve(state) {
       // Reject cross-origin writes so a stray page can't score matches or deploy.
       const o = req.headers.origin;
       const self = `http://127.0.0.1:${server.address().port}`;
+      // Origin: null (a sandboxed iframe, a file:// page) is a cross-origin
+      // page like any other: the string is truthy and matches neither self —
+      // the one condition below refuses it with the rest.
       if (o && o !== self && o !== self.replace('127.0.0.1', 'localhost')) return json(res, 403, { error: 'forbidden origin' });
     }
     if (url.startsWith('/api/')) {

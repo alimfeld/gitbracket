@@ -6,7 +6,7 @@
 
 const path = require('path');
 const { loadRepo, isRealDate, schedEntries, pairBusy, consumedSlots, winTarget, reachedWinner, feederBounds } = require('./tools.js');
-const { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, poolStandings, resolveSide, isDeadTie, bestOfOf, schedTime, schedDays, placementLabel, parentsOf } = require('../site/derive.js');
+const { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, matchesOf, poolStandings, resolveSide, isDeadTie, bestOfOf, schedTime, schedDays, placementLabel, parentsOf } = require('../site/derive.js');
 
 const RESULTS = ['winner', 'loser'];
 const RESULT_STATUSES = ['played', 'walkover', 'void'];
@@ -91,7 +91,7 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
 
   // mjson: matches as a plain object, or null when malformed (reported in the
   // matches check below)
-  const mjson = tjson.matches && typeof tjson.matches === 'object' && !Array.isArray(tjson.matches) ? tjson.matches : null;
+  const mjson = matchesOf(tjson);
   let tzOk = false;
   if (typeof tjson.timezone !== 'string' || !tjson.timezone) {
     err(tFile, 'timezone required');

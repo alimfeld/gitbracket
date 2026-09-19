@@ -7,7 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { ID_RE, makeCat, schedTime, isDone, matchSlotMs } = require('../site/derive.js');
+const { ID_RE, makeCat, matchesOf, schedTime, isDone, matchSlotMs } = require('../site/derive.js');
 
 // Window collision: shared by the validator's venue rule and the generator's
 // occupancy — one predicate, no drift.
@@ -202,7 +202,7 @@ function schedEntries(tjson) {
   // Skip malformed categories — the validator's shape loop reports them (never throw).
   for (const cat of Array.isArray(tjson.categories) ? tjson.categories : []) {
     if (!cat || typeof cat !== 'object') continue;
-    const ms = tjson.matches && typeof tjson.matches === 'object' && !Array.isArray(tjson.matches) ? tjson.matches[cat.id] : undefined;
+    const ms = matchesOf(tjson)?.[cat.id];
     if (!Array.isArray(ms)) continue;
     const ctx = makeCat({ meta: cat, matches: ms }, tjson);
     for (const m of ms) {

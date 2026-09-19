@@ -384,7 +384,11 @@ function renderVenue(route, data, now) {
   // the last day show its board — "Today · Nothing scheduled." reads stale
   const shownDay = firstDay && today < firstDay ? firstDay : lastDay && today > lastDay ? lastDay : today;
   const open = shown.filter(r => dayKey(r.t, r.ctx.tz) === shownDay); // the full day stays on the board; the scroll follows the current slot
-  const cols = (data.tjson.venues || []).filter(v => v && typeof v === 'object').map(v => v.id).filter(id => open.some(r => r.m.venue === id));
+  // the day's columns: declared courts with matches on it — a match on a
+  // venue the file never declares (the gate reports it) renders absent
+  const declared = (data.tjson.venues || []).filter(v => v && typeof v === 'object');
+  const venueNames = new Map(declared.map(v => [v.id, v.name]));
+  const cols = declared.map(v => v.id).filter(id => open.some(r => r.m.venue === id));
   // the header's foot: one line, the freshness stamp (never the sim clock)
   // holding the latest results — the board must not look live while polls
   // fail; the live region stays scoped to the ticker, so the stamp, which
@@ -397,7 +401,7 @@ function renderVenue(route, data, now) {
   const header = `<header><div><h1>${esc(data.t.name)}</h1><p>${shownDay === today ? 'Today' : dayLabel(shownDay)}</p><p class="meta"${stale ? ' data-status="stale"' : ''}>${esc(stamp)}${ticker}</p></div><time id="clock"></time></header>`;
   // header and venue titles stick as one block — the titles ride the running
   // clock, aligned to the board by the shared --cols track
-  const top = `<div class="kiosk-top" style="--cols: ${cols.length}">${header}${cols.map(id => `<h2>${esc(venueName(ctxs[0], id))}</h2>`).join('')}</div>`;
+  const top = `<div class="kiosk-top" style="--cols: ${cols.length}">${header}${cols.map(id => `<h2>${esc(venueNames.get(id) || id)}</h2>`).join('')}</div>`;
   if (!cols.length) return top + '<p>Nothing scheduled.</p>';
   // Wall-clock minutes drive the day's layout — never instants or offsets, so
   // the board stays right if DST rules change. One window per row (start +
@@ -408,8 +412,6 @@ function renderVenue(route, data, now) {
     const sl = matchSlotMs(r.m, r.ctx) / 60000;
     return { r, s, e: Number.isFinite(sl) ? s + sl : null };
   });
-  // a column holds only declared courts — a match on a venue the file never
-  // declares (the gate reports it) renders absent, never a crash
   const byVenue = new Map(cols.map(id => [id, []]));
   for (const w of win) {
     const list = byVenue.get(w.r.m.venue);

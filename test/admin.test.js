@@ -520,7 +520,12 @@ test('admin HTTP: a cross-origin POST is refused, a same-origin edit still commi
   t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
   const base = await withServer(t, state);
   const edit = JSON.stringify({ slug: 'sample', verb: 'result', cat: 'md40', matchId: '8', value: 'wo a' });
-  assert.equal((await postJson(base, '/api/edit', edit, 'http://evil.example')).status, 403, 'a stray page cannot write through the daemon');
+  // Origin: null (a sandboxed iframe, a file:// page) is a cross-origin page
+  // like any other — the null string matches neither self, so the one gate
+  // refuses it with the rest.
+  for (const origin of ['http://evil.example', 'null']) {
+    assert.equal((await postJson(base, '/api/edit', edit, origin)).status, 403, `origin ${origin} is refused`);
+  }
   const good = await postJson(base, '/api/edit', edit, base);
   assert.equal(good.status, 200, 'the same-origin path is unaffected');
   assert.equal((await good.json()).ok, true);

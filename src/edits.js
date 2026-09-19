@@ -7,7 +7,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { isDone, sideLabel, schedDays, bestOfOf } = require('../site/derive.js');
+const { isDone, sideLabel, schedDays, bestOfOf, matchesOf } = require('../site/derive.js');
 const { writeTournament, tournamentText, catCtx, winTarget, reachedWinner, git } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 
@@ -90,7 +90,7 @@ function writeEdit(siteRoot, repo, slug, catId, apply) {
   const tjson = info.tjson;
   const cats = (tjson.categories || []).map(c => c.id);
   if (!cats.includes(catId)) return { err: `unknown category ${catId} — have: ${cats.join(', ')}` };
-  const ms = tjson.matches && typeof tjson.matches === 'object' && !Array.isArray(tjson.matches) ? tjson.matches[catId] : undefined;
+  const ms = matchesOf(tjson)?.[catId];
   if (!ms) return { err: `no matches for category ${catId}` };
   const ctx = catCtx(tjson, catId);
   const file = path.join(siteRoot, 'tournaments', `${slug}.json`);

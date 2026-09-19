@@ -48,8 +48,14 @@ function makeCat(c, tjson, shared) {
   };
 }
 
+// The one matches-field shape guard: an object map of category id → match
+// array, or null when malformed (the validator reports it). Every consumer
+// reads the map through this — a copy per layer would drift (arrays slip one
+// guard and trip the rest).
+const matchesOf = tjson => (tjson && tjson.matches && typeof tjson.matches === 'object' && !Array.isArray(tjson.matches)) ? tjson.matches : null;
+
 function toCats(tjson) {
-  const byCat = (tjson && tjson.matches && typeof tjson.matches === 'object') ? tjson.matches : {};
+  const byCat = matchesOf(tjson) || {};
   const cats = (tjson && Array.isArray(tjson.categories)) ? tjson.categories : [];
   const shared = sharedFacts(tjson); // once per render — every category's context shares the one map
   // A non-object entry renders as absent — the gate reports it, the page never throws.
@@ -1089,5 +1095,5 @@ function playerStatus(ctx, pid) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, esc, makeCat, toCats, matchSlotMs, bestOfOf, poolBo1, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, poolFacts, resolveSide, teamLabel, sideLabel, scoreCells, playerMatches, possibleStages, placementLabel, plRange, placementColumn, bandLabels, stageGroupName, parentsOf, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dayShort, dayLabel, fmtDiff, kioskStatus, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, currentWave, playerStatus };
+  module.exports = { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, esc, makeCat, matchesOf, toCats, matchSlotMs, bestOfOf, poolBo1, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, poolFacts, resolveSide, teamLabel, sideLabel, scoreCells, playerMatches, possibleStages, placementLabel, plRange, placementColumn, bandLabels, stageGroupName, parentsOf, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dayShort, dayLabel, fmtDiff, kioskStatus, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, currentWave, playerStatus };
 }

@@ -37,8 +37,19 @@ function teardown(root) {
     console.error(`sim: surge teardown ${cname} failed — the domain stays hosted until it succeeds; the branch stays so its CNAME stays readable`);
     process.exit(1);
   }
-  git(root, ['checkout', 'main']);
-  git(root, ['branch', '-D', branch]);
+  // The branch must not be deleted while it is checked out, and a failed
+  // checkout would leave the operator stranded on a sim branch — verify both
+  // before claiming anything is gone.
+  const co = git(root, ['checkout', 'main']);
+  if (co.code !== 0) {
+    console.error(`sim: checkout main failed — the branch stays, its CNAME stays readable:\n${co.err}`);
+    process.exit(1);
+  }
+  const dl = git(root, ['branch', '-D', branch]);
+  if (dl.code !== 0) {
+    console.error(`sim: deleting ${branch} failed — delete it manually:\n${dl.err}`);
+    process.exit(1);
+  }
   const del = git(root, ['push', 'origin', '--delete', branch]);
   if (del.code !== 0) console.warn(`sim: the surge domain is down and ${branch} is deleted locally, but the remote delete failed (offline?) — run \`git push origin --delete ${branch}\` once online`);
   console.log(`sim: ${cname} torn down; ${branch} deleted (local${del.code === 0 ? ' + origin' : ''})`);
