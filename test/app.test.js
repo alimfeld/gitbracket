@@ -11,6 +11,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, matchSlotMs, sideLabel, placementLabel, koColumn, koOrdinal, matchLabel, schedTime, toCats, isDeadTie, winners, catStatus, roundName, playerStatus } = require('../site/derive.js');
 const { parseRoute, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset } = require('../site/app.js');
+const { generate } = require('../src/schedule.js');
 const { FIX, catOf, pageData, repoPage, withTjson, text, vals, card, cards, links } = require('./helpers.js');
 const { loadRepo } = require('../src/tools.js');
 
@@ -414,16 +415,43 @@ test('koOrdinal: bracket ordinals are structural — schedule edits cannot renum
   raw.find(m => m.id === 7).scheduled = t8; // swap the two SFs on the clock
   raw.find(m => m.id === 8).scheduled = t7;
   const md = makeCat({ meta: tjson.categories[0], matches: raw }, tjson);
-  assert(matchLabel(md.byId.get(7), md) === 'SF1' && matchLabel(md.byId.get(8), md) === 'SF2', 'labels read who feeds the final, not the clock');
+  assert(matchLabel(md.byId.get(7), md) === 'SF-1' && matchLabel(md.byId.get(8), md) === 'SF-2', 'labels read who feeds the final, not the clock');
   // the final's open slot keeps its reference label; the decided feeder's side
   // resolves to a team, so only the open one renders the slot form
-  assert(sideLabel(md.byId.get(9).sides[1], md) === 'Winner of SF2', 'the open feeder ref holds under schedule edits');
+  assert(sideLabel(md.byId.get(9).sides[1], md) === 'Winner of SF-2', 'the open feeder ref holds under schedule edits');
+});
+
+test('matchLabel: every knockout round carries its bracket ordinal — R16-N, QF-N, SF-N', () => {
+  // A 16-team field is a real Round of 16 — the depth the sample fixture never reaches;
+  // the generator builds it through the same derive the site renders.
+  const spec = {
+    slug: 'lab', name: 'Label Open', location: 'Z', timezone: 'Europe/Zurich', date: '2026-05-02', poolSize: 6,
+    blocks: { t: '09:00' },
+    venues: { c1: 'C1', c2: 'C2', c3: 'C3', c4: 'C4', c5: 'C5', c6: 'C6' },
+    players: Object.fromEntries(Array.from({ length: 16 }, (_, i) => ['p' + i, 'P' + i])),
+    categories: [{ id: 't', name: 'T', bestOf: 1, slotMinutes: 30 }],
+    teams: { t: Array.from({ length: 16 }, (_, i) => ['p' + i]) },
+  };
+  const tourney = generate(spec);
+  const ms = tourney.matches.t;
+  const ctx = makeCat({ meta: tourney.categories[0], matches: ms }, tourney);
+  const round1 = ms.filter(m => m.pool === undefined && koColumn(m, ctx) === 3);
+  assert.equal(round1.length, 8, 'a 16-team field plays eight first-round matches');
+  assert(round1.every(m => /^R16-\d+$/.test(matchLabel(m, ctx))), 'first round reads R16-N, never the unnumbered "Round of 16"');
+  assert.equal(new Set(round1.map(m => matchLabel(m, ctx))).size, 8, 'each R16 match carries its own ordinal');
+  const qf = ms.find(m => m.pool === undefined && koColumn(m, ctx) === 2);
+  const sf = ms.find(m => m.pool === undefined && koColumn(m, ctx) === 1);
+  assert(/^QF-\d+$/.test(matchLabel(qf, ctx)) && /^SF-\d+$/.test(matchLabel(sf, ctx)), 'quarterfinals and semifinals read QF-N / SF-N');
+  // an open slot referencing a round-1 match names a visible card, without the
+  // article ("Winner of the Round of 16" would be the old broken form)
+  assert(/^Winner of R16-\d+$/.test(sideLabel(qf.sides.find(s => s.kind === 'match'), ctx)), 'a QF slot names its feeder as "Winner of R16-N"');
+  assert(matchLabel(ms[0], ctx).includes('Pool'), 'a pool match still reads Pool N');
 });
 
 test('bracket: slot labels are plain text — no link wrapping, no trace machinery', () => {
   const data = repoPage('sample');
   const html = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' }, data);
-  assert(text(html).includes('Winner of SF2') && !html.includes('<a href="#m-'), 'slot labels are plain text, not anchors');
+  assert(text(html).includes('Winner of SF-2') && !html.includes('<a href="#m-'), 'slot labels are plain text, not anchors');
   assert(!html.includes('data-feeders') && !html.includes('id="m-'), 'cards are static nodes — the trace graph shipped nothing');
 });
 
@@ -500,11 +528,11 @@ test('renderers: escapes, a11y state, and behavioral hooks — the shipped surfa
   assert((standings.match(/<h2\b/g) || []).length === 1, 'one category heading per page');
   const xd = renderTournament({ slug: 'sample', view: 'tournament', cat: 'xd' }, data);
   assert((xd.match(/<h2\b/g) || []).length === 1, '?cat= selects one category heading');
-  assert(text(standings).includes('Winner of SF2') && !standings.includes('<a href="#m-'), 'slot labels are plain text, not anchors');
+  assert(text(standings).includes('Winner of SF-2') && !standings.includes('<a href="#m-'), 'slot labels are plain text, not anchors');
   assert(!standings.includes('data-feeders') && !standings.includes('data-stage') && !standings.includes('toggle'), 'no trace or disclosure machinery ships');
   for (const j of vals(standings, 'data-jump')) assert(card(standings, 'id', j) !== undefined, `every jump link has its target section (${j})`);
   assert.equal(vals(standings, 'data-status').filter(s => s === 'next').length, 1, 'ko in play: only the one unscored semifinal card carries the accent');
-  assert(card(standings, 'data-status', 'next').includes('SF2'), 'the highlighted card is the unresolved semifinal');
+  assert(card(standings, 'data-status', 'next').includes('SF-2'), 'the highlighted card is the unresolved semifinal');
   const midJson = clone();
   midJson.matches.md40[0].result = undefined;
   const mid = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' }, withTjson(data, midJson));

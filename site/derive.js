@@ -240,7 +240,7 @@ function slotLabel(side, ctx) {
     const who = side.result === 'winner' ? 'Winner' : 'Loser';
     const ref = ctx.byId.get(side.match);
     if (!ref) return `${who} of match ${side.match}`; // dangling ref — the id is all there is
-    const what = matchLabel(ref, ctx); // QF/SF labels carry their bracket ordinal
+    const what = matchLabel(ref, ctx); // numbered rounds carry their bracket ordinal
     return /\d$/.test(what) ? `${who} of ${what}` : `${who} of the ${what}`;
   }
   if (side && side.kind === 'pool') return `${ordinal(side.rank)} in Pool ${side.pool}`;
@@ -266,8 +266,10 @@ function scoreCells(m, i, ctx) {
   // placeholder dots keep the best-of shape; the winner carries the W/O mark
   const slot = () => Array.from({ length: bo }, (_, g) => {
     const game = games[g];
-    // aria-hidden: the placeholder dot is shape-as-label, noise to a screen reader
-    return `<span${game ? '' : ' class="ph" aria-hidden="true"'}>${game ? (i === 0 ? game.a : game.b) : '·'}</span>`;
+    // aria-hidden: the placeholder dot is shape-as-label, noise to a screen reader.
+    // The gate ships integer scores only — escape anything else.
+    const x = game ? (i === 0 ? game.a : game.b) : '·';
+    return `<span${game ? '' : ' class="ph" aria-hidden="true"'}>${esc(x)}</span>`;
   }).join('');
   if (!r || r.status === 'played') return slot();
   if (r.status === 'void') return '<span>void</span>';
@@ -963,11 +965,14 @@ function matchLabel(m, ctx) {
   if (m.pool !== undefined) return `Pool ${m.pool}`;
   const pl = placementLabel(m, ctx);
   if (pl) return pl;
-  const full = roundName(koColumn(m, ctx));
-  const abbr = full.replace('Semifinals', 'SF').replace('Quarterfinals', 'QF');
-  // QF/SF carry their bracket ordinal so slot references name a visible card.
-  // ponytail: only QF/SF get numbered — deeper rounds number when one needs cross-refs there
-  return abbr === full ? full : abbr + (koOrdinal(m, ctx) || '');
+  const col = koColumn(m, ctx);
+  const full = roundName(col);
+  if (full === 'Final') return full; // the one apex — the article names it, no ordinal
+  // Every round carries its bracket ordinal so a slot reference names a visible
+  // card ("Winner of R16-3"); the digit ending keeps slotLabel's article rule uniform.
+  const abbr = full.replace('Semifinals', 'SF').replace('Quarterfinals', 'QF').replace('Round of ', 'R');
+  const ord = koOrdinal(m, ctx);
+  return ord ? `${abbr}-${ord}` : abbr;
 }
 
 // ---- Status derivation: what a category or player's line says ----------------
@@ -1050,8 +1055,9 @@ function currentWave(ctx, status) {
   return ready.filter(m => schedTime(m, ctx.tz) === t);
 }
 
-const inWord = col => col === 0 ? 'In the final' : `In ${roundName(col)}`;
-const elimWord = col => col === 0 ? 'Eliminated in the final' : `Eliminated in ${roundName(col)}`;
+// The article carries deep rounds; only the final drops to lowercase.
+const inWord = col => col === 0 ? 'In the final' : `In the ${roundName(col)}`;
+const elimWord = col => col === 0 ? 'Eliminated in the final' : `Eliminated in the ${roundName(col)}`;
 
 // A player's standing in one category, as a plain word.
 function playerStatus(ctx, pid) {

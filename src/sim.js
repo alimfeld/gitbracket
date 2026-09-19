@@ -39,8 +39,9 @@ function teardown(root) {
   }
   git(root, ['checkout', 'main']);
   git(root, ['branch', '-D', branch]);
-  git(root, ['push', 'origin', '--delete', branch]);
-  console.log(`sim: ${cname} torn down; ${branch} deleted (local + origin)`);
+  const del = git(root, ['push', 'origin', '--delete', branch]);
+  if (del.code !== 0) console.warn(`sim: the surge domain is down and ${branch} is deleted locally, but the remote delete failed (offline?) — run \`git push origin --delete ${branch}\` once online`);
+  console.log(`sim: ${cname} torn down; ${branch} deleted (local${del.code === 0 ? ' + origin' : ''})`);
 }
 
 // CLI entry (dispatched from gb.js): args = ['--teardown'] | anything, ignored —

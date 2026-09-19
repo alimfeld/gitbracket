@@ -134,7 +134,7 @@ function renderGrid() {
   grid.style.gridTemplateColumns = `4.5rem ${cols.map(() => 'minmax(9rem,1fr)').join(' ')} 13rem`;
 
   let html = '<div class="ruler">';
-  for (let hm = Math.floor(dayStart / 60) * 60; hm <= dayEnd; hm += 60) {
+  for (let hm = Math.floor(dayStart / 60) * 60; hm <= dayEnd && hm < 1440; hm += 60) {
     const y = (hm - dayStart) * S.pxPerMin;
     html += `<div class="hour" style="top:${y}px"></div><div class="hourlabel" style="top:${y}px">${pad(hm / 60)}:00</div>`;
   }
