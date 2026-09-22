@@ -10,6 +10,7 @@
   --accent: #0a66c2;
   --on-accent: #fff;
   --due: #15803d;
+  --done-wash: #eef7f0;
   --pending: #b45309;
   --pending-wash: #fbf6e9;
   --danger: #b3261e;
@@ -91,11 +92,9 @@ main { flex: 1; display: flex; min-height: 0; }
   border-radius: .3rem; font-size: .75rem; cursor: pointer;
   box-shadow: 0 1px 2px #00000012;
 }
-/* done recedes so open work pops; hover restores full weight for the
-   correction path */
-.match.done { opacity: .62; border-left-color: var(--due); }
-.match.done:hover { opacity: 1; }
-.match .winmark { flex: none; color: var(--due); }
+/* done: the wash closes the card; hover hands it the editable blue wash,
+   which wins by rule order — green returns on mouseout */
+.match.done { background: var(--done-wash); border-left-color: var(--due); }
 /* a match that can't be scored yet — a side can't resolve; a quiet sand wash
    and amber spine say "waiting", while the grip and the per-side pencils stay
    live (the side label already names the blocker) */
