@@ -17,6 +17,13 @@ const S = {
 // ---- derive wrappers (derive.js globals) ----
 const cat = cid => S.cats.find(c => c.id === cid);
 const matchOf = (cid, id) => cat(cid)?.byId.get(Number(id));
+// The gate's own UI rule: a match needs both sides resolved to hold a score;
+// done holds one, so never pending.
+const pendingReason = (m, ctx) => {
+  if (!m || !Array.isArray(m.sides) || m.sides.length !== 2 || isDone(m)) return null;
+  const bad = m.sides.find(s => !resolveSide(s, ctx));
+  return bad ? sideLabel(bad, ctx) : null;
+};
 
 // wall "HH:MM" from an ISO scheduled string; the grid works in wall-clock
 // minutes — never offsets (the tz only anchors instants)
@@ -166,8 +173,8 @@ function cardMeta(c, m) {
 }
 
 function cardHtml(c, m, venue) {
-  const st = isDone(m) ? m.result.status : 'open';
-  const stCls = st === 'open' ? '' : ' done';
+  const pend = pendingReason(m, c);
+  const stCls = isDone(m) ? ' done' : pend ? ' pending' : '';
   // wall-time placement in the day's scale; unscheduled cards are
   // flow-positioned
   const wm = (m.scheduled != null && venue) ? wallMin(m.scheduled) : null;
@@ -176,7 +183,8 @@ function cardHtml(c, m, venue) {
     ? ` style="top:${(wm - S.dayStart) * S.pxPerMin}px;min-height:${slot * S.pxPerMin}px;"` : '';
   const k = keyOf(c, m);
   // one side row per side, meta last; a drag grip leads — only the grip drags
-  return `<article class="match${stCls}" data-key="${esc(k)}" data-venue="${esc(venue || '')}"${pos}>
+  const tip = pend ? `can't score yet — waiting on ${pend}` : '';
+  return `<article class="match${stCls}" data-key="${esc(k)}" data-venue="${esc(venue || '')}"${tip ? ` title="${esc(tip)}"` : ''}${pos}>
     <span class="grip" draggable="true" title="Drag to move"></span>
     ${sideRow(c, m, 0)}${sideRow(c, m, 1)}
     <div class="meta">${esc(cardMeta(c, m))}</div>
@@ -188,7 +196,8 @@ function cardHtml(c, m, venue) {
 // never the score.
 function sideRow(c, m, i) {
   const sideName = esc(sideLabel(m.sides[i], c));
-  return `<div class="side"${winnerIdx(m) === i ? ' data-win' : ''}><span class="who"><span class="name">${sideName}</span><button type="button" class="edit-side" data-side="${i}" title="edit side ${i === 0 ? 'a' : 'b'}" aria-label="edit side ${i === 0 ? 'a' : 'b'} — ${sideName}">✎</button></span><span class="score">${scoreCells(m, i, c)}</span></div>`;
+  const win = winnerIdx(m) === i;
+  return `<div class="side"${win ? ' data-win' : ''}><span class="who">${win ? '<span class="winmark" aria-label="won">✓</span>' : ''}<span class="name">${sideName}</span><button type="button" class="edit-side" data-side="${i}" title="edit side ${i === 0 ? 'a' : 'b'}" aria-label="edit side ${i === 0 ? 'a' : 'b'} — ${sideName}">✎</button></span><span class="score">${scoreCells(m, i, c)}</span></div>`;
 }
 
 const keyOf = (c, m) => `${c.id}:${m.id}`;
@@ -213,8 +222,11 @@ function wireGrid() {
     el.addEventListener('click', e => {
       if (e.target.closest('.grip, .edit-side')) return;
       const [cid, mid] = keyParts(el.dataset.key);
+      const m = matchOf(cid, mid);
+      const why = pendingReason(m, cat(cid));
+      if (why) { flash(`can't score yet — waiting on ${why}`); return; }
       modalTrigger = { key: el.dataset.key };
-      openResult(cid, matchOf(cid, mid));
+      openResult(cid, m);
     });
     el.addEventListener('dragstart', e => {
       S.dragSource = el.dataset.key;
@@ -321,6 +333,7 @@ async function sendEdit(verb, cid, mid, value) {
   const r = await post('/api/edit', { slug: S.slug, verb, cat: cid, matchId: mid, value });
   if (!r.ok) { const msg = r.errors ? r.errors.join('\n') : (r.error || 'edit refused'); flash(msg); return msg; }
   await reload(); // setSlug re-renders the grid + editor and refreshes pending
+  flash({ result: 'result saved', move: 'match moved', side: 'side updated' }[verb] || 'saved');
   return true;
 }
 
@@ -531,11 +544,13 @@ $('undo').onclick = async () => {
   const r = await post('/api/undo', {});
   if (!r.ok) { flash(r.error); return; }
   await reload(); // setSlug refreshes pending
+  flash('undone');
 };
 $('redo').onclick = async () => {
   const r = await post('/api/redo', {});
   if (!r.ok) { flash(r.error); return; }
   await reload(); // setSlug refreshes pending
+  flash('redone');
 };
 $('publish').onclick = async () => {
   if (publishing) return;
