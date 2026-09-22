@@ -10,6 +10,12 @@ const RECENT_MS = 2 * 60 * 1000; // how long a completed result stays on the kio
 // with the 1.6px/min floor and the 140px header allowance beside it.
 const CARD_PX = 135;
 
+// The seam between stacked cards: each card's box ends this many px short of
+// its slot, so tops stay pinned to the start minute and bottoms read as
+// separate blocks. Rendered inline — the flex wrapper can't be trusted to
+// shrink (its height is content-driven).
+const CARD_GAP = 4;
+
 // derive.js loads first as a classic script, so its names are already page
 // globals; under node, the module lands on globalThis.
 if (typeof module !== 'undefined') {
@@ -349,7 +355,7 @@ function matchCard(m, ctx, opts = {}) {
   };
   const meta = opts.meta.map(k => item[k]).join(' · ');
   const head = opts.head ? `<div class="head">${opts.head.map(c => `<span>${c.html !== undefined ? c.html : item[c.key]}</span>`).join('')}</div>` : '';
-  return `<article${opts.id ? ` id="${opts.id}"` : ''}${opts.status ? ` data-status="${opts.status}"` : ''}>${head}${sideRow(m, ctx, 0)}${sideRow(m, ctx, 1)}<div class="meta">${meta}</div></article>`;
+  return `<article${opts.id ? ` id="${opts.id}"` : ''}${opts.status ? ` data-status="${opts.status}"` : ''}${opts.style ? ` style="${opts.style}"` : ''}>${head}${sideRow(m, ctx, 0)}${sideRow(m, ctx, 1)}<div class="meta">${meta}</div></article>`;
 }
 
 function sideRow(m, ctx, i) {
@@ -433,18 +439,18 @@ function renderVenue(route, data, now) {
   const avail = typeof document !== 'undefined' ? document.documentElement.clientHeight : 0;
   const ppm = Math.max(1.6, avail ? (avail - 140) / total : 0, CARD_PX / sShort);
   const y = min => (min - dayStart) * ppm;
-  const card = r => {
+  const card = (r, h) => {
     const status = kioskStatus(r, now);
     const when = timeEl(r.t, r.ctx.tz);
     const flag = status === 'due' || status === 'overdue' ? status : ''; // the status word is the flag; done and upcoming cards show none
     return matchCard(r.m, r.ctx, { meta: ['catName', 'label'],
-      head: [{ html: when }, { html: flag }], status });
+      head: [{ html: when }, { html: flag }], status, style: `height:${h}px` });
   };
   // Cards sit at their wall-clock top; ordering can't drift. The follow's
   // scroll target is the now-line — the render places it at the wall-minute y.
   const placed = w => {
     const { r, s, e } = w;
-    return `<div class="bcard" style="top:${y(s)}px; min-height:${e !== null ? (e - s) * ppm : CARD_PX}px">${card(r)}</div>`;
+    return `<div class="bcard" style="top:${y(s)}px">${card(r, (e !== null ? (e - s) * ppm : CARD_PX) - CARD_GAP)}</div>`;
   };
   const dayH = Math.ceil(total * ppm);
   const nowMin = wallClockMin(now, tz);

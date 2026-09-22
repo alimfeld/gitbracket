@@ -377,6 +377,7 @@ body.venue header {
 
 .board {
   position: relative;
+  z-index: 0; /* one stacking context: the now-line never escapes above the sticky kiosk-top (1) */
   display: grid;
   grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
   grid-auto-rows: 1fr;
@@ -386,12 +387,16 @@ body.venue header {
 }
 
 /* where the day is right now: the renderer places it at the wall-minute y;
-   the per-minute re-render advances it with the clock; it never intercepts a tap */
+   the per-minute re-render advances it with the clock; it never intercepts a tap.
+   Painted above the cards so it reads as a true timeline; the alpha keeps the
+   content it crosses readable */
 .now {
   position: absolute;
   left: 0;
   right: 0;
   border-top: 2px solid var(--live);
+  z-index: 1;
+  opacity: .6;
   pointer-events: none;
 }
 
@@ -399,19 +404,12 @@ body.venue header {
   position: relative;
 }
 
-/* one card per slot, placed by wall clock: top = its start, the slot's
-   minutes are its height — a longer slot reads as a taller block */
+/* one card per slot, placed by wall clock: top = its start, slot minutes are
+   its height; the seam between stacked cards is CARD_GAP (app.js), inline */
 .bcard {
   position: absolute;
   left: 0;
   right: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.bcard > article {
-  flex: 1;
-  background: var(--page); /* cards are opaque — nothing overlays them, ever */
 }
 
 #clock {
@@ -421,28 +419,18 @@ body.venue header {
   white-space: nowrap;
 }
 
+/* status rides the spine — a 3px left edge, the admin board's vocabulary;
+   the head keeps its word in plain ink, the color carries no message */
 article[data-status="overdue"] {
-  border-color: var(--alert);
-}
-
-article[data-status="overdue"] .head span {
-  color: var(--alert);
+  border-left: 3px solid var(--alert);
 }
 
 article[data-status="due"] {
-  border-color: var(--live);
-}
-
-article[data-status="due"] .head span {
-  color: var(--live);
+  border-left: 3px solid var(--live);
 }
 
 article[data-status="done"] {
-  border-color: var(--muted);
-}
-
-article[data-status="done"] .head span {
-  color: var(--muted);
+  border-left: 3px solid var(--muted);
 }
 
 article[data-status="next"] {
