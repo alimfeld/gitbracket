@@ -272,6 +272,10 @@ article {
   font-weight: 700;
 }
 
+.winmark {
+  color: var(--live);
+}
+
 .meta {
   font-size: .875em;
   color: var(--muted);

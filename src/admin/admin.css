@@ -95,6 +95,7 @@ main { flex: 1; display: flex; min-height: 0; }
 /* done: the wash closes the card; hover hands it the editable blue wash,
    which wins by rule order — green returns on mouseout */
 .match.done { background: var(--done-wash); border-left-color: var(--due); }
+.match .winmark { flex: none; color: var(--due); }
 /* a match that can't be scored yet — a side can't resolve; a quiet sand wash
    and amber spine say "waiting", while the grip and the per-side pencils stay
    live (the side label already names the blocker) */

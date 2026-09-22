@@ -196,7 +196,8 @@ function cardHtml(c, m, venue) {
 // never the score.
 function sideRow(c, m, i) {
   const sideName = esc(sideLabel(m.sides[i], c));
-  return `<div class="side"${winnerIdx(m) === i ? ' data-win' : ''}><span class="who"><span class="name">${sideName}</span><button type="button" class="edit-side" data-side="${i}" title="edit side ${i === 0 ? 'a' : 'b'}" aria-label="edit side ${i === 0 ? 'a' : 'b'} — ${sideName}">✎</button></span><span class="score">${scoreCells(m, i, c)}</span></div>`;
+  const win = winnerIdx(m) === i;
+  return `<div class="side"${win ? ' data-win' : ''}><span class="who"><span class="name">${sideName}</span>${win ? '<span class="winmark" aria-label="won">✓</span>' : ''}<button type="button" class="edit-side" data-side="${i}" title="edit side ${i === 0 ? 'a' : 'b'}" aria-label="edit side ${i === 0 ? 'a' : 'b'} — ${sideName}">✎</button></span><span class="score">${scoreCells(m, i, c)}</span></div>`;
 }
 
 const keyOf = (c, m) => `${c.id}:${m.id}`;
