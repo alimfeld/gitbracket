@@ -50,7 +50,12 @@ function validateRepo(repo) {
   const seenSlugs = new Set();
   for (let i = 0; i < index.length; i++) {
     const t = index[i];
-    const where = `tournaments.json [${i}]`;
+    // Name the entry once its slug parses — a per-slug run (validate <slug>)
+    // must see this entry's errors too, and filterErrs keys off the named
+    // slug. A malformed-slug entry can't be attributed to a tournament — its
+    // errors stay visible in the full run only.
+    const named = t && typeof t.slug === 'string' && ID_RE.test(t.slug) ? ` (${t.slug})` : '';
+    const where = `tournaments.json [${i}]${named}`;
     if (!t || typeof t !== 'object') { err(where, 'entry must be an object'); continue; }
     if (typeof t.name !== 'string' || !t.name.trim()) err(where, 'name must be a non-empty string');
     if (typeof t.location !== 'string' || !t.location.trim()) err(where, 'location must be a non-empty string');
@@ -473,10 +478,13 @@ function validateGames(games, target, where, err) {
 }
 
 // Errors touching that tournament's file or index entry. Exact matches only —
-// a substring would leak tie3 errors into `validate tie`. main() gates the slug
-// by repo membership (loadRepo admits only id-regex keys), so the regex is safe.
+// a substring would leak tie3 errors into `validate tie`. Index-entry errors
+// carry '(slug)' in their label when the entry's slug parses (a malformed slug
+// can't be attributed), so the paren alternative is the index-entry match.
+// main() gates the slug by repo membership (loadRepo admits only id-regex
+// keys), so the regex is safe.
 function filterErrs(errs, slug) {
-  const re = new RegExp(`(?:tournaments/${slug}\\.json|"${slug}"|slug ${slug}(?:\\s|$))`);
+  const re = new RegExp(`(?:tournaments/${slug}\\.json|\\(${slug}\\)|"${slug}"|slug ${slug}(?:\\s|$))`);
   return errs.filter(e => re.test(e));
 }
 

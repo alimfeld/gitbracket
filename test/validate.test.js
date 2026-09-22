@@ -5,8 +5,9 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { filterErrs } = require('../src/validate.js');
-const { validateFixture, hasErr, hasWarn } = require('./helpers.js');
+const { filterErrs, validateRepo } = require('../src/validate.js');
+const { validateFixture, hasErr, hasWarn, FIX } = require('./helpers.js');
+const { loadRepo } = require('../src/tools.js');
 
 const V = [
   ['clean fixture validates', 'sample', r => r.errs.length === 0 && r.warns.length === 0, null],
@@ -98,6 +99,15 @@ test('two malformed index entries: real shape errors, no bogus undefined-slug du
   const r = validateFixture('bad-duplicate-slug');
   assert(r.errs.some(e => /must match/.test(e)), 'the shape errors are still reported');
   assert(!r.errs.some(e => e.includes('duplicate slug undefined')), 'two missing slugs are not a duplicate-slug pair');
+});
+
+test('filterErrs: an index-entry error carries its slug — validate <slug> keeps it', () => {
+  const info = loadRepo(FIX('sample')).tournaments.get('sample');
+  // a valid-slug entry missing its name — the tournament file itself is fine
+  const r = validateRepo({ readErrs: [], index: [{ location: 'New York', slug: 'sample' }], tournaments: new Map([['sample', info]]) });
+  const idxErr = r.errs.find(e => e.startsWith('tournaments.json'));
+  assert(idxErr && idxErr.includes('(sample)'), `index errors name their entry, got: ${idxErr}`);
+  assert(filterErrs(r.errs, 'sample').includes(idxErr), "a per-slug run keeps the entry's own errors");
 });
 
 test('filterErrs: validate <slug> narrows to that tournament', () => {
