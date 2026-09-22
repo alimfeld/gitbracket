@@ -273,7 +273,7 @@ article {
 }
 
 .winmark {
-  color: var(--live);
+  margin-right: auto;
 }
 
 .meta {
