@@ -195,7 +195,10 @@ function cardHtml(c, m, venue) {
 // the row. The pencil sits inside .who with its name — it edits that side,
 // never the score.
 function sideRow(c, m, i) {
-  const sideName = esc(sideLabel(m.sides[i], c));
+  // the site's sideRow guards the same shape — a malformed match (hand-edit)
+  // renders TBD rows here too, never a TypeError off the operator's board
+  const side = m.sides && m.sides[i];
+  const sideName = esc(sideLabel(side, c));
   const win = winnerIdx(m) === i;
   return `<div class="side"${win ? ' data-win' : ''}><span class="who"><span class="name">${sideName}</span><button type="button" class="edit-side" data-side="${i}" title="edit side ${i === 0 ? 'a' : 'b'}" aria-label="edit side ${i === 0 ? 'a' : 'b'} — ${sideName}">✎</button>${win ? '<span class="winmark" aria-label="won">✓</span>' : ''}</span><span class="score">${scoreCells(m, i, c)}</span></div>`;
 }
@@ -342,6 +345,7 @@ async function dropAt(e) {
 async function sendEdit(verb, cid, mid, value) {
   const r = await post('/api/edit', { slug: S.slug, verb, cat: cid, matchId: mid, value });
   if (!r.ok) { const msg = r.errors ? r.errors.join('\n') : (r.error || 'edit refused'); flash(msg); return msg; }
+  if (r.unchanged) { flash('no change — the same data is already stored'); return true; }
   await reload(); // setSlug re-renders the grid + editor and refreshes pending
   flash({ result: 'result saved', move: 'match moved', side: 'side updated' }[verb] || 'saved');
   return true;
