@@ -300,8 +300,18 @@ function ghost(e) {
   if (!Number.isFinite(slot)) return;
   const col = $('grid').querySelector(`.col[data-venue="${CSS.escape(ht.venue)}"]`);
   if (!col) return;
-  if (ht.venue === '__none') { // unscheduled — the gate refuses a drop that empties the match's published day; the flash names it
-    addGhost(col, { top: '.5rem', height: '2.5rem' });
+  if (ht.venue === '__none') {
+    // A drop here clears time+venue — legal whenever the day stays covered;
+    // only the last scheduled match on its day would shrink the published day
+    // set, so the ghost marks exactly the case the day guard refuses.
+    const t = schedTime(m, ctx.tz);
+    const day = t === null ? null : dayKey(t, ctx.tz);
+    const emptiesDay = day !== null && !S.cats.some(c => c.matches.some(x => {
+      if (x === m) return false;
+      const xt = schedTime(x, c.tz);
+      return xt !== null && dayKey(xt, c.tz) === day;
+    }));
+    addGhost(col, { invalid: emptiesDay, title: emptiesDay ? 'last scheduled match on this day — clearing would drop the day from the published schedule' : '', top: '.5rem', height: '2.5rem' });
     return;
   }
   // the slot list may still be in flight from dragstart — a neutral ghost then
