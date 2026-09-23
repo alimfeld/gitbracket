@@ -564,7 +564,12 @@ test('possible stages render as cards: a status flag per stage, and the next hea
   const info = repo.tournaments.get('byes');
   const data = pageData(info.tjson, 'byes', repo.index);
   const page = renderPlayer({ slug: 'byes', view: 'schedule', player: 'p4' }, data);
-  assert.equal(vals(page, 'data-status').filter(s => s === 'possible').length, 3, 'p4 (pool open): three possible stages — QF, SF, and the merged final/bronze');
+  const poss = cards(page, 'data-status', 'possible');
+  assert.equal(poss.length, 3, 'p4 (pool open): three possible stages — QF, SF, and the merged final/bronze');
+  // the chips name the gates in one phrase — the dead-tie rank run, its rank + edge join, and the merged stage's via
+  assert.equal(poss[0].includes('Quarterfinals (as 3rd–6th in Pool A)'), true, 'a collapsed dead-tie rank run renders as a range');
+  assert.equal(poss[1].includes('Semifinals (as 1st–2nd in Pool A or as winner of the Quarterfinals)'), true, 'rank and edge chips join with or, the round ref wears the article');
+  assert.equal(poss[2].includes('Final / 3rd place (via the Semifinals)'), true, 'a merged stage names its gate via, not as');
   // next points at the earliest possible stage when no confirmed match is left
   const tjson = JSON.parse(JSON.stringify(info.tjson));
   for (const id of [1, 4, 7, 10, 13]) tjson.matches.t.find(m => m.id === id).result = { status: 'walkover', winner: 'a' };
@@ -573,6 +578,23 @@ test('possible stages render as cards: a status flag per stage, and the next hea
   assert(vals(page2, 'datetime').includes('2026-07-12T10:30:00.000Z'), 'the next line carries the instant in a semantic time element');
   assert(card(page2, 'id', 'next').includes('Quarterfinals'), 'the earliest possible card is the jump target, never carrying the confirmed accent');
   assert.equal(vals(page2, 'data-status').filter(s => s === 'next').length, 1, 'only the header line carries the green accent — possible cards never do');
+});
+
+test('possible stages: a stage holding every dead-tie rank shortens its chip to "any rank"', () => {
+  // A 2-team pool whose only match is voided ties 1-1 — the dead-tie cluster
+  // spans both ranks, and the bracket round consuming them both gates nobody.
+  const tjson = {
+    timezone: 'UTC',
+    categories: [{ id: 't', name: 'Singles', bestOf: { groups: 1, knockout: 1 } }],
+    venues: [{ id: 'c1', name: 'Court 1' }],
+    players: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }],
+    matches: { t: [
+      { id: 1, pool: 'A', sides: [{ kind: 'players', ids: ['p1'] }, { kind: 'players', ids: ['p2'] }], result: { status: 'void' }, scheduled: '2026-01-01T09:00:00', venue: 'c1' },
+      { id: 2, sides: [{ kind: 'pool', pool: 'A', rank: 1 }, { kind: 'pool', pool: 'A', rank: 2 }], scheduled: '2026-01-01T09:30:00', venue: 'c1' },
+    ] },
+  };
+  const page = renderPlayer({ slug: 't', view: 'schedule', player: 'p1' }, pageData(tjson, 't'));
+  assert.equal(cards(page, 'data-status', 'possible')[0].includes('Final (any rank in Pool A)'), true, 'every rank of the tied cluster has a slot in the one stage — the chip reads any rank');
 });
 
 test('multi-day kiosk: one day at a time, previewing day one early, falling back to the last day', () => {
