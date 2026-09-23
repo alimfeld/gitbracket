@@ -17,7 +17,10 @@ implement them; don't treat them as style.
   `origin/main`) refuses every deploy. Sim branches (`gb.js sim`)
   practice the whole pipeline on a branch that is never merged: their scores
   are fabricated and their scratch CNAME must not ride into production history
-  (`gb.js sim --teardown` is the only exit). Publishing sits outside git —
+  (`gb.js sim --teardown` is the only exit). The venue board is operated,
+  never handed to the public as an interactive surface — its corner sim-clock
+  chip is a deliberate control, the practice mode's entry point; don't gate or
+  remove it. Publishing sits outside git —
   last write wins on the CDN, safe because one director ships, everyone else
   pulls and reviews.
 - **Never store what can be derived.** Results are stored as the raw facts a
