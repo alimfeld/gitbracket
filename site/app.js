@@ -247,8 +247,9 @@ function catSection(ctx, opts) {
       byPool.get(m.pool).push(m);
     } else ko.push(m);
   }
-  // All pools, chronological by wall-clock (stable sort keeps file order on ties).
-  const grp = [...byPool.values()].flat().sort((a, b) => (schedTime(a, ctx.tz) ?? 0) - (schedTime(b, ctx.tz) ?? 0));
+  // All pools, chronological by wall-clock (stable sort keeps file order on ties);
+  // a TBD-time match trails the scheduled ones.
+  const grp = [...byPool.values()].flat().sort((a, b) => (schedTime(a, ctx.tz) ?? Infinity) - (schedTime(b, ctx.tz) ?? Infinity));
   // one category subline: the date span on multi-day pages only — a single-day
   // heading already states the date once — then the status sentence or podium
   const status = catStatus(ctx);
@@ -291,16 +292,17 @@ function catSection(ctx, opts) {
 
 
 // Bracket order first: a card's position must match its QF/SF ordinal, which
-// schedule edits can't move. Time breaks ties and orders unnumbered matches.
+// schedule edits can't move. Time breaks ties and orders unnumbered matches;
+// a TBD-time match trails (Infinity), like every other time-ordered list.
 const koOrder = (ms, ctx) => [...ms].sort((a, b) =>
   (koOrdinal(a, ctx) || Infinity) - (koOrdinal(b, ctx) || Infinity) ||
-  (schedTime(a, ctx.tz) ?? 0) - (schedTime(b, ctx.tz) ?? 0));
+  (schedTime(a, ctx.tz) ?? Infinity) - (schedTime(b, ctx.tz) ?? Infinity));
 
 // By prize (3rd before 5th) then time — rank is structural, view-stable;
 // koOrdinal numbers only the championship tree.
 const placeOrder = ctx => (a, b) =>
   ((plRange(a, ctx) || {}).lo ?? Infinity) - ((plRange(b, ctx) || {}).lo ?? Infinity) ||
-  (schedTime(a, ctx.tz) ?? 0) - (schedTime(b, ctx.tz) ?? 0);
+  (schedTime(a, ctx.tz) ?? Infinity) - (schedTime(b, ctx.tz) ?? Infinity);
 
 // Brackets merged by depth band: each column holds the round's matches plus the
 // classification matches at the same edge count — the bronze under the Final's
