@@ -3,111 +3,117 @@
 README describes the model and the tools; tests pin behavior. When docs and
 code disagree, code wins.
 
-## Architectural principles
+## Principles
 
-Violating a principle breaks the system — now, or the first time an upstream
+Breaking a principle breaks the system — now, or the first time an upstream
 fact changes: a wrong render, a bypassable gate, lost data. Code and tests
-implement them; don't treat them as style.
+implement them; treat them as rules, not style.
 
-- **Git is the record, not the transport.** No server, no accounts — the repo
-  is data, history, and frontend. Only `gb.js publish` ships `site/`, and the
-  deploy role follows the branch, never the operator's intent: `main` ships
-  the production domain, proved equal to `origin/main`'s CNAME; a branch
-  ships only a CNAME proved different from it — a missing anchor (no
-  `origin/main`) refuses every deploy. Sim branches (`gb.js sim`)
-  practice the whole pipeline on a branch that is never merged: their scores
-  are fabricated and their scratch CNAME must not ride into production history
-  (`gb.js sim --teardown` is the only exit). The venue board is operated,
-  never handed to the public as an interactive surface — its corner sim-clock
-  chip is a deliberate control, the practice mode's entry point; don't gate or
-  remove it. Publishing sits outside git —
-  last write wins on the CDN, safe because one director ships, everyone else
-  pulls and reviews.
-- **Never store what can be derived.** Results are stored as the raw facts a
-  scorer records — games, scores, winner — never the aggregates built from
-  them (standings, ranks, done flags); an aggregate goes silently stale the
-  moment a fact is corrected, so everything downstream is recomputed at
-  render. Schedules are the exception: they can't be derived, so they're
-  stored — generated from a spec, tweakable via the editor. Regeneration
-  rewrites the whole file, so never run it after results are in.
+### Data
+
+- **Never store what can be derived.** Store only the raw facts a scorer
+  records — games, scores, winner — never the aggregates built from them
+  (standings, ranks, done flags). An aggregate goes silently stale the moment
+  a fact is corrected, so everything downstream is recomputed at render.
+  Exception: schedules can't be derived, so they're stored — generated from a
+  spec, tweakable via the editor. Regeneration rewrites the whole file, so
+  never run it after results are in.
 - **Times are wall-clock, never offsets.** `scheduled` holds local wall time
   in the tournament's IANA `timezone` — never a UTC instant or an offset. The
-  instant is derived at render, so data stays readable local time and stays
-  right if clock rules change.
-- **derive.js is the single source of the site's domain model.** Validator,
-  editor, generator, and renderers all consume it — extend it, never reimplement
-  the model elsewhere. The site is its only tenant: every export must be
-  reachable from a shipped render path — used by the site's own code, or called
-  by another derive.js function that a render path reaches. A function only
-  node tools consume — even when several tools share it — belongs in
-  src/tools.js or the tool that owns it; derive.js is not the shared utility
+  instant is derived at render, so data stays readable and stays right if
+  clock rules change.
+- **Slots are category-local, consumed at most once, acyclic.**
+- **One file per tournament, minimal diffs.** Data edits stay byte-identical
+  apart from the change, so a commit diff shows only the edit.
+
+### Code
+
+- **derive.js is the single source of the domain model.** Validator, editor,
+  generator, and renderers all consume it — extend it, never reimplement it
+  elsewhere. The site is its only tenant: every export must be reachable from
+  a shipped render path (directly, or through another derive.js function a
+  render path reaches). Node-tool-only helpers, even shared ones, belong in
+  src/tools.js or the tool that owns it — derive.js is not the shared utility
   belt. The integrity gate never depends on renderer code, and derive.js must
   run in the browser and under node, so node-only modules stay out. Its
   internal laws: side identity derives from the player set, never from list
   order; memoized state resets every render, so a corrected score surfaces on
   the next poll; resolution is cycle-proof — the validator rejects cycles
-  first, so a guard only ever prevents a hang.
-- **Slots are category-local, consumed at most once, acyclic.**
-- **Every editor edit validates, writes, and commits itself** — the process can
-  die at any instant with nothing lost.
-- **One file per tournament, minimal diffs.** Data edits stay byte-identical
-  apart from the change, so a commit diff shows only the edit.
+  first, so a guard only prevents a hang.
 - **Renderers never throw, and neither does the gate.** Missing data renders
-  empty, unresolvable slots render a descriptive label, malformed data
-  reports an error — never a crash. Cycles and reference errors are the
-  validator's job. Data from the repo renders as text, never HTML.
-- **Markup is semantic, styling is minimal.** Shipped HTML uses real
-  elements — headings, sections, articles, tables, `details`, navs, links —
-  with one small stylesheet, no framework, no presentational classes from JS.
-  State rides `data-*` / `aria-current`, body classes layer per-page layout
-  (e.g. `venue` on the kiosk), and layout is flex/grid + `em` — browser zoom
-  scales the kiosk, so there are no media queries. New markup reuses existing
-  elements and rules; a new class is a change to be justified.
-- **Never weaken a check to make data pass — fix the data.** Pre-commit runs
-  validate + the test suite (the dev gate). A commit staging only tournament
-  data skips the suite — it reads fixtures, never live data, so it can't
-  change with an edit — but validate always runs, and `gb.js publish` re-runs
-  it (the data gate): a bypassed hook can't ship.
+  empty, unresolvable slots a descriptive label, malformed data an error
+  report — never a crash. Cycles and reference errors are the validator's
+  job. Data from the repo renders as text, never HTML.
+- **Markup is semantic, styling is minimal.** Shipped HTML uses real elements
+  — headings, sections, articles, tables, `details`, navs, links — with one
+  small stylesheet, no framework, no presentational classes from JS. State
+  rides `data-*` / `aria-current`; body classes layer per-page layout (e.g.
+  `venue` on the kiosk); layout is flex/grid + `em`, so browser zoom scales
+  the kiosk — no media queries. New markup reuses existing elements and
+  rules; a new class is a change to be justified.
 
-## Where code lives
+### Process & Deploy
+
+- **Git is the record, not the transport.** No server, no accounts — the repo
+  is data, history, and frontend. Only `gb.js publish` ships `site/`, and the
+  deploy follows the branch, never the operator's intent: `main` ships the
+  production domain, proved equal to `origin/main`'s CNAME; a branch ships
+  only a CNAME proved different from it — a missing anchor (no `origin/main`)
+  refuses every deploy. Sim branches
+  (`gb.js sim`) practice the whole pipeline on a branch that is never merged:
+  their scores are fabricated and their scratch CNAME must not ride into
+  production history (`gb.js sim --teardown` is the only exit). The venue
+  board is operated, never handed to the public — its corner sim-clock chip
+  is a deliberate control, practice mode's entry point; don't gate or remove
+  it. Publishing sits outside git: last write wins on the CDN, safe because
+  one director ships, everyone else pulls and reviews.
+- **Every editor edit validates, writes, and commits itself** — the process
+  can die at any instant with nothing lost.
+- **Never weaken a check to make data pass — fix the data.** Pre-commit runs
+  validate + tests (the dev gate). A commit staging only tournament data
+  skips the suite — it reads fixtures, never live data, so it can't change
+  with an edit — but validate always runs, and `gb.js publish` re-runs it
+  (the data gate): a bypassed hook can't ship.
+
+## Where Code Lives
 
 One question decides placement for any new function: does the browser run it?
 
-- **Yes, on the shipped site → `site/`** (the shipping surface). Pure
-  fetch/render/boot in `app.js`; markup and styling in `index.html` /
-  `style.css`; site computations in `derive.js` so the gate and the renderer
-  can't drift.
-- **Yes, but never shipped → `src/<tool>/`** beside the server that serves
+- **Yes, on the shipped site → `site/`** (the shipping surface).
+  Fetch/render/boot in `app.js`; markup and styling in `index.html` /
+  `style.css`; site computations in `derive.js`, so the gate and the
+  renderer can't drift.
+- **Yes, but never shipped → `src/<tool>/`**, beside the server that serves
   it — the admin page lives in `src/admin/`, served loopback-only by the
-  daemon. It is browser code, not site code.
+  daemon. Browser code, not site code.
 - **No → `src/`** (the tool layer, never ships). Keep it in the tool that
-  uses it (`validate.js`, `schedule.js`, `edits.js`); share via `src/tools.js`
-  — repo I/O and tool-only predicates already live there. Root files
-  (`gb.js`, `.githooks/`) dispatch and gate only; logic lives in `src/`.
+  uses it (`validate.js`, `schedule.js`, `edits.js`); share via
+  `src/tools.js` — repo I/O and tool-only predicates already live there. Root
+  files (`gb.js`, `.githooks/`) dispatch and gate only; logic lives in `src/`.
 - **Specs → `specs/`**, one file per tournament, consumed only by
   `schedule.js`.
 
 ## Conventions
 
-Violating a convention costs friction, not correctness — they are working
+Violating a convention costs friction, not correctness — these are working
 agreements; if one doesn't fit, raise it instead of breaking it silently.
 
-- **Comments state why, never what** — code and tests carry the what.
-  Shipping-surface comments cost transfer bytes on every page load, so keep
-  rationale out of `site/` unless it warns against a real trap.
+- **Comments state why, never what.** Shipping-surface comments cost transfer
+  bytes on every page load, so keep rationale out of `site/` unless it warns
+  against a real trap.
 - **Mark deliberate shortcuts** with a `ponytail:` comment naming the ceiling
-  and the upgrade path — the shortcut ledger.
+  and the upgrade path.
 - **A behavior change is a fixture + a test.** New validator rules and derive
   behavior need a committed scenario under `fixtures/` and an assertion in
   `test/`, both loaded via the same `loadRepo` as real checkouts. Tests
   assert domain behavior — ladder order, slot resolution, validation
-  outcomes, escaping, no-throw. Renderer tests are smoke checks only:
-  shipped state survives — an a11y state, a status flag, a data-jump target,
-  an escape, a no-throw — never the words, columns, tags, or layout that
-  carry it; copy and layout are review changes, not test changes. Derive
-  helpers that only feed the renderer (labels, status words, layout columns,
-  scroll anchors) get smoke coverage or none. Neither layer mutates
-  committed data or depends on live `site/tournaments/`.
+  outcomes, escaping, no-throw. Renderer tests are smoke checks only: shipped
+  state survives — an a11y state, a status flag, a data-jump target, an
+  escape, a no-throw — never the words, columns, tags, or layout carrying it;
+  copy and layout are review changes, not test changes. Derive helpers that
+  only feed the renderer (labels, status words, layout columns, scroll
+  anchors) get smoke coverage or none. Neither layer mutates committed data
+  or depends on live `site/tournaments/`.
 - **Concurrent edits are rebase conflicts, not lost writes.** A rejected push
   means someone pushed first: `git pull --rebase && git push`.
 - **One scorer owns one tournament.**

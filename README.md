@@ -12,12 +12,12 @@ are not supported.
 - **Tournament** — a whole event, from its first group match to its final.
 - **Category** — one competition within a tournament (e.g. Men's Doubles
   40+), with its own pools and knockout.
-- **Player** — a person taking part in a tournament.
+- **Player** — a person taking part.
 - **Team** — one player (singles) or two (doubles) competing together in a
   category.
 - **Venue** — a court, the physical place a match happens.
-- **Pool** — a round-robin group; every team plays every other team in it.
-  Rankings decide which teams advance.
+- **Pool** — a round-robin group; every team plays every other. Rankings
+  decide who advances.
 - **Group stage** — the first phase: every team plays the others in its pool.
 - **Knockout stage** — the second phase: single-elimination matches; lose and
   you're out. Teams enter as pool ranks or as the winner/loser of an earlier
@@ -33,26 +33,27 @@ are not supported.
 - **Match** — one meeting of two sides, the smallest unit of play.
 - **Side** — one of the two opponents in a match: players, a previous match's
   winner/loser, or a pool rank.
-- **Game** — a single race within a match; games are the score evidence a
-  result is judged by.
+- **Game** — a single race within a match; games are the evidence a result is
+  judged by.
 
-## Model
+## Tournament files
 
 One file per tournament. `tournaments.json` is the index; each entry's slug
 names a file in `site/tournaments/`:
 
 ```json
 [
-  { "slug": "2026-alpineopen", "name": "Alpine Open 60+", "location": "Bärenhalle, Grindelwald", "dates": ["2026-10-03"] }
+  { "slug": "2026-alpineopen", "name": "Alpine Open 60+",
+    "location": "Bärenhalle, Grindelwald", "dates": ["2026-10-03"] }
 ]
 ```
 
-`location` is shown on the list page and tournament heading (instead of the
-timezone); required, and must match the file like `name`. `dates` is the list
-page's day list (ascending ISO dates, required to match the schedule once the
-tournament is scheduled, like `name`).
+- `location` — shown on the list page and the tournament heading (instead of
+  the timezone). Required, and must match the file's like `name`.
+- `dates` — the list page's day list (ascending ISO dates). Once the
+  tournament is scheduled it must match the schedule, like `name`.
 
-The tournament file holds everything: venues, categories, players, and all
+The tournament file holds everything — venues, categories, players, and all
 matches keyed by category:
 
 ```jsonc
@@ -69,14 +70,16 @@ matches keyed by category:
 }
 ```
 
-A match has two stages: `groups` (has a `pool`) and `knockout` (no pool).
-`bestOf` sets match length per stage, `slotMinutes` the court slot per stage;
-a match can override either with a plain number. A side is one of three kinds:
+- Matches have two stages: `groups` (has a `pool`) and `knockout` (no pool).
+- `bestOf` sets match length per stage, `slotMinutes` the court slot per
+  stage; a match can override either with a plain number.
+- `scheduled` is local wall time in the tournament's `timezone` — never a UTC
+  instant or offset; the IANA zone at the top of the file interprets it.
+
+A side is one of three kinds:
 
 ```jsonc
-// players — the actual people; singles: one id, doubles: two.
-// scheduled is local wall time in the tournament's `timezone` — no offset in
-// the string, the IANA zone at the top of the file interprets it.
+// players — the actual people; singles: one id, doubles: two
 { "id": 1, "pool": "A", "venue": "court-3", "scheduled": "2025-07-14T09:00:00",
   "sides": [
     { "kind": "players", "ids": ["p1", "p3"] },
@@ -111,33 +114,37 @@ done when it has one, in play without one. `winner` is a side letter (`a` or
 Nothing else stored can be derived — standings and brackets follow from the
 data.
 
-Pool rankings use the standard round-robin ladder: wins, then head-to-head
-against the tied teams (mutual-match wins, game differential, point
-differential), then overall game and point differential. A group still tied
-after the whole ladder is a dead tie — its bracket slot stays TBD for the
-organizer to settle.
+**Pool rankings** use the standard round-robin ladder: wins, then
+head-to-head against the tied teams (mutual-match wins, game differential,
+point differential), then overall game and point differential. A group still
+tied after the whole ladder is a dead tie — its bracket slot stays TBD for
+the organizer to settle.
 
 ## Views
 
 One page, fragment-routed: `#<slug>[/schedule|venues][?cat=&player=&venue=]`.
-`#<slug>` is the tournament page — one category at a time, the category switch
-pinned under the view bar; `?cat=` picks the category and the first is
-canonical at the bare slug. A floating `Tournament | Schedule` switch sits
-above the two tournament views. The kiosk is a separate mode, the index the
-front door. The player pick is URL state, never device state — links carry
-only the params legal on their target: `cat` and `player` ride along between
-tournament and schedule so switching views keeps the focus and Schedule
-restores it; `venue` lives on the kiosk alone:
+The player pick is URL state, never device state — links carry only the
+params legal on their target: `cat` and `player` ride between tournament and
+schedule so switching views keeps the focus; `venue` lives on the kiosk
+alone.
 
-- `#` — lists tournaments, past and current; the only page with kiosk links.
-- `#<slug>` / `#<slug>?cat=<category-id>` — the tournament, one category at a time (the first by default); the date span and location in the heading, the category's span and status under its title.
-- `#<slug>/schedule?player=<player-id>` — a player's Schedule; without a valid `player` (or via "Change") it shows a picker of participating players. The URL is the only memory of a pick — share or bookmark it.
-- `#<slug>/venues?venue=<venue-id>` — the kiosk, the fullscreen board for the hall: the whole day's schedule on every court, auto-centered on the current slot (done matches stay, muted; overdue red, now green); `venue` narrows to one court.
+- `#` — the index, listing past and current tournaments; the only page with
+  kiosk links.
+- `#<slug>` / `#<slug>?cat=<category-id>` — the tournament, one category at a
+  time (the first by default); date span and location in the heading, the
+  category's span and status under its title. A floating
+  `Tournament | Schedule` switch sits above the two views.
+- `#<slug>/schedule?player=<player-id>` — a player's Schedule. Without a
+  valid `player` (or via "Change") it shows a picker of participating
+  players. The URL is the only memory of a pick — share or bookmark it.
+- `#<slug>/venues?venue=<venue-id>` — the kiosk, the fullscreen board for the
+  hall: the whole day on every court, auto-centered on the current slot (done
+  matches stay, muted; overdue red, now green); `venue` narrows to one court.
 
 ## Specs
 
 `node gb.js schedule specs/<slug>.json` generates a tournament file from a
-spec — the single source for the schedule:
+spec — the single source of the schedule:
 
 ```jsonc
 { "slug": "2026-alpineopen", "name": "Alpine Open 60+",
@@ -157,11 +164,11 @@ spec — the single source for the schedule:
 - `date` is the tournament day, `blocks` the first match of each category;
   `poolSize` splits the category's `teams` into round-robin pools. Pools play
   each round in the same time window, so every team carries the same
-  back-to-back burden — the schedule stays packed tight, no idle slots.
+  back-to-back burden — a packed schedule, no idle slots.
 - Each `teams.<cat>` list is **seed / strength order** (best first): the
   generator snakes the list across pools so every pool gets a spread of seeds
-  and the top seeds land one per pool, in order — balanced pools whose winners
-  still feed the knockout as the top seeds.
+  and the top seeds land one per pool, in order — balanced pools whose
+  winners still feed the knockout as top seeds.
 - `bestOf`/`slotMinutes` are plain numbers applied to both stages;
   `knockout: false` skips the knockout stage; `placements` (a power of 2)
   sizes the classification bracket; `final` overrides the final and bronze
@@ -171,34 +178,41 @@ spec — the single source for the schedule:
   meet late (2 pools: the final; k pools: no earlier than the semis).
 - Regeneration rewrites the whole matches map, scores included — run it
   before results go in, never after.
-- Match ids follow chronological order in the generated file (per-category,
-  sequential by `scheduled`; build order breaks simultaneous ties). A
-  category's match 5 is a different match from any other category's match 5.
+- Match ids follow chronological order (per-category, sequential by
+  `scheduled`; build order breaks simultaneous ties). A category's match 5
+  is a different match from any other category's match 5.
 
 ## Tools
 
-**`gb.js`** — the one CLI. `node gb.js` (or `node gb.js admin [slug]`) starts
- the admin daemon — the single match-day interface: a calendar grid (venues
- across, wall-clock minutes down, matches as slot-sized blocks),
- drag-to-reschedule (drops snap to the gate's own legal starts), click-to-
- score/wo/void, a side picker, a pending-changes panel (unpushed commits),
- undo/redo, and a publish button. Every edit goes through the one edit engine
- — validate, write, byte-identical diff, commit — so the browser can never
- outrun the gate. `node gb.js validate [slug]` checks data;
- `node gb.js schedule <specs/xxx.json>` generates a tournament file from a
- spec; `node gb.js publish` ships `site/` (from `main` to the production
- domain, proved equal to `origin/main`'s CNAME; from a branch only to its own
- scratch domain); `node gb.js sim` practices the whole pipeline on a
- `sim/<rand>` branch with a scratch surge domain and a kiosk sim clock, and
- `--teardown` undoes it (sim branches are practice, never merged). Commands
- live as modules under `src/`; `site/` stays the shipping surface.
+**`gb.js`** is the one CLI.
+
+- `node gb.js` (or `node gb.js admin [slug]`) — the admin daemon, the single
+  match-day interface: a calendar grid (venues across, wall-clock minutes
+  down, matches as slot-sized blocks), drag-to-reschedule (drops snap to the
+  gate's own legal starts), click-to-score/wo/void, a side picker, a
+  pending-changes panel (unpushed commits), undo/redo, and a publish button.
+  Every edit goes through the one edit engine — validate, write,
+  byte-identical diff, commit — so the browser can never outrun the gate.
+- `node gb.js validate [slug]` — checks data.
+- `node gb.js schedule <specs/xxx.json>` — generates a tournament file (see
+  Specs).
+- `node gb.js publish` — ships `site/`: from `main` to the production domain
+  (proved equal to `origin/main`'s CNAME), from a branch only to its own
+  scratch domain.
+- `node gb.js sim` — practices the whole pipeline on a `sim/<rand>` branch
+  with a scratch surge domain and a kiosk sim clock; `--teardown` undoes it.
+  Sim branches are practice, never merged.
+
+Commands live as modules under `src/`; `site/` stays the shipping surface.
 
 ## Development
 
-The pre-commit hook (validator + tests) is the dev gate. A fresh clone needs it wired once:
+The pre-commit hook (validator + tests) is the dev gate. A fresh clone needs
+it wired once:
 
 ```bash
 git config core.hooksPath .githooks
 ```
 
-Publish re-runs the validator from disk, so a bypassed hook can't ship bad data — the hook is the fast local gate, not the last one.
+Publish re-runs the validator from disk, so a bypassed hook can't ship bad
+data — the hook is the fast local gate, not the last one.
