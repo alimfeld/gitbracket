@@ -510,13 +510,13 @@ test('renderers: escapes, a11y state, and behavioral hooks — the shipped surfa
   assert(text(standings).includes('Winner of SF-2') && !standings.includes('<a href="#m-'), 'slot labels are plain text, not anchors');
   assert(!standings.includes('data-feeders') && !standings.includes('data-stage') && !standings.includes('toggle') && !standings.includes('id="m-'), 'no trace or disclosure machinery ships');
   for (const j of vals(standings, 'data-jump')) assert(card(standings, 'id', j) !== undefined, `every jump link has its target section (${j})`);
-  assert.equal(vals(standings, 'data-status').filter(s => s === 'next').length, 1, 'ko in play: only the one unscored semifinal card carries the accent');
-  assert(card(standings, 'data-status', 'next').includes('SF-2'), 'the highlighted card is the unresolved semifinal');
+  assert.equal(vals(standings, 'data-status').filter(s => s === 'next').length, 2, 'ko in play: the Next line and the one unscored semifinal card carry the accent');
+  assert(cards(standings, 'data-status', 'next').some(c => c.includes('SF-2')), 'the highlighted card is the unresolved semifinal');
   const midJson = clone();
   midJson.matches.md40[0].result = undefined;
   const mid = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' }, withTjson(data, midJson));
   assert(vals(mid, 'data-jump').includes('group-matches'), 'running groups: the Next line links the group matches');
-  assert.equal(vals(mid, 'data-status').filter(s => s === 'next').length, 1, 'groups in play: only the one unscored group match carries the accent');
+  assert.equal(vals(mid, 'data-status').filter(s => s === 'next').length, 2, 'groups in play: the Next line and the one unscored group match carry the accent');
   const preJson = clone();
   for (const ms of Object.values(preJson.matches)) for (const m of ms) { delete m.result; delete m.games; }
   const pre = renderTournament({ slug: 'sample', view: 'tournament' }, withTjson(data, preJson));
@@ -677,17 +677,17 @@ test('knockout wave link names the merged band; playable placement matches share
   // not flagged
   const a = render(base());
   assert(vals(a, 'data-jump').includes('ko-1') && !vals(a, 'data-jump').includes('ko-0'), 'jump lands on Semifinals, never on Final for a placement match');
-  assert.equal(vals(a, 'data-status').filter(s => s === 'next').length, 1, 'a placement match whose feeder is undecided is not flagged');
+  assert.equal(vals(a, 'data-status').filter(s => s === 'next').length, 2, 'a placement match whose feeder is undecided: the Next line and the card are flagged');
   // championship finished, only the bronze left open: the wave is the placement
   // band, and the open bronze carries the accent so the link has its partner
   const done = base(); played(done, [7, 8, 9]);
   const doneHtml = render(done);
   assert(vals(doneHtml, 'data-jump').includes('ko-0'), 'placement-pending links to the merged band, not a round or a Placement section');
-  assert.equal(vals(doneHtml, 'data-status').filter(s => s === 'next').length, 1, 'only the open bronze is flagged');
-  assert(card(doneHtml, 'data-status', 'next').includes('3rd place'), 'the accent lands on the open placement card in the band');
+  assert.equal(vals(doneHtml, 'data-status').filter(s => s === 'next').length, 2, 'the Next line and the open bronze carry the flag');
+  assert(cards(doneHtml, 'data-status', 'next').some(c => c.includes('3rd place')), 'the accent lands on the open placement card in the band');
   // both semis decided, final + bronze open: the Final wave flags both playable matches
   const tjson = base(); played(tjson, [7, 8]);
   const html = render(tjson);
   assert(vals(html, 'data-jump').includes('ko-0'), 'the wave is the Final');
-  assert.equal(vals(html, 'data-status').filter(s => s === 'next').length, 2, 'the final and the playable bronze both carry the accent');
+  assert.equal(vals(html, 'data-status').filter(s => s === 'next').length, 3, 'the Next line, the final, and the playable bronze all carry the accent');
 });

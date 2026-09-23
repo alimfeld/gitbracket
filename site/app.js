@@ -243,7 +243,7 @@ const anticipationLine = (ctx, status, href, day, wave) => {
     : status.wave !== null ? `ko-${status.wave}` : '';
   const body = `${starts ? 'Starts' : 'Next'}: ${timeEl(schedTime(m0, ctx.tz), ctx.tz, day)}${where}`;
   // the whole line is the link — a full-size tap target, same as the schedule page
-  return section ? `<p><a data-jump="${section}" href="${esc(href)}">${body}</a></p>` : `<p>${body}</p>`;
+  return section ? `<p data-status="next"><a data-jump="${section}" href="${esc(href)}">${body}</a></p>` : `<p>${body}</p>`;
 };
 
 function catSection(ctx, opts) {
