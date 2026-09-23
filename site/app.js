@@ -193,10 +193,12 @@ const statusLine = (status, ctx) => {
     return `<p>Knockout stage: ${esc(stageGroupName(roundName(status.wave), bandLabels(ctx, status.wave)))}</p>`;
   }
   if (status.kind === 'finished') return '<p data-status="finished">Finished</p>';
-  // winners: the podium is one line, third only when a bronze decided it
-  const names = [status.first, status.second, status.third].filter(Boolean).map(ids => teamLabel(ids, ctx));
-  const ranks = ['Champion', 'Runner-up', '3rd'];
-  return `<p>${names.map((n, i) => `${ranks[i]} <strong>${esc(n)}</strong>`).join(' · ')}</p>`;
+  // winners: one line per place, third only when a bronze decided it — 4th is
+  // omitted, only the top 3 get awards
+  return [['Champion', status.first], ['Runner-up', status.second], ['3rd', status.third]]
+    .filter(([, ids]) => ids)
+    .map(([rank, ids]) => `<p>${rank}: <strong>${esc(teamLabel(ids, ctx))}</strong></p>`)
+    .join('');
 };
 
 // Compact court list — a round plays several matches at once, so "next" is a
@@ -565,7 +567,7 @@ function playerSchedule(route, data, p) {
   const statuses = [];
   for (const ctx of ctxs) {
     const s = playerStatus(ctx, pid);
-    if (s) statuses.push(`${esc(ctx.name || ctx.id)}: ${esc(s)}`);
+    if (s) statuses.push(`${esc(ctx.name || ctx.id)}: <strong>${esc(s)}</strong>`);
   }
   // the "what's next" line names the earliest playable event — a confirmed
   // match, or the earliest possible stage
@@ -583,7 +585,7 @@ function playerSchedule(route, data, p) {
       next = `${link}Next: ${esc(stage.label)}${stage.time !== null ? ' · ' + timeEl(stage.time, nctx.tz, multi) : ''}${stage.chip ? ` (${esc(stage.chip)})` : ''}</a>`;
     }
   }
-  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}<a href="${esc(href(data.t.slug, 'schedule', { cat: route.cat }))}">Change</a></h1>${statuses.length ? `<p>${statuses.join(' · ')}</p>` : ''}${next ? `<p data-status="next">${next}</p>` : ''}${updatedLine(data, data.tjson.timezone || 'UTC')}</header>`];
+  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}<a href="${esc(href(data.t.slug, 'schedule', { cat: route.cat }))}">Change</a></h1>${statuses.map(s => `<p>${s}</p>`).join('')}${next ? `<p data-status="next">${next}</p>` : ''}${updatedLine(data, data.tjson.timezone || 'UTC')}</header>`];
   const out = [];
   let curDay = null;
   for (const e of events) {
