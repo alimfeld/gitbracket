@@ -150,7 +150,9 @@ function renderIndex(route, data) {
 // stays canonical at the bare slug, the rest select via ?cat=.
 const catNav = (slug, ctxs, route) => ctxs.map((c, i) => {
   const p = { ...route, cat: i === 0 ? undefined : c.id };
-  const active = (route.cat || ctxs[0].id) === c.id;
+  // an unknown cat renders the first category — the tabs must agree with the page
+  const activeId = route.cat && ctxs.some(x => x.id === route.cat) ? route.cat : ctxs[0].id;
+  const active = activeId === c.id;
   return `<a href="${esc(href(slug, 'tournament', p))}"${active ? ' aria-current="true"' : ''}>${esc(c.name || c.id)}</a>`;
 }).join('');
 

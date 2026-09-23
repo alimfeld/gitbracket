@@ -119,7 +119,7 @@ function poolRanks(std) {
 
 // Rank cells stay blank until a pool has a decided match — before that every
 // team ties at zero and a wall of 1s reads as "all ranked first".
-const poolDecided = std => std.some(r => r.wins || r.losses);
+const poolDecided = std => !!std && std.some(r => r.wins || r.losses);
 
 function poolStandings(ctx, pool, partial) {
   // partial=true: skip unfinished matches — live standings; strict form TBDs.
