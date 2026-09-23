@@ -552,7 +552,6 @@ test('renderers: escapes, a11y state, and behavioral hooks — the shipped surfa
   ] });
   assert(text(idx).indexOf('Wide') < text(idx).indexOf('Sample') && text(idx).indexOf('Sample') < text(idx).indexOf('Later'), 'sorted by start date descending, undated last');
   assert(!idx.includes('undefined') && !idx.includes('null'), 'no date renders clean, no null payload');
-  assert(links(idx).filter(l => l.href === '#sample/venues').length === 1, 'venue board appears once per tournament');
   const tdata = repoPage('tie');
   const tieHtml = renderTournament({ slug: 'tie', view: 'tournament' }, tdata);
   assert(!text(tieHtml).includes('†') && text(tieHtml).includes('1 A') && text(tieHtml).includes('1 B'), 'tied teams share rank 1, no dagger');

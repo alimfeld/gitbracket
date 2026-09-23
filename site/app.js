@@ -136,9 +136,7 @@ function renderIndex(route, data) {
       const dates = fmtRange(e.dates); // stored ISO days -> span
       const meta = [dates, e.location].filter(Boolean).map(esc).join(' · ');
       const name = esc(e.name || e.slug);
-      // the card opens the tournament; the venue board is a sibling chip — a
-      // link can't nest a link
-      return `<div class="tcard-wrap"><a class="tcard" aria-label="${name}" href="#${esc(e.slug)}"><h2>${name}</h2>${meta ? `<p>${meta}</p>` : ''}</a><a class="board-link" href="#${esc(e.slug)}/venues">Venue board</a></div>`;
+      return `<a class="tcard" aria-label="${name}" href="#${esc(e.slug)}"><h2>${name}</h2>${meta ? `<p>${meta}</p>` : ''}</a>`;
     });
   if (!items.length) return `<header><h1>Tournaments</h1><p>No tournaments yet.</p></header>`;
   // the home-screen tip lives muted in the header once — .meta is the existing
@@ -172,7 +170,7 @@ function renderTournament(route, data) {
   const ctxs = data.cats;
   const show = ctxs.find(c => c.id === route.cat) || ctxs[0]; // an unknown cat falls back to the first
   const multi = multiDay(ctxs);
-  const parts = [segmentBar(route), `<header><h1>${esc(data.t.name)}</h1>`];
+  const parts = [segmentBar(route), `<header><h1>${esc(data.t.name)}<a href="#">Tournaments</a></h1>`];
   // the heading states the span and the location once — single-day cards never repeat the date
   const range = fmtRange(schedDays(ctxs.flatMap(c => c.matches), tz));
   parts.push(`<p>${[range, esc(data.tjson.location)].filter(Boolean).join(' · ')}</p>${updatedLine(data, tz)}</header>`);
@@ -189,7 +187,7 @@ const statusLine = (status, ctx) => {
   if (!status || status.kind === 'starts') return '';
   if (status.kind === 'groups') return `<p>Group stage: ${status.played} of ${status.count} played</p>`;
   if (status.kind === 'ko') {
-    if (status.wave === null) return '<p>Knockout stage · Placement</p>';
+    if (status.wave === null) return '<p>Knockout stage: placement matches remain</p>';
     return `<p>Knockout stage: ${esc(stageGroupName(roundName(status.wave), bandLabels(ctx, status.wave)))}</p>`;
   }
   if (status.kind === 'finished') return '<p data-status="finished">Finished</p>';
@@ -481,7 +479,7 @@ let lastPoll = 0; // real time of the last successful fetch — never the sim cl
 let lastSnap = null; // { slug, done } — the previous poll's done-ness per match
 let recent = []; // [{ text, at }] — completed results, pruned at render
 
-// One completed match's announcement: court · wall time · winner (or annulled).
+// One completed match's announcement: court · wall time · winner (or void).
 const resultText = (ctx, m) => {
   const t = schedTime(m, ctx.tz);
   const when = t !== null ? fmtTime(t, ctx.tz) : 'TBD';
@@ -490,7 +488,7 @@ const resultText = (ctx, m) => {
   // a scored match with no sides (invalid via the gate, but the recency line
   // must not die on it — bad-sides-knockout's played m5 has none)
   const s = m.sides && m.sides[w];
-  return w === null ? `${where} · ${when} · annulled` : `${where} · ${when} · ${s ? sideLabel(s, ctx) : 'the match'} won`;
+  return w === null ? `${where} · ${when} · void` : `${where} · ${when} · ${s ? sideLabel(s, ctx) : 'the match'} won`;
 };
 
 // Matches that completed since the last poll, merged into the rolling window.

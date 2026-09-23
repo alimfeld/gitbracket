@@ -279,7 +279,7 @@ function scoreCells(m, i, ctx) {
   }).join('');
   if (!r || r.status === 'played') return slot();
   if (r.status === 'void') return '<span>void</span>';
-  return sideIdx(r.winner) === i ? '<span>W/O</span>' : slot();
+  return sideIdx(r.winner) === i ? '<span title="Walkover">W/O</span>' : slot();
 }
 
 // Confirmed only: a side must resolve to the player — undecided slots stay off.
