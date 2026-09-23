@@ -210,6 +210,15 @@ a.tcard:focus-visible {
   color: var(--on-accent);
 }
 
+/* the home screen has no board: a phone can't hold the court columns, and
+   hiding is safe because the index is never rendered on the kiosk — the one
+   place width queries could break (browser zoom simulates a narrow viewport) */
+@media (max-width: 40em) {
+  .board-link {
+    display: none;
+  }
+}
+
 a.tcard h2 {
   margin: 0;
   /* the corner chip overlaps the title row — long names must not run under it */
