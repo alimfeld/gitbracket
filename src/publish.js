@@ -8,12 +8,13 @@
 
 const fs = require('fs');
 const os = require('os');
-const { spawn, spawnSync } = require('child_process');
+const { spawn } = require('child_process');
 const path = require('path');
 const validate = require('./validate.js');
 const { branchOf, git, cnameOf } = require('./tools.js');
 
 // CLI entry (from gb.js): validate exits 1 on data errors, so nothing dirty ships.
+// Returns ship's promise — gb.js awaits it, so the CLI and the daemon share one path.
 function main(root) {
   validate.main(root);
   return ship(root);
@@ -79,29 +80,11 @@ function snapshotSite(siteRoot) {
   return snap;
 }
 
-// Upload site/ to the domain in site/CNAME. Split from main so the daemon's
-// publish can ship without validate.main's process.exit.
+// Upload site/ to the domain in site/CNAME — the one deploy path, shared by
+// the CLI and the daemon, and split from main so the daemon never goes through
+// validate.main's process.exit. Async keeps the server answering while a
+// multi-minute push+deploy runs; gb.js awaits it for the CLI.
 function ship(root) {
-  const pre = deployPreflight(root);
-  if (pre !== null) { console.error(pre); return 1; }
-  const snap = snapshotSite(path.join(root, 'site'));
-  try {
-    // surge ≥0.43: `surge <path> publish` reads the domain from <path>/CNAME.
-    const r = spawnSync('surge', [snap, 'publish'], { cwd: root, stdio: 'inherit' });
-    if (r.error) {
-      console.error('publish: surge CLI not found — install once: npm install -g surge');
-      return 1;
-    }
-    return r.status === null ? 1 : r.status;
-  } finally {
-    fs.rmSync(snap, { recursive: true, force: true });
-  }
-}
-
-// The admin daemon's deploy — the same preflight, snapshot, and surge
-// invocation as ship(), async so the server keeps answering while a
-// multi-minute push+deploy runs. It owns the snapshot's lifecycle.
-function shipAsync(root) {
   return new Promise((resolve) => {
     const pre = deployPreflight(root);
     if (pre !== null) { console.error(pre); return resolve(1); }
@@ -110,6 +93,7 @@ function shipAsync(root) {
     const done = (code) => {
       try { fs.rmSync(snap, { recursive: true, force: true }); } finally { resolve(code); }
     };
+    // surge ≥0.43: `surge <path> publish` reads the domain from <path>/CNAME.
     const r = spawn('surge', [snap, 'publish'], { cwd: root, stdio: 'inherit' });
     r.on('error', () => {
       console.error('publish: surge CLI not found — install once: npm install -g surge');
@@ -119,4 +103,4 @@ function shipAsync(root) {
   });
 }
 
-module.exports = { main, ship, shipAsync, snapshotSite, deployPreflight, deployRole, productionCNAME };
+module.exports = { main, ship, snapshotSite, deployPreflight, deployRole, productionCNAME };

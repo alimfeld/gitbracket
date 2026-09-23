@@ -386,10 +386,10 @@ test('admin undo: a root commit (orphan branch) reports the ceiling, never git\'
 
 // ---- publish: the deploy gate, the frozen snapshot, and the async daemon path ----
 
-test('publish shipAsync: the async daemon path shares the preflight gate — a role refusal resolves fast without spawning anything', async () => {
+test('publish ship: the one deploy path shares the preflight gate — a role refusal resolves fast without spawning anything', async () => {
   const { tmp } = scratchWithRemote();
   // the sample fixture has no CNAME, so deployRole refuses before any surge call
-  assert.equal(await publish.shipAsync(tmp), 1, 'the async deploy resolves the refusal as a failure');
+  assert.equal(await publish.ship(tmp), 1, 'the deploy resolves the refusal as a failure');
 });
 
 test('publish snapshotSite: a frozen copy of site/ — CNAME included, live tree untouched', () => {

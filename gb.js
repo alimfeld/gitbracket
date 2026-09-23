@@ -25,5 +25,6 @@ function main(argv) {
   process.exit(1);
 }
 
-const code = main(process.argv.slice(2));
-if (code) process.exitCode = code;
+// publish returns a promise (the deploy is async) — await it so the CLI exits
+// with the deploy's code; sync verbs resolve immediately.
+Promise.resolve(main(process.argv.slice(2))).then(code => { if (code) process.exitCode = code; });

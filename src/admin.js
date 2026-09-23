@@ -19,7 +19,7 @@ const { loadRepo, catCtx, schedEntries, pairBusy, fixedPlayers, consumedSlots, d
 const { execEdit, parseResult } = require('./edits.js');
 const { matchSlotMs, schedTime } = require('../site/derive.js');
 const { validateRepo } = require('./validate.js');
-const { shipAsync, deployRole } = require('./publish.js');
+const { ship, deployRole } = require('./publish.js');
 
 // The unpushed commits as [{sha, msg}]. The window is the current branch's own
 // upstream (@{upstream}..HEAD), not origin/main — a window over origin/main
@@ -333,7 +333,7 @@ function serve(state) {
         const push = p.hasRemote ? git(state.root, ['push']) : { code: 0 };
         if (push.code !== 0) return json(res, 400, { error: `push failed:\n${push.err}` });
         state.redo = []; // published — the undone edge is no longer the last act; undo/redo stay local to the unpushed window
-        const s = await shipAsync(state.root);
+        const s = await ship(state.root);
         return json(res, s === 0 ? 200 : 400, s === 0 ? { text: 'published' } : { error: 'deploy failed — see the daemon output' });
       }
       return json(res, 404, { error: 'unknown api' });
