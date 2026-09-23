@@ -82,7 +82,7 @@ main { flex: 1; display: flex; min-height: 0; }
 .colhead { position: sticky; top: 0; background: #fff; z-index: 3; padding: .35rem .5rem; font-size: .8rem; color: var(--muted); border-bottom: 1px solid var(--line); }
 .ruler { position: relative; }
 .hour { position: absolute; left: 0; right: 0; border-top: 1px solid var(--hairline); }
-.hourlabel { position: absolute; right: .4rem; transform: translateY(-50%); font-size: .7rem; color: var(--muted); }
+.hourlabel { position: absolute; right: .4rem; padding-top: .1rem; font-size: .7rem; color: var(--muted); }
 
 .match {
   position: absolute; left: .25rem; right: .25rem; overflow: hidden;
