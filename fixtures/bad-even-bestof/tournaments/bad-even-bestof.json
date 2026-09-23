@@ -33,6 +33,12 @@
       {
         "id": 1,
         "bestOf": 2,
+        "games": [
+          {
+            "a": 21,
+            "b": 19
+          }
+        ],
         "sides": [
           {
             "kind": "players",

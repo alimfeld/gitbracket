@@ -19,7 +19,7 @@ const { loadRepo, catCtx, schedEntries, pairBusy, fixedPlayers, consumedSlots, d
 const { execEdit, parseResult } = require('./edits.js');
 const { matchSlotMs, schedTime } = require('../site/derive.js');
 const { validateRepo } = require('./validate.js');
-const { ship, deployRole } = require('./publish.js');
+const { shipAsync, deployRole } = require('./publish.js');
 
 // The unpushed commits as [{sha, msg}]. The window is the current branch's own
 // upstream (@{upstream}..HEAD), not origin/main — a window over origin/main
@@ -79,10 +79,11 @@ function undo(state) {
   const hosted = git(state.root, ['branch', '-r', '--contains', 'HEAD']);
   if (hosted.code === 0 && hosted.out.trim()) return { error: 'HEAD is already pushed — undo only rewinds unpushed commits' };
   const head = git(state.root, ['rev-parse', 'HEAD']).out.trim();
-  const parent = git(state.root, ['rev-parse', 'HEAD~1']).out.trim();
+  const parent = git(state.root, ['rev-parse', 'HEAD~1']);
+  if (parent.code !== 0) return { error: 'nothing to undo — the branch is at its first commit' };
   const r = git(state.root, ['reset', '--hard', 'HEAD~1']);
   if (r.code !== 0) return { error: `undo failed: ${r.err}` };
-  state.redo.push({ sha: head, parent, msg: p.commits[0].msg }); // the dropped commit — redo's only record of it
+  state.redo.push({ sha: head, parent: parent.out.trim(), msg: p.commits[0].msg }); // the dropped commit — redo's only record of it
   reload(state);
   return { sha: p.commits[0].sha, msg: p.commits[0].msg };
 }
@@ -194,7 +195,14 @@ function sideOpts(tjson, cat, matchId, si) {
     }
     busy = [...busySet];
   }
+  // The picker's player pool is the full registered roster, not the players
+  // who happen to appear in a match — a late-show hand-added to players[] is
+  // legal for the gate and must be reachable from the page.
+  const roster = Array.isArray(tjson.players)
+    ? tjson.players.map(p => p && typeof p === 'object' && typeof p.id === 'string' ? p.id : null).filter(Boolean)
+    : [];
   return {
+    roster,
     busy,
     consumedRanks: [...pool.keys()],
     consumedEdges: [...edge.keys()],
@@ -325,7 +333,7 @@ function serve(state) {
         const push = p.hasRemote ? git(state.root, ['push']) : { code: 0 };
         if (push.code !== 0) return json(res, 400, { error: `push failed:\n${push.err}` });
         state.redo = []; // published — the undone edge is no longer the last act; undo/redo stay local to the unpushed window
-        const s = ship(state.root);
+        const s = await shipAsync(state.root);
         return json(res, s === 0 ? 200 : 400, s === 0 ? { text: 'published' } : { error: 'deploy failed — see the daemon output' });
       }
       return json(res, 404, { error: 'unknown api' });

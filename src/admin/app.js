@@ -445,7 +445,9 @@ async function openSide(cid, m, si) {
     if (kind === 'players') {
       const ids = cur && cur.kind === 'players' ? cur.ids : [];
       const names = new Map((S.tjson.players || []).map(p => [p.id, p.name]));
-      const all = ctx.matches.flatMap(mm => (mm.sides || []).flatMap(s => (s.kind === 'players' ? s.ids : [])));
+      // the full roster from /api/sideopts — a registered player who appears in
+      // no match yet is still a legal side and must be placeable
+      const all = L.roster || [];
       body.innerHTML = `<p class="hint">pick ${size} player${size === 1 ? '' : 's'}</p><div class="players">` +
         [...new Set(all)].map(id => {
           const checked = ids.includes(id);

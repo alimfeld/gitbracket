@@ -101,6 +101,13 @@ test('two malformed index entries: real shape errors, no bogus undefined-slug du
   assert(!r.errs.some(e => e.includes('duplicate slug undefined')), 'two missing slugs are not a duplicate-slug pair');
 });
 
+test('even bestOf with games: the config is the cause, never an invented null target', () => {
+  const r = validateFixture('bad-even-bestof');
+  assert(hasErr(r, /odd/), 'the override error is still reported');
+  assert(!r.errs.some(e => /target of null|reached the best-of target/.test(e)),
+    `no null-target messages — the games are not blamed for a config error, got: ${r.errs.join(' | ')}`);
+});
+
 test('filterErrs: an index-entry error carries its slug — validate <slug> keeps it', () => {
   const info = loadRepo(FIX('sample')).tournaments.get('sample');
   // a valid-slug entry missing its name — the tournament file itself is fine

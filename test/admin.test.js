@@ -359,8 +359,88 @@ test('admin sideOpts: the picker greys what the gate would reject — consumed s
   assert(busy2.includes('p2'), 'p2 is in match 7, which overlaps match 2 but shares no player with it — still busy');
   assert.deepEqual(admin.sideOpts(tjson, 'md', 6, 0).busy, [], 'an unscheduled match has no window — no player is busy yet');
   assert.deepEqual(admin.sideOpts(tjson, 'md', 5, NaN), a5, 'an out-of-range side clamps to side a — a hostile param frees no nonexistent side');
+  // the picker's player pool is the registered roster, not match appearances —
+  // a never-matched player stays reachable (the gate accepts any registered id)
+  const roster = admin.sideOpts(tjson, 'md', 3, 0).roster;
+  assert.deepEqual(roster, ['p1', 'p2', 'p3', 'p4'], 'the full roster is offered, matching no match yet or not');
   // an unknown match reports nothing, never throws — same as legalSlots
   assert.deepEqual(admin.sideOpts(tjson, 'md', 999, 0), {});
+});
+
+test('admin undo: a root commit (orphan branch) reports the ceiling, never git\'s raw error', () => {
+  const { tmp, state } = scratchWithRemote();
+  try {
+    // an orphan branch has one root commit with no parent — not on any remote,
+    // so it counts as pending, but there is nothing to reset back to
+    git(tmp, ['checkout', '-q', '--orphan', 'single']);
+    git(tmp, ['add', '-A']);
+    git(tmp, ['commit', '-qm', 'sole']);
+    assert.equal(admin.unpushed(tmp).commits.length, 1, 'the root commit is pending against origin/main');
+    const r = admin.undo(state);
+    assert.equal(r.error, 'nothing to undo — the branch is at its first commit', `got: ${r.error}`);
+    assert.equal(git(tmp, ['rev-parse', 'HEAD']).out.trim().length, 40, 'HEAD untouched');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+// ---- publish: the deploy gate, the frozen snapshot, and the async daemon path ----
+
+test('publish shipAsync: the async daemon path shares the preflight gate — a role refusal resolves fast without spawning anything', async () => {
+  const { tmp } = scratchWithRemote();
+  // the sample fixture has no CNAME, so deployRole refuses before any surge call
+  assert.equal(await publish.shipAsync(tmp), 1, 'the async deploy resolves the refusal as a failure');
+});
+
+test('publish snapshotSite: a frozen copy of site/ — CNAME included, live tree untouched', () => {
+  const { tmp, siteRoot } = scratchWithRemote();
+  try {
+    anchorCNAME(tmp, siteRoot);
+    const snap = publish.snapshotSite(siteRoot);
+    try {
+      assert.notEqual(snap, siteRoot, 'the snapshot is a fresh directory, not site/ itself');
+      const expected = fs.readFileSync(path.join(siteRoot, 'tournaments.json'), 'utf8');
+      assert.equal(fs.readFileSync(path.join(snap, 'tournaments.json'), 'utf8'), expected, 'the index rides along byte-identical');
+      assert(fs.existsSync(path.join(snap, 'tournaments', 'sample.json')), 'tournament files ride along');
+      assert.equal(fs.readFileSync(path.join(snap, 'CNAME'), 'utf8').trim(), PROD, 'the CNAME rides along — surge reads its domain from the deployed dir');
+    } finally {
+      fs.rmSync(snap, { recursive: true, force: true });
+    }
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+// The guarantee that matters: publish uploads a frozen copy taken at publish
+// time, never the live tree — a mid-deploy edit stays pending (un-pushed, not
+// live) instead of half-reaching the CDN. A fake surge on PATH records what it
+// was asked to upload, and the snapshot must be gone once the deploy ends.
+test('admin HTTP: publish deploys a snapshot, never the live tree — the fake surge logs a temp copy, cleaned up after', async t => {
+  const { tmp, siteRoot, state } = scratchWithRemote();
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  anchorCNAME(tmp, siteRoot);
+  const fakebin = path.join(tmp, 'fakebin');
+  const log = path.join(tmp, 'surge.log');
+  fs.mkdirSync(fakebin);
+  fs.writeFileSync(path.join(fakebin, 'surge'), `#!/bin/sh\nfor a in "$@"; do printf '%s\\n' "$a" >> "${log}"; done\nexit 0\n`);
+  fs.chmodSync(path.join(fakebin, 'surge'), 0o755);
+  const PATH = process.env.PATH;
+  process.env.PATH = fakebin + path.delimiter + PATH;
+  try {
+    const base = await withServer(t, state);
+    const r = await postJson(base, '/api/publish', '{}');
+    assert.equal(r.status, 200, 'the publish lands');
+    assert.equal((await r.json()).text, 'published');
+    const args = fs.readFileSync(log, 'utf8').trim().split('\n');
+    assert.equal(args.length, 2, 'surge got exactly a directory and the publish verb');
+    assert.equal(args[1], 'publish');
+    const snap = args[0];
+    assert.notEqual(snap, siteRoot, 'the deployed dir is a snapshot, not the live tree');
+    assert(snap.startsWith(os.tmpdir()), 'the snapshot lives in the temp dir');
+    assert(!fs.existsSync(snap), 'the snapshot is cleaned up after the deploy — no litter');
+  } finally {
+    process.env.PATH = PATH;
+  }
 });
 
 // ---- branch-role: the undo window is the branch's own upstream ----

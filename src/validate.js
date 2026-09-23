@@ -468,7 +468,9 @@ function validateGames(games, target, where, err) {
       continue;
     }
     if (g.a === g.b) { err(where, `games[${i}] has no winner (a equals b)`); continue; }
-    if (target === undefined) continue;
+    // winTarget returns null when the stage's bestOf is invalid/absent — pass A
+    // already flags the config, and 0 >= null would invent a reached target.
+    if (typeof target !== 'number') continue;
     if (wins[0] >= target || wins[1] >= target) {
       err(where, `games[${i}] recorded after a side already reached the target of ${target}`);
       continue;

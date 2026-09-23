@@ -12,7 +12,7 @@ const os = require('os');
 const path = require('path');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { loadRepo, isRealDate, findRoot, writeTournamentIndex } = require('../src/tools.js');
+const { loadRepo, isRealDate, findRoot, writeTournamentIndex, writeTournament } = require('../src/tools.js');
 const { FIX } = require('./helpers.js');
 
 test('repo loadRepo: unreadable tournament files land in readErrs, the rest still load', () => {
@@ -41,6 +41,19 @@ test('tools writeTournamentIndex: one entry per line — index diffs stay per-to
     ]);
     const out = fs.readFileSync(path.join(tmp, 'tournaments.json'), 'utf8');
     assert.equal(out, '[\n  {"slug":"one","name":"One","dates":["2026-07-11"]},\n  {"slug":"two","name":"Two"}\n]\n', 'the byte shape is a contract, not an accident');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('tools writeTournament: atomic tmp+rename leaves no litter and the byte contract intact', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gitbracket-'));
+  try {
+    fs.mkdirSync(path.join(tmp, 'tournaments'), { recursive: true });
+    writeTournament(tmp, 'one', { name: 'One' });
+    const dir = path.join(tmp, 'tournaments');
+    assert.equal(fs.readFileSync(path.join(dir, 'one.json'), 'utf8'), JSON.stringify({ name: 'One' }, null, 2) + '\n', 'the byte shape is a contract, not an accident');
+    assert.deepEqual(fs.readdirSync(dir), ['one.json'], 'no .tmp sibling survives the rename — a crash would leave one, which git status makes loud');
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

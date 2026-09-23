@@ -489,7 +489,13 @@ function main(root, specPath) {
 
   // keep the list page in sync — a tournament the index doesn't know is invisible
   const idxFile = path.join(siteRoot, 'tournaments.json');
-  const idx = JSON.parse(fs.readFileSync(idxFile, 'utf8'));
+  let idx;
+  try {
+    idx = JSON.parse(fs.readFileSync(idxFile, 'utf8'));
+  } catch (e) {
+    console.error(`schedule: can't read site/tournaments.json as JSON (${e.message}) — ${spec.slug}.json is written but the index is untouched; fix the index by hand and commit both`);
+    process.exit(1);
+  }
   const entry = { slug: spec.slug, name: spec.name, location: spec.location, dates: schedDays(Object.values(tourney.matches).flat(), tourney.timezone) };
   const i = Array.isArray(idx) ? idx.findIndex((t) => t && t.slug === spec.slug) : -1;
   if (i >= 0) idx[i] = entry; else idx.push(entry);

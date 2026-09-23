@@ -53,6 +53,15 @@ test('pre-commit: data-only commits skip the suite, anything else runs it', () =
     assert.equal(git(['commit', '-qm', 'code'], env).status, 0, 'code commit lands');
     calls = fs.readFileSync(log, 'utf8').trim().split('\n');
     assert(calls.includes('--test'), 'a non-data commit still runs the suite');
+    // nothing newly staged (an amend re-commits HEAD's tree) → the suite has
+    // nothing new to check, but the hook still ran the disk validate
+    const testCalls = () => fs.readFileSync(log, 'utf8').trim().split('\n').filter(l => l.includes('--test')).length;
+    const validateCalls = () => fs.readFileSync(log, 'utf8').trim().split('\n').filter(l => l.includes('gb.js validate')).length;
+    assert.equal(testCalls(), 1, 'the code commit ran the suite once');
+    assert.equal(validateCalls(), 2, 'data + code commits validated');
+    assert.equal(git(['commit', '--amend', '-qm', 'code amend'], env).status, 0, 'amend lands');
+    assert.equal(validateCalls(), 3, 'the amend\'s hook still validated');
+    assert.equal(testCalls(), 1, 'an empty staged set adds no suite run');
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

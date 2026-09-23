@@ -183,14 +183,23 @@ function tournamentText(tjson) {
   return JSON.stringify(tjson, null, 2) + '\n';
 }
 
+// One write, atomic: tmp + rename, so a reader overlapping the write (the
+// surge upload during an async publish, any future watcher) sees the old bytes
+// or the new, never a slice of either. A crash between the two leaves the old
+// file intact plus a .tmp sibling — git status makes the litter loud.
+function writeFileAtomic(file, text) {
+  fs.writeFileSync(file + '.tmp', text);
+  fs.renameSync(file + '.tmp', file);
+}
+
 function writeTournament(siteRoot, slug, tjson) {
-  fs.writeFileSync(path.join(siteRoot, 'tournaments', `${slug}.json`), tournamentText(tjson));
+  writeFileAtomic(path.join(siteRoot, 'tournaments', `${slug}.json`), tournamentText(tjson));
 }
 
 // One entry per line — pretty-printing the whole array would reflow every line
 // on each add, blurring per-tournament diffs.
 function writeTournamentIndex(siteRoot, entries) {
-  fs.writeFileSync(path.join(siteRoot, 'tournaments.json'), '[' + entries.map((t) => `\n  ${JSON.stringify(t)}`).join(',') + '\n]\n');
+  writeFileAtomic(path.join(siteRoot, 'tournaments.json'), '[' + entries.map((t) => `\n  ${JSON.stringify(t)}`).join(',') + '\n]\n');
 }
 
 // The board's scheduled-unplayed windows: {m, t, ctx, players, cat}. noSlot
