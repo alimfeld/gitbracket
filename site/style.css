@@ -394,9 +394,9 @@ body.venue header {
   position: absolute;
   left: 0;
   right: 0;
-  border-top: 2px solid var(--live);
+  border-top: 1px solid var(--live);
   z-index: 1;
-  opacity: .6;
+  opacity: .35;
   pointer-events: none;
 }
 
