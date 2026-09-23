@@ -185,10 +185,10 @@ function renderTournament(route, data) {
 }
 
 // The status line is progress only, linkless — the page's one link lives in the
-// anticipation (Next) line. 'starts' is anticipation, so no status line until
-// a match resolves.
+// anticipation (Next) line. Nothing played is zero progress, so the first stage
+// always has a status.
 const statusLine = (status, ctx) => {
-  if (!status || status.kind === 'starts') return '';
+  if (!status) return '';
   if (status.kind === 'groups') return `<p>Group stage: <strong>${status.played} of ${status.count} played</strong></p>`;
   if (status.kind === 'ko') {
     if (status.wave === null) return '<p>Knockout stage: <strong>placement matches remain</strong></p>';
@@ -220,28 +220,18 @@ const fmtCourts = names => {
   return ns.join(' · ');
 };
 
-// The anticipation line: "Starts" before anything, "Next:" once a match has
-// gone in; both jump to the wave's section. Data-only: scheduled times, never
-// the clock (the page's 30s poll keeps it current).
+// The anticipation line: "Next" at every stage — bracket and schedule share
+// the word; data-only, never the clock (the 30s poll keeps it current).
 const anticipationLine = (ctx, status, href, day, wave) => {
   if (!status || status.kind === 'finished' || status.kind === 'winners') return '';
-  if (!wave.length) {
-    // nothing ready yet (e.g. a bracket waiting on its feeders): a bare Starts line, no block to jump to
-    if (status.kind === 'starts' && status.time != null) return `<p>Starts: ${timeEl(status.time, ctx.tz, day)}</p>`;
-    return '';
-  }
+  if (!wave.length) return ''; // no playable match (feeders undecided): the progress line carries the page
   const m0 = wave[0];
   const courts = [...new Set(wave.map(m => m.venue ? venueName(ctx, m.venue) : null).filter(Boolean))];
   // fmtCourts is repo data — the same esc contract as every other name on the page
   const where = courts.length ? ` · ${esc(fmtCourts(courts))}` : '';
-  const starts = status.kind === 'starts';
-  // the jump target is the section the wave lives in: starts derives it from
-  // the opening block, groups and ko keep the committed rule
-  const section = starts
-    ? (m0.pool !== undefined ? 'group-matches' : `ko-${koColumn(m0, ctx)}`)
-    : status.kind === 'groups' ? 'group-matches'
-    : status.wave !== null ? `ko-${status.wave}` : '';
-  const body = `${starts ? 'Starts' : 'Next'}: ${timeEl(schedTime(m0, ctx.tz), ctx.tz, day)}${where}`;
+  // the jump target is the section the wave lives in
+  const section = status.kind === 'groups' ? 'group-matches' : status.wave !== null ? `ko-${status.wave}` : '';
+  const body = `Next: ${timeEl(schedTime(m0, ctx.tz), ctx.tz, day)}${where}`;
   // the whole line is the link — a full-size tap target, same as the schedule page
   return section ? `<p data-status="next"><a data-jump="${section}" href="${esc(href)}">${body}</a></p>` : `<p>${body}</p>`;
 };

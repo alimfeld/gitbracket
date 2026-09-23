@@ -1028,7 +1028,7 @@ function winners(ctx) {
 }
 
 // Category status line: the facts a renderer turns into the subline.
-// kind: starts (nothing played) | groups | ko | finished | winners.
+// kind: groups (zero played included) | ko | finished | winners.
 function catStatus(ctx) {
   const ms = ctx.matches;
   if (!ms.length) return null;
@@ -1036,17 +1036,15 @@ function catStatus(ctx) {
     const w = winners(ctx);
     return w ? { kind: 'winners', ...w } : { kind: 'finished' };
   }
-  if (!ms.some(isDone)) {
-    const ts = ms.map(m => schedTime(m, ctx.tz)).filter(Number.isFinite);
-    return { kind: 'starts', time: ts.length ? Math.min(...ts) : null };
-  }
+  // Nothing played is not a state of its own: it is the first stage at zero
+  // progress — groups at 0/N, or the front KO wave.
   const grp = ms.filter(m => m.pool !== undefined);
   if (grp.some(m => !isDone(m))) return { kind: 'groups', played: grp.filter(isDone).length, count: grp.length };
   const col = nextKoWave(ctx);
   const place = placeWave(ctx);
   // place: the classification wave — the main wave may be spent while a bronze
   // still reads ready. wave: the deeper of the two.
-  return { kind: 'ko', col, place, wave: col ?? place };
+  return { kind: 'ko', wave: col ?? place };
 }
 
 // Unplayed matches with both sides resolved, at the earliest scheduled time —

@@ -248,18 +248,18 @@ test('matchSlotMs: match override > per-stage category config, no default', () =
   assert(Number.isNaN(matchSlotMs({}, { slotMinutes: { groups: 60 } })), 'groups config does not leak into knockout → NaN');
 });
 
-test('catStatus: starts, groups progress, the KO wave in play, and the podium at full finish', () => {
+test('catStatus: pre-start zero progress, groups live, the KO wave in play, and the podium at full finish', () => {
   const tjson = require(FIX('sample', 'tournaments', 'sample.json'));
   const mk = ms => makeCat({ meta: tjson.categories[0], matches: ms }, tjson);
   const base = catOf('sample', 'md40').matches;
   const pre = mk(base.map(m => ({ ...m, games: [], result: undefined })));
-  assert(catStatus(pre).kind === 'starts' && catStatus(pre).time === Date.parse('2025-07-14T09:00:00-04:00'), 'nothing played: starts at the earliest scheduled time, in a semantic time element');
+  assert(catStatus(pre).kind === 'groups' && catStatus(pre).played === 0 && catStatus(pre).count === 6, 'nothing played: zero progress on the opening stage — no separate start state');
   const mid = mk(base.map(m => m.id === 1 ? { ...m, result: undefined } : m));
   const g = catStatus(mid);
   assert(g.kind === 'groups' && g.played === 5 && g.count === 6, 'groups live: the progress count, no next-slot noise');
   const live = catOf('sample', 'md40');
   const k = catStatus(live);
-  assert(k.kind === 'ko' && k.col === 1 && roundName(k.col) === 'Semifinals', 'the Semifinals are in play — a scheduled final/bronze stays silent while its semifinals still decide them');
+  assert(k.kind === 'ko' && k.wave === 1 && roundName(k.wave) === 'Semifinals', 'the Semifinals are in play — a scheduled final/bronze stays silent while its semifinals still decide them');
   const full = catOf('full', 't');
   const w = catStatus(full);
   assert(w.kind === 'winners' && w.first.join() === 'p1' && w.second.join() === 'p5' && w.third.join() === 'p6', 'full finish: the podium off the played final and bronze');
@@ -521,8 +521,8 @@ test('renderers: escapes, a11y state, and behavioral hooks — the shipped surfa
   for (const ms of Object.values(preJson.matches)) for (const m of ms) { delete m.result; delete m.games; }
   const pre = renderTournament({ slug: 'sample', view: 'tournament' }, withTjson(data, preJson));
   assert(text(pre).includes('Ada Lovelace / Grace Hopper') && !text(pre).includes('1 Ada Lovelace'), 'roster renders before any result, no phantom rank 1s');
-  const sLink = links(pre).find(l => l.text.startsWith('Starts'));
-  assert(sLink && sLink.jump === 'group-matches' && sLink.href === '#sample', 'the Starts line is a link to the opening block, like the Next line');
+  const sLink = links(pre).find(l => l.text.startsWith('Next'));
+  assert(sLink && sLink.jump === 'group-matches' && sLink.href === '#sample', 'the pre-start line says Next, like every other stage — a link to the opening block');
   assert(vals(pre, 'data-status').includes('next'), 'pre-start: the opening block is lit — playable before the first result');
   const seg = links(standings).filter(l => l.text === 'Tournament' || l.text === 'Schedule');
   assert(seg.length === 2 && seg[0].href === '#sample' && seg[0].current && seg[1].href === '#sample/schedule' && !seg[1].current, 'tournament page: segment switch, Tournament current');
