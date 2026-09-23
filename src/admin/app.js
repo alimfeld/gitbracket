@@ -358,7 +358,8 @@ function openResult(cid, m) {
     <p class="kicker">Result</p>
     <h2 class="sides">${esc(sideLabel(m.sides[0], ctx))} vs ${esc(sideLabel(m.sides[1], ctx))}</h2>
     <p class="sub">${esc(cardMeta(ctx, m))}</p>
-    <input type="text" class="scoreinput" id="scoreinput" value="${esc(pre)}" aria-label="Result" placeholder="${esc(ex)}">
+    <input type="text" class="scoreinput" id="scoreinput" value="${esc(pre)}" aria-label="Result" aria-describedby="resulthint">
+    <p class="hint" id="resulthint">Game scores — e.g. ${esc(ex)}</p>
     <div class="fillbtns">
       <button type="button" data-fill="wo a">${esc(sideLabel(m.sides[0], ctx))} wins by walkover</button>
       <button type="button" data-fill="wo b">${esc(sideLabel(m.sides[1], ctx))} wins by walkover</button>
