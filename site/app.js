@@ -470,11 +470,11 @@ const multiDay = ctxs => schedDays(ctxs.flatMap(c => c.matches), (ctxs[0] && ctx
 
 
 // ---- the kiosk's freshness + latest-results state. Renderer bookkeeping, not
-// domain — module state the venue view owns; per-slug reset keeps tournament
-// hops from diffing one file against another.
+// domain — module state the venue view owns; kept per slug, so a hop away and
+// back compares against the last visit instead of announcing from zero.
 let lastPoll = 0; // real time of the last successful fetch — never the sim clock
-let lastSnap = null; // { slug, done } — the previous poll's done-ness per match
-let recent = []; // [{ text, at }] — completed results, pruned at render
+const slugSnap = new Map(); // slug -> { done: Map } — previous poll's done-ness per match
+const slugRecent = new Map(); // slug -> [{ text, at }] — completed results, pruned at render
 
 // One completed match's announcement: court · wall time · winner (or void).
 const resultText = (ctx, m) => {
@@ -491,7 +491,10 @@ const resultText = (ctx, m) => {
 // Matches that completed since the last poll, merged into the rolling window.
 function venueRecency(data, cats) {
   const slug = data.t.slug;
-  if (!lastSnap || lastSnap.slug !== slug) { lastSnap = { slug, done: new Map() }; recent = []; }
+  let lastSnap = slugSnap.get(slug);
+  if (!lastSnap) { lastSnap = { done: new Map() }; slugSnap.set(slug, lastSnap); }
+  let recent = slugRecent.get(slug);
+  if (!recent) { recent = []; slugRecent.set(slug, recent); }
   const done = new Map();
   const fresh = [];
   for (const c of cats) for (const m of c.matches) {
@@ -504,6 +507,7 @@ function venueRecency(data, cats) {
   lastSnap.done = done;
   const at = Date.now();
   recent = [...recent.filter(e => at - e.at < RECENT_MS), ...fresh.map(text => ({ text, at }))];
+  slugRecent.set(slug, recent);
   return recent;
 }
 
