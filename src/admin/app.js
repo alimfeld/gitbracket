@@ -99,7 +99,7 @@ async function setSlug(slug) {
   S.venues = S.tjson.venues || [];
   S.days = schedDays(S.cats.flatMap(c => c.matches), S.tz);
   const daySel = $('day');
-  daySel.innerHTML = S.days.map(d => `<option>${d}</option>`).join('');
+  daySel.innerHTML = S.days.map(d => `<option value="${esc(d)}">${esc(dayLabel(d))}</option>`).join('');
   S.day = S.days[0] || null;
   renderGrid();
   refreshPending();
