@@ -184,15 +184,15 @@ function renderTournament(route, data) {
   return parts.join('');
 }
 
-// The status line is progress only, plain — the page's one link lives in the
+// The status line is progress only, linkless — the page's one link lives in the
 // anticipation (Next) line. 'starts' is anticipation, so no status line until
 // a match resolves.
 const statusLine = (status, ctx) => {
   if (!status || status.kind === 'starts') return '';
-  if (status.kind === 'groups') return `<p>Group stage: ${status.played} of ${status.count} played</p>`;
+  if (status.kind === 'groups') return `<p>Group stage: <strong>${status.played} of ${status.count} played</strong></p>`;
   if (status.kind === 'ko') {
-    if (status.wave === null) return '<p>Knockout stage: placement matches remain</p>';
-    return `<p>Knockout stage: ${esc(stageGroupName(roundName(status.wave), bandLabels(ctx, status.wave)))}</p>`;
+    if (status.wave === null) return '<p>Knockout stage: <strong>placement matches remain</strong></p>';
+    return `<p>Knockout stage: <strong>${esc(stageGroupName(roundName(status.wave), bandLabels(ctx, status.wave)))}</strong></p>`;
   }
   if (status.kind === 'finished') return '<p data-status="finished">Finished</p>';
   // winners: one line per place, third only when a bronze decided it — 4th is
@@ -227,7 +227,7 @@ const anticipationLine = (ctx, status, href, day, wave) => {
   if (!status || status.kind === 'finished' || status.kind === 'winners') return '';
   if (!wave.length) {
     // nothing ready yet (e.g. a bracket waiting on its feeders): a bare Starts line, no block to jump to
-    if (status.kind === 'starts' && status.time != null) return `<p>Starts ${timeEl(status.time, ctx.tz, day)}</p>`;
+    if (status.kind === 'starts' && status.time != null) return `<p>Starts: ${timeEl(status.time, ctx.tz, day)}</p>`;
     return '';
   }
   const m0 = wave[0];
@@ -567,11 +567,6 @@ function playerSchedule(route, data, p) {
   for (const r of rows) events.push({ t: schedTime(r.m, r.ctx.tz) ?? Infinity, r, ctx: r.ctx });
   // times ascending; a confirmed row wins an exact tie against a possible stage
   events.sort((a, b) => a.t - b.t || (a.r ? 0 : 1) - (b.r ? 0 : 1));
-  const statuses = [];
-  for (const ctx of ctxs) {
-    const s = playerStatus(ctx, pid);
-    if (s) statuses.push(`${esc(ctx.name || ctx.id)}: <strong>${esc(s)}</strong>`);
-  }
   // the "what's next" line names the earliest playable event — a confirmed
   // match, or the earliest possible stage
   const nextEv = events.find(e => e.r ? !isDone(e.r.m) : true);
@@ -588,7 +583,16 @@ function playerSchedule(route, data, p) {
       next = `${link}Next: ${esc(stage.label)}${stage.time !== null ? ' · ' + timeEl(stage.time, nctx.tz, multi) : ''}${stage.chip ? ` (${esc(stage.chip)})` : ''}</a>`;
     }
   }
-  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}<a href="${esc(href(data.t.slug, 'schedule', { cat: route.cat }))}">Change player</a></h1>${statuses.map(s => `<p>${s}</p>`).join('')}${next ? `<p data-status="next">${next}</p>` : ''}${updatedLine(data, data.tjson.timezone || 'UTC')}</header>`];
+  // the one next line rides under the progress of the category that hosts it:
+  // a player has one next match, and the category lead above it says whose it is
+  const blocks = [];
+  for (const ctx of ctxs) {
+    const s = playerStatus(ctx, pid);
+    if (!s) continue;
+    blocks.push(`<p>${esc(ctx.name || ctx.id)}: <strong>${esc(s)}</strong></p>`);
+    if (nextEv && nextEv.ctx === ctx) blocks.push(`<p data-status="next">${next}</p>`);
+  }
+  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}<a href="${esc(href(data.t.slug, 'schedule', { cat: route.cat }))}">Change player</a></h1>${blocks.join('')}${updatedLine(data, data.tjson.timezone || 'UTC')}</header>`];
   const out = [];
   let curDay = null;
   for (const e of events) {

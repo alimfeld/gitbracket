@@ -438,7 +438,14 @@ article[data-status="next"] {
   border-left: 3px solid var(--accent);
 }
 
+/* the next line tucks under its status — collapsing margins mean the gap
+   is cut on the status, never the next's own margin-top */
+p:has(+ p[data-status="next"]) {
+  margin-bottom: 0;
+}
+
 p[data-status="next"] {
+  margin-top: calc(var(--space)/2);
   color: var(--accent);
 }
 
