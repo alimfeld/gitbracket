@@ -77,6 +77,16 @@ article[id] {
   scroll-margin-top: calc(var(--bar-h) + var(--space)*2);
 }
 
+/* the jump receipt: a brief accent wash on the arrived-at target — state rides
+   data-*, set and cleared by the data-jump click handler */
+[data-flash] {
+  animation: flash 1.2s ease-out;
+}
+
+@keyframes flash {
+  from { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+}
+
 header {
   margin: calc(var(--space)*2) 0 var(--space);
 }

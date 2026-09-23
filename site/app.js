@@ -233,7 +233,7 @@ const anticipationLine = (ctx, status, href, day, wave) => {
   const section = status.kind === 'groups' ? 'group-matches' : status.wave !== null ? `ko-${status.wave}` : '';
   const body = `Next: ${timeEl(schedTime(m0, ctx.tz), ctx.tz, day)}${where}`;
   // the whole line is the link — a full-size tap target, same as the schedule page
-  return section ? `<p data-status="next"><a data-jump="${section}" href="${esc(href)}">${body}</a></p>` : `<p>${body}</p>`;
+  return section ? `<p data-status="next"><a data-jump="${section}" href="${esc(href)}">${body}<span aria-hidden="true"> ↓</span></a></p>` : `<p>${body}</p>`;
 };
 
 function catSection(ctx, opts) {
@@ -567,10 +567,10 @@ function playerSchedule(route, data, p) {
     if (nextEv.r) {
       const m = nextEv.r.m, nctx = nextEv.r.ctx;
       const t = schedTime(m, nctx.tz);
-      next = `${link}Next: ${t !== null ? timeEl(t, nctx.tz, multi) : 'TBD'}${m.venue ? ` · ${esc(venueName(nctx, m.venue))}` : ' · TBD'}</a>`;
+      next = `${link}Next: ${t !== null ? timeEl(t, nctx.tz, multi) : 'TBD'}${m.venue ? ` · ${esc(venueName(nctx, m.venue))}` : ' · TBD'}<span aria-hidden="true"> ↓</span></a>`;
     } else {
       const stage = nextEv.stage, nctx = nextEv.ctx;
-      next = `${link}Next: ${esc(stage.label)}${stage.time !== null ? ' · ' + timeEl(stage.time, nctx.tz, multi) : ''}${stage.chip ? ` (${esc(stage.chip)})` : ''}</a>`;
+      next = `${link}Next: ${esc(stage.label)}${stage.time !== null ? ' · ' + timeEl(stage.time, nctx.tz, multi) : ''}${stage.chip ? ` (${esc(stage.chip)})` : ''}<span aria-hidden="true"> ↓</span></a>`;
     }
   }
   // the one next line rides under the progress of the category that hosts it:
@@ -799,11 +799,20 @@ function boot() {
     }
   };
 
-  // data-jump links keep the route — the href stays a valid fragment; a click
-  // only scrolls (every jump link is same-view today)
+  // the receipt and the scroll target are the same: the first spined card —
+  // a deep group stage buries the wave below its heading, and the match the
+  // line names is what the jump owes the user, not the section label. Centering
+  // keeps the target clear of the sticky bars on both pages.
   const jumpTo = id => {
     const el = document.getElementById(id);
-    if (el) el.scrollIntoView({ block: 'start' });
+    if (!el) return;
+    const boxes = document.querySelectorAll('article[data-status="next"]');
+    const targets = boxes.length ? boxes : [el]; // a possible-stage jump has no spined card — the anchor stands in
+    targets[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
+    targets.forEach(box => {
+      box.setAttribute('data-flash', '');
+      box.addEventListener('animationend', () => box.removeAttribute('data-flash'), { once: true });
+    });
   };
   document.addEventListener('click', e => {
     const a = e.target.closest('a[data-jump]');

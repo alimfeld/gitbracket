@@ -534,6 +534,7 @@ test('renderers: escapes, a11y state, and behavioral hooks — the shipped surfa
   assert(pseg[0].href === '#sample?player=p1' && !pseg[0].current && pseg[1].href === '#sample/schedule?player=p1' && pseg[1].current, 'player page: Schedule current, pick preserved in links');
   const nextLink = links(ppage).find(l => l.text.startsWith('Next'));
   assert(nextLink && nextLink.jump === 'next' && nextLink.href === '#sample/schedule?player=p1', 'the whole next line is the link to the next card');
+  assert(ppage.includes('aria-hidden="true"> ↓</span></a>'), 'the next line ends with a decorative down arrow, hidden from screen readers');
   assert(text(ppage).includes('Ada Lovelace') && text(ppage).includes('Court 1'), 'player card finds the player, names the court');
   const picker = renderPlayer({ slug: 'sample', view: 'schedule' }, data);
   const secs = picker.split('<section>').slice(1);
