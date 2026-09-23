@@ -395,7 +395,7 @@ article[data-status="overdue"] {
   border-left: 3px solid var(--alert);
 }
 
-article[data-status="due"] {
+article[data-status="now"] {
   border-left: 3px solid var(--live);
 }
 

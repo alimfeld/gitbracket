@@ -656,7 +656,7 @@ test('routing: cat and player ride along between tournament and schedule — app
   assert(lk(t, 'Mixed Doubles').href === '#sample?cat=xd', 'the switcher selects another category, no extra params');
   const s = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p1', cat: 'md40' }, data);
   assert(lk(s, 'Tournament').href === '#sample?cat=md40&player=p1', 'schedule page carries cat and player back onto the tournament link');
-  assert(lk(s, 'Change').href === '#sample/schedule?cat=md40', 'Change keeps the cat, drops only the player');
+  assert(lk(s, 'Change player').href === '#sample/schedule?cat=md40', 'Change keeps the cat, drops only the player');
   const back = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40', player: 'p1' }, data);
   assert(lk(back, 'Schedule').href === '#sample/schedule?cat=md40&player=p1', 'tournament page carries the pick onto Schedule');
   assert(lk(back, 'Mixed Doubles').href === '#sample?cat=xd&player=p1', 'category switch keeps the riding player');

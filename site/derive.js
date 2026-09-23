@@ -869,7 +869,7 @@ function kioskStatus(r, now) {
   const t = r.t;
   if (isDone(r.m)) return 'done';
   if (now >= t + matchSlotMs(r.m, r.ctx)) return 'overdue';
-  if (now >= t) return 'due';
+  if (now >= t) return 'now';
   return 'upcoming';
 }
 

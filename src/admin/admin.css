@@ -9,7 +9,7 @@
   --page: #fdfdfc;
   --accent: #0a66c2;
   --on-accent: #fff;
-  --due: #15803d;
+  --now: #15803d;
   --done-wash: #eef7f0;
   --pending: #b45309;
   --pending-wash: #fbf6e9;
@@ -94,7 +94,7 @@ main { flex: 1; display: flex; min-height: 0; }
 }
 /* done: the wash closes the card; hover hands it the editable blue wash,
    which wins by rule order — green returns on mouseout */
-.match.done { background: var(--done-wash); border-left-color: var(--due); }
+.match.done { background: var(--done-wash); border-left-color: var(--now); }
 .match .winmark { flex: none; }
 /* a match that can't be scored yet — a side can't resolve; a quiet sand wash
    and amber spine say "waiting", while the grip and the per-side pencils stay
@@ -124,6 +124,10 @@ main { flex: 1; display: flex; min-height: 0; }
 }
 .match:hover .edit-side, .match .edit-side:focus-visible { opacity: 1; }
 .match .edit-side:hover, .match .edit-side:focus-visible { color: var(--accent); }
+/* touch devices have no hover to reveal the pencils — keep them visible */
+@media (hover: none) {
+  .match .edit-side { opacity: 1; }
+}
 .match .side[data-win] { font-weight: 600; }
 .match:hover { background: #0a66c21a; }
 .match .score { display: flex; gap: .2rem; margin-left: .4rem; }

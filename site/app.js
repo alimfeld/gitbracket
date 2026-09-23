@@ -442,7 +442,7 @@ function renderVenue(route, data, now) {
   const card = (r, h) => {
     const status = kioskStatus(r, now);
     const when = timeEl(r.t, r.ctx.tz);
-    const flag = status === 'due' || status === 'overdue' ? status : ''; // the status word is the flag; done and upcoming cards show none
+    const flag = status === 'now' ? 'Now' : status === 'overdue' ? 'Overdue' : ''; // the status word is the flag; done and upcoming cards show none
     return matchCard(r.m, r.ctx, { meta: ['catName', 'label'],
       head: [{ html: when }, { html: flag }], status, style: `height:${h}px` });
   };
@@ -583,7 +583,7 @@ function playerSchedule(route, data, p) {
       next = `${link}Next: ${esc(stage.label)}${stage.time !== null ? ' · ' + timeEl(stage.time, nctx.tz, multi) : ''}${stage.chip ? ` (${esc(stage.chip)})` : ''}</a>`;
     }
   }
-  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}<a href="${esc(href(data.t.slug, 'schedule', { cat: route.cat }))}">Change</a></h1>${statuses.map(s => `<p>${s}</p>`).join('')}${next ? `<p data-status="next">${next}</p>` : ''}${updatedLine(data, data.tjson.timezone || 'UTC')}</header>`];
+  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}<a href="${esc(href(data.t.slug, 'schedule', { cat: route.cat }))}">Change player</a></h1>${statuses.map(s => `<p>${s}</p>`).join('')}${next ? `<p data-status="next">${next}</p>` : ''}${updatedLine(data, data.tjson.timezone || 'UTC')}</header>`];
   const out = [];
   let curDay = null;
   for (const e of events) {
