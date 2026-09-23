@@ -136,7 +136,9 @@ function renderIndex(route, data) {
       const dates = fmtRange(e.dates); // stored ISO days -> span
       const meta = [dates, e.location].filter(Boolean).map(esc).join(' · ');
       const name = esc(e.name || e.slug);
-      return `<a class="tcard" aria-label="${name}" href="#${esc(e.slug)}"><h2>${name}</h2>${meta ? `<p>${meta}</p>` : ''}</a>`;
+      // the card opens the tournament; the venue board is a sibling chip — a
+      // link can't nest a link
+      return `<div class="tcard-wrap"><a class="tcard" aria-label="${name}" href="#${esc(e.slug)}"><h2>${name}</h2>${meta ? `<p>${meta}</p>` : ''}</a><a class="board-link" href="#${esc(e.slug)}/venues">Venue board</a></div>`;
     });
   if (!items.length) return `<header><h1>Tournaments</h1><p>No tournaments yet.</p></header>`;
   // the home-screen tip lives muted in the header once — .meta is the existing

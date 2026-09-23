@@ -123,13 +123,13 @@ One page, fragment-routed: `#<slug>[/schedule|venues][?cat=&player=&venue=]`.
 `#<slug>` is the tournament page — one category at a time, the category switch
 pinned under the view bar; `?cat=` picks the category and the first is
 canonical at the bare slug. A floating `Tournament | Schedule` switch sits
-above the two tournament views. The kiosk is a separate mode, reached from the
-admin's header link — no public page links to it. The player pick is URL state, never device state — links carry
+above the two tournament views. The kiosk is a separate mode, the index the
+front door. The player pick is URL state, never device state — links carry
 only the params legal on their target: `cat` and `player` ride along between
 tournament and schedule so switching views keeps the focus and Schedule
 restores it; `venue` lives on the kiosk alone:
 
-- `#` — lists tournaments, past and current.
+- `#` — lists tournaments, past and current; the only page with kiosk links.
 - `#<slug>` / `#<slug>?cat=<category-id>` — the tournament, one category at a time (the first by default); the date span and location in the heading, the category's span and status under its title.
 - `#<slug>/schedule?player=<player-id>` — a player's Schedule; without a valid `player` (or via "Change") it shows a picker of participating players. The URL is the only memory of a pick — share or bookmark it.
 - `#<slug>/venues?venue=<venue-id>` — the kiosk, the fullscreen board for the hall: the whole day's schedule on every court, auto-centered on the current slot (done matches stay, muted; overdue red, now green); `venue` narrows to one court.
