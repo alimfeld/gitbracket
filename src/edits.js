@@ -105,6 +105,8 @@ function writeEdit(siteRoot, repo, slug, catId, apply) {
   if (tournamentText(beforeJson) !== tournamentText(tjson)) {
     return { err: `the file changed on disk (${slug}.json) since it was loaded — refusing to overwrite it; reload and retry` };
   }
+  // undo the in-memory edit too — a same-process retry must start from the original
+  const restore = () => ms.splice(0, ms.length, ...((beforeJson.matches || {})[catId] || []));
   const aerr = apply(ms, ctx);
   if (aerr) return { err: aerr };
   // The published days (the index dates) are fixed: only the schedule
@@ -117,7 +119,7 @@ function writeEdit(siteRoot, repo, slug, catId, apply) {
   const afterDays = daysOf(tjson);
   const fmtDays = ds => ds.length ? ds.join(', ') : 'no scheduled days';
   if (fmtDays(beforeDays) !== fmtDays(afterDays)) {
-    ms.splice(0, ms.length, ...((beforeJson.matches || {})[catId] || [])); // undo the in-memory edit too — a same-process retry must start from the original
+    restore();
     return { err: `refused: this edit changes the tournament's scheduled days (${fmtDays(beforeDays)} → ${fmtDays(afterDays)}) — the index dates are fixed once the schedule is published and no edit follows them; keep the match on a published day, or change the days by hand-editing the file and its tournaments.json entry together` };
   }
   // tjson is the single view of the data, so the validator sees exactly what
@@ -126,7 +128,7 @@ function writeEdit(siteRoot, repo, slug, catId, apply) {
   if (errs.length) {
     // Nothing was written — writeTournament runs only past this gate — so the
     // in-memory undo is the whole rollback.
-    ms.splice(0, ms.length, ...((beforeJson.matches || {})[catId] || []));
+    restore();
     return { errs };
   }
   // byte equality is data equality — "21:19" for a stored "21-9" lands on the

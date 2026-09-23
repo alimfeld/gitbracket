@@ -397,7 +397,8 @@ function renderVenue(route, data, now) {
   // the day's columns: declared courts with matches on it — a match on a
   // venue the file never declares (the gate reports it) renders absent
   const declared = (data.tjson.venues || []).filter(v => v && typeof v === 'object');
-  const venueNames = new Map(declared.map(v => [v.id, v.name]));
+  // the same map every category context already carries (sharedFacts) — never rebuilt
+  const venueNames = ctxs.length ? ctxs[0].venues : new Map();
   const cols = declared.map(v => v.id).filter(id => open.some(r => r.m.venue === id));
   // the header's foot: one line, the freshness stamp (never the sim clock)
   // holding the latest results — the board must not look live while polls

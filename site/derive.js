@@ -823,7 +823,8 @@ const dayShort = (t, tz) => {
 };
 
 // A calendar-day label needs no timezone — the weekday/month/day of a Y-M-D key are absolute.
-const dayLabel = k => new Intl.DateTimeFormat(LOCALE, { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(k + 'T00:00:00Z'));
+const DAY_F = new Intl.DateTimeFormat(LOCALE, { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' });
+const dayLabel = k => DAY_F.format(new Date(k + 'T00:00:00Z'));
 
 // Distinct scheduled days as sorted ISO date keys — the index's stored form.
 function schedDays(ms, tz) {
