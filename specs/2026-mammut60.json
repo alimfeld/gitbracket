@@ -41,6 +41,7 @@
     "phoebe": "Phoebe",
     "reto": "Reto",
     "stephen": "Stephen",
+    "susanne": "Susanne",
     "suzi": "Suzi",
     "tom": "Tom"
   },
@@ -94,6 +95,10 @@
         "matthias"
       ],
       [
+        "marc",
+        "stephen"
+      ],
+      [
         "beni",
         "charles"
       ],
@@ -102,16 +107,12 @@
         "otto"
       ],
       [
-        "charly",
-        "reto"
-      ],
-      [
-        "marc",
-        "stephen"
-      ],
-      [
         "gerry",
         "hako"
+      ],
+      [
+        "charly",
+        "reto"
       ]
     ],
     "wd": [
@@ -130,6 +131,10 @@
       [
         "nelly",
         "phoebe"
+      ],
+      [
+        "susanne",
+        "suzi"
       ]
     ],
     "xd": [
@@ -150,24 +155,28 @@
         "patrick"
       ],
       [
+        "marc",
+        "phoebe"
+      ],
+      [
         "elke",
         "otto"
+      ],
+      [
+        "charles",
+        "gabi"
       ],
       [
         "eveline",
         "hako"
       ],
       [
-        "marc",
-        "phoebe"
+        "stephen",
+        "susanne"
       ],
       [
         "gerry",
         "suzi"
-      ],
-      [
-        "charles",
-        "gabi"
       ]
     ]
   }
