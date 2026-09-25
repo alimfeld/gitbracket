@@ -338,9 +338,10 @@ function serve(state) {
       }
       return json(res, 404, { error: 'unknown api' });
     }
-    // static: admin page files + the one shared domain module
+    // static: admin page files + the shared domain modules (derive.js and its
+    // translation bundle — the admin renders derive's labels, in English)
     const rel = url.replace(/^\/+/, '') || 'index.html';
-    const f = staticFile(rel === 'derive.js' ? state.siteRoot : pageRoot, rel);
+    const f = staticFile(rel === 'derive.js' || rel === 'i18n.js' ? state.siteRoot : pageRoot, rel);
     if (!f) { res.statusCode = 404; return res.end('not found'); }
     res.setHeader('Content-Type', f.type);
     res.end(f.body);
