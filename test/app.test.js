@@ -10,8 +10,9 @@
 const fs = require('fs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, matchSlotMs, sideLabel, placementLabel, koColumn, koOrdinal, matchLabel, schedTime, toCats, isDeadTie, winners, catStatus, roundName, playerStatus } = require('../site/derive.js');
-const { parseRoute, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset } = require('../site/app.js');
+const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, matchSlotMs, sideLabel, placementLabel, koColumn, koOrdinal, matchLabel, schedTime, toCats, isDeadTie, winners, catStatus, roundName, playerStatus, setLocale } = require('../site/derive.js');
+const { I18N } = require('../site/i18n.js');
+const { parseRoute, resolveLang, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset } = require('../site/app.js');
 const { generate } = require('../src/schedule.js');
 const { FIX, catOf, pageData, repoPage, withTjson, text, vals, card, cards, links } = require('./helpers.js');
 const { loadRepo } = require('../src/tools.js');
@@ -713,4 +714,50 @@ test('knockout wave link names the merged band; playable placement matches share
   const html = render(tjson);
   assert(vals(html, 'data-jump').includes('ko-0'), 'the wave is the Final');
   assert.equal(vals(html, 'data-status').filter(s => s === 'next').length, 3, 'the Next line, the final, and the playable bronze all carry the accent');
+});
+
+test('i18n: the language override is accepted in either query position', () => {
+  assert.equal(resolveLang('#slug?lang=de', '?lang=en'), 'de', 'the fragment form (which rides the links) wins');
+  assert.equal(resolveLang('#slug', '?lang=de'), 'de', 'the URL query — where people actually type it — is read too');
+  assert.equal(resolveLang('#slug', '?lang=fr'), 'en', 'an unknown language falls back to the browser language (en in tests)');
+});
+
+test('i18n: every translation key exists in both languages', () => {
+  assert.deepEqual(Object.keys(I18N.de).sort(), Object.keys(I18N.en).sort(), 'a key missing from one language leaves a {placeholder} on the page');
+});
+
+test('i18n: German derives domain labels and date spans — not just chrome', () => {
+  setLocale('de');
+  try {
+    assert.equal(roundName(1), 'Halbfinale', 'round names follow the dialect');
+    assert(fmtRange(['2026-07-11', '2026-07-12']).includes('11. Juli'), 'German date spans keep the day first');
+    // the same-byes scenario the en chip test pins, in German — articles decline by case
+    const info = loadRepo(FIX('byes')).tournaments.get('byes');
+    const page = renderPlayer({ slug: 'byes', view: 'schedule', player: 'p4' }, pageData(info.tjson, 'byes', info.index));
+    const poss = cards(page, 'data-status', 'possible');
+    assert(poss[1].includes('als Sieger vom Viertelfinale'), 'the doer takes the dative — never "von das"');
+    assert(poss[2].includes('über das Halbfinale'), 'the via takes the accusative');
+  } finally {
+    setLocale('en');
+  }
+});
+
+test('i18n: German renders stay whole — no raw placeholders, never a throw', () => {
+  setLocale('de');
+  try {
+    const repo = loadRepo(FIX('full'));
+    const info = repo.tournaments.get('full');
+    const data = pageData(info.tjson, 'full', repo.index);
+    const views = [
+      () => renderTournament({ slug: 'full', view: 'tournament' }, data),
+      () => renderVenue({ slug: 'full', view: 'venues' }, data, Date.now()),
+      () => renderPlayer({ slug: 'full', view: 'schedule' }, data),
+    ];
+    for (const v of views) {
+      const html = v();
+      assert(typeof html === 'string' && !html.includes('{'), 'a German view renders complete — no translation placeholder survives');
+    }
+  } finally {
+    setLocale('en');
+  }
 });
