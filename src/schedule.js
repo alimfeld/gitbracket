@@ -252,68 +252,114 @@ function buildCategory(teams, cat, poolSize) {
 
 // ---------- scheduling ----------
 
-// Greedy court + time assignment across all categories. Matches run in build
-// order — pools first (players known), then knockout in dependency order. A
-// match's floor is its block's start, or the end of its feeders / its pool's
-// last match, so brackets never start before their sources. One bracket rule
-// rides on top: every match of a champion-tree round shares the round's latest
-// feeder end — a play-in bracket plays all its QFs together instead of
-// staggering the play-in's quarter a slot behind the others. Placement matches
-// (loser-fed) keep own-feeder floors; their feeders are aligned rounds, so
-// they land aligned too. Each match takes the earliest floor-aligned slot with
-// a free court and no same-window player double-book (pool matches only —
-// knockout sides resolve only after results). Occupancy is a start/end window
-// over the effective slot length (matchSlotMs), matching the validator's
-// overlap rule. Tuples are [cat, teamList, matches, rounds].
+// Greedy court + time assignment across all categories. Matches run in one
+// global order merged from the categories' build orders (pools first, then
+// knockout in dependency order), so the earliest a match can start is its
+// block's start, or the end of its feeders / its pool's last match — brackets
+// never start before their sources. Each step places the next match of the
+// category with the earliest such floor, so a match gets its turn before
+// later-floor matches can occupy its courts; floor ties go to the category
+// least advanced relative to its court-minute workload, so categories sharing
+// a block start share the courts in proportion to their workload and end
+// together — the category-major order used to let the spec-first category
+// monopolize every court, stretching the others long past it. Build ids and
+// pool letters restart per category, so all feeder/pool/round state is keyed
+// by category index. One bracket rule rides on top: every match of a
+// champion-tree round shares the round's latest feeder end — a play-in
+// bracket plays all its QFs together instead of staggering the play-in's
+// quarter a slot behind the others. Placement matches (loser-fed) keep
+// own-feeder floors; their feeders are aligned rounds, so they land aligned
+// too. Each match takes the earliest floor-aligned slot with a free court and
+// no same-window player double-book (pool matches only — knockout sides
+// resolve only after results). Occupancy is a start/end window over the
+// effective slot length (matchSlotMs), matching the validator's overlap rule.
+// Tuples are [cat, teamList, matches, rounds].
 function scheduleMatches(categories, venues, tz, slotCfgOf, eventDate, blockStart) {
   if (venues.length === 0) throw new Error('spec: venues must be a non-empty id -> name map');
   const offset = tzOffset(tz, eventDate);
   const startOf = (cat) => Date.parse(`${eventDate}T${blockStart[cat]}:00${offset}`);
   const courtUse = new Map(); // venue -> [{ start, end }]
-  const playerUse = []; // { start, end, players: Set }
-  const endOf = new Map(); // match id -> end ms (feeder floor)
-  const poolDone = new Map(); // pool -> end ms (pool-slot floor)
-
-  for (const [cat, , matches, rounds] of categories) {
+  const playerUse = []; // { start, end, players: Set } — global, players span categories
+  const endOf = new Map(); // catIdx -> match id -> end ms (feeder floor)
+  const poolDone = new Map(); // catIdx -> pool -> end ms (pool-slot floor)
+  const roundOf = new Map(); // catIdx -> match id -> its round's matches
+  const poolLast = new Map(); // catIdx -> pool -> build index of its last match
+  const st = categories.map(([cat, , matches], i) => {
+    const catSlots = slotCfgOf.get(cat);
+    return { i, matches, idx: 0, total: matches.reduce((s, m) => s + matchSlotMs(m, { slotMinutes: catSlots }), 0), placed: 0 };
+  }); // merge cursors, each carrying its court-minute workload
+  categories.forEach(([, , matches, rounds], c) => {
+    endOf.set(c, new Map());
+    poolDone.set(c, new Map());
+    const ro = new Map();
+    // A play-in bracket must not stagger its quarters: every match of a
+    // champion-tree round shares the round's latest feeder end.
+    rounds.forEach((rs) => { for (const m of rs) ro.set(m.id, rs); });
+    roundOf.set(c, ro);
+    const pl = new Map();
+    matches.forEach((pm, i) => { if (pm.pool !== undefined) pl.set(pm.pool, i); });
+    poolLast.set(c, pl);
+  });
+  const total = st.reduce((s, x) => s + x.matches.length, 0);
+  // A knockout match's earliest start, as a pick-time predicate: Infinity (not
+  // pickable) until every pool it feeds on has placed its last match — a
+  // pool's end isn't final until then, and a stale floor would let a bracket
+  // start before its own pools finish. Feeder ends only exist after placement,
+  // so they gate the same way.
+  const floorOf = (catIdx, start) => {
+    const m = st[catIdx].matches[st[catIdx].idx];
+    const grp = roundOf.get(catIdx).get(m.id) ?? [m];
+    let t = start;
+    for (const fm of grp) {
+      for (const s of fm.sides) {
+        if (s.kind === 'match') {
+          const e = endOf.get(catIdx).get(s.match);
+          if (e === undefined) return Infinity;
+          t = Math.max(t, e);
+        } else if (s.kind === 'pool') {
+          if (poolLast.get(catIdx).get(s.pool) >= st[catIdx].idx) return Infinity;
+          t = Math.max(t, poolDone.get(catIdx).get(s.pool) ?? start);
+        }
+      }
+    }
+    return t;
+  };
+  for (let n = 0; n < total; n++) {
+    let pick = -1, pf = Infinity;
+    for (const s of st) {
+      if (s.idx >= s.matches.length) continue;
+      const f = floorOf(s.i, startOf(categories[s.i][0]));
+      const adv = s.placed / s.total;
+      if (f < pf || (f === pf && (pick < 0 || adv < st[pick].placed / st[pick].total))) { pick = s.i; pf = f; }
+    }
+    const cat = categories[pick][0];
     const start = startOf(cat);
     if (Number.isNaN(start)) throw new Error(`spec: no blocks entry for category ${cat}`);
     const catSlots = slotCfgOf.get(cat);
-    // A play-in bracket must not stagger its quarters: every match of a
-    // champion-tree round shares the round's latest feeder end.
-    const roundOf = new Map(); // match id -> its round's matches
-    rounds.forEach((rs) => { for (const m of rs) roundOf.set(m.id, rs); });
-    for (const m of matches) {
-      const slotMs = matchSlotMs(m, { slotMinutes: catSlots });
-      const players = fixedPlayers(m);
-      let t = start;
-      // whole-round floor: pools/placement use the match itself, knockout its round
-      const grp = roundOf.get(m.id) ?? [m];
-      for (const fm of grp) {
-        for (const s of fm.sides) {
-          if (s.kind === 'match') t = Math.max(t, endOf.get(s.match) ?? start);
-          else if (s.kind === 'pool') t = Math.max(t, poolDone.get(s.pool) ?? start);
-        }
+    const m = st[pick].matches[st[pick].idx++];
+    const slotMs = matchSlotMs(m, { slotMinutes: catSlots });
+    const players = fixedPlayers(m);
+    let t = pf; // the pick already computed this match's floor
+    for (;;) {
+      const free = (v) => !(courtUse.get(v) ?? []).some((w) => slotsOverlap(t, t + slotMs, w.start, w.end));
+      const venue = venues.find(free);
+      const blocked = players && playerUse.some(
+        (w) => slotsOverlap(t, t + slotMs, w.start, w.end) && [...players].some((p) => w.players.has(p)));
+      if (venue && !blocked) {
+        m.venue = venue;
+        // Local wall date + time in the event tz, no offset. A fixed
+        // eventDate prefix would backdate a midnight-crossing slot by 24h,
+        // so the day comes from the instant.
+        m.scheduled = `${dayKey(t, tz)}T${fmtTime(t, tz)}:00`;
+        courtUse.set(venue, [...(courtUse.get(venue) ?? []), { start: t, end: t + slotMs }]);
+        endOf.get(pick).set(m.id, t + slotMs);
+        if (m.pool !== undefined) poolDone.get(pick).set(m.pool, Math.max(poolDone.get(pick).get(m.pool) ?? start, t + slotMs));
+        if (players) playerUse.push({ start: t, end: t + slotMs, players });
+        break;
       }
-      for (;;) {
-        const free = (v) => !(courtUse.get(v) ?? []).some((w) => slotsOverlap(t, t + slotMs, w.start, w.end));
-        const venue = venues.find(free);
-        const blocked = players && playerUse.some(
-          (w) => slotsOverlap(t, t + slotMs, w.start, w.end) && [...players].some((p) => w.players.has(p)));
-        if (venue && !blocked) {
-          m.venue = venue;
-          // Local wall date + time in the event tz, no offset. A fixed
-          // eventDate prefix would backdate a midnight-crossing slot by 24h,
-          // so the day comes from the instant.
-          m.scheduled = `${dayKey(t, tz)}T${fmtTime(t, tz)}:00`;
-          courtUse.set(venue, [...(courtUse.get(venue) ?? []), { start: t, end: t + slotMs }]);
-          endOf.set(m.id, t + slotMs);
-          if (m.pool !== undefined) poolDone.set(m.pool, Math.max(poolDone.get(m.pool) ?? start, t + slotMs));
-          if (players) playerUse.push({ start: t, end: t + slotMs, players });
-          break;
-        }
-        t += slotMs;
-      }
+      t += slotMs;
     }
+    st[pick].placed += slotMs;
   }
 }
 

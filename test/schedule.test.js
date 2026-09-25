@@ -312,6 +312,34 @@ test('group stage: multi-pool rounds pack tight and spread back-to-backs evenly'
     `back-to-back counts spread by more than one: ${[...new Set(counts)].sort((a, b) => a - b).join(', ')}`);
 });
 
+test('categories sharing a block start end within one slot of each other', () => {
+  // Two same-block categories on four courts: the category-major greedy used
+  // to let the spec-first category monopolize every court until it finished,
+  // pushing the second's end two slots past its own. The fair-share order
+  // keeps same-block categories ending together. Plain 30-min categories — a
+  // final override's longer slot legitimately skews end times by one slot.
+  const players = {};
+  const a = [], b = [];
+  for (let i = 0; i < 8; i++) { players['a' + (i + 1)] = 'A' + (i + 1); a.push(['a' + (i + 1)]); }
+  for (let i = 0; i < 6; i++) { players['b' + (i + 1)] = 'B' + (i + 1); b.push(['b' + (i + 1)]); }
+  const venues = { 'court-1': 'C1', 'court-2': 'C2', 'court-3': 'C3', 'court-4': 'C4' };
+  const mkCat = (id, name) => ({ id, name, bestOf: 1, slotMinutes: 30 });
+  const tourney = generate({
+    ...MINI,
+    players,
+    venues,
+    blocks: { md: '09:00', xd: '09:00' },
+    categories: [mkCat('md', 'Men'), mkCat('xd', 'Mixed')],
+    teams: { md: a, xd: b },
+  });
+  const { errs } = validateRepo(repoOf(tourney));
+  assert.deepEqual(errs, []);
+  const slot = matchSlotMs(tourney.matches.xd[0], { slotMinutes: tourney.categories.find((c) => c.id === 'xd').slotMinutes });
+  const endOf = (cat) => Math.max(...tourney.matches[cat].map((m) => Date.parse(m.scheduled) + slot));
+  assert.ok(Math.abs(endOf('md') - endOf('xd')) <= slot,
+    `same-block categories ended ${Math.abs(endOf('md') - endOf('xd')) / 60000} min apart (allowed: one slot)`);
+});
+
 test('match ids follow chronological order; slot refs stay valid after renumbering', () => {
   const tourney = generate(MINI);
   for (const ms of Object.values(tourney.matches)) {
