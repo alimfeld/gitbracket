@@ -384,38 +384,31 @@ function scheduleMatches(categories, venues, tz, slotCfgOf, eventDate, blockStar
     }
     const cat = categories[pick][0];
     const start = startOf(cat);
-    if (Number.isNaN(start)) throw new Error(`spec: no blocks entry for category ${cat}`);
     const catSlots = slotCfgOf.get(cat);
-    if (unit) {
-      // Whole round on one wave: every member gets its own court at pt.
-      const taken = new Set();
-      for (const gm of unit) {
-        const gslot = matchSlotMs(gm, { slotMinutes: catSlots });
-        const venue = courtAt(pt, gslot, taken);
-        taken.add(venue);
-        gm.venue = venue;
-        gm.scheduled = `${dayKey(pt, tz)}T${fmtTime(pt, tz)}:00`;
-        courtUse.set(venue, [...(courtUse.get(venue) ?? []), { start: pt, end: pt + gslot }]);
-        endOf.get(pick).set(gm.id, pt + gslot);
-        st[pick].placed += gslot;
-      }
-      st[pick].idx += unit.length;
-    } else {
-      const m = st[pick].matches[st[pick].idx++];
+    // One match on a court: venue, wall clock, occupancy, floors, credit.
+    // `taken` keeps synced round members off a shared court; a match with
+    // known players books them against double-books. Wall date + time come
+    // from the instant — a fixed eventDate prefix would backdate a
+    // midnight-crossing slot by 24h.
+    const place = (m, t, taken) => {
       const slotMs = matchSlotMs(m, { slotMinutes: catSlots });
-      const players = fixedPlayers(m);
-      const t = pt; // the pick already scanned this match's earliest slot
-      const venue = courtAt(t, slotMs);
+      const venue = courtAt(t, slotMs, taken);
       m.venue = venue;
-      // Local wall date + time in the event tz, no offset. A fixed
-      // eventDate prefix would backdate a midnight-crossing slot by 24h,
-      // so the day comes from the instant.
       m.scheduled = `${dayKey(t, tz)}T${fmtTime(t, tz)}:00`;
       courtUse.set(venue, [...(courtUse.get(venue) ?? []), { start: t, end: t + slotMs }]);
       endOf.get(pick).set(m.id, t + slotMs);
       if (m.pool !== undefined) poolDone.get(pick).set(m.pool, Math.max(poolDone.get(pick).get(m.pool) ?? start, t + slotMs));
+      const players = fixedPlayers(m);
       if (players) playerUse.push({ start: t, end: t + slotMs, players });
       st[pick].placed += slotMs;
+    };
+    if (unit) {
+      // Whole round on one wave: every member gets its own court at pt.
+      const taken = new Set();
+      for (const gm of unit) place(gm, pt, taken);
+      st[pick].idx += unit.length;
+    } else {
+      place(st[pick].matches[st[pick].idx++], pt); // the pick already scanned this earliest slot
     }
   }
 }
@@ -497,6 +490,11 @@ function generate(spec) {
   // the one spec failure the gate can't see. Everything else lands in the file
   // where validate.js rejects it by name.
   for (const c of categories) {
+    // A missing block start used to leak NaN through the greedy into an
+    // unreadable TypeError — name it here instead.
+    if (typeof blockStart[c.id] !== 'string' || !/^\d\d:\d\d$/.test(blockStart[c.id])) {
+      throw new Error(`spec: no blocks entry for category ${c.id} — need a HH:MM start, got ${JSON.stringify(blockStart[c.id])}`);
+    }
     if (c.final !== undefined && (typeof c.final !== 'object' || Array.isArray(c.final))) {
       throw new Error(`spec: category ${c.id}: final must be an object { bestOf?, slotMinutes? }, got ${JSON.stringify(c.final)}`);
     }
