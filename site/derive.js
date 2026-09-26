@@ -35,7 +35,7 @@ const bandShort = l => (fmtOf('bandShort') || (l => l))(l);   // the band a plac
 const refWord = (key, c, label) => {
   const refs = bundle(LOCALE).refs || {};
   const s = (refs[key] || refs[''] || {})[c] || label;
-  return s.replace('{label}', label); // templates carry exactly one {label}
+  return s.replace('{label}', () => label); // function form: a label containing $& or $' is data, never a replacement pattern
 };
 const artWord = (key, c) => ((bundle(LOCALE).art || {})[key] || {})[c] || ''; // 'Im' / 'In der' per round key
 const ROUND_KEYS = ['round-final', 'round-semi', 'round-quart', 'round-16']; // keyed by depth from the final, mirroring roundName

@@ -698,6 +698,15 @@ test('routing: cat and player ride along between tournament and schedule — app
   assert(links(picker).some(x => x.href.startsWith('#sample/schedule?cat=md40&player=')), 'picker picks carry the cat and the pick');
 });
 
+test('routing: schedule links carry the chosen language — a shared URL keeps it', () => {
+  const data = repoPage('sample');
+  const lk = (html, label) => links(html).find(x => x.text === label);
+  const s = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p1', cat: 'md40', lang: 'de' }, data);
+  assert(lk(s, 'Change player').href.endsWith('&lang=de'), 'Change player keeps the language');
+  const picker = renderPlayer({ slug: 'sample', view: 'schedule', cat: 'md40', lang: 'de' }, data);
+  assert(links(picker).some(x => x.href.endsWith('&lang=de')), 'picker picks keep the language');
+});
+
 test('knockout wave link names the merged band; playable placement matches share the accent', () => {
   const base = () => JSON.parse(JSON.stringify(require(FIX('sample', 'tournaments', 'sample.json'))));
   const render = tjson => {

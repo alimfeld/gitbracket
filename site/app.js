@@ -448,7 +448,7 @@ function renderVenue(route, data, now) {
     const s = wallClockMin(r.t, r.ctx.tz);
     const sl = matchSlotMs(r.m, r.ctx) / 60000;
     return { r, s, e: Number.isFinite(sl) ? s + sl : null };
-  }).filter(w => w.s !== null); // a null wall minute would NaN the day's frame (Math.min coerces null to 0) — keep it off the layout
+  }).filter(w => Number.isFinite(w.s)); // a null/NaN wall minute would NaN the day's frame — keep it off the layout
   const byVenue = new Map(cols.map(id => [id, []]));
   for (const w of win) {
     const list = byVenue.get(w.r.m.venue);
@@ -465,7 +465,8 @@ function renderVenue(route, data, now) {
   // Scale: sparse days spread to the screen, dense days to one card per slot —
   // one rule for any slot length, so a 60-min match reads six times a 10-min
   // one and the shortest card always fits. (30: no known slot lengths)
-  const sShort = Math.min(...win.filter(w => w.e !== null).map(w => w.e - w.s), 30);
+  const lens = win.filter(w => w.e !== null).map(w => w.e - w.s);
+  const sShort = lens.length ? Math.min(...lens) : 30;
   const total = dayEnd - dayStart; // ≥ 30 by the quarter-hour padding — never 0
   const avail = typeof document !== 'undefined' ? document.documentElement.clientHeight : 0;
   const ppm = Math.max(1.6, avail ? (avail - 140) / total : 0, CARD_PX / sShort);
@@ -568,7 +569,7 @@ function playerPicker(route, data, players) {
     const items = players
       .filter(pl => playerMatches(c, pl.id).length)
       .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id))
-      .map(pl => `<li><a href="${esc(href(data.t.slug, 'schedule', { cat: route.cat, player: pl.id }))}">${esc(pl.name || pl.id)}</a></li>`)
+      .map(pl => `<li><a href="${esc(href(data.t.slug, 'schedule', { ...route, player: pl.id }))}">${esc(pl.name || pl.id)}</a></li>`)
       .join('');
     return items ? `<section><h2>${esc(c.name || c.id)}</h2><ul>${items}</ul></section>` : '';
   }).join('');
@@ -619,7 +620,7 @@ function playerSchedule(route, data, p) {
     blocks.push(`<p>${esc(ctx.name || ctx.id)}: <strong>${esc(s)}</strong></p>`);
     if (nextEv && nextEv.ctx === ctx) blocks.push(`<p data-status="next">${next}</p>`);
   }
-  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}<a href="${esc(href(data.t.slug, 'schedule', { cat: route.cat }))}">${u('change-player')}</a></h1>${blocks.join('')}${updatedLine(data, data.tjson.timezone || 'UTC')}</header>`];
+  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}<a href="${esc(href(data.t.slug, 'schedule', { ...route, player: null }))}">${u('change-player')}</a></h1>${blocks.join('')}${updatedLine(data, data.tjson.timezone || 'UTC')}</header>`];
   const out = [];
   let curDay = null;
   for (const e of events) {

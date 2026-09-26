@@ -88,7 +88,7 @@ function teamSize(ctx) {
 }
 function pools(ctx) { return [...new Set(ctx.matches.filter(m => m && m.pool).map(m => m.pool))]; }
 
-async function setSlug(slug) {
+async function setSlug(slug, keepDay = false) {
   S.slug = slug;
   S.tjson = await get('/api/data?slug=' + slug);
   if (!S.tjson) return;
@@ -98,13 +98,14 @@ async function setSlug(slug) {
   S.days = schedDays(S.cats.flatMap(c => c.matches), S.tz);
   const daySel = $('day');
   daySel.innerHTML = S.days.map(d => `<option value="${esc(d)}">${esc(dayLabel(d))}</option>`).join('');
-  S.day = S.days[0] || null;
+  S.day = keepDay && S.days.includes(S.day) ? S.day : (S.days[0] || null);
+  daySel.value = S.day ?? '';
   renderGrid();
   refreshPending();
 }
 
 // keep slug/day/selection, just re-fetch the data after an edit or undo
-async function reload() { await setSlug(S.slug); }
+async function reload() { await setSlug(S.slug, true); }
 
 // Fill the board's height when the day fits; floor the scale so the day's
 // shortest slot is at least one card tall — the shortest card can never
