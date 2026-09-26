@@ -136,8 +136,6 @@ main { flex: 1; display: flex; min-height: 0; }
 .match .meta { color: var(--muted); font-size: .6rem; line-height: 1.2; }
 
 .ghost { position: absolute; left: .25rem; right: .25rem; border: 2px dashed var(--accent); border-radius: .3rem; background: #0a66c21a; pointer-events: none; z-index: 2; padding: .1rem .25rem; font-size: .7rem; color: var(--muted); }
-.ghost.invalid { border-color: var(--danger); background: #b3261e1a; }
-
 .unsched { position: relative; }
 .unsched .match { position: relative; left: auto; right: auto; margin: .3rem; }
 

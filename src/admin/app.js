@@ -269,13 +269,17 @@ function hitTest(e) {
   return { venue, wm, align: x - (rect.left - gr.left) > rect.width / 2 ? 'left' : 'right' };
 }
 
-// nearest legal start-minute — null when the column has none, so the ghost
-// never snaps to a spot the write gate would reject.
-function legalSnap(venue, wm) {
+// The legal start whose own slot covers this minute — null when none does, so a
+// ghost exists exactly where a drop would land: no ghost, no drop. Keys arrive
+// as JSON object keys, so they are strings.
+function legalSnap(venue, wm, slot) {
   const ticks = S.legal && S.legal.byVenue.get(venue);
   if (!ticks || !ticks.length) return null;
-  let best = ticks[0];
-  for (const t of ticks) if (Math.abs(t - wm) < Math.abs(best - wm)) best = t;
+  let best = null;
+  for (const t of ticks) {
+    const start = +t;
+    if (start <= wm && wm < start + slot && (best === null || start > best)) best = start;
+  }
   return best;
 }
 
@@ -288,11 +292,11 @@ async function loadSlots(cid, mid) {
   S.legal = { byVenue: new Map(Object.entries((r && r.ok) || {})) };
 }
 
-// One ghost element — the drop target's preview; invalid shrinks to a red marker.
-function addGhost(col, { invalid, title, time = '', align = '', top, height }) {
+// One ghost element — the drop target's preview. Legal starts only, so its
+// absence is the refusal the flash then repeats.
+function addGhost(col, { time = '', align = '', top, height }) {
   const g = document.createElement('div');
-  g.className = 'ghost' + (invalid ? ' invalid' : '');
-  g.title = title;
+  g.className = 'ghost';
   g.textContent = time;
   g.style.textAlign = align;
   g.setAttribute('aria-hidden', 'true'); // a sight aid for the pointer drag
@@ -313,31 +317,22 @@ function ghost(e) {
   clearGhost();
   if (!ht) return;
   const slot = slotMinOf(m, ctx);
-  if (!Number.isFinite(slot)) return;
   const col = $('grid').querySelector(`.col[data-venue="${CSS.escape(ht.venue)}"]`);
   if (!col) return;
   if (ht.venue === '__none') {
-    // A drop here clears time+venue — legal whenever the day stays covered;
-    // only the last scheduled match on its day would shrink the published day
-    // set, so the ghost marks exactly the case the day guard refuses.
-    const t = schedTime(m, ctx.tz);
-    const day = t === null ? null : dayKey(t, ctx.tz);
-    const emptiesDay = day !== null && !S.cats.some(c => c.matches.some(x => {
-      if (x === m) return false;
-      const xt = schedTime(x, c.tz);
-      return xt !== null && dayKey(xt, c.tz) === day;
-    }));
-    addGhost(col, { invalid: emptiesDay, title: emptiesDay ? 'last scheduled match on this day — clearing would drop the day from the published schedule' : '', top: '.5rem', height: '2.5rem' });
+    // A drop here clears time+venue. The one that would empty a published day
+    // is the daemon's to refuse (it names the days), so the marker is a plain
+    // box: the column has no time axis to place it on.
+    addGhost(col, { top: '.5rem', height: '2.5rem' });
     return;
   }
   // The slot list is still in flight from dragstart — no preview beats a wrong one.
   if (!S.legal) return;
-  const wm = legalSnap(ht.venue, ht.wm);
-  const bad = wm === null, top = (bad ? ht.wm : wm) - S.dayStart;
+  const wm = legalSnap(ht.venue, ht.wm, slot);
+  if (wm === null) return;
   // the wall start the drop would write, padded exactly as the rail and the
   // daemon's slot lattice pad it
-  const time = bad ? null : `${pad(Math.floor(wm / 60))}:${pad(wm % 60)}`;
-  addGhost(col, { invalid: bad, time, align: ht.align, title: bad ? 'no legal slot here' : '', top: top * S.pxPerMin + 'px', height: (bad ? 2.5 : slot) * S.pxPerMin + 'px' });
+  addGhost(col, { time: `${pad(Math.floor(wm / 60))}:${pad(wm % 60)}`, align: ht.align, top: (wm - S.dayStart) * S.pxPerMin + 'px', height: slot * S.pxPerMin + 'px' });
 }
 function clearGhost() { if (S.ghost) { S.ghost.remove(); S.ghost = null; } }
 
@@ -351,7 +346,8 @@ async function dropAt(e) {
   if (ht.venue === '__none') { time = null; venue = null; }
   else {
     if (!S.legal) await loadSlots(cid, mid); // a drop can beat the dragstart fetch
-    const wm = legalSnap(ht.venue, ht.wm);
+    // the same rule the ghost showed: the pointer must sit in the box it drew
+    const wm = legalSnap(ht.venue, ht.wm, slotMinOf(matchOf(cid, mid), cat(cid)));
     if (wm === null) { flash('no legal slot here'); return; }
     time = isoOf(S.day, wm); venue = ht.venue;
   }
