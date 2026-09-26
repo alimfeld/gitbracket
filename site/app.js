@@ -142,6 +142,9 @@ const MISSING = () => `<p>${u('missing')}</p>`;
 // fragment route, or a slug whose tournament file is a permanent 404.
 const BAD_LINK = () => `<p>${u('bad-link')}</p><p><a href="#">${u('all-tournaments')}</a></p>`;
 
+// The invalid-route page, painted through a named seam so the branch is DOM-testable — it once shipped the builder's source.
+const paintBadRoute = el => { el.innerHTML = BAD_LINK(); };
+
 // The one failed-render message, verbatim in the renderer's catch and the
 // load path — data the model can't digest never blanks the page.
 const FAILED = () => `<p>${u('failed')}</p>`;
@@ -653,7 +656,7 @@ function mountSimClock({ tjsonOf, onChange }) {
   const toggle = document.createElement('button'); toggle.type = 'button';
   const back = document.createElement('button'); back.type = 'button'; back.textContent = '◀'; back.setAttribute('aria-label', 'sim clock 30 minutes back');
   const fwd = document.createElement('button'); fwd.type = 'button'; fwd.textContent = '▶'; fwd.setAttribute('aria-label', 'sim clock 30 minutes forward');
-  const readout = document.createElement('span'); readout.setAttribute('aria-live', 'polite');
+  const readout = document.createElement('span');
   const steps = [back, readout, fwd]; // shown only while the clock is on
 
   const panel = () => {
@@ -822,7 +825,8 @@ function boot() {
     if (!r) {
       route = null;
       pollOn = false; stopPoll();
-      app.innerHTML = BAD_LINK;
+      document.body.classList.remove('venue'); // a dead link is not the kiosk — never inherit the board layout
+      paintBadRoute(app);
       return;
     }
     route = r;
@@ -874,5 +878,5 @@ if (typeof document !== 'undefined') boot();
 
 // CommonJS exports for node tests; the browser <script> ignores these.
 if (typeof module !== 'undefined') {
-  module.exports = { parseRoute, resolveLang, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset };
+  module.exports = { parseRoute, resolveLang, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset, paintBadRoute };
 }

@@ -12,7 +12,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, matchSlotMs, sideLabel, placementLabel, koColumn, koOrdinal, matchLabel, schedTime, toCats, isDeadTie, winners, catStatus, roundName, playerStatus, setLocale } = require('../site/derive.js');
 const { I18N } = require('../site/i18n.js');
-const { parseRoute, resolveLang, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset } = require('../site/app.js');
+const { parseRoute, resolveLang, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset, paintBadRoute } = require('../site/app.js');
 const { generate } = require('../src/schedule.js');
 const { FIX, catOf, pageData, repoPage, withTjson, text, vals, card, cards, links } = require('./helpers.js');
 const { loadRepo } = require('../src/tools.js');
@@ -111,6 +111,15 @@ test('renderers: every fixture renders every view — the never-throw contract, 
     assert.doesNotThrow(() => renderVenue({ slug: dir, view: 'venues' }, data, now), `${dir}: venue view`);
     assert.doesNotThrow(() => renderPlayer({ slug: dir, view: 'schedule' }, data), `${dir}: player view`);
   }
+});
+
+test('a rejected fragment route paints the bad-link page — a call, never the builder reference', () => {
+  const app = { innerHTML: '' };
+  paintBadRoute(app);
+  // the old bug assigned the BAD_LINK reference: innerHTML was a function, the
+  // page painted its source. This is the shipped recovery page's one contract.
+  assert.equal(typeof app.innerHTML, 'string', 'the branch assigns rendered HTML, not a function');
+  assert(app.innerHTML.includes('href="#"'), 'the page offers a route home — the shipped recovery link');
 });
 
 test('parseRoute: fragment routing — bare slug is the tournament page, params id-gated, unknown input ignored', () => {
