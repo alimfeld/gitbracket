@@ -359,8 +359,12 @@ async function dropAt(e) {
   const ht = hitTest(e);
   if (!ht) return;
   let time, venue;
-  if (ht.venue === '__none') { time = null; venue = null; }
-  else {
+  if (ht.venue === '__none') {
+    // a stray drop here unschedules the match — confirm when there is something to lose
+    const m = matchOf(cid, mid);
+    if ((m.scheduled || m.venue) && !confirm("Clear this match's time and court?")) return;
+    time = null; venue = null;
+  } else {
     if (!S.legal) await loadSlots(cid, mid); // a drop can beat the dragstart fetch
     // the same rule the ghost showed: the pointer must sit in the box it drew
     const wm = legalSnap(ht.venue, ht.wm, slotMinOf(matchOf(cid, mid), cat(cid)));
@@ -573,17 +577,17 @@ async function refreshPending() {
   site.href = `https://${p.domain}/#${S.slug}`;
   $('kioskLink').href = `${site.href}/venues`;
   $('links').hidden = !(p.domain && S.slug); // the CNAME is where the last publish went — without it there is nothing to link to
-  $('pendingBadge').textContent = p.commits.length ? `${p.commits.length} pending` : p.deployFailed ? 'not live' : 'clean';
-  $('pendingList').innerHTML = p.commits.length
+  $('pendingBadge').textContent = p.dirty ? 'dirty' : p.commits.length ? `${p.commits.length} pending` : p.deployFailed ? 'not live' : 'clean';
+  $('pendingList').innerHTML = (p.commits.length
     ? p.commits.map(c => `<li>${esc(c.msg)}</li>`).join('')
-    : `<li class="hint">${p.deployFailed ? 'nothing pending — the last deploy did not ship; Publish retries' : 'nothing pending'}</li>`;
+    : `<li class="hint">${p.deployFailed ? 'nothing pending — the last deploy did not ship; Publish retries' : 'nothing pending'}</li>`)
+    + (p.dirty ? '<li class="hint">site/ is dirty — commit or stash before publishing</li>' : '');
   $('undo').disabled = p.commits.length === 0 || p.dirty;
   $('redo').disabled = !p.redo || p.dirty;
   $('redo').title = p.redo ? `Redo ${p.redo.msg}` : '';
   // A deploy can fail after its push already landed, leaving nothing pending —
   // so Publish can't gate on the count; re-deploying is idempotent.
   $('publish').disabled = publishing || p.dirty;
-  $('publish').title = p.dirty ? 'site/ is dirty — commit or stash first' : '';
 }
 // the pending popover is a native <details> — close it when the pointer lands
 // elsewhere

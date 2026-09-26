@@ -216,6 +216,20 @@ test('admin undo: once the tip is on a remote ref, undo refuses — the fallback
   }
 });
 
+test('admin undo: an untracked file does not block undo — reset leaves it alone', () => {
+  const { tmp, state } = scratchWithRemote();
+  try {
+    fs.writeFileSync(path.join(tmp, 'results.csv'), 'scratch\n'); // untracked — a day-of export on the desktop
+    assert.equal(admin.doEdit(state, 'result', 'md40', '8', { shape: 'score', games: [{ a: 11, b: 5 }, { a: 11, b: 3 }] }).ok, true, 'the edit commits');
+    const r = admin.undo(state);
+    assert(r.sha, `undo runs with an untracked file present, got: ${r.error}`);
+    assert(fs.existsSync(path.join(tmp, 'results.csv')), 'the untracked file survives the reset');
+    assert.equal(admin.unpushed(tmp).commits.length, 0, 'the edit was rewound');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 test('admin doEdit: an out-of-band hand edit is refused once, reloaded, and the retry applies onto it — nothing clobbered', () => {
   const { tmp, siteRoot, state } = scratchWithRemote();
   try {

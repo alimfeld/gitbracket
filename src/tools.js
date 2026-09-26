@@ -136,11 +136,10 @@ function branchOf(root) {
 // what a sim is.
 const isSimBranch = b => /^sim\//.test(b);
 
-// A pristine tree — no staged, unstaged, or untracked changes. The admin's
-// undo/redo resets and sim's teardown both require it; one predicate, so the
-// two mirrors can't drift on what "clean" means.
+// No in-progress tracked edits (untracked files survive reset and checkout, so
+// they don't block undo). Admin undo/redo and sim teardown both gate on this.
 function cleanTree(root) {
-  const s = git(root, ['status', '--porcelain']);
+  const s = git(root, ['status', '--porcelain', '--untracked-files=no']);
   return s.code === 0 && s.out.trim() === '';
 }
 
