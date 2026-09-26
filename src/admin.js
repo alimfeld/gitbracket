@@ -309,7 +309,7 @@ function serve(state) {
         const p = unpushed(state.root);
         const dirty = git(state.root, ['status', '--porcelain', '--', 'site/']);
         const top = state.redo && state.redo.length ? state.redo[state.redo.length - 1] : null;
-        return json(res, 200, { ...p, dirty: dirty.code === 0 && dirty.out.trim().length > 0, slug: state.slug, domain: cnameOf(state.root), redo: top ? { sha: top.sha.slice(0, 7), msg: top.msg } : null });
+        return json(res, 200, { ...p, dirty: dirty.code === 0 && dirty.out.trim().length > 0, slug: state.slug, domain: cnameOf(state.root), deployFailed: !!state.deployFailed, redo: top ? { sha: top.sha.slice(0, 7), msg: top.msg } : null });
       }
       if (url === '/api/edit' && req.method === 'POST') {
         let body;
@@ -343,6 +343,7 @@ function serve(state) {
         if (push.code !== 0) return json(res, 400, { error: `push failed:\n${push.err}` });
         state.redo = []; // published — the undone edge is no longer the last act; undo/redo stay local to the unpushed window
         const s = await ship(state.root);
+        state.deployFailed = s !== 0; // the badge reads "not live" until a ship actually lands
         return json(res, s === 0 ? 200 : 400, s === 0 ? { text: 'published' } : { error: 'deploy failed — see the daemon output' });
       }
       return json(res, 404, { error: 'unknown api' });
@@ -364,7 +365,7 @@ function main(root, args) {
   const siteRoot = path.join(root, 'site');
   const repo = loadRepo(siteRoot);
   if (repo.readErrs.length) { console.error(repo.readErrs.join('\n')); process.exit(1); }
-  const state = { root, siteRoot, repo, slug: slug || defaultSlug(repo), redo: [] };
+  const state = { root, siteRoot, repo, slug: slug || defaultSlug(repo), redo: [], deployFailed: false };
   const server = serve(state);
   server.listen(0, '127.0.0.1', () => {
     const url = `http://127.0.0.1:${server.address().port}/`;

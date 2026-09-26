@@ -459,32 +459,55 @@ test('publish snapshotSite: a frozen copy of site/ — CNAME included, live tree
 // time, never the live tree — a mid-deploy edit stays pending (un-pushed, not
 // live) instead of half-reaching the CDN. A fake surge on PATH records what it
 // was asked to upload, and the snapshot must be gone once the deploy ends.
+// Put a fake `surge` on PATH for one test; a successful publish runs it with
+// the snapshot dir as its first argument. PATH is restored when the test ends.
+function withFakeSurge(t, tmp, script) {
+  const fakebin = path.join(tmp, 'fakebin');
+  fs.mkdirSync(fakebin);
+  fs.writeFileSync(path.join(fakebin, 'surge'), `#!/bin/sh\n${script}\n`);
+  fs.chmodSync(path.join(fakebin, 'surge'), 0o755);
+  const PATH = process.env.PATH;
+  process.env.PATH = fakebin + path.delimiter + PATH;
+  t.after(() => { process.env.PATH = PATH; });
+}
+
 test('admin HTTP: publish deploys a snapshot, never the live tree — the fake surge logs a temp copy, cleaned up after', async t => {
   const { tmp, siteRoot, state } = scratchWithRemote();
   t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
   anchorCNAME(tmp, siteRoot);
-  const fakebin = path.join(tmp, 'fakebin');
   const log = path.join(tmp, 'surge.log');
-  fs.mkdirSync(fakebin);
-  fs.writeFileSync(path.join(fakebin, 'surge'), `#!/bin/sh\nfor a in "$@"; do printf '%s\\n' "$a" >> "${log}"; done\nexit 0\n`);
-  fs.chmodSync(path.join(fakebin, 'surge'), 0o755);
-  const PATH = process.env.PATH;
-  process.env.PATH = fakebin + path.delimiter + PATH;
-  try {
-    const base = await withServer(t, state);
-    const r = await postJson(base, '/api/publish', '{}');
-    assert.equal(r.status, 200, 'the publish lands');
-    assert.equal((await r.json()).text, 'published');
-    const args = fs.readFileSync(log, 'utf8').trim().split('\n');
-    assert.equal(args.length, 2, 'surge got exactly a directory and the publish verb');
-    assert.equal(args[1], 'publish');
-    const snap = args[0];
-    assert.notEqual(snap, siteRoot, 'the deployed dir is a snapshot, not the live tree');
-    assert(snap.startsWith(os.tmpdir()), 'the snapshot lives in the temp dir');
-    assert(!fs.existsSync(snap), 'the snapshot is cleaned up after the deploy — no litter');
-  } finally {
-    process.env.PATH = PATH;
-  }
+  withFakeSurge(t, tmp, `for a in "$@"; do printf '%s\\n' "$a" >> "${log}"; done\nexit 0`);
+  const base = await withServer(t, state);
+  const r = await postJson(base, '/api/publish', '{}');
+  assert.equal(r.status, 200, 'the publish lands');
+  assert.equal((await r.json()).text, 'published');
+  const args = fs.readFileSync(log, 'utf8').trim().split('\n');
+  assert.equal(args.length, 2, 'surge got exactly a directory and the publish verb');
+  assert.equal(args[1], 'publish');
+  const snap = args[0];
+  assert.notEqual(snap, siteRoot, 'the deployed dir is a snapshot, not the live tree');
+  assert(snap.startsWith(os.tmpdir()), 'the snapshot lives in the temp dir');
+  assert(!fs.existsSync(snap), 'the snapshot is cleaned up after the deploy — no litter');
+});
+
+// A deploy can fail after its push already landed, leaving nothing pending —
+// the retry must still deploy, and the badge must not read "clean".
+test('admin HTTP: a publish retry after a failed deploy needs no pending commits', async t => {
+  const { tmp, siteRoot, state } = scratchWithRemote();
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  anchorCNAME(tmp, siteRoot);
+  const marker = path.join(tmp, 'deployed-once');
+  withFakeSurge(t, tmp, `[ -f "${marker}" ] && exit 0\ntouch "${marker}"\nexit 1`); // first deploy fails, later ones succeed
+  const base = await withServer(t, state);
+  const pend = () => fetch(base + '/api/pending').then(r => r.json());
+  const failed = await postJson(base, '/api/publish', '{}');
+  assert.equal(failed.status, 400, 'the failed deploy is reported, not swallowed');
+  assert.equal(admin.unpushed(tmp).commits.length, 0, 'the push already landed — nothing pending to gate the retry on');
+  assert.equal((await pend()).deployFailed, true, 'the badge can tell "not live" from "clean"');
+  const retry = await postJson(base, '/api/publish', '{}');
+  assert.equal(retry.status, 200, 'the retry deploys with nothing pending');
+  assert.equal((await retry.json()).text, 'published');
+  assert.equal((await pend()).deployFailed, false, 'a successful ship clears the stale flag');
 });
 
 // ---- branch-role: the undo window is the branch's own upstream ----

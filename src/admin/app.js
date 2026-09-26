@@ -556,14 +556,16 @@ async function refreshPending() {
   site.href = `https://${p.domain}/#${S.slug}`;
   $('kioskLink').href = `${site.href}/venues`;
   $('links').hidden = !(p.domain && S.slug); // the CNAME is where the last publish went — without it there is nothing to link to
-  $('pendingBadge').textContent = p.commits.length ? `${p.commits.length} pending` : 'clean';
+  $('pendingBadge').textContent = p.commits.length ? `${p.commits.length} pending` : p.deployFailed ? 'not live' : 'clean';
   $('pendingList').innerHTML = p.commits.length
     ? p.commits.map(c => `<li>${esc(c.msg)}</li>`).join('')
-    : '<li class="hint">nothing pending</li>';
+    : `<li class="hint">${p.deployFailed ? 'nothing pending — the last deploy did not ship; Publish retries' : 'nothing pending'}</li>`;
   $('undo').disabled = p.commits.length === 0 || p.dirty;
   $('redo').disabled = !p.redo || p.dirty;
   $('redo').title = p.redo ? `Redo ${p.redo.msg}` : '';
-  $('publish').disabled = publishing || p.commits.length === 0 || p.dirty;
+  // A deploy can fail after its push already landed, leaving nothing pending —
+  // so Publish can't gate on the count; re-deploying is idempotent.
+  $('publish').disabled = publishing || p.dirty;
   $('publish').title = p.dirty ? 'site/ is dirty — commit or stash first' : '';
 }
 // the pending popover is a native <details> — close it when the pointer lands
