@@ -813,6 +813,7 @@ function boot() {
       if (contentChanged) window.scrollTo(0, 0);
     } catch (e) {
       app.innerHTML = FAILED();
+      lastHtml = ''; // the memo is void once the DOM is painted outside the guard — a later identical render must repaint
       console.error(e);
     }
     aim();
@@ -829,6 +830,7 @@ function boot() {
       pollOn = false; stopPoll();
       document.body.classList.remove('venue'); // a dead link is not the kiosk — never inherit the board layout
       paintBadRoute(app);
+      lastHtml = ''; // as in the render catch: a later cached re-render must repaint over the bad-link page
       return;
     }
     route = r;
