@@ -14,10 +14,32 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 // The presentation dialect — render-facing labels and date phrasing follow it;
 // derivation (day keys, offsets) stays locale-independent by design. The admin
 // page never calls setLocale, so its labels stay English. The value is the
-// bundle code ('de'/'en') — Intl accepts it as a language-only locale.
+// bundle code ('de'/'en'…) — Intl accepts it as a language-only locale, and
+// resolveLang pre-checks it against I18N, so a missing bundle renders English
+// rather than a half-translated page.
 let LOCALE = 'en';
 const setLocale = l => { LOCALE = l; };
-const isDe = () => LOCALE === 'de';
+
+// Every per-locale decision (word positions, articles, ordinal styles) lives in
+// the bundle as data or tiny formatters; this file only dispatches, so a third
+// language is a bundle edit, never a code branch. A stray setLocale to a
+// missing bundle lands on en, matching t()'s fallback.
+const bundle = () => I18N[LOCALE] || I18N.en;
+const fmtOf = k => (bundle().fmt || {})[k];
+const ordNum = n => (fmtOf('ord') || (n => String(n)))(n);    // '3.' / '3rd' — range form
+const cardNum = n => (fmtOf('place') || (n => String(n)))(n); // '3' / '3rd' — pre-word form
+const bandShort = l => (fmtOf('bandShort') || (l => l))(l);   // the band a placement label names
+const stripWord = l => (fmtOf('stripWord') || (l => l))(l);   // a paired label's classification word
+// A declined chip ref ('the final', 'vom Finale'): per-key, per-case article
+// templates from the bundle, keyed by the round kind the caller already holds —
+// the label string is only a {label} parameter, never inspected.
+const refWord = (key, c, label) => {
+  const refs = bundle().refs || {};
+  const s = (refs[key] || refs[''] || {})[c] || label;
+  return s.replace('{label}', label); // templates carry exactly one {label}
+};
+const artWord = (key, c) => ((bundle().art || {})[key] || {})[c] || ''; // 'Im' / 'In der' per round key
+const roundKeyOf = d => d === 0 ? 'round-final' : d === 1 ? 'round-semi' : d === 2 ? 'round-quart' : d === 3 ? 'round-16' : 'round-of'; // depth from the final, mirroring roundName
 
 // Shared side identity: sorted '|'-joined ids.
 const pairSig = ids => [...ids].sort().join('|');
@@ -252,6 +274,9 @@ function resolveSide(side, ctx, memo = new Map()) {
   return null;
 }
 
+// ponytail: slot phrasing still ships English-only ("Winner of SF1", "2nd in
+// Pool A" — the /\d$/ 'the'-insertion is English grammar) — a decline-and-copy
+// bundle job of its own; localized when a venue asks.
 // Unresolved slot keeps what the slot IS: "Winner of SF1", "2nd in Pool A".
 function slotLabel(side, ctx) {
   if (side && side.kind === 'match') {
@@ -261,7 +286,7 @@ function slotLabel(side, ctx) {
     const what = matchLabel(ref, ctx); // numbered rounds carry their bracket ordinal
     return /\d$/.test(what) ? `${who} of ${what}` : `${who} of the ${what}`;
   }
-  if (side && side.kind === 'pool') return `${ordinal(side.rank)} in Pool ${side.pool}`;
+  if (side && side.kind === 'pool') return `${ordNum(side.rank)} in Pool ${side.pool}`;
   return 'TBD';
 }
 
@@ -375,20 +400,6 @@ function rankRange(ranks) {
   return runs.map(([a, b]) => a === b ? ordNum(a) : `${ordNum(a)}–${ordNum(b)}`).join(', ');
 }
 
-// 'the Semifinals' / 'the final' — a stage's name when a chip references it as
-// the gate into a deeper stage; placement labels and Round-of-N keep the article.
-// A stage's name when a chip references it as the gate into a deeper stage;
-// German articles decline by case and noun family: accusative after "über"
-// ("über das Viertelfinale", "über den Platz 3"), dative after the doer
-// ("als Sieger vom Viertelfinale", "von der Runde der letzten 16").
-const chipRef = (label, c) => {
-  if (isDe()) {
-    if (label.startsWith('Runde')) return c === 'acc' ? `die ${label}` : `von der ${label}`;
-    return c === 'acc' ? (label.startsWith('Platz') ? `den ${label}` : `das ${label}`) : `vom ${label}`;
-  }
-  return { Final: 'the final', Semifinals: 'the Semifinals', Quarterfinals: 'the Quarterfinals' }[label] || `the ${label}`;
-};
-
 const matchEdge = s => s && s.kind === 'match';
 
 
@@ -456,16 +467,18 @@ function possibleStages(ctx, pid) {
     if (confIds.has(id)) continue;
     const m = ctx.byId.get(id);
     if (!m || !Array.isArray(m.sides)) continue;
-    const pl = placementLabel(m, ctx);
-    const col = pl === null ? koColumn(m, ctx) : null;
-    const label = pl || roundName(col);
+    const pr = plRange(m, ctx);
+    const col = pr === null ? koColumn(m, ctx) : null;
+    // The label rides its structural row (lo/hi/win) so the merge logic below
+    // classifies by shape, never by word position in a localized string.
+    const label = pr === null ? roundName(col) : pr.win ? t(LOCALE, 'pl-place', { n: cardNum(pr.lo) }) : t(LOCALE, 'pl-semi', { a: ordNum(pr.lo), b: ordNum(pr.hi) });
     let stage = stages.get(label);
-    if (!stage) { stage = { label, col, ranks: new Set(), edges: [], times: [], courts: [], ids: [] }; stages.set(label, stage); }
+    if (!stage) { stage = { label, col, pl: pr, ranks: new Set(), edges: [], times: [], courts: [], ids: [] }; stages.set(label, stage); }
     stage.ids.push(m);
     for (const rank of poolSeatsOf.get(id) || []) stage.ranks.add(rank);
     for (const e of edgeSeatsOf.get(id) || []) stage.edges.push(e);
-    const t = schedTime(m, ctx.tz);
-    if (t !== null) stage.times.push(t);
+    const ts = schedTime(m, ctx.tz);
+    if (ts !== null) stage.times.push(ts);
     if (typeof m.venue === 'string') stage.courts.push(m.venue);
   }
 
@@ -473,7 +486,7 @@ function possibleStages(ctx, pid) {
   const present = [];
   for (const stage of stages.values()) {
     present.push({
-      label: stage.label, col: stage.col, ranks: stage.ranks, edges: stage.edges,
+      label: stage.label, col: stage.col, pl: stage.pl, ranks: stage.ranks, edges: stage.edges,
       times: stage.times, courts: stage.courts, ids: stage.ids,
       ...uniformBits(stage.ids.length, stage.times, stage.courts),
     });
@@ -496,9 +509,11 @@ function possibleStages(ctx, pid) {
       for (const e of stage.edges) {
         const parent = ctx.byId.get(e.parent);
         if (!parent || !Array.isArray(parent.sides)) continue;
-        const pl = placementLabel(parent, ctx);
-        const label = pl || roundName(koColumn(parent, ctx));
-        parts.add(stage.merged ? t(LOCALE, 'chip-via', { ref: chipRef(label, 'acc') }) : t(LOCALE, 'chip-as', { kind: t(LOCALE, e.kind === 'winner' ? 'kind-winner' : 'kind-loser'), ref: chipRef(label, 'dat') }));
+        const pr = plRange(parent, ctx);
+        const col = koColumn(parent, ctx);
+        const key = pr === null ? roundKeyOf(col) : pr.win ? 'pl-place' : 'pl-semi';
+        const label = pr === null ? roundName(col) : pr.win ? t(LOCALE, 'pl-place', { n: cardNum(pr.lo) }) : t(LOCALE, 'pl-semi', { a: ordNum(pr.lo), b: ordNum(pr.hi) });
+        parts.add(stage.merged ? t(LOCALE, 'chip-via', { ref: refWord(key, 'acc', label) }) : t(LOCALE, 'chip-as', { kind: t(LOCALE, e.kind === 'winner' ? 'kind-winner' : 'kind-loser'), ref: refWord(key, 'dat', label) }));
       }
       for (const p of [...parts].sort()) chips.push(p);
     }
@@ -523,9 +538,8 @@ const uniformBits = (n, times, courts) => ({
 // Two sibling classification semis of one seat ('5th–8th' + '9th–12th') name
 // their full band ('5th–12th semi') — appending ' place' would mangle a semi
 // label.
-const bandSemiLabel = ls => {
-  const rs = ls.flatMap(l => (l.match(/\d+/g) || []).map(Number)); // digit extraction survives every dialect
-  return t(LOCALE, 'pl-semi', { a: ordNum(Math.min(...rs)), b: ordNum(Math.max(...rs)) });
+const bandSemiLabel = ps => { // ps: the pair's structural rows — min/max over their ranges, no label parsing
+  return t(LOCALE, 'pl-semi', { a: ordNum(Math.min(...ps.map(p => p.lo))), b: ordNum(Math.max(...ps.map(p => p.hi))) });
 };
 
 // Mutually exclusive outcomes of one seat (winner- and loser-fed entries of
@@ -549,16 +563,15 @@ function mergeTwinStages(present) {
     const other = twin(key);
     if (!other || other.length !== 1 || merged.has(list[0]) || merged.has(other[0])) continue;
     const [x, y] = [list[0], other[0]];
-    // Classification words sit in different positions per dialect ("5th place"
-    // ends with its word, "Platz 5" starts with it) — test and strip per locale.
-    const isPlace = l => isDe() ? l.startsWith('Platz ') || l.endsWith(' Halbfinale') : / (place|semi)$/.test(l);
-    const placeL = [x, y].filter(s => isPlace(s.label)).map(s => s.label);
-    const roundL = [x, y].filter(s => !isPlace(s.label)).map(s => s.label);
+    // Classification vs round is a structural flag (pl), never a label sniff;
+    // the paired-label stripping rides the bundle's stripWord.
+    const placeL = [x, y].filter(s => s.pl !== null);
+    const roundL = [x, y].filter(s => s.pl === null);
     // "5th / 7th place" joins a decider pair's labels; a round with its
     // placement companion names the band like the bracket headings do.
-    const label = roundL.length ? stageGroupName(roundL[0], placeL)
-      : placeL.every(l => l.endsWith(isDe() ? ' Halbfinale' : ' semi')) ? bandSemiLabel(placeL)
-      : t(LOCALE, 'pl-pair', { a: placeL[0].replace(isDe() ? /^Platz / : / place$/, ''), b: placeL[1].replace(isDe() ? /^Platz / : / place$/, '') });
+    const label = roundL.length ? stageGroupName(roundL[0].label, placeL.map(s => s.label))
+      : placeL.every(s => !s.pl.win) ? bandSemiLabel(placeL.map(s => s.pl))
+      : t(LOCALE, 'pl-pair', { a: stripWord(x.label), b: stripWord(y.label) });
     merged.add(x); merged.add(y);
     const times = [...x.times, ...y.times];
     const courts = [...x.courts, ...y.courts];
@@ -573,17 +586,13 @@ function mergeTwinStages(present) {
 }
 
 
-const ordRules = new Intl.PluralRules('en-US', { type: 'ordinal' }); // English ordinals only — German is the plain dot
-const ordinal = n => n + ({ one: 'st', two: 'nd', few: 'rd' }[ordRules.select(n)] || 'th');
-const ordNum = n => isDe() ? `${n}.` : ordinal(n); // range ordinals: "3.–5. Halbfinale"
-
 // Placement label (3rd/5th/7th place, classification semis), null for main-
 // bracket matches.
 function placementLabel(m, ctx) {
   const r = plRange(m, ctx);
   if (!r) return null;
-  // the cardinal, not the dotted ordinal: "Platz 3", never "Platz 3."
-  return r.win ? t(LOCALE, 'pl-place', { n: isDe() ? String(r.lo) : ordinal(r.lo) }) : t(LOCALE, 'pl-semi', { a: ordNum(r.lo), b: ordNum(r.hi) });
+  // the pre-word form, not the range form: "Platz 3", never "Platz 3."
+  return r.win ? t(LOCALE, 'pl-place', { n: cardNum(r.lo) }) : t(LOCALE, 'pl-semi', { a: ordNum(r.lo), b: ordNum(r.hi) });
 }
 
 // Possible-rank range of every classification match. One rule: a slot reaches
@@ -688,12 +697,12 @@ function plBuild(ctx) {
   return pl;
 }
 
-// Range of a classification match, null for main-bracket matches. The bronze
-// finder (winners) reads lo here.
+// Range of a classification match, null for main-bracket matches (including
+// matches the walk never visits). The bronze finder (winners) reads lo here.
 function plRange(m, ctx) {
   const memo = ctxMemo(ctx);
   if (!memo.pl) memo.pl = plBuild(ctx);
-  return memo.pl.get(m.id);
+  return memo.pl.get(m.id) ?? null;
 }
 
 // Depth band of every classification match: the column one below its anchor's,
@@ -750,9 +759,6 @@ function placementColumn(m, ctx) {
 function bandLabels(ctx, col) {
   return [...(plBands(ctx).labels.get(col) || [])];
 }
-
-// "5th–8th semi" -> "5th–8th": the band a placement label names.
-const bandShort = l => l.replace(isDe() ? / Halbfinale$/ : / semi$/, '');
 
 // Merged heading of a band: the round name plus its placement companions. One
 // distinct label names it exactly; several fall back to "Final / Placement";
@@ -892,14 +898,13 @@ function kioskStatus(r, now) {
 }
 
 // Round names by distance from the final (2 -> Final, 4 -> Semifinals, ...);
-// keyed off koColumn, so a bye'd semi still reads as a semifinal.
+// keyed off koColumn, so a bye'd semi still reads as a semifinal. Which round
+// size takes a dedicated word (n=16: "Achtelfinale" vs "Runde der letzten 16")
+// is a per-locale key decision — the n=16 key applies whenever the bundle
+// defines it, no language branch here.
 function roundName(depthFromEnd) {
-  const n = 2 << depthFromEnd;
-  if (n === 2) return t(LOCALE, 'round-final');
-  if (n === 4) return t(LOCALE, 'round-semi');
-  if (n === 8) return t(LOCALE, 'round-quart');
-  if (isDe() && n === 16) return t(LOCALE, 'round-16'); // Achtelfinale — beyond that the fallback reads fine
-  return t(LOCALE, 'round-of', { n });
+  const key = roundKeyOf(depthFromEnd);
+  return t(LOCALE, key, key === 'round-of' ? { n: 2 << depthFromEnd } : undefined);
 }
 
 // The championship final, shared with koOrdinal: a knockout match no winner
@@ -1082,19 +1087,18 @@ function currentWave(ctx, status) {
   return ready.filter(m => schedTime(m, ctx.tz) === t);
 }
 
-// The article carries deep rounds; only the final drops to lowercase.
-// The German article depends on the noun family (das Finale, die Runde …) — the
-// {art} param carries it, chosen off the localized round name; the en templates
-// have no {art}, so one call serves both dialects.
+// The prepositional article is bundle data keyed by the round kind the caller
+// already holds (artWord) — never parsed off the rendered name; the en
+// templates have no {art} slot, so one call serves both dialects.
 const inWord = col => {
   if (col === 0) return t(LOCALE, 'in-final');
   const r = roundName(col);
-  return t(LOCALE, 'in-round', { art: r.startsWith('Runde') ? 'In der' : 'Im', round: r });
+  return t(LOCALE, 'in-round', { art: artWord(roundKeyOf(col), 'in'), round: r });
 };
 const elimWord = col => {
   if (col === 0) return t(LOCALE, 'elim-final');
   const r = roundName(col);
-  return t(LOCALE, 'elim-round', { art: r.startsWith('Runde') ? 'in der' : 'im', round: r });
+  return t(LOCALE, 'elim-round', { art: artWord(roundKeyOf(col), 'elim'), round: r });
 };
 
 // A player's standing in one category, as a plain word.

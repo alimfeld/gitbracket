@@ -761,3 +761,45 @@ test('i18n: German renders stay whole — no raw placeholders, never a throw', (
     setLocale('en');
   }
 });
+
+test('i18n: a third locale with deviant word order and declined refs derives cleanly — no code branch sniffs strings', () => {
+  // Synthetic fr: classification words at the FRONT ('place 3') where en and de
+  // both put them at the back, its own round names, ordinal style, and declined
+  // refs. Under the old isDe branches a third language silently got English
+  // rules — this pins that adds-a-language = adds-a-bundle only.
+  I18N.fr = {
+    ...I18N.en,
+    'round-final': 'Finale', 'round-semi': 'Demi-finales', 'round-quart': 'Quarts',
+    'round-16': 'Seizièmes', 'round-of': 'Tour {n}',
+    'pl-place': 'place {n}', 'pl-semi': 'demi {a}–{b}',
+    fmt: {
+      ord: n => `${n}e`, place: n => String(n),
+      bandShort: l => l.replace(/^(place|demi) /, ''),
+      stripWord: l => l.replace(/^place /, ''),
+    },
+    refs: {
+      'round-final': { acc: 'la finale', dat: 'de la finale' },
+      '': { acc: 'le {label}', dat: 'du {label}' },
+    },
+    art: { 'round-of': { in: 'dans la', elim: 'hors de la' } },
+  };
+  setLocale('fr');
+  try {
+    assert.equal(roundName(1), 'Demi-finales', 'round names ride the bundle keys, not en/de branches');
+    assert.equal(roundName(2), 'Quarts', 'the quart key applies at n=4');
+    assert.equal(roundName(3), 'Seizièmes', 'the n=16 key is unconditional — no isDe guard');
+    const sample = loadRepo(FIX('sample')).tournaments.get('sample');
+    const tour = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' }, pageData(sample.tjson, 'sample', sample.index));
+    assert(!tour.includes('{'), 'the deviant-locale tournament view renders whole — no placeholder');
+    assert(tour.includes('place 3'), 'the classification word sits at the front — merge/band logic never sniffs word position');
+    const info = loadRepo(FIX('byes')).tournaments.get('byes');
+    const page = renderPlayer({ slug: 'byes', view: 'schedule', player: 'p4' }, pageData(info.tjson, 'byes', info.index));
+    const poss = cards(page, 'data-status', 'possible');
+    assert(poss.length && !poss.some(c => c.includes('{')), 'possible-stage chips render whole under the deviant locale');
+    assert(poss.some(c => c.includes('du Quarts')), 'the dative chip ref declines from bundle data — never "vom"');
+    assert(poss.some(c => c.includes('le Demi-finales')), 'the accusative chip ref too — never "the"');
+  } finally {
+    setLocale('en');
+    delete I18N.fr;
+  }
+});

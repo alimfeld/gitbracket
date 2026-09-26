@@ -34,15 +34,18 @@ const u = (k, p) => t(lang, k, p);
 // The override is accepted in either query position — the fragment (`#s?lang=de`,
 // the form that rides the links) or the URL (?lang=de#s, where people type it);
 // neither present, the browser's language decides. lang stays 'en' under node.
+// A language is usable only when its bundle ships — anything else is en, so a
+// half-translated page never renders (t() and derive's dispatchers agree on
+// the same fallback).
 const resolveLang = (hash, search) => {
   const r = parseRoute(hash);
-  if (r && r.lang) return r.lang;
+  if (r && r.lang) return I18N[r.lang] ? r.lang : 'en';
   const v = new URLSearchParams(search).get('lang');
-  if (v === 'de' || v === 'en') return v;
+  if (/^[a-z]{2}$/i.test(v || '')) { const l = v.toLowerCase(); return I18N[l] ? l : 'en'; }
   if (typeof navigator === 'undefined') return 'en';
   for (const l of navigator.languages || [navigator.language]) {
-    if (/^de/i.test(l)) return 'de';
-    if (/^en/i.test(l)) return 'en';
+    const m = /^([a-z]{2})/i.exec(l || '');
+    if (m && I18N[m[1].toLowerCase()]) return m[1].toLowerCase();
   }
   return 'en';
 };
@@ -99,7 +102,7 @@ function parseRoute(hash) {
   const q = new URLSearchParams(query);
   for (const k of ['cat', 'player', 'venue', 'lang']) {
     const v = q.get(k);
-    if (k === 'lang') { if (v === 'de' || v === 'en') r.lang = v; continue; }
+    if (k === 'lang') { if (/^[a-z]{2}$/i.test(v)) r.lang = v.toLowerCase(); continue; }
     if (v && ID_RE.test(v)) r[k] = v;
   }
   return r;

@@ -1,9 +1,17 @@
 'use strict';
 
+// English ordinal suffixes — the only per-locale formatter that needs code;
+// every other word rule lives in the maps below as data.
+const enOrdRules = new Intl.PluralRules('en', { type: 'ordinal' });
+const enOrd = n => n + ({ one: 'st', two: 'nd', few: 'rd' }[enOrdRules.select(n)] || 'th');
+
 // One translation bundle for the public page — every user-facing string ships
-// through these two maps (completeness is pinned by a test). Repo data (names,
+// through these maps (completeness is pinned by a test). Repo data (names,
 // courts, pools, players) is never translated — proper nouns stay as authored;
 // TBD and the W/L/GD/PD table headers are international shorthand and stay too.
+// fmt/refs/art carry the per-locale word rules (ordinal styles, declined chip
+// refs, prepositional articles) as data — derive.js only dispatches them, so a
+// third language is a bundle edit, never a code branch.
 const I18N = {
   en: {
     // chrome (app.js)
@@ -71,6 +79,22 @@ const I18N = {
     'kind-winner': 'winner',
     'kind-loser': 'loser',
     'chip-or': ' or ',
+    // per-locale word rules (derive.js dispatches by name): bandShort strips the
+    // classification word from a band heading, stripWord from a paired label;
+    // place is the pre-word number ("3rd place"), ord the range form ("3rd–5th").
+    fmt: {
+      ord: enOrd,
+      place: enOrd,
+      bandShort: l => l.replace(/ semi$/, ''),
+      stripWord: l => l.replace(/ place$/, ''),
+    },
+    // declined chip refs per round key and case — the default covers every key
+    // without an entry; only the one lowercase quirk ("the final") earns its own.
+    refs: {
+      'round-final': { acc: 'the final', dat: 'the final' }, // the one lowercase quirk
+      '': { acc: 'the {label}', dat: 'the {label}' },
+    },
+    art: {}, // no articles — parity with de, and the empty entry documents the slot
   },
 
   de: {
@@ -140,6 +164,26 @@ const I18N = {
     'kind-winner': 'Sieger',
     'kind-loser': 'Verlierer',
     'chip-or': ' oder ',
+    fmt: {
+      ord: n => `${n}.`,
+      place: n => String(n),
+      bandShort: l => l.replace(/ Halbfinale$/, ''),
+      stripWord: l => l.replace(/^Platz /, ''),
+    },
+    refs: {
+      'round-of': { acc: 'die {label}', dat: 'von der {label}' }, // "die Runde der letzten 32" — feminine
+      'pl-place': { acc: 'den {label}', dat: 'vom {label}' },     // "den Platz 3" — masculine
+      '': { acc: 'das {label}', dat: 'vom {label}' },             // the default: neuter "das/vom"
+    },
+    // prepositional article per round kind — "Im Finale" (neuter) vs
+    // "In der Runde der letzten 32" (feminine), in/eliminated phrasing.
+    art: {
+      'round-final': { in: 'Im', elim: 'im' },
+      'round-semi': { in: 'Im', elim: 'im' },
+      'round-quart': { in: 'Im', elim: 'im' },
+      'round-16': { in: 'Im', elim: 'im' },
+      'round-of': { in: 'In der', elim: 'in der' },
+    },
   },
 };
 
