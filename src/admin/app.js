@@ -524,9 +524,10 @@ async function openSide(cid, m, si) {
   };
   modal.querySelector('[data-x="cancel"]').onclick = closeModal;
   modal.querySelector('[data-x="apply"]').onclick = apply;
-  modal.addEventListener('keydown', e => {
+  // onkeydown, not addEventListener — #modal persists, so listeners would accumulate per open and replay stale applies.
+  modal.onkeydown = e => {
     if (e.key === 'Enter' && !e.target.matches('select, input, button')) { e.preventDefault(); apply(); }
-  });
+  };
   modal.querySelector('.tabs button.active').focus(); // open inside the dialog, not behind it
 }
 

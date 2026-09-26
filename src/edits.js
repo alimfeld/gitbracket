@@ -94,8 +94,14 @@ function writeEdit(siteRoot, repo, slug, catId, apply) {
   if (!ms) return { err: `no matches for category ${catId}` };
   const ctx = catCtx(tjson, catId);
   const file = path.join(siteRoot, 'tournaments', `${slug}.json`);
-  const before = fs.readFileSync(file, 'utf8');
-  const beforeJson = JSON.parse(before); // the rollback snapshot — the day guard below reads it too
+  // A hand-edited disk can be malformed between load and write: refuse, never throw out of the daemon's handler (an unhandled rejection kills the match day).
+  let before, beforeJson;
+  try {
+    before = fs.readFileSync(file, 'utf8');
+    beforeJson = JSON.parse(before); // the rollback snapshot — the day guard below reads it too
+  } catch (e) {
+    return { err: `site/tournaments/${slug}.json is not readable JSON on disk (${e.message}) — fix the file and retry; nothing was written` };
+  }
   // The daemon's memory snapshot can outlive an out-of-band hand edit; writing
   // from it would silently drop that edit in the next commit (the pre-commit's
   // disk-side validate can't see it either). Refuse — the daemon reloads on

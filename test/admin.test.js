@@ -237,6 +237,22 @@ test('admin doEdit: an out-of-band hand edit is refused once, reloaded, and the 
   }
 });
 
+test('admin doEdit: a malformed file on disk is a refusal, never a throw — the daemon survives the match day', () => {
+  const { tmp, siteRoot, state } = scratchWithRemote();
+  try {
+    const file = path.join(siteRoot, 'tournaments', 'sample.json');
+    fs.writeFileSync(file, '{ hand edit gone wrong');
+    let first;
+    assert.doesNotThrow(() => { first = admin.doEdit(state, 'result', 'md40', '8', '21-19 21-18'); },
+      'a corrupt disk file must not throw out of the request handler');
+    assert.equal(first.ok, false, 'the edit is refused');
+    assert(/not readable JSON/.test(first.error), `the refusal names the cause, got: ${first.error}`);
+    assert.equal(fs.readFileSync(file, 'utf8'), '{ hand edit gone wrong', 'nothing was overwritten');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 test('admin redo: a daemon edit after the undo clears the stack — redo reports nothing', () => {
   const { tmp, state } = scratchWithRemote();
   try {
