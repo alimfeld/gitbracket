@@ -12,9 +12,13 @@ const $ = id => document.getElementById(id);
 // into the next. ponytail: re-tune with the card's font/padding.
 const CARD_PX = 50;
 
+// Drops land on any 5-minute wall mark — the slot-minute gcd only aligned them
+// with the generated layout. ponytail: raise if 5-minute drops feel too fine.
+const STEP = 5;
+
 // ---- tiny state ----
 const S = {
-  slug: null, day: null, tjson: null, tz: 'UTC', gcd: 15,
+  slug: null, day: null, tjson: null, tz: 'UTC',
   pxPerMin: 1.2, dayStart: 0, dayEnd: 0,
   cats: [], venues: [], days: [], dragSource: null, ghost: null, legal: null,
 };
@@ -37,16 +41,6 @@ const pad = n => String(n).padStart(2, '0');
 const isoOf = (day, wm) => `${day}T${pad(Math.floor(wm / 60))}:${pad(wm % 60)}:00`;
 // ms from derive.js; the grid works in wall-clock minutes
 const slotMinOf = (m, ctx) => matchSlotMs(m, ctx) / 60000;
-
-const gcd = (a, b) => { while (b) [a, b] = [b, a % b]; return a; };
-function gridGcd(tjson) {
-  let g = 0;
-  const add = n => { if (Number.isInteger(n) && n > 0) g = gcd(g, n); };
-  for (const c of (tjson.categories || [])) { const sm = c.slotMinutes || {}; add(sm.groups); add(sm.knockout); }
-  for (const cid of Object.keys(tjson.matches || {}))
-    for (const m of tjson.matches[cid] || []) if (m) add(m.slotMinutes);
-  return g || 15;
-}
 
 // A match's wall-time window on a day, as [startMin, endMin] or null.
 function dayWindow(m, ctx) {
@@ -99,7 +93,6 @@ async function setSlug(slug) {
   S.tjson = await get('/api/data?slug=' + slug);
   if (!S.tjson) return;
   S.tz = S.tjson.timezone || 'UTC';
-  S.gcd = gridGcd(S.tjson);
   S.cats = toCats(S.tjson);
   S.venues = S.tjson.venues || [];
   S.days = schedDays(S.cats.flatMap(c => c.matches), S.tz);
@@ -139,8 +132,8 @@ function renderGrid() {
   let dayEnd = mins.length ? Math.max(...mins) : 20 * 60;
   // one slot of headroom above the first card — it clears the sticky column
   // heading and leaves the preceding slot visible and droppable
-  dayStart = Math.floor((dayStart - (sShort || 15)) / S.gcd) * S.gcd;
-  dayEnd = Math.ceil((dayEnd + 15) / S.gcd) * S.gcd;
+  dayStart = Math.floor((dayStart - (sShort || 15)) / STEP) * STEP;
+  dayEnd = Math.ceil((dayEnd + 15) / STEP) * STEP;
   if (dayStart < 0) dayStart = 0;
   S.dayStart = dayStart; S.dayEnd = dayEnd;
   fitScale(sShort); // board height fills short days; the shortest slot floors the scale so long days scroll without overlap
@@ -261,7 +254,7 @@ function wireGrid() {
 }
 
 // The candidate (venue, wallMin) under the pointer — legal snapping happens
-// against the daemon's slot list, not the old gcd-only grid.
+// against the daemon's slot list.
 function hitTest(e) {
   const grid = $('grid');
   const gr = grid.getBoundingClientRect();
@@ -287,7 +280,9 @@ function legalSnap(venue, wm) {
 // Legal start-minutes per venue from the daemon (the gate's own rules),
 // computed once per drag.
 async function loadSlots(cid, mid) {
-  const r = await get(`/api/slots?slug=${S.slug}&cat=${cid}&id=${mid}&day=${S.day}&gcd=${S.gcd}`);
+  const r = await get(`/api/slots?slug=${S.slug}&cat=${cid}&id=${mid}&day=${S.day}&gcd=${STEP}`);
+  // A superseded reply — an earlier drag's fetch landing late.
+  if (S.dragSource !== `${cid}:${mid}`) return;
   S.legal = { byVenue: new Map(Object.entries((r && r.ok) || {})) };
 }
 
@@ -330,10 +325,11 @@ function ghost(e) {
     addGhost(col, { invalid: emptiesDay, title: emptiesDay ? 'last scheduled match on this day — clearing would drop the day from the published schedule' : '', top: '.5rem', height: '2.5rem' });
     return;
   }
-  // the slot list may still be in flight from dragstart — a neutral ghost then
-  const wm = S.legal ? legalSnap(ht.venue, ht.wm) : Math.round(ht.wm / S.gcd) * S.gcd;
-  const ok = S.legal ? wm !== null : true;
-  addGhost(col, { invalid: !ok, title: ok ? '' : 'no legal slot here', top: (wm - S.dayStart) * S.pxPerMin + 'px', height: (ok ? slot : 2.5) * S.pxPerMin + 'px' });
+  // The slot list is still in flight from dragstart — no preview beats a wrong one.
+  if (!S.legal) return;
+  const wm = legalSnap(ht.venue, ht.wm);
+  const bad = wm === null, top = (bad ? ht.wm : wm) - S.dayStart;
+  addGhost(col, { invalid: bad, title: bad ? 'no legal slot here' : '', top: top * S.pxPerMin + 'px', height: (bad ? 2.5 : slot) * S.pxPerMin + 'px' });
 }
 function clearGhost() { if (S.ghost) { S.ghost.remove(); S.ghost = null; } }
 

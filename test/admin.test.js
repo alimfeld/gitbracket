@@ -352,6 +352,14 @@ test('admin legalSlots: the scan rides the schedule\'s lattice, not midnight —
   assert(t.every(wm => wm % 25 === 15), 'every tick rides the 09:00-anchored lattice, never its 25k ghost');
 });
 
+test('admin legalSlots: the board drags on a 5-minute step — every wall mark the gate allows, not just the slot-minute lattice', () => {
+  const tjson = loadRepo(FIX('sample')).tournaments.get('sample').tjson;
+  const c1 = new Set(admin.legalSlots(tjson, 'md40', '9', '2025-07-14', 5)['court-1']);
+  assert([...c1].every(wm => wm % 5 === 0), 'every offer is a 5-minute mark');
+  assert(c1.has(720) && c1.has(725), 'the feeder floor 12:00 and the 12:05 nudge past it — the 45-minute lattice never offered 725');
+  assert(!c1.has(715), '11:55 before the floor is still refused — a finer step narrows nothing but the step');
+});
+
 test('admin pairBusy: the validators\' conflict kinds served to the preview — the same code the gate runs', () => {
   const { schedEntries, pairBusy } = require('../src/tools.js');
   const db = schedEntries(loadRepo(FIX('bad-player-doublebook')).tournaments.get('bad-player-doublebook').tjson).entries;
