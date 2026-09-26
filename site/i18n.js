@@ -101,7 +101,6 @@ const I18N = {
       'round-final': { acc: 'the final', dat: 'the final' }, // the one lowercase quirk
       '': { acc: 'the {label}', dat: 'the {label}' },
     },
-    art: {}, // no articles — parity with de, and the empty entry documents the slot
   },
 
   de: {
@@ -200,13 +199,17 @@ const I18N = {
   },
 };
 
+// One place decides that a missing bundle renders English — t() and derive's
+// per-locale dispatchers both read it through this, so the fallback can't drift.
+const bundle = lang => I18N[lang] || I18N.en;
+
 // {param} substitution, nothing else — values are pre-scaped/rendered by the
 // caller, so HTML passes through untouched. A missing key or param renders its
 // placeholder visibly — never blank, never a throw.
 const t = (lang, key, params) => {
-  const s = (I18N[lang] || I18N.en)[key];
+  const s = bundle(lang)[key];
   if (s === undefined) return `{${key}}`;
   return params ? s.replace(/\{(\w+)\}/g, (m, k) => (k in params ? params[k] : m)) : s;
 };
 
-if (typeof module !== 'undefined') module.exports = { I18N, t };
+if (typeof module !== 'undefined') module.exports = { I18N, t, bundle };

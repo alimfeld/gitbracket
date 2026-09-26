@@ -24,8 +24,7 @@ const setLocale = l => { LOCALE = l; };
 // the bundle as data or tiny formatters; this file only dispatches, so a third
 // language is a bundle edit, never a code branch. A stray setLocale to a
 // missing bundle lands on en, matching t()'s fallback.
-const bundle = () => I18N[LOCALE] || I18N.en;
-const fmtOf = k => (bundle().fmt || {})[k];
+const fmtOf = k => (bundle(LOCALE).fmt || {})[k];
 const ordNum = n => (fmtOf('ord') || (n => String(n)))(n);    // '3.' / '3rd' — range form
 const cardNum = n => (fmtOf('place') || (n => String(n)))(n); // '3' / '3rd' — pre-word form
 const bandShort = l => (fmtOf('bandShort') || (l => l))(l);   // the band a placement label names
@@ -34,11 +33,11 @@ const bandShort = l => (fmtOf('bandShort') || (l => l))(l);   // the band a plac
 // the caller already holds. The label string is only a {label} parameter,
 // never inspected.
 const refWord = (key, c, label) => {
-  const refs = bundle().refs || {};
+  const refs = bundle(LOCALE).refs || {};
   const s = (refs[key] || refs[''] || {})[c] || label;
   return s.replace('{label}', label); // templates carry exactly one {label}
 };
-const artWord = (key, c) => ((bundle().art || {})[key] || {})[c] || ''; // 'Im' / 'In der' per round key
+const artWord = (key, c) => ((bundle(LOCALE).art || {})[key] || {})[c] || ''; // 'Im' / 'In der' per round key
 const roundKeyOf = d => d === 0 ? 'round-final' : d === 1 ? 'round-semi' : d === 2 ? 'round-quart' : d === 3 ? 'round-16' : 'round-of'; // depth from the final, mirroring roundName
 
 // Shared side identity: sorted '|'-joined ids.

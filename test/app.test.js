@@ -741,7 +741,10 @@ test('i18n: a native-digit locale still keys days in ISO — Intl digits never l
 });
 
 test('i18n: every translation key exists in both languages', () => {
-  assert.deepEqual(Object.keys(I18N.de).sort(), Object.keys(I18N.en).sort(), 'a key missing from one language leaves a {placeholder} on the page');
+  // string keys only — the fmt/refs/art sub-maps legitimately differ per locale
+  // (en needs no articles, a third language may decline where en does not).
+  const words = o => Object.entries(o).filter(([, v]) => typeof v === 'string').map(([k]) => k).sort();
+  assert.deepEqual(words(I18N.de), words(I18N.en), 'a key missing from one language leaves a {placeholder} on the page');
 });
 
 test('i18n: German derives domain labels and date spans — not just chrome', () => {
