@@ -260,11 +260,13 @@ function hitTest(e) {
   const gr = grid.getBoundingClientRect();
   const x = e.clientX - gr.left, y = e.clientY - gr.top;
   const cols = grid.querySelectorAll('.col');
-  let venue = null;
-  for (const c of cols) { const cr = c.getBoundingClientRect(); if (x >= cr.left - gr.left && x <= cr.right - gr.left) { venue = c.dataset.venue; break; } }
+  let venue = null, rect = null;
+  for (const c of cols) { const cr = c.getBoundingClientRect(); if (x >= cr.left - gr.left && x <= cr.right - gr.left) { venue = c.dataset.venue; rect = cr; break; } }
   if (venue == null) return null;
   const wm = S.dayStart + Math.round(y / S.pxPerMin);
-  return { venue, wm };
+  // the ghost's time label rides the half the pointer is NOT in, so the cursor
+  // never sits on the words it is trying to read
+  return { venue, wm, align: x - (rect.left - gr.left) > rect.width / 2 ? 'left' : 'right' };
 }
 
 // nearest legal start-minute — null when the column has none, so the ghost
@@ -287,10 +289,13 @@ async function loadSlots(cid, mid) {
 }
 
 // One ghost element — the drop target's preview; invalid shrinks to a red marker.
-function addGhost(col, { invalid, title, top, height }) {
+function addGhost(col, { invalid, title, time = '', align = '', top, height }) {
   const g = document.createElement('div');
   g.className = 'ghost' + (invalid ? ' invalid' : '');
   g.title = title;
+  g.textContent = time;
+  g.style.textAlign = align;
+  g.setAttribute('aria-hidden', 'true'); // a sight aid for the pointer drag
   g.style.top = top;
   g.style.height = height;
   col.appendChild(g);
@@ -329,7 +334,10 @@ function ghost(e) {
   if (!S.legal) return;
   const wm = legalSnap(ht.venue, ht.wm);
   const bad = wm === null, top = (bad ? ht.wm : wm) - S.dayStart;
-  addGhost(col, { invalid: bad, title: bad ? 'no legal slot here' : '', top: top * S.pxPerMin + 'px', height: (bad ? 2.5 : slot) * S.pxPerMin + 'px' });
+  // the wall start the drop would write, padded exactly as the rail and the
+  // daemon's slot lattice pad it
+  const time = bad ? null : `${pad(Math.floor(wm / 60))}:${pad(wm % 60)}`;
+  addGhost(col, { invalid: bad, time, align: ht.align, title: bad ? 'no legal slot here' : '', top: top * S.pxPerMin + 'px', height: (bad ? 2.5 : slot) * S.pxPerMin + 'px' });
 }
 function clearGhost() { if (S.ghost) { S.ghost.remove(); S.ghost = null; } }
 
