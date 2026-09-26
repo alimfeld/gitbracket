@@ -150,17 +150,20 @@ function renderGrid() {
   const cols = S.venues.map(v => v.id);
   grid.style.gridTemplateColumns = `4.5rem ${cols.map(() => 'minmax(9rem,1fr)').join(' ')} 13rem`;
 
-  let html = '<div class="ruler">';
+  // the day's hour ticks, shared by the label rail and every venue column —
+  // each column draws them behind its own cards
+  let hourHtml = '', labelHtml = '';
   for (let hm = Math.floor(dayStart / 60) * 60; hm <= dayEnd && hm < 1440; hm += 60) {
     const y = (hm - dayStart) * S.pxPerMin;
-    html += `<div class="hour" style="top:${y}px"></div><div class="hourlabel" style="top:${y}px">${pad(hm / 60)}:00</div>`;
+    hourHtml += `<div class="hour" style="top:${y}px"></div>`;
+    labelHtml += `<div class="hourlabel" style="top:${y}px">${pad(hm / 60)}:00</div>`;
   }
-  html += '</div>';
+  let html = `<div class="ruler">${hourHtml}${labelHtml}</div>`;
   for (const vid of cols) {
     const v = S.venues.find(x => x.id === vid);
     const name = v ? v.name : vid;
     const here = dayMatches.filter(({ m }) => m.venue === vid);
-    html += `<div class="col" data-venue="${esc(vid)}"><div class="colhead">${esc(name)}</div>`;
+    html += `<div class="col" data-venue="${esc(vid)}"><div class="colhead">${esc(name)}</div>${hourHtml}`;
     for (const { c, m } of here) html += cardHtml(c, m, vid);
     html += '</div>';
   }
