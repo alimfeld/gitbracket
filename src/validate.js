@@ -131,25 +131,29 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
     if (v !== undefined && !Array.isArray(v)) err(tFile, `${field} must be an array, got ${JSON.stringify(v)}`);
     return Array.isArray(v) ? v : [];
   };
+  // Every entity list registers the same way: a valid unique id, a non-empty
+  // name. The containers differ (Set for venues/players, Map for categories),
+  // so the caller records — false only for a non-object.
+  const checkEntry = (label, x, set, where) => {
+    if (!x || typeof x !== 'object') { err(where, 'entry must be an object'); return false; }
+    if (typeof x.id !== 'string' || !ID_RE.test(x.id)) err(where, `id ${JSON.stringify(x.id)} must match ${ID_RE}`);
+    if (typeof x.name !== 'string' || !x.name.trim()) err(where, 'name must be a non-empty string');
+    if (set.has(x.id)) err(where, `duplicate ${label} id ${x.id}`);
+    return true;
+  };
   const venuesArr = list(tjson.venues, 'venues');
   const categoriesArr = list(tjson.categories, 'categories');
   const playersArr = list(tjson.players, 'players');
 
   venuesArr.forEach((v, i) => {
     const where = `${tFile} venues[${i}]`;
-    if (!v || typeof v !== 'object') { err(where, 'entry must be an object'); return; }
-    if (typeof v.id !== 'string' || !ID_RE.test(v.id)) err(where, `id ${JSON.stringify(v.id)} must match ${ID_RE}`);
-    if (typeof v.name !== 'string' || !v.name.trim()) err(where, 'name must be a non-empty string');
-    if (venues.has(v.id)) err(where, `duplicate venue id ${v.id}`);
+    if (!checkEntry('venue', v, venues, where)) return;
     venues.add(v.id);
   });
 
   categoriesArr.forEach((c, i) => {
     const where = `${tFile} categories[${i}]`;
-    if (!c || typeof c !== 'object') { err(where, 'entry must be an object'); return; }
-    if (typeof c.id !== 'string' || !ID_RE.test(c.id)) err(where, `id ${JSON.stringify(c.id)} must match ${ID_RE}`);
-    if (typeof c.name !== 'string' || !c.name.trim()) err(where, 'name must be a non-empty string');
-    if (categories.has(c.id)) err(where, `duplicate category id ${c.id}`);
+    if (!checkEntry('category', c, categories, where)) return;
     categories.set(c.id, c);
     const b = c.bestOf;
     if (b !== undefined && (typeof b !== 'object' || b === null)) err(where, 'bestOf must be an object with odd positive groups/knockout numbers');
@@ -164,10 +168,7 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
 
   playersArr.forEach((p, i) => {
     const where = `${tFile} players[${i}]`;
-    if (!p || typeof p !== 'object') { err(where, 'entry must be an object'); return; }
-    if (typeof p.id !== 'string' || !ID_RE.test(p.id)) err(where, `id ${JSON.stringify(p.id)} must match ${ID_RE}`);
-    if (typeof p.name !== 'string' || !p.name.trim()) err(where, 'name must be a non-empty string');
-    if (players.has(p.id)) err(where, `duplicate player id ${p.id}`);
+    if (!checkEntry('player', p, players, where)) return;
     players.set(p.id, p);
   });
 
@@ -367,19 +368,19 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
       // consumedSlots records this match as the owner of every source it holds,
       // so the cross-match test below is blind to one source used on both sides.
       const seen = new Set();
-      m.sides.forEach((side, si) => {
+      m.sides.forEach((side) => {
         if (!side || typeof side !== 'object') return;
-        if (side.kind === 'match') {
-          const key = `${side.match}:${side.result}`;
+        // the one claim rule for either kind — same-match reuse bites both
+        const claim = (key, owner) => {
           if (seen.has(key)) err(where, `slot source ${key} is consumed twice by this match`);
           seen.add(key);
           // every holder but the first is a duplicate — the gate names the first owner
-          if (sources.edge.get(key) !== m.id) err(where, `slot source ${key} is consumed twice (also by ${sources.edge.get(key)})`);
+          if (owner.get(key) !== m.id) err(where, `slot source ${key} is consumed twice (also by ${owner.get(key)})`);
+        };
+        if (side.kind === 'match') {
+          claim(`${side.match}:${side.result}`, sources.edge);
         } else if (side.kind === 'pool') {
-          const key = `pool:${side.pool}:${side.rank}`;
-          if (seen.has(key)) err(where, `slot source ${key} is consumed twice by this match`);
-          seen.add(key);
-          if (sources.pool.get(key) !== m.id) err(where, `slot source ${key} is consumed twice (also by ${sources.pool.get(key)})`);
+          claim(`pool:${side.pool}:${side.rank}`, sources.pool);
           if (typeof side.pool === 'string' && typeof side.rank === 'number' && Number.isInteger(side.rank) && side.rank >= 1) {
             if (!poolUses.has(side.pool)) {
               err(where, `pool slot references unknown pool ${JSON.stringify(side.pool)} (no matches use it)`);
