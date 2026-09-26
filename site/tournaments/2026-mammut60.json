@@ -448,8 +448,8 @@
             "rank": 4
           }
         ],
-        "venue": "court-3",
-        "scheduled": "2026-10-03T11:00:00"
+        "venue": "court-1",
+        "scheduled": "2026-10-03T11:30:00"
       },
       {
         "id": 14,
@@ -465,8 +465,8 @@
             "rank": 3
           }
         ],
-        "venue": "court-4",
-        "scheduled": "2026-10-03T11:00:00"
+        "venue": "court-2",
+        "scheduled": "2026-10-03T11:30:00"
       },
       {
         "id": 15,
@@ -482,8 +482,8 @@
             "rank": 4
           }
         ],
-        "venue": "court-5",
-        "scheduled": "2026-10-03T11:00:00"
+        "venue": "court-3",
+        "scheduled": "2026-10-03T11:30:00"
       },
       {
         "id": 16,
@@ -499,7 +499,7 @@
             "rank": 3
           }
         ],
-        "venue": "court-1",
+        "venue": "court-4",
         "scheduled": "2026-10-03T11:30:00"
       },
       {
@@ -810,7 +810,7 @@
             "rank": 5
           }
         ],
-        "venue": "court-2",
+        "venue": "court-5",
         "scheduled": "2026-10-03T11:30:00"
       },
       {

@@ -40,6 +40,13 @@ function backToBacks(tourney, catId) {
   return counts;
 }
 
+// N single-player teams under one prefix, as player map entries + team list.
+function field(players, n, prefix) {
+  const teams = [];
+  for (let i = 1; i <= n; i++) { players[prefix + i] = prefix.toUpperCase() + i; teams.push([prefix + i]); }
+  return teams;
+}
+
 test('a minimal spec generates a valid tournament', () => {
   const tourney = generate(MINI);
   const { errs } = validateRepo(repoOf(tourney));
@@ -338,6 +345,92 @@ test('categories sharing a block start end within one slot of each other', () =>
   const endOf = (cat) => Math.max(...tourney.matches[cat].map((m) => Date.parse(m.scheduled) + slot));
   assert.ok(Math.abs(endOf('md') - endOf('xd')) <= slot,
     `same-block categories ended ${Math.abs(endOf('md') - endOf('xd')) / 60000} min apart (allowed: one slot)`);
+});
+
+test('a knockout round syncs to one wave when its floor wave has a court for every member', () => {
+  // The mammut shape: md (8 teams) and wd (5 teams, knockout) share the
+  // 09:00 block on 5 courts. WD's pool tail runs into MD's QF wave: the
+  // round must stay whole AND the tail must pack the yielded wave — both
+  // finish at the earliest possible time (13:30).
+  const players = {};
+  const md = field(players, 8, 'a'), wd = field(players, 5, 'b');
+  const tourney = generate({
+    ...MINI,
+    poolSize: 7,
+    venues: { 'court-1': 'C1', 'court-2': 'C2', 'court-3': 'C3', 'court-4': 'C4', 'court-5': 'C5' },
+    blocks: { md: '09:00', wd: '09:00' },
+    players,
+    categories: [
+      { id: 'md', name: 'Men', bestOf: 1, slotMinutes: 30, final: { bestOf: 3, slotMinutes: 60 } },
+      { id: 'wd', name: 'Women', bestOf: 1, slotMinutes: 30, knockout: true, final: { bestOf: 3, slotMinutes: 60 } },
+    ],
+    teams: { md, wd },
+  });
+  const { errs } = validateRepo(repoOf(tourney));
+  assert.deepEqual(errs, []);
+  // Round 1 of the md bracket: 8 teams → 4 matches, every side a pool slot.
+  const r1 = tourney.matches.md.filter((m) => m.pool === undefined && m.sides.every((s) => s.kind === 'pool'));
+  assert.equal(r1.length, 4, 'md quarter-finals');
+  assert.equal(new Set(r1.map((m) => m.scheduled)).size, 1, 'QF split across waves');
+  // The pool tail packs the wave the round yields: WD's last pool match
+  // starts at or before the QF — not after it.
+  const lastWDPool = tourney.matches.wd.filter((m) => m.pool !== undefined).reduce((a, b) => Date.parse(a.scheduled) >= Date.parse(b.scheduled) ? a : b);
+  assert(Date.parse(lastWDPool.scheduled) <= Date.parse(r1[0].scheduled),
+    `WD pool tail (${lastWDPool.scheduled}) must not start after the synced QF (${r1[0].scheduled})`);
+  // Makespan: 1140 court-minutes on 5 courts and finals that force the last
+  // chain to 13:30 — any later finish is wasted slack.
+  const endOf = (ms) => Math.max(...ms.map((m) => Date.parse(m.scheduled) + (m.slotMinutes || 30) * 60000));
+  assert(endOf(tourney.matches.md) <= Date.parse('2026-05-02T13:30:00'));
+  assert(endOf(tourney.matches.wd) <= Date.parse('2026-05-02T13:30:00'));
+});
+
+test('a knockout round spills across waves when courts cannot hold it whole', () => {
+  // 8 teams on 3 courts: the QF needs 4 courts, the floor wave has 3 — the
+  // round must start as early as possible (3 now, 1 next wave) rather than
+  // wait for a wave that never comes.
+  const players = {};
+  const md = field(players, 8, 'a');
+  const tourney = generate({
+    ...MINI,
+    poolSize: 7,
+    venues: { 'court-1': 'C1', 'court-2': 'C2', 'court-3': 'C3' },
+    players,
+    categories: [{ id: 'md', name: 'Men', bestOf: 1, slotMinutes: 30, final: { bestOf: 3, slotMinutes: 60 } }],
+    teams: { md },
+  });
+  const { errs } = validateRepo(repoOf(tourney));
+  assert.deepEqual(errs, []);
+  const r1 = tourney.matches.md.filter((m) => m.pool === undefined && m.sides.every((s) => s.kind === 'pool'));
+  assert.equal(r1.length, 4, 'md quarter-finals');
+  assert.equal(new Set(r1.map((m) => m.scheduled)).size, 2, '4 QFs on 3 courts must spill exactly one wave');
+});
+
+test('a finishing chain yields to a round: the near-done category takes its finals later', () => {
+  // 9 teams (md) + 6 teams (wd) on 5 courts: MD's round-2 (4 matches) and
+  // WD's finals (2 × 60 min) both reach 13:00. WD is nearly done (its tail
+  // cascades into nothing), MD's round gates SF + finals — the round must
+  // take the wave, or MD's whole chain slides a slot. Pure court-minutes
+  // (1500) fit 09:00-14:00; the dependency chains push the effective bound
+  // to 15:00, never later.
+  const players = {};
+  const md = field(players, 9, 't'), wd = field(players, 6, 'u');
+  const tourney = generate({
+    ...MINI,
+    poolSize: 7,
+    venues: { 'court-1': 'C1', 'court-2': 'C2', 'court-3': 'C3', 'court-4': 'C4', 'court-5': 'C5' },
+    blocks: { md: '09:00', wd: '09:00' },
+    players,
+    categories: [
+      { id: 'md', name: 'Men', bestOf: 1, slotMinutes: 30, final: { bestOf: 3, slotMinutes: 60 } },
+      { id: 'wd', name: 'Women', bestOf: 1, slotMinutes: 30, knockout: true, final: { bestOf: 3, slotMinutes: 60 } },
+    ],
+    teams: { md, wd },
+  });
+  const { errs } = validateRepo(repoOf(tourney));
+  assert.deepEqual(errs, []);
+  const endOf = (ms) => Math.max(...ms.map((m) => Date.parse(m.scheduled) + (m.slotMinutes || 30) * 60000));
+  assert.ok(endOf(tourney.matches.md) <= Date.parse('2026-05-02T15:00:00'), 'md chain must not slide past 15:00');
+  assert.ok(endOf(tourney.matches.wd) <= Date.parse('2026-05-02T15:00:00'), 'wd chain must not slide past 15:00');
 });
 
 test('match ids follow chronological order; slot refs stay valid after renumbering', () => {

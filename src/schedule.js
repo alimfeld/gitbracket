@@ -256,24 +256,25 @@ function buildCategory(teams, cat, poolSize) {
 // global order merged from the categories' build orders (pools first, then
 // knockout in dependency order), so the earliest a match can start is its
 // block's start, or the end of its feeders / its pool's last match — brackets
-// never start before their sources. Each step places the next match of the
-// category with the earliest such floor, so a match gets its turn before
-// later-floor matches can occupy its courts; floor ties go to the category
-// least advanced relative to its court-minute workload, so categories sharing
-// a block start share the courts in proportion to their workload and end
-// together — the category-major order used to let the spec-first category
-// monopolize every court, stretching the others long past it. Build ids and
-// pool letters restart per category, so all feeder/pool/round state is keyed
-// by category index. One bracket rule rides on top: every match of a
-// champion-tree round shares the round's latest feeder end — a play-in
-// bracket plays all its QFs together instead of staggering the play-in's
-// quarter a slot behind the others. Placement matches (loser-fed) keep
-// own-feeder floors; their feeders are aligned rounds, so they land aligned
-// too. Each match takes the earliest floor-aligned slot with a free court and
-// no same-window player double-book (pool matches only — knockout sides
-// resolve only after results). Occupancy is a start/end window over the
-// effective slot length (matchSlotMs), matching the validator's overlap rule.
-// Tuples are [cat, teamList, matches, rounds].
+// never start before their sources. Each step places the candidate whose
+// earliest obtainable slot is soonest (a round's slot is its sync wave — the
+// first wave that holds the whole round); same-slot ties go to the least-
+// advanced category (placed/total), the fair-share rule for pools and the
+// round-vs-tail packing rule alike, so categories sharing a block start end
+// together and a nearly-done category yields its wave instead of cascading
+// the other's chain. Build ids and pool letters restart per category, so all
+// feeder/pool/round state is keyed by category index. One bracket rule rides
+// on top: a champion-tree round never splits — it is placed atomically on
+// the first wave where every member fits, waiting a wave when a chain to
+// preserve packs it; a round with more members than courts can never fit and
+// spills individually.
+// Placement matches (loser-fed) keep own-feeder floors; their feeders are
+// aligned rounds, so they land aligned too. Each match takes the earliest
+// floor-aligned slot with a free court and no same-window player double-book
+// (pool matches only — knockout sides resolve only after results). Occupancy
+// is a start/end window over the effective slot length (matchSlotMs),
+// matching the validator's overlap rule. Tuples are [cat, teamList, matches,
+// rounds].
 function scheduleMatches(categories, venues, tz, slotCfgOf, eventDate, blockStart) {
   if (venues.length === 0) throw new Error('spec: venues must be a non-empty id -> name map');
   const offset = tzOffset(tz, eventDate);
@@ -300,7 +301,6 @@ function scheduleMatches(categories, venues, tz, slotCfgOf, eventDate, blockStar
     matches.forEach((pm, i) => { if (pm.pool !== undefined) pl.set(pm.pool, i); });
     poolLast.set(c, pl);
   });
-  const total = st.reduce((s, x) => s + x.matches.length, 0);
   // A knockout match's earliest start, as a pick-time predicate: Infinity (not
   // pickable) until every pool it feeds on has placed its last match — a
   // pool's end isn't final until then, and a stale floor would let a bracket
@@ -324,42 +324,99 @@ function scheduleMatches(categories, venues, tz, slotCfgOf, eventDate, blockStar
     }
     return t;
   };
-  for (let n = 0; n < total; n++) {
-    let pick = -1, pf = Infinity;
+  // The first free court at t outside `taken` — round members need distinct
+  // courts. Placement matches aren't in roundOf (their feeders are aligned
+  // rounds, not their own), so they never sync here; they land aligned
+  // through their floors, as before.
+  const courtAt = (t, slot, taken) => venues.find((v) => (!taken || !taken.has(v)) && !(courtUse.get(v) ?? []).some((w) => slotsOverlap(t, t + slot, w.start, w.end)));
+  const grpFit = (grp, t, catSlots) => {
+    const taken = new Set();
+    for (const gm of grp) {
+      const v = courtAt(t, matchSlotMs(gm, { slotMinutes: catSlots }), taken);
+      if (!v) return false;
+      taken.add(v);
+    }
+    return true;
+  };
+  // The first wave at/after the floor where the whole round fits — a round
+  // waits rather than splits, so its start is never a partial round, and the
+  // wait is bounded by a chain to preserve. A round with more members than
+  // courts can never fit — Infinity, and its members place individually.
+  const syncWave = (grp, f, catSlots) => {
+    if (grp.length > venues.length) return Infinity;
+    const step = matchSlotMs(grp[0], { slotMinutes: catSlots }); // all members share one slot length
+    let maxEnd = 0;
+    for (const ws of courtUse.values()) for (const w of ws) maxEnd = Math.max(maxEnd, w.end);
+    for (let t = f; ; t += step) {
+      if (t >= maxEnd || grpFit(grp, t, catSlots)) return t; // past every occupancy: all courts free
+    }
+  };
+  // A single match's earliest obtainable slot: a free court and, for known
+  // players, no same-window double-book. Always terminates — courts empty out.
+  const firstFree = (t, slotMs, players) => {
+    for (;;) {
+      const venue = courtAt(t, slotMs);
+      const blocked = players && playerUse.some(
+        (w) => slotsOverlap(t, t + slotMs, w.start, w.end) && [...players].some((p) => w.players.has(p)));
+      if (venue && !blocked) return t;
+      t += slotMs;
+    }
+  };
+  while (st.some((s) => s.idx < s.matches.length)) {
+    let pick = -1, pt = Infinity, padv = Infinity, unit = null;
     for (const s of st) {
       if (s.idx >= s.matches.length) continue;
       const f = floorOf(s.i, startOf(categories[s.i][0]));
+      if (f === Infinity) continue; // feeders still in flight — not pickable
+      const catSlots = slotCfgOf.get(categories[s.i][0]);
+      const head = s.matches[s.idx];
+      // A round is one unit on its sync wave; a plain match takes its
+      // earliest slot. Same-t ties: least advanced wins (see the header).
+      const grp = roundOf.get(s.i).get(head.id);
+      let t, u = null;
+      if (grp && grp.length > 1) {
+        t = syncWave(grp, f, catSlots);
+        if (t !== Infinity) u = grp;
+      }
+      if (!u) t = firstFree(f, matchSlotMs(head, { slotMinutes: catSlots }), fixedPlayers(head));
       const adv = s.placed / s.total;
-      if (f < pf || (f === pf && (pick < 0 || adv < st[pick].placed / st[pick].total))) { pick = s.i; pf = f; }
+      if (t < pt || (t === pt && adv < padv)) { pick = s.i; pt = t; padv = adv; unit = u; }
     }
     const cat = categories[pick][0];
     const start = startOf(cat);
     if (Number.isNaN(start)) throw new Error(`spec: no blocks entry for category ${cat}`);
     const catSlots = slotCfgOf.get(cat);
-    const m = st[pick].matches[st[pick].idx++];
-    const slotMs = matchSlotMs(m, { slotMinutes: catSlots });
-    const players = fixedPlayers(m);
-    let t = pf; // the pick already computed this match's floor
-    for (;;) {
-      const free = (v) => !(courtUse.get(v) ?? []).some((w) => slotsOverlap(t, t + slotMs, w.start, w.end));
-      const venue = venues.find(free);
-      const blocked = players && playerUse.some(
-        (w) => slotsOverlap(t, t + slotMs, w.start, w.end) && [...players].some((p) => w.players.has(p)));
-      if (venue && !blocked) {
-        m.venue = venue;
-        // Local wall date + time in the event tz, no offset. A fixed
-        // eventDate prefix would backdate a midnight-crossing slot by 24h,
-        // so the day comes from the instant.
-        m.scheduled = `${dayKey(t, tz)}T${fmtTime(t, tz)}:00`;
-        courtUse.set(venue, [...(courtUse.get(venue) ?? []), { start: t, end: t + slotMs }]);
-        endOf.get(pick).set(m.id, t + slotMs);
-        if (m.pool !== undefined) poolDone.get(pick).set(m.pool, Math.max(poolDone.get(pick).get(m.pool) ?? start, t + slotMs));
-        if (players) playerUse.push({ start: t, end: t + slotMs, players });
-        break;
+    if (unit) {
+      // Whole round on one wave: every member gets its own court at pt.
+      const taken = new Set();
+      for (const gm of unit) {
+        const gslot = matchSlotMs(gm, { slotMinutes: catSlots });
+        const venue = courtAt(pt, gslot, taken);
+        taken.add(venue);
+        gm.venue = venue;
+        gm.scheduled = `${dayKey(pt, tz)}T${fmtTime(pt, tz)}:00`;
+        courtUse.set(venue, [...(courtUse.get(venue) ?? []), { start: pt, end: pt + gslot }]);
+        endOf.get(pick).set(gm.id, pt + gslot);
+        st[pick].placed += gslot;
       }
-      t += slotMs;
+      st[pick].idx += unit.length;
+    } else {
+      const m = st[pick].matches[st[pick].idx++];
+      const slotMs = matchSlotMs(m, { slotMinutes: catSlots });
+      const players = fixedPlayers(m);
+      const t = pt; // the pick already scanned this match's earliest slot
+      const venue = courtAt(t, slotMs);
+      m.venue = venue;
+      // Local wall date + time in the event tz, no offset. A fixed
+      // eventDate prefix would backdate a midnight-crossing slot by 24h,
+      // so the day comes from the instant.
+      m.scheduled = `${dayKey(t, tz)}T${fmtTime(t, tz)}:00`;
+      courtUse.set(venue, [...(courtUse.get(venue) ?? []), { start: t, end: t + slotMs }]);
+      endOf.get(pick).set(m.id, t + slotMs);
+      if (m.pool !== undefined) poolDone.get(pick).set(m.pool, Math.max(poolDone.get(pick).get(m.pool) ?? start, t + slotMs));
+      if (players) playerUse.push({ start: t, end: t + slotMs, players });
+      st[pick].placed += slotMs;
     }
-    st[pick].placed += slotMs;
   }
 }
 
