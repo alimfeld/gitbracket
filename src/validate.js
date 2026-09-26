@@ -5,7 +5,7 @@
 // it against fixtures/ in memory. Never writes — the gate stays pure.
 
 const path = require('path');
-const { loadRepo, plainObject, isRealDate, schedEntries, pairBusy, consumedSlots, winTarget, reachedWinner, feederBounds } = require('./tools.js');
+const { loadRepo, plainObject, isRealDate, schedEntries, pairBusy, consumedSlots, winTarget, reachedWinner, feederBounds, sameSet } = require('./tools.js');
 const { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, matchesOf, poolStandings, resolveSide, isDeadTie, bestOfOf, schedTime, schedDays, placementLabel, parentsOf } = require('../site/derive.js');
 
 const RESULTS = ['winner', 'loser'];
@@ -423,7 +423,7 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
       const b = resolveSide(m.sides[1], ctx);
       if ((r !== undefined || hasGames) && (!a || !b)) {
         err(where, 'scored match must have both sides resolved to players — check the pool or match feeding the unresolved side');
-      } else if (a && b && a.size === b.size && [...a].every(id => b.has(id))) {
+      } else if (a && b && sameSet(a, b)) {
         err(where, `both sides resolve to the same team (${[...a].join(', ')}) — a match needs two distinct sides`);
       }
     }

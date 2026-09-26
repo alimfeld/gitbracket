@@ -7,8 +7,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const { isDone, sideLabel, schedDays, bestOfOf, matchesOf } = require('../site/derive.js');
-const { writeTournament, tournamentText, catCtx, winTarget, reachedWinner, plainObject, git } = require('./tools.js');
+const { isDone, sideLabel, resolveSide, schedDays, bestOfOf, matchesOf } = require('../site/derive.js');
+const { writeTournament, tournamentText, catCtx, winTarget, reachedWinner, plainObject, git, sameSet } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 
 // ---------- pure logic (tests drive these on fixture repos) ----------
@@ -84,7 +84,10 @@ function applyMove(matches, matchId, value) {
 // commit diff to the one edited match.) An edit whose result is byte-identical
 // to the stored file changes nothing: no write, no commit — execEdit reports
 // unchanged.
-function writeEdit(siteRoot, repo, slug, catId, apply) {
+// skipId exempts the match being edited from the reattribution guard: re-seating
+// a decided match keeps its result by design (editDetail flags it), while a
+// change that reaches a *different* decided match's side is refused.
+function writeEdit(siteRoot, repo, slug, catId, apply, skipId) {
   const info = repo.tournaments.get(slug);
   if (!info || !info.tjson) return { err: `unknown tournament ${slug}` };
   const tjson = info.tjson;
@@ -136,6 +139,21 @@ function writeEdit(siteRoot, repo, slug, catId, apply) {
     // in-memory undo is the whole rollback.
     restore();
     return { errs };
+  }
+  // A stored result is side-letter-relative: correcting a score a decided match
+  // consumes would silently reattribute the result to another team.
+  const beforeMs = (beforeJson.matches || {})[catId] || [];
+  const beforeCtx = catCtx(beforeJson, catId);
+  const afterCtx = catCtx(tjson, catId);
+  for (const m of ms) {
+    if (!m || m.id === skipId || !isDone(m) || !Array.isArray(m.sides)) continue;
+    const b = beforeMs.find(x => x && x.id === m.id);
+    if (!b || !Array.isArray(b.sides)) continue;
+    const si = m.sides.findIndex((s, i) => !sameSet(resolveSide(s, afterCtx), resolveSide(b.sides[i], beforeCtx)));
+    if (si !== -1) {
+      restore();
+      return { err: `refused: match ${m.id} is already decided and this edit changes which team its side ${si === 0 ? 'a' : 'b'} resolves to — its stored result would follow the wrong team; clear match ${m.id}'s result, then correct this one` };
+    }
   }
   // byte equality is data equality — "21:19" for a stored "21-9" lands on the
   // same bytes, as does a re-scored identical game list
@@ -235,7 +253,7 @@ function execEdit(state, verb, cat, matchId, value) {
   const ctx = catCtx(info.tjson, cat);
   const m = ctx.byId.get(Number(matchId)); // the same object writeEdit mutates in place
   const preStatus = m && m.result && m.result.status; // what a clear removes — its commit kind matches it
-  const res = writeEdit(siteRoot, repo, slug, cat, applyFor(verb, matchId, value));
+  const res = writeEdit(siteRoot, repo, slug, cat, applyFor(verb, matchId, value), Number(matchId));
   // the structured facts the admin daemon JSON-ifies
   if (res.err) return { error: res.err };
   if (res.errs) return { errors: res.errs };

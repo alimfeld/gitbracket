@@ -240,6 +240,32 @@ test('editor writeEdit: rollback on validation failure, write on success (real d
   }
 });
 
+test('editor writeEdit: correcting a result a decided match consumes is refused — no silent reattribution', () => {
+  const { tmp, dataRoot } = scratchSite('place');
+  try {
+    const repo = loadRepo(dataRoot);
+    const file = path.join(dataRoot, 'tournaments', 'place.json');
+    const before = fs.readFileSync(file, 'utf8');
+    const state = { root: tmp, siteRoot: dataRoot, repo, slug: 'place' };
+    const m = id => repo.tournaments.get('place').tjson.matches.pl.find(x => x.id === id);
+    // m1's winner feeds m5 and m9, both already decided — flipping it would
+    // carry their stored results onto the other team
+    const flip = editor.execEdit(state, 'result', 'pl', '1', { shape: 'walkover', winner: 'b' });
+    assert(flip.error && /already decided/.test(flip.error), `the cascade is refused, got: ${flip.error || (flip.errs || []).join('; ')}`);
+    assert(fs.readFileSync(file, 'utf8') === before, 'nothing written');
+    assert(m(1).result.winner === 'a' && m(1).games, 'the in-memory edit rolled back');
+    // the final feeds nothing, so correcting it reattributes no stored result
+    const root = editor.writeEdit(dataRoot, repo, 'place', 'pl', (ms, ctx) => editor.applyResult(ms, '7', 'walkover', 'b'), 7);
+    assert(!root.err && !root.errs, `a leaf correction still applies, got: ${root.err || (root.errs || []).join('; ')}`);
+    assert(m(7).result.status === 'walkover' && m(7).result.winner === 'b', 'the leaf correction landed');
+    // re-seating the edited match itself keeps its result by design (skipId)
+    const reseat = editor.writeEdit(dataRoot, repo, 'place', 'pl', (ms) => editor.applySide(ms, '8', { si: 0, side: { kind: 'players', ids: ['p2'] } }), 8);
+    assert(!reseat.err && !reseat.errs, `re-seating a decided match keeps its result, got: ${reseat.err || (reseat.errs || []).join('; ')}`);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 test('editor applySide: rewrites a side in place; the generic domain is the validator', () => {
   const repo = loadRepo(FIX('sample'));
   const matches = repo.tournaments.get('sample').tjson.matches.md40;

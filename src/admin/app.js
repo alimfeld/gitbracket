@@ -52,9 +52,24 @@ function dayWindow(m, ctx) {
 }
 
 // ---- fetch helpers ----
-async function get(url) { const r = await fetch(url); return r.ok ? r.json() : null; }
+// A fetch that never rejects: a dead daemon must say so, not silently drop writes.
+let reachable = true;
+function setReachable(ok) {
+  if (ok === reachable) return;
+  reachable = ok;
+  $('offline').hidden = ok;
+}
+async function get(url) {
+  let r;
+  try { r = await fetch(url); } catch { setReachable(false); return null; }
+  setReachable(true);
+  try { return r.ok ? await r.json() : null; } catch { return null; } // a proxy's HTML error page is not data
+}
 async function post(url, body) {
-  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  let r;
+  try { r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); }
+  catch { setReachable(false); return { ok: false, error: 'admin daemon unreachable — nothing was saved' }; }
+  setReachable(true);
   let j = null; try { j = await r.json(); } catch { /* no body */ }
   return { ok: r.ok, ...(j || {}) };
 }
@@ -370,6 +385,7 @@ async function sendEdit(verb, cid, mid, value) {
 // with the editor's grammar; the modal keeps a rejected draft for fixing.
 
 function openResult(cid, m) {
+  if (!reachable) return; // the offline banner says why
   const ctx = cat(cid);
   const hasOutcome = !!(m.games || m.result);
   let pre = '';
@@ -442,6 +458,7 @@ function openResult(cid, m) {
 // are greyed; the current value stays selectable so it can be moved away, and
 // Apply blocks anything still illegal.
 async function openSide(cid, m, si) {
+  if (!reachable) return; // the offline banner says why
   const ctx = cat(cid);
   const size = teamSize(ctx);
   const L = (await get(`/api/sideopts?cat=${cid}&id=${m.id}&si=${si}`))?.ok || {};

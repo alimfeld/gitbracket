@@ -54,6 +54,8 @@ button:disabled { opacity: .5; cursor: default; }
 main { flex: 1; display: flex; min-height: 0; }
 .board { flex: 1; min-width: 0; overflow-y: auto; background: #fff; }
 .hint { margin: .4rem 1rem; font-size: .8rem; color: var(--muted); }
+/* the daemon is gone: the board still shows, but nothing is saving */
+.offline { margin: 0; padding: .4rem 1rem; background: var(--danger); color: #fff; font-size: .85rem; }
 
 /* ---- pending dropdown ---- */
 .badge { font-size: .8rem; color: var(--muted); }

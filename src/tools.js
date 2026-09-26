@@ -13,6 +13,11 @@ const { ID_RE, makeCat, matchesOf, schedTime, isDone, matchSlotMs } = require('.
 // occupancy — one predicate, no drift.
 const slotsOverlap = (a0, a1, b0, b1) => a0 < b1 && b0 < a1;
 
+// Resolved-side equality: null is unresolved, so two TBD sides are equal too.
+// Shared by the validator's self-match check and the editor's reattribution
+// guard — one predicate, no drift.
+const sameSet = (a, b) => a === null || b === null ? a === b : a.size === b.size && [...a].every(x => b.has(x));
+
 // A non-null, non-array object — every JSON-shape guard in the tool layer reads
 // this, so the three-clause test is written once.
 const plainObject = v => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -287,4 +292,4 @@ function pairBusy(a, b) {
   return kinds;
 }
 
-module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, plainObject, fixedPlayers, schedEntries, pairBusy, consumedSlots, descendants, winTarget, reachedWinner, feederBounds, isRealDate, findRoot, catCtx, tournamentText, cnameOf, branchOf, isSimBranch, cleanTree, git, defaultSlug };
+module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, plainObject, fixedPlayers, schedEntries, pairBusy, consumedSlots, descendants, winTarget, reachedWinner, feederBounds, isRealDate, findRoot, catCtx, tournamentText, cnameOf, branchOf, isSimBranch, cleanTree, git, defaultSlug, sameSet };
