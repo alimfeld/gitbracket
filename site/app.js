@@ -37,15 +37,17 @@ const u = (k, p) => t(lang, k, p);
 // A language is usable only when its bundle ships — anything else is en, so a
 // half-translated page never renders (t() and derive's dispatchers agree on
 // the same fallback).
+// The one language-acceptance rule: a two-letter code with a shipped bundle.
+const langOf = v => { const l = String(v || '').toLowerCase(); return /^[a-z]{2}$/.test(l) && I18N[l] ? l : null; };
 const resolveLang = (hash, search) => {
   const r = parseRoute(hash);
-  if (r && r.lang) return I18N[r.lang] ? r.lang : 'en';
-  const v = new URLSearchParams(search).get('lang');
-  if (/^[a-z]{2}$/i.test(v || '')) { const l = v.toLowerCase(); return I18N[l] ? l : 'en'; }
+  if (r && r.lang) return r.lang;
+  const l = langOf(new URLSearchParams(search).get('lang'));
+  if (l) return l;
   if (typeof navigator === 'undefined') return 'en';
-  for (const l of navigator.languages || [navigator.language]) {
-    const m = /^([a-z]{2})/i.exec(l || '');
-    if (m && I18N[m[1].toLowerCase()]) return m[1].toLowerCase();
+  for (const lang of navigator.languages || [navigator.language]) {
+    const m = langOf(/^([a-z]{2})/i.exec(lang || '')?.[1]);
+    if (m) return m;
   }
   return 'en';
 };
@@ -102,7 +104,7 @@ function parseRoute(hash) {
   const q = new URLSearchParams(query);
   for (const k of ['cat', 'player', 'venue', 'lang']) {
     const v = q.get(k);
-    if (k === 'lang') { if (/^[a-z]{2}$/i.test(v)) r.lang = v.toLowerCase(); continue; }
+    if (k === 'lang') { const l = langOf(v); if (l) r.lang = l; continue; }
     if (v && ID_RE.test(v)) r[k] = v;
   }
   return r;

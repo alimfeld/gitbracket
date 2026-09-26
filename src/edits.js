@@ -259,4 +259,4 @@ function execEdit(state, verb, cat, matchId, value) {
   return { sha };
 }
 
-module.exports = { parseGame, applyScore, applyResult, applyMove, applySide, writeEdit, commitMessage, editDetail, parseResult, execEdit };
+module.exports = { applyScore, applyResult, applyMove, applySide, writeEdit, commitMessage, editDetail, parseResult, execEdit };

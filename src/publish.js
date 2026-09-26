@@ -103,4 +103,4 @@ function ship(root) {
   });
 }
 
-module.exports = { main, ship, snapshotSite, deployPreflight, deployRole, productionCNAME };
+module.exports = { main, ship, snapshotSite, deployRole, productionCNAME };
