@@ -275,7 +275,7 @@ function buildCategory(teams, cat, poolSize) {
 // is a start/end window over the effective slot length (matchSlotMs),
 // matching the validator's overlap rule. Tuples are [cat, teamList, matches,
 // rounds].
-function scheduleMatches(categories, venues, tz, slotCfgOf, eventDate, blockStart) {
+function scheduleMatches(categories, venues, tz, slotCfgOf, courtsOf, eventDate, blockStart) {
   if (venues.length === 0) throw new Error('spec: venues must be a non-empty id -> name map');
   const offset = tzOffset(tz, eventDate);
   const startOf = (cat) => Date.parse(`${eventDate}T${blockStart[cat]}:00${offset}`);
@@ -287,7 +287,7 @@ function scheduleMatches(categories, venues, tz, slotCfgOf, eventDate, blockStar
   const poolLast = new Map(); // catIdx -> pool -> build index of its last match
   const st = categories.map(([cat, , matches], i) => {
     const catSlots = slotCfgOf.get(cat);
-    return { i, matches, idx: 0, total: matches.reduce((s, m) => s + matchSlotMs(m, { slotMinutes: catSlots }), 0), placed: 0 };
+    return { i, matches, idx: 0, total: matches.reduce((s, m) => s + matchSlotMs(m, { slotMinutes: catSlots }), 0), placed: 0, courts: courtsOf.get(cat) };
   }); // merge cursors, each carrying its court-minute workload
   categories.forEach(([, , matches, rounds], c) => {
     endOf.set(c, new Map());
@@ -327,12 +327,18 @@ function scheduleMatches(categories, venues, tz, slotCfgOf, eventDate, blockStar
   // The first free court at t outside `taken` — round members need distinct
   // courts. Placement matches aren't in roundOf (their feeders are aligned
   // rounds, not their own), so they never sync here; they land aligned
-  // through their floors, as before.
-  const courtAt = (t, slot, taken) => venues.find((v) => (!taken || !taken.has(v)) && !(courtUse.get(v) ?? []).some((w) => slotsOverlap(t, t + slot, w.start, w.end)));
-  const grpFit = (grp, t, catSlots) => {
+  // through their floors, as before. A category's `courts` preference is soft:
+  // try it in order, then any free court — the greedy's pick sequence never
+  // changes (some court is free at the same t), only which court it lands on.
+  const courtAt = (t, slot, taken, pref) => {
+    const free = (v) => (!taken || !taken.has(v)) && !(courtUse.get(v) ?? []).some((w) => slotsOverlap(t, t + slot, w.start, w.end));
+    for (const v of pref) if (free(v)) return v;
+    return venues.find(free);
+  };
+  const grpFit = (grp, t, catSlots, pref) => {
     const taken = new Set();
     for (const gm of grp) {
-      const v = courtAt(t, matchSlotMs(gm, { slotMinutes: catSlots }), taken);
+      const v = courtAt(t, matchSlotMs(gm, { slotMinutes: catSlots }), taken, pref);
       if (!v) return false;
       taken.add(v);
     }
@@ -342,20 +348,20 @@ function scheduleMatches(categories, venues, tz, slotCfgOf, eventDate, blockStar
   // waits rather than splits, so its start is never a partial round, and the
   // wait is bounded by a chain to preserve. A round with more members than
   // courts can never fit — Infinity, and its members place individually.
-  const syncWave = (grp, f, catSlots) => {
+  const syncWave = (grp, f, catSlots, pref) => {
     if (grp.length > venues.length) return Infinity;
     const step = matchSlotMs(grp[0], { slotMinutes: catSlots }); // all members share one slot length
     let maxEnd = 0;
     for (const ws of courtUse.values()) for (const w of ws) maxEnd = Math.max(maxEnd, w.end);
     for (let t = f; ; t += step) {
-      if (t >= maxEnd || grpFit(grp, t, catSlots)) return t; // past every occupancy: all courts free
+      if (t >= maxEnd || grpFit(grp, t, catSlots, pref)) return t; // past every occupancy: all courts free
     }
   };
   // A single match's earliest obtainable slot: a free court and, for known
   // players, no same-window double-book. Always terminates — courts empty out.
-  const firstFree = (t, slotMs, players) => {
+  const firstFree = (t, slotMs, players, pref) => {
     for (;;) {
-      const venue = courtAt(t, slotMs);
+      const venue = courtAt(t, slotMs, undefined, pref);
       const blocked = players && playerUse.some(
         (w) => slotsOverlap(t, t + slotMs, w.start, w.end) && [...players].some((p) => w.players.has(p)));
       if (venue && !blocked) return t;
@@ -375,10 +381,10 @@ function scheduleMatches(categories, venues, tz, slotCfgOf, eventDate, blockStar
       const grp = roundOf.get(s.i).get(head.id);
       let t, u = null;
       if (grp && grp.length > 1) {
-        t = syncWave(grp, f, catSlots);
+        t = syncWave(grp, f, catSlots, s.courts);
         if (t !== Infinity) u = grp;
       }
-      if (!u) t = firstFree(f, matchSlotMs(head, { slotMinutes: catSlots }), fixedPlayers(head));
+      if (!u) t = firstFree(f, matchSlotMs(head, { slotMinutes: catSlots }), fixedPlayers(head), s.courts);
       const adv = s.placed / s.total;
       if (t < pt || (t === pt && adv < padv)) { pick = s.i; pt = t; padv = adv; unit = u; }
     }
@@ -392,7 +398,7 @@ function scheduleMatches(categories, venues, tz, slotCfgOf, eventDate, blockStar
     // midnight-crossing slot by 24h.
     const place = (m, t, taken) => {
       const slotMs = matchSlotMs(m, { slotMinutes: catSlots });
-      const venue = courtAt(t, slotMs, taken);
+      const venue = courtAt(t, slotMs, taken, st[pick].courts);
       m.venue = venue;
       m.scheduled = `${dayKey(t, tz)}T${fmtTime(t, tz)}:00`;
       courtUse.set(venue, [...(courtUse.get(venue) ?? []), { start: t, end: t + slotMs }]);
@@ -506,6 +512,18 @@ function generate(spec) {
         throw new Error(`spec: category ${c.id}: placements must be a power of 2 >= 2, got ${JSON.stringify(c.placements)}`);
       }
     }
+    if (c.courts !== undefined) {
+      // A malformed preference would silently place nothing (unknown ids never
+      // match) — name it here.
+      if (!Array.isArray(c.courts) || c.courts.some((v) => typeof v !== 'string')) {
+        throw new Error(`spec: category ${c.id}: courts must be an array of venue ids, got ${JSON.stringify(c.courts)}`);
+      }
+      for (const v of c.courts) {
+        if (!(v in venues)) {
+          throw new Error(`spec: category ${c.id}: courts venue ${JSON.stringify(v)} is not in spec.venues`);
+        }
+      }
+    }
     // A missing slotMinutes is only a validator warning, yet it NaNs every slot
     // window and piles every match on the first court — fail fast instead.
     if (typeof c.slotMinutes !== 'number' || !Number.isInteger(c.slotMinutes) || c.slotMinutes < 1) {
@@ -544,7 +562,8 @@ function generate(spec) {
     results.push([cat, teamList, built.matches, built.rounds]);
   }
   const slotCfgOf = new Map(CATS.map((c) => [c.id, c.slotMinutes]));
-  scheduleMatches(results, VENUES.map((v) => v.id), timezone, slotCfgOf, eventDate, blockStart);
+  const courtsOf = new Map(categories.map((c) => [c.id, c.courts ?? []]));
+  scheduleMatches(results, VENUES.map((v) => v.id), timezone, slotCfgOf, courtsOf, eventDate, blockStart);
   assertSchedule(results);
 
   const out = { name, location, timezone, venues: VENUES, categories: CATS, players: PLAYERS, matches: {} };

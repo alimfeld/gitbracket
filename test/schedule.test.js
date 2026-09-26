@@ -102,6 +102,31 @@ test('spec guards reject bad input fast', () => {
   assert.throws(() => generate({ ...MINI, location: '' }), /location must be a non-empty string/);
   assert.throws(() => generate({ ...MINI, timezone: undefined }), /timezone required/);
   assert.throws(() => generate({ ...MINI, timezone: 'Mars/Olympus' }), /not a valid IANA timezone/);
+  assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], courts: 'court-1' }] }), /courts must be an array/);
+  assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], courts: ['court-9'] }] }), /not in spec.venues/);
+});
+
+test('court preference keeps a category on its chosen courts when it fits — soft, never a constraint', () => {
+  // md: 4 teams, one pool, rounds of 2 matches (a 2-court wave) — its
+  // preference fits exactly; xd plays once, on its own pair. No overlap here:
+  // the assertion is that preference, not greedy order, picked the courts.
+  const spec = {
+    ...MINI,
+    venues: { 'court-1': 'Court 1', 'court-2': 'Court 2', 'court-3': 'Court 3', 'court-4': 'Court 4' },
+    categories: [
+      { ...MINI.categories[0], courts: ['court-1', 'court-2'] },
+      { ...MINI.categories[1], courts: ['court-3', 'court-4'] },
+    ],
+    teams: {
+      md: [['ada', 'ben'], ['cid', 'dan'], ['eve', 'fin'], ['gus', 'huw']],
+      xd: MINI.teams.xd,
+    },
+  };
+  const tourney = generate(spec);
+  const { errs } = validateRepo(repoOf(tourney));
+  assert.deepEqual(errs, []);
+  assert.ok(tourney.matches.md.every((m) => m.venue === 'court-1' || m.venue === 'court-2'), 'md stays on courts 1-2');
+  assert.ok(tourney.matches.xd.every((m) => m.venue === 'court-3' || m.venue === 'court-4'), 'xd stays on courts 3-4');
 });
 
 test('knockout: false skips the knockout phase for a multi-pool category — the placements flag is silently irrelevant', () => {

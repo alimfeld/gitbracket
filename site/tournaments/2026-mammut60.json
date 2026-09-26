@@ -189,7 +189,7 @@
             ]
           }
         ],
-        "venue": "court-1",
+        "venue": "court-3",
         "scheduled": "2026-10-03T09:00:00"
       },
       {
@@ -211,7 +211,7 @@
             ]
           }
         ],
-        "venue": "court-3",
+        "venue": "court-4",
         "scheduled": "2026-10-03T09:00:00"
       },
       {
@@ -255,7 +255,7 @@
             ]
           }
         ],
-        "venue": "court-2",
+        "venue": "court-3",
         "scheduled": "2026-10-03T09:30:00"
       },
       {
@@ -321,7 +321,7 @@
             ]
           }
         ],
-        "venue": "court-2",
+        "venue": "court-3",
         "scheduled": "2026-10-03T10:00:00"
       },
       {
@@ -387,7 +387,7 @@
             ]
           }
         ],
-        "venue": "court-2",
+        "venue": "court-3",
         "scheduled": "2026-10-03T10:30:00"
       },
       {
@@ -448,7 +448,7 @@
             "rank": 4
           }
         ],
-        "venue": "court-1",
+        "venue": "court-3",
         "scheduled": "2026-10-03T11:30:00"
       },
       {
@@ -465,7 +465,7 @@
             "rank": 3
           }
         ],
-        "venue": "court-2",
+        "venue": "court-4",
         "scheduled": "2026-10-03T11:30:00"
       },
       {
@@ -482,7 +482,7 @@
             "rank": 4
           }
         ],
-        "venue": "court-3",
+        "venue": "court-5",
         "scheduled": "2026-10-03T11:30:00"
       },
       {
@@ -499,7 +499,7 @@
             "rank": 3
           }
         ],
-        "venue": "court-4",
+        "venue": "court-2",
         "scheduled": "2026-10-03T11:30:00"
       },
       {
@@ -552,7 +552,7 @@
         ],
         "bestOf": 3,
         "slotMinutes": 60,
-        "venue": "court-2",
+        "venue": "court-3",
         "scheduled": "2026-10-03T12:30:00"
       },
       {
@@ -595,7 +595,7 @@
             ]
           }
         ],
-        "venue": "court-2",
+        "venue": "court-1",
         "scheduled": "2026-10-03T09:00:00"
       },
       {
@@ -617,7 +617,7 @@
             ]
           }
         ],
-        "venue": "court-4",
+        "venue": "court-2",
         "scheduled": "2026-10-03T09:00:00"
       },
       {
@@ -661,7 +661,7 @@
             ]
           }
         ],
-        "venue": "court-3",
+        "venue": "court-2",
         "scheduled": "2026-10-03T09:30:00"
       },
       {
@@ -705,7 +705,7 @@
             ]
           }
         ],
-        "venue": "court-3",
+        "venue": "court-2",
         "scheduled": "2026-10-03T10:00:00"
       },
       {
@@ -749,7 +749,7 @@
             ]
           }
         ],
-        "venue": "court-3",
+        "venue": "court-2",
         "scheduled": "2026-10-03T10:30:00"
       },
       {
@@ -810,7 +810,7 @@
             "rank": 5
           }
         ],
-        "venue": "court-5",
+        "venue": "court-1",
         "scheduled": "2026-10-03T11:30:00"
       },
       {
@@ -882,7 +882,7 @@
         ],
         "bestOf": 3,
         "slotMinutes": 60,
-        "venue": "court-3",
+        "venue": "court-2",
         "scheduled": "2026-10-03T12:30:00"
       }
     ],
@@ -906,7 +906,7 @@
             ]
           }
         ],
-        "venue": "court-1",
+        "venue": "court-5",
         "scheduled": "2026-10-03T14:00:00"
       },
       {
@@ -928,7 +928,7 @@
             ]
           }
         ],
-        "venue": "court-2",
+        "venue": "court-4",
         "scheduled": "2026-10-03T14:00:00"
       },
       {
@@ -972,7 +972,7 @@
             ]
           }
         ],
-        "venue": "court-4",
+        "venue": "court-2",
         "scheduled": "2026-10-03T14:00:00"
       },
       {
@@ -994,7 +994,7 @@
             ]
           }
         ],
-        "venue": "court-1",
+        "venue": "court-5",
         "scheduled": "2026-10-03T14:30:00"
       },
       {
@@ -1016,7 +1016,7 @@
             ]
           }
         ],
-        "venue": "court-2",
+        "venue": "court-4",
         "scheduled": "2026-10-03T14:30:00"
       },
       {
@@ -1060,7 +1060,7 @@
             ]
           }
         ],
-        "venue": "court-4",
+        "venue": "court-2",
         "scheduled": "2026-10-03T14:30:00"
       },
       {
@@ -1082,7 +1082,7 @@
             ]
           }
         ],
-        "venue": "court-1",
+        "venue": "court-5",
         "scheduled": "2026-10-03T15:00:00"
       },
       {
@@ -1104,7 +1104,7 @@
             ]
           }
         ],
-        "venue": "court-2",
+        "venue": "court-4",
         "scheduled": "2026-10-03T15:00:00"
       },
       {
@@ -1148,7 +1148,7 @@
             ]
           }
         ],
-        "venue": "court-4",
+        "venue": "court-2",
         "scheduled": "2026-10-03T15:00:00"
       },
       {
@@ -1170,7 +1170,7 @@
             ]
           }
         ],
-        "venue": "court-1",
+        "venue": "court-5",
         "scheduled": "2026-10-03T15:30:00"
       },
       {
@@ -1192,7 +1192,7 @@
             ]
           }
         ],
-        "venue": "court-2",
+        "venue": "court-4",
         "scheduled": "2026-10-03T15:30:00"
       },
       {
@@ -1236,7 +1236,7 @@
             ]
           }
         ],
-        "venue": "court-4",
+        "venue": "court-2",
         "scheduled": "2026-10-03T15:30:00"
       },
       {
@@ -1258,7 +1258,7 @@
             ]
           }
         ],
-        "venue": "court-1",
+        "venue": "court-5",
         "scheduled": "2026-10-03T16:00:00"
       },
       {
@@ -1280,7 +1280,7 @@
             ]
           }
         ],
-        "venue": "court-2",
+        "venue": "court-4",
         "scheduled": "2026-10-03T16:00:00"
       },
       {
@@ -1324,7 +1324,7 @@
             ]
           }
         ],
-        "venue": "court-4",
+        "venue": "court-2",
         "scheduled": "2026-10-03T16:00:00"
       },
       {
@@ -1341,7 +1341,7 @@
             "rank": 5
           }
         ],
-        "venue": "court-1",
+        "venue": "court-5",
         "scheduled": "2026-10-03T16:30:00"
       },
       {
@@ -1358,7 +1358,7 @@
             "rank": 5
           }
         ],
-        "venue": "court-2",
+        "venue": "court-4",
         "scheduled": "2026-10-03T16:30:00"
       },
       {
@@ -1375,7 +1375,7 @@
             "result": "winner"
           }
         ],
-        "venue": "court-1",
+        "venue": "court-5",
         "scheduled": "2026-10-03T17:00:00"
       },
       {
@@ -1392,7 +1392,7 @@
             "rank": 3
           }
         ],
-        "venue": "court-2",
+        "venue": "court-4",
         "scheduled": "2026-10-03T17:00:00"
       },
       {
@@ -1426,7 +1426,7 @@
             "rank": 3
           }
         ],
-        "venue": "court-4",
+        "venue": "court-2",
         "scheduled": "2026-10-03T17:00:00"
       },
       {
@@ -1443,7 +1443,7 @@
             "result": "winner"
           }
         ],
-        "venue": "court-1",
+        "venue": "court-5",
         "scheduled": "2026-10-03T17:30:00"
       },
       {
@@ -1460,7 +1460,7 @@
             "result": "winner"
           }
         ],
-        "venue": "court-2",
+        "venue": "court-4",
         "scheduled": "2026-10-03T17:30:00"
       },
       {
@@ -1479,7 +1479,7 @@
         ],
         "bestOf": 3,
         "slotMinutes": 60,
-        "venue": "court-1",
+        "venue": "court-5",
         "scheduled": "2026-10-03T18:00:00"
       },
       {
@@ -1498,7 +1498,7 @@
         ],
         "bestOf": 3,
         "slotMinutes": 60,
-        "venue": "court-2",
+        "venue": "court-4",
         "scheduled": "2026-10-03T18:00:00"
       }
     ]

@@ -155,7 +155,7 @@ spec — the single source of the schedule:
   "players": { "ada": "Ada", "ben": "Ben" },
   "categories": [
     { "id": "md", "name": "Men's Doubles", "bestOf": 1, "slotMinutes": 30,
-      "knockout": true, "placements": 2,
+      "knockout": true, "placements": 2, "courts": ["court-1"],
       "final": { "bestOf": 3, "slotMinutes": 60 } }
   ],
   "teams": { "md": [["ada", "ben"]] } }
@@ -173,6 +173,10 @@ spec — the single source of the schedule:
   `knockout: false` skips the knockout stage; `placements` (a power of 2)
   sizes the classification bracket; `final` overrides the final and bronze
   matches.
+- `courts` (optional) lists preferred venue ids per category, in order of
+  preference: a match takes the first free preferred court, then any free
+  court. It keeps a category clustered for spectators but is soft — spill is
+  always legal, so the schedule's order is unchanged by it.
 - Knockout draws use the standard S-curve bracket: round 1 pairs best vs
   worst and splits the top seeds across halves, so two pool winners only
   meet late (2 pools: the final; k pools: no earlier than the semis).

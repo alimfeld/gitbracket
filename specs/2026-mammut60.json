@@ -55,10 +55,12 @@
         "bestOf": 3,
         "slotMinutes": 60
       },
-      "knockout": true
+      "knockout": true,
+      "courts": ["court-3", "court-4", "court-5", "court-2"]
     },
     {
       "id": "wd",
+      "courts": ["court-1", "court-2"],
       "name": "Women's Doubles",
       "bestOf": 1,
       "slotMinutes": 30,
@@ -77,7 +79,8 @@
         "bestOf": 3,
         "slotMinutes": 60
       },
-      "knockout": true
+      "knockout": true,
+      "courts": ["court-5", "court-4", "court-3", "court-2"]
     }
   ],
   "teams": {
