@@ -332,6 +332,26 @@ test('admin legalSlots: a non-positive gcd step clamps to the default — it can
   assert(admin.legalSlots(tjson, 'md40', '9', '2025-07-14', -45)['court-1'].length > 0, 'negative gcd clamps too');
 });
 
+test('admin legalSlots: the scan rides the schedule\'s lattice, not midnight — a 25-minute day keeps its 09:00 start and whole-slot moves', () => {
+  // The generator anchors at the category block start (09:00), not a multiple
+  // of a 25-minute slot, so the lattice is 15 + 25k: a from-zero 25k scan offers
+  // only :10/:35 starts — never the match's own, and never a whole slot away.
+  const tjson = {
+    name: 'T', location: 'L', timezone: 'UTC', dates: ['2026-10-03'],
+    venues: [{ id: 'c1', name: 'C1' }],
+    categories: [{ id: 'md', name: 'MD', bestOf: { groups: 1, knockout: 1 }, slotMinutes: { groups: 25, knockout: 25 } }],
+    players: [{ id: 'p1', name: 'One' }, { id: 'p2', name: 'Two' }, { id: 'p3', name: 'Three' }, { id: 'p4', name: 'Four' }],
+    matches: { md: [
+      { id: 1, pool: 'A', scheduled: '2026-10-03T09:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p1', 'p2'] }, { kind: 'players', ids: ['p3', 'p4'] }] },
+      { id: 2, pool: 'A', scheduled: '2026-10-03T09:25:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p1', 'p3'] }, { kind: 'players', ids: ['p2', 'p4'] }] },
+    ] },
+  };
+  const t = admin.legalSlots(tjson, 'md', '1', '2026-10-03', 25)['c1'];
+  assert(t.includes(540), 'the match\'s own 09:00 start is offered — a drag can return where it was');
+  assert(t.includes(515) && t.includes(590), 'the one-slot neighbours 08:35/09:50 are reachable');
+  assert(t.every(wm => wm % 25 === 15), 'every tick rides the 09:00-anchored lattice, never its 25k ghost');
+});
+
 test('admin pairBusy: the validators\' conflict kinds served to the preview — the same code the gate runs', () => {
   const { schedEntries, pairBusy } = require('../src/tools.js');
   const db = schedEntries(loadRepo(FIX('bad-player-doublebook')).tournaments.get('bad-player-doublebook').tjson).entries;

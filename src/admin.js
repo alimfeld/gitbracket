@@ -106,6 +106,10 @@ function redo(state) {
   return { sha: top.sha.slice(0, 7), msg: top.msg };
 }
 
+// wall "HH:MM" of a stored schedule string — the scan works in wall minutes,
+// never offsets (the tz only anchors instants)
+const wallMinOf = s => { const x = /T(\d{2}):(\d{2})/.exec(String(s || '')); return x ? +x[1] * 60 + +x[2] : null; };
+
 // The day's legal starts for one match, as wall-clock minutes per venue — the
 // grid ticks where the move passes the gate's own rules (schedEntries +
 // pairBusy, feederBounds), so the preview and the write gate can't disagree.
@@ -140,9 +144,13 @@ function legalSlots(tjson, cat, matchId, day, gcd) {
     }
   }
   const out = {};
+  // The generator anchors at the category block start, which need not divide
+  // the slot length — scan the schedule's lattice, not midnight's.
+  const wms = ctx.matches.map(x => wallMinOf(x && x.scheduled)).filter(w => w !== null);
+  const offset = wms.length ? Math.min(...wms) % step : 0;
   for (const venue of (tjson.venues || []).map(v => v.id)) {
     const ticks = [];
-    for (let wm = 0; wm < 1440; wm += step) {
+    for (let wm = offset; wm < 1440; wm += step) {
       if (!Number.isFinite(slotMin) || wm + slotMin > 1440) continue;
       const iso = `${day}T${String(Math.floor(wm / 60)).padStart(2, '0')}:${String(wm % 60).padStart(2, '0')}:00`;
       const t = schedTime({ scheduled: iso }, tz);
