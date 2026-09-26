@@ -8,7 +8,8 @@ const enOrd = n => n + ({ one: 'st', two: 'nd', few: 'rd' }[enOrdRules.select(n)
 // One translation bundle for the public page — every user-facing string ships
 // through these maps (completeness is pinned by a test). Repo data (names,
 // courts, pools, players) is never translated — proper nouns stay as authored;
-// TBD and the W/L/GD/PD table headers are international shorthand and stay too.
+// TBD, void, W/O, and the W/L/GD/PD table headers are international scoring
+// shorthand and stay too.
 // fmt/refs/art carry the per-locale word rules (ordinal styles, declined chip
 // refs, prepositional articles) as data — derive.js only dispatches them, so a
 // third language is a bundle edit, never a code branch.
