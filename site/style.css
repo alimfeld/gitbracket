@@ -210,10 +210,8 @@ a.tcard:focus-visible {
   color: var(--on-accent);
 }
 
-/* the home screen has no board: a phone can't hold the court columns, and
-   hiding is safe because the index is never rendered on the kiosk — the one
-   place width queries could break (browser zoom simulates a narrow viewport) */
-@media (max-width: 40em) {
+/* the court columns only fit a big screen — the index hides its link below it */
+@media (max-width: 1920px) {
   .board-link {
     display: none;
   }
