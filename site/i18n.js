@@ -16,6 +16,7 @@ const I18N = {
   en: {
     // chrome (app.js)
     views: 'Views',
+    categories: 'Categories',
     tournament: 'Tournament',
     schedule: 'Schedule',
     tournaments: 'Tournaments',
@@ -100,6 +101,7 @@ const I18N = {
   de: {
     // chrome (app.js) — informal you, like the venue board itself
     views: 'Ansichten',
+    categories: 'Kategorien',
     tournament: 'Turnier',
     schedule: 'Spielplan',
     tournaments: 'Turniere',
@@ -117,7 +119,7 @@ const I18N = {
     'ko-round': 'K.o.-Phase: <strong>{round}</strong>',
     finished: 'Beendet',
     champion: 'Sieger',
-    'runner-up': 'Finalist',
+    'runner-up': '2. Platz',
     rank3: '3. Platz',
     rank4: '4. Platz',
     next: 'Als Nächstes: {body}',
