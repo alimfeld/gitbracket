@@ -440,7 +440,7 @@ function renderVenue(route, data, now) {
     const s = wallClockMin(r.t, r.ctx.tz);
     const sl = matchSlotMs(r.m, r.ctx) / 60000;
     return { r, s, e: Number.isFinite(sl) ? s + sl : null };
-  });
+  }).filter(w => w.s !== null); // a null wall minute would NaN the day's frame (Math.min coerces null to 0) — keep it off the layout
   const byVenue = new Map(cols.map(id => [id, []]));
   for (const w of win) {
     const list = byVenue.get(w.r.m.venue);

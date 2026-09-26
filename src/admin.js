@@ -113,8 +113,9 @@ function redo(state) {
 function legalSlots(tjson, cat, matchId, day, gcd) {
   const tz = tjson.timezone || 'UTC';
   // The query param is untrusted: a non-positive step would never advance the
-  // scan below. Clamp to the page's default grid.
-  const step = Number.isInteger(gcd) && gcd > 0 ? gcd : 15;
+  // scan below, and a pathological gcd would widen it toward 1440 ticks per
+  // venue. Floor the step — every real slot length lands on ≥5-minute marks.
+  const step = Number.isInteger(gcd) && gcd > 0 ? Math.max(gcd, 5) : 15;
   const { entries } = schedEntries(tjson);
   const others = entries.filter(e => !(e.cat === cat && e.m.id === Number(matchId)));
   const ctx = catCtx(tjson, cat);

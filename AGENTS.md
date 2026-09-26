@@ -49,7 +49,8 @@ implement them; treat them as rules, not style.
   small stylesheet, no framework, no presentational classes from JS. State
   rides `data-*` / `aria-current`; body classes layer per-page layout (e.g.
   `venue` on the kiosk); layout is flex/grid + `em`, so browser zoom scales
-  the kiosk — no media queries. New markup reuses existing elements and
+  the kiosk — no media queries (the one exception: a `max-width` cut hides the
+  venue-board chip on small screens). New markup reuses existing elements and
   rules; a new class is a change to be justified.
 
 ### Process & Deploy

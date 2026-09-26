@@ -403,6 +403,13 @@ function rankRange(ranks) {
 const matchEdge = s => s && s.kind === 'match';
 
 
+// Any match's possible-stage label: a placement match's band (via
+// placementLabel), else the round's name. Stage cards and their chips read
+// it — matchLabel keeps the abbr+ordinal form the bracket cards need.
+function stageLabel(m, ctx) {
+  return placementLabel(m, ctx) ?? roundName(koColumn(m, ctx));
+}
+
 // Possible stages: one entry per knockout round a player could still reach —
 // certain bits (label, uniform time/court) plus a chip naming the ranks or
 // outcomes that get in. A confirmed knockout seat follows only the branches
@@ -471,7 +478,7 @@ function possibleStages(ctx, pid) {
     const col = pr === null ? koColumn(m, ctx) : null;
     // The label rides its structural row (lo/hi/win) so the merge logic below
     // classifies by shape, never by word position in a localized string.
-    const label = pr === null ? roundName(col) : pr.win ? t(LOCALE, 'pl-place', { n: cardNum(pr.lo) }) : t(LOCALE, 'pl-semi', { a: ordNum(pr.lo), b: ordNum(pr.hi) });
+    const label = stageLabel(m, ctx);
     let stage = stages.get(label);
     if (!stage) { stage = { label, col, pl: pr, ranks: new Set(), edges: [], times: [], courts: [], ids: [] }; stages.set(label, stage); }
     stage.ids.push(m);
@@ -510,9 +517,9 @@ function possibleStages(ctx, pid) {
         const parent = ctx.byId.get(e.parent);
         if (!parent || !Array.isArray(parent.sides)) continue;
         const pr = plRange(parent, ctx);
-        const col = koColumn(parent, ctx);
+        const col = pr === null ? koColumn(parent, ctx) : null;
         const key = pr === null ? roundKeyOf(col) : pr.win ? 'pl-place' : 'pl-semi';
-        const label = pr === null ? roundName(col) : pr.win ? t(LOCALE, 'pl-place', { n: cardNum(pr.lo) }) : t(LOCALE, 'pl-semi', { a: ordNum(pr.lo), b: ordNum(pr.hi) });
+        const label = stageLabel(parent, ctx);
         parts.add(stage.merged ? t(LOCALE, 'chip-via', { ref: refWord(key, 'acc', label) }) : t(LOCALE, 'chip-as', { kind: t(LOCALE, e.kind === 'winner' ? 'kind-winner' : 'kind-loser'), ref: refWord(key, 'dat', label) }));
       }
       for (const p of [...parts].sort()) chips.push(p);
