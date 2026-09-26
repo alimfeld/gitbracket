@@ -7,6 +7,11 @@
 
 const $ = id => document.getElementById(id);
 
+// A card's measured height (~49px: two side rows + meta). The day's scale
+// floors at one card per shortest slot, so the shortest card never overflows
+// into the next. ponytail: re-tune with the card's font/padding.
+const CARD_PX = 50;
+
 // ---- tiny state ----
 const S = {
   slug: null, day: null, tjson: null, tz: 'UTC', gcd: 15,
@@ -108,13 +113,14 @@ async function setSlug(slug) {
 // keep slug/day/selection, just re-fetch the data after an edit or undo
 async function reload() { await setSlug(S.slug); }
 
-// Fill the board's height when the day fits; floor the scale so a scored
-// card's three rows never clip.
-function fitScale() {
+// Fill the board's height when the day fits; floor the scale so the day's
+// shortest slot is at least one card tall — the shortest card can never
+// overflow into its next slot.
+function fitScale(sShort) {
   const sc = $('board');
   const avail = sc ? sc.clientHeight : 0;
   const total = S.dayEnd - S.dayStart || 1;
-  S.pxPerMin = Math.max(1.6, avail / total);
+  S.pxPerMin = Math.max(1.6, avail / total, sShort ? CARD_PX / sShort : 0);
 }
 
 // ---- the grid ----
@@ -127,13 +133,17 @@ function renderGrid() {
     if (t !== null && dayKey(t, S.tz) === S.day) dayMatches.push({ c, m, ctx: c });
   }
   let mins = dayMatches.map(({ c, m }) => dayWindow(m, c)).filter(Boolean).flat();
+  const slots = dayMatches.map(({ c, m }) => slotMinOf(m, c)).filter(Number.isFinite);
+  const sShort = slots.length ? Math.min(...slots) : 0;
   let dayStart = mins.length ? Math.min(...mins) : 8 * 60;
   let dayEnd = mins.length ? Math.max(...mins) : 20 * 60;
-  dayStart = Math.floor((dayStart - 15) / S.gcd) * S.gcd; // pad a couple ticks
+  // one slot of headroom above the first card — it clears the sticky column
+  // heading and leaves the preceding slot visible and droppable
+  dayStart = Math.floor((dayStart - (sShort || 15)) / S.gcd) * S.gcd;
   dayEnd = Math.ceil((dayEnd + 15) / S.gcd) * S.gcd;
   if (dayStart < 0) dayStart = 0;
   S.dayStart = dayStart; S.dayEnd = dayEnd;
-  fitScale(); // scale to the board's height so short days fill it, long days scroll
+  fitScale(sShort); // board height fills short days; the shortest slot floors the scale so long days scroll without overlap
   const h = (dayEnd - dayStart) * S.pxPerMin;
   grid.style.height = h + 'px';
 
