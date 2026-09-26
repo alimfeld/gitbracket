@@ -163,6 +163,12 @@ test('editor execEdit: non-object values are refused by name, never dereferenced
       const r = editor.execEdit(state, verb, 'md40', '2', value);
       assert(r.error && /value object/.test(r.error), `${verb} with ${JSON.stringify(value)} names the required shape, got: ${r.error}`);
     }
+    // a shaped score whose games isn't an array is the same crash one level in —
+    // reachedWinner iterates games, so applyFor must refuse it too
+    for (const games of [5, null, '21-19', {}]) {
+      const r = editor.execEdit(state, 'result', 'md40', '2', { shape: 'score', games });
+      assert(r.error && /games array/.test(r.error), `score with games ${JSON.stringify(games)} names the required shape, got: ${r.error}`);
+    }
     assert(fs.readFileSync(file, 'utf8') === before, 'no write on any refused value');
     // a shaped object still flows through (and the unknown-verb refusal still names the verb)
     assert(/unknown edit verb/.test(editor.execEdit(state, 'tme', 'md40', '2', {}).error), 'typo verb still named');

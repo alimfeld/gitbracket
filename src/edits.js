@@ -184,8 +184,13 @@ function applyFor(verb, matchId, value) {
       return () => `${verb} edits carry a value object — got ${JSON.stringify(value)}`;
     }
   }
+  // result.score's nested games is iterated by reachedWinner — a non-array
+  // would throw out of the handler just like a non-object value; same refusal.
   if (verb === 'result') return (ms, ctx) => {
-    if (value.shape === 'score') return applyScore(ms, matchId, value.games, ctx);
+    if (value.shape === 'score') {
+      if (!Array.isArray(value.games)) return `score edits carry a games array — got ${JSON.stringify(value.games)}`;
+      return applyScore(ms, matchId, value.games, ctx);
+    }
     if (value.shape === 'walkover') return applyResult(ms, matchId, 'walkover', value.winner);
     if (value.shape === 'void') return applyResult(ms, matchId, 'void');
     if (value.shape === 'clear') return applyClear(ms, matchId);
