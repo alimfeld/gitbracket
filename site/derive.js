@@ -38,7 +38,8 @@ const refWord = (key, c, label) => {
   return s.replace('{label}', label); // templates carry exactly one {label}
 };
 const artWord = (key, c) => ((bundle(LOCALE).art || {})[key] || {})[c] || ''; // 'Im' / 'In der' per round key
-const roundKeyOf = d => d === 0 ? 'round-final' : d === 1 ? 'round-semi' : d === 2 ? 'round-quart' : d === 3 ? 'round-16' : 'round-of'; // depth from the final, mirroring roundName
+const ROUND_KEYS = ['round-final', 'round-semi', 'round-quart', 'round-16']; // keyed by depth from the final, mirroring roundName
+const roundKeyOf = d => ROUND_KEYS[d] ?? 'round-of';
 
 // Shared side identity: sorted '|'-joined ids.
 const pairSig = ids => [...ids].sort().join('|');
@@ -387,11 +388,7 @@ function poolFacts(ctx) {
 // confirmed seat (handled elsewhere); an unslotted rank is eliminated.
 function playerRanks(ctx, pool, pid, roster) {
   const std = poolStandings(ctx, pool);
-  if (!std) {
-    const out = [];
-    for (let r = 1; r <= roster; r++) out.push(r);
-    return out;
-  }
+  if (!std) return Array.from({ length: roster }, (_, i) => i + 1);
   const i = std.findIndex(x => x.ids.has(pid));
   if (i < 0 || !isDeadTie(std, i + 1)) return [];
   const out = [];

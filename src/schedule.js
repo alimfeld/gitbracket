@@ -34,7 +34,10 @@ function roundRobin(teams) {
 function splitPools(teams, poolSize) {
   const k = Math.ceil(teams.length / poolSize);
   const pools = Array.from({ length: k }, () => []);
-  teams.forEach((t, i) => pools[Math.floor(i / k) % 2 ? k - 1 - (i % k) : i % k].push(t));
+  teams.forEach((team, i) => {
+    const row = Math.floor(i / k), col = i % k;
+    pools[row % 2 ? k - 1 - col : col].push(team); // alternate direction each row
+  });
   return pools;
 }
 

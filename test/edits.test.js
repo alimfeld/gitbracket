@@ -5,7 +5,6 @@
 // funnel the admin daemon drives (execEdit).
 
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');

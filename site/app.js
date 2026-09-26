@@ -45,8 +45,8 @@ const resolveLang = (hash, search) => {
   const l = langOf(new URLSearchParams(search).get('lang'));
   if (l) return l;
   if (typeof navigator === 'undefined') return 'en';
-  for (const lang of navigator.languages || [navigator.language]) {
-    const m = langOf(/^([a-z]{2})/i.exec(lang || '')?.[1]);
+  for (const tag of navigator.languages || [navigator.language]) {
+    const m = langOf(/^([a-z]{2})/i.exec(tag || '')?.[1]);
     if (m) return m;
   }
   return 'en';
@@ -204,10 +204,11 @@ function renderTournament(route, data) {
   const tz = data.tjson.timezone || 'UTC';
   const ctxs = data.cats;
   const show = ctxs.find(c => c.id === route.cat) || ctxs[0]; // an unknown cat falls back to the first
-  const multi = multiDay(ctxs);
+  const days = schedDays(ctxs.flatMap(c => c.matches), tz); // one scan: the span and the multi-day cue read the same set
+  const multi = days.length > 1;
   const parts = [segmentBar(route), `<header><h1>${esc(data.t.name)}<a href="#">${u('tournaments')}</a></h1>`];
   // the heading states the span and the location once — single-day cards never repeat the date
-  const range = fmtRange(schedDays(ctxs.flatMap(c => c.matches), tz));
+  const range = fmtRange(days);
   parts.push(`<p>${[range, esc(data.tjson.location)].filter(Boolean).join(' · ')}</p>${updatedLine(data, tz)}</header>`);
   parts.push(`<nav class="cats" aria-label="${u('categories')}">${catNav(data.t.slug, ctxs, route)}</nav>`);
   // a tournament with no categories (hand-edited or staged) renders the shell — "missing data renders empty", never a throw
