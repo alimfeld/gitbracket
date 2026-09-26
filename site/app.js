@@ -720,7 +720,7 @@ function boot() {
       }
       return `${d.t.name} — ${u('schedule')}`;
     }
-    return d.t.name;
+    return `${d.t.name} — ${u('venue-board')}`; // the venues view names itself — the kiosk tab distinguishes boards from schedules
   };
   let route = null;    // current fragment route — the poll reads it each tick
   let data = null;     // last good snapshot — a failed poll keeps the board up
