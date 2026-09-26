@@ -87,7 +87,7 @@ function teamSize(ctx) {
   }
   return 1;
 }
-function pools(ctx) { return [...new Set(ctx.matches.map(m => m && m.pool).filter(Boolean))]; }
+function pools(ctx) { return [...new Set(ctx.matches.filter(m => m && m.pool).map(m => m.pool))]; }
 
 async function setSlug(slug) {
   S.slug = slug;

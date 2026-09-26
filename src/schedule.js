@@ -7,7 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 const { matchSlotMs, pairSig, dayKey, tzOffset, schedTime, fmtTime, ID_RE, schedDays, LOCALE } = require('../site/derive.js');
-const { writeTournament, writeTournamentIndex, slotsOverlap, fixedPlayers, isRealDate } = require('./tools.js');
+const { writeTournament, writeTournamentIndex, slotsOverlap, plainObject, fixedPlayers, isRealDate } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 
 // Round-robin pairings, circle method: array of rounds, each a list of pairs.
@@ -476,7 +476,7 @@ function generate(spec) {
   // name/location/timezone and bestOf are checked by the validator gate at the
   // end — one source for those messages.
   const objMap = (v, field) => {
-    if (typeof v !== 'object' || v === null || Array.isArray(v)) throw new Error(`spec: ${field} must be an id -> value map, got ${JSON.stringify(v)}`);
+    if (!plainObject(v)) throw new Error(`spec: ${field} must be an id -> value map, got ${JSON.stringify(v)}`);
   };
   objMap(venues, 'venues');
   objMap(players, 'players');
@@ -526,7 +526,7 @@ function generate(spec) {
     }
     // A missing slotMinutes is only a validator warning, yet it NaNs every slot
     // window and piles every match on the first court — fail fast instead.
-    if (typeof c.slotMinutes !== 'number' || !Number.isInteger(c.slotMinutes) || c.slotMinutes < 1) {
+    if (!Number.isInteger(c.slotMinutes) || c.slotMinutes < 1) {
       throw new Error(`spec: category ${c.id}: slotMinutes must be a positive integer, got ${JSON.stringify(c.slotMinutes)}`);
     }
   }

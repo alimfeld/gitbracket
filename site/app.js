@@ -111,7 +111,8 @@ function parseRoute(hash) {
 // Fragment URLs with params in fixed order. cat and player ride along between
 // tournament and schedule so switching keeps the focus and Schedule restores
 // the pick; the kiosk carries only venue.
-const LEGAL = { tournament: ['cat', 'player', 'lang'], schedule: ['cat', 'player', 'lang'], venues: ['venue', 'lang'] };
+const CARRY = ['cat', 'player', 'lang']; // the tournament and schedule views carry the pick between them
+const LEGAL = { tournament: CARRY, schedule: CARRY, venues: ['venue', 'lang'] };
 const href = (slug, view, p = {}) => {
   const q = LEGAL[view].filter(k => p[k]).map(k => `${k}=${p[k]}`).join('&');
   return `#${slug}${view === 'tournament' ? '' : '/' + view}${q ? '?' + q : ''}`;
@@ -177,13 +178,14 @@ function renderIndex(route, data) {
 
 // One category per page; the switcher is the navigation — the first category
 // stays canonical at the bare slug, the rest select via ?cat=.
-const catNav = (slug, ctxs, route) => ctxs.map((c, i) => {
-  const p = { ...route, cat: i === 0 ? undefined : c.id };
+const catNav = (slug, ctxs, route) => {
   // an unknown cat renders the first category — the tabs must agree with the page
-  const activeId = route.cat && ctxs.some(x => x.id === route.cat) ? route.cat : ctxs[0].id;
-  const active = activeId === c.id;
-  return `<a href="${esc(href(slug, 'tournament', p))}"${active ? ' aria-current="true"' : ''}>${esc(c.name || c.id)}</a>`;
-}).join('');
+  const activeId = route.cat && ctxs.some(x => x.id === route.cat) ? route.cat : ctxs[0]?.id;
+  return ctxs.map((c, i) => {
+    const p = { ...route, cat: i === 0 ? undefined : c.id };
+    return `<a href="${esc(href(slug, 'tournament', p))}"${activeId === c.id ? ' aria-current="true"' : ''}>${esc(c.name || c.id)}</a>`;
+  }).join('');
+};
 
 // The tournament views' change cue: a poll that actually changed the file
 // flashes "Updated HH:MM" for one cycle — proof the page refreshes itself,
@@ -419,7 +421,7 @@ function renderVenue(route, data, now) {
   const open = shown.filter(r => dayKey(r.t, r.ctx.tz) === shownDay); // the full day stays on the board; the scroll follows the current slot
   // the day's columns: declared courts with matches on it — a match on a
   // venue the file never declares (the gate reports it) renders absent
-  const declared = (data.tjson.venues || []).filter(v => v && typeof v === 'object');
+  const declared = (data.tjson.venues || []).filter(venue => venue && typeof venue === 'object');
   // the same map every category context already carries (sharedFacts) — never rebuilt
   const venueNames = ctxs.length ? ctxs[0].venues : new Map();
   const cols = declared.map(v => v.id).filter(id => open.some(r => r.m.venue === id));
@@ -577,12 +579,9 @@ function playerPicker(route, data, players) {
 // stages, under date headings.
 function playerSchedule(route, data, p) {
   const pid = p.id;
-  const rows = [];
   const ctxs = data.cats;
   const multi = multiDay(ctxs); // the stage times need their date on multi-day pages
-  for (const ctx of ctxs) {
-    for (const pm of playerMatches(ctx, pid)) rows.push({ m: pm.m, i: pm.i, ctx });
-  }
+  const rows = ctxs.flatMap(ctx => playerMatches(ctx, pid).map(pm => ({ m: pm.m, ctx })));
   rows.sort((a, b) => (schedTime(a.m, a.ctx.tz) ?? Infinity) - (schedTime(b.m, b.ctx.tz) ?? Infinity));
   // One flat timeline under date headings — the day owns the context, so cards
   // never repeat it. Possible stages merge in at their own time, next to the

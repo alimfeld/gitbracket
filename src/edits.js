@@ -8,7 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 const { isDone, sideLabel, schedDays, bestOfOf, matchesOf } = require('../site/derive.js');
-const { writeTournament, tournamentText, catCtx, winTarget, reachedWinner, git } = require('./tools.js');
+const { writeTournament, tournamentText, catCtx, winTarget, reachedWinner, plainObject, git } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 
 // ---------- pure logic (tests drive these on fixture repos) ----------
@@ -179,10 +179,8 @@ function applyFor(verb, matchId, value) {
   // and move/side/result dereference the value — a non-object would throw out
   // of the async handler and kill the match-day daemon. Refuse the shape here,
   // before any field is read; the page always sends shaped objects.
-  if (verb === 'result' || verb === 'move' || verb === 'side') {
-    if (value === null || typeof value !== 'object' || Array.isArray(value)) {
-      return () => `${verb} edits carry a value object — got ${JSON.stringify(value)}`;
-    }
+  if ((verb === 'result' || verb === 'move' || verb === 'side') && !plainObject(value)) {
+    return () => `${verb} edits carry a value object — got ${JSON.stringify(value)}`;
   }
   // result.score's nested games is iterated by reachedWinner — a non-array
   // would throw out of the handler just like a non-object value; same refusal.

@@ -5,7 +5,7 @@
 // it against fixtures/ in memory. Never writes — the gate stays pure.
 
 const path = require('path');
-const { loadRepo, isRealDate, schedEntries, pairBusy, consumedSlots, winTarget, reachedWinner, feederBounds } = require('./tools.js');
+const { loadRepo, plainObject, isRealDate, schedEntries, pairBusy, consumedSlots, winTarget, reachedWinner, feederBounds } = require('./tools.js');
 const { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, matchesOf, poolStandings, resolveSide, isDeadTie, bestOfOf, schedTime, schedDays, placementLabel, parentsOf } = require('../site/derive.js');
 
 const RESULTS = ['winner', 'loser'];
@@ -161,7 +161,7 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
     if (sm !== undefined && (typeof sm !== 'object' || sm === null)) err(where, 'slotMinutes must be an object with positive-integer groups/knockout minutes');
     else if (sm !== undefined) {
       for (const k of ['groups', 'knockout']) {
-        if (sm[k] !== undefined && (typeof sm[k] !== 'number' || !Number.isInteger(sm[k]) || sm[k] < 1)) err(where, `slotMinutes.${k} must be a positive integer, got ${JSON.stringify(sm[k])}`);
+        if (sm[k] !== undefined && (!Number.isInteger(sm[k]) || sm[k] < 1)) err(where, `slotMinutes.${k} must be a positive integer, got ${JSON.stringify(sm[k])}`);
       }
     }
   });
@@ -172,7 +172,7 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
     players.set(p.id, p);
   });
 
-  if (tjson.matches !== undefined && (typeof tjson.matches !== 'object' || tjson.matches === null || Array.isArray(tjson.matches))) {
+  if (tjson.matches !== undefined && !plainObject(tjson.matches)) {
     err(tFile, 'matches must be an object map of category id → match array');
   }
 
@@ -228,7 +228,7 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
     const m = matches[i];
     const where = `${cFile} match[${i}]`;
     if (!m || typeof m !== 'object') { err(where, 'must be an object'); continue; }
-    if (typeof m.id !== 'number' || !Number.isInteger(m.id) || m.id < 1) err(where, `match id ${JSON.stringify(m.id)} must be a positive integer`);
+    if (!Number.isInteger(m.id) || m.id < 1) err(where, `match id ${JSON.stringify(m.id)} must be a positive integer`);
     if (byId.has(m.id)) err(where, `duplicate match id ${m.id}`);
     byId.set(m.id, m);
   }
@@ -253,7 +253,7 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
       hasKnockout = true;
     }
 
-    if (m.slotMinutes !== undefined && (typeof m.slotMinutes !== 'number' || !Number.isInteger(m.slotMinutes) || m.slotMinutes < 1)) err(where, `slotMinutes must be a positive integer, got ${JSON.stringify(m.slotMinutes)}`);
+    if (m.slotMinutes !== undefined && (!Number.isInteger(m.slotMinutes) || m.slotMinutes < 1)) err(where, `slotMinutes must be a positive integer, got ${JSON.stringify(m.slotMinutes)}`);
 
     if (!Array.isArray(m.sides) || m.sides.length !== 2) { err(where, 'exactly two sides required'); continue; }
     m.sides.forEach((side, si) => {
@@ -285,12 +285,12 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
         }
       } else if (side.kind === 'match') {
         if (m.pool !== undefined) err(where, `side ${si}: a pool match cannot have a match slot — pools are round robin`);
-        if (typeof side.match !== 'number' || !Number.isInteger(side.match) || !byId.has(side.match)) err(where, `side ${si}: unknown match slot ${JSON.stringify(side.match)}`);
+        if (!Number.isInteger(side.match) || !byId.has(side.match)) err(where, `side ${si}: unknown match slot ${JSON.stringify(side.match)}`);
         if (!RESULTS.includes(side.result)) err(where, `side ${si}: match slot result must be winner or loser, got ${JSON.stringify(side.result)}`);
       } else if (side.kind === 'pool') {
         if (m.pool !== undefined) err(where, `side ${si}: a pool match cannot have a pool slot — pools are round robin`);
         if (typeof side.pool !== 'string') err(where, `side ${si}: pool slot needs a pool string`);
-        if (typeof side.rank !== 'number' || !Number.isInteger(side.rank) || side.rank < 1) err(where, `side ${si}: pool slot rank must be a positive integer, got ${JSON.stringify(side.rank)}`);
+        if (!Number.isInteger(side.rank) || side.rank < 1) err(where, `side ${si}: pool slot rank must be a positive integer, got ${JSON.stringify(side.rank)}`);
       } else {
         err(where, `side ${si}: unknown side kind ${JSON.stringify(side.kind)}`);
       }
@@ -381,7 +381,7 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
           claim(`${side.match}:${side.result}`, sources.edge);
         } else if (side.kind === 'pool') {
           claim(`pool:${side.pool}:${side.rank}`, sources.pool);
-          if (typeof side.pool === 'string' && typeof side.rank === 'number' && Number.isInteger(side.rank) && side.rank >= 1) {
+          if (typeof side.pool === 'string' && Number.isInteger(side.rank) && side.rank >= 1) {
             if (!poolUses.has(side.pool)) {
               err(where, `pool slot references unknown pool ${JSON.stringify(side.pool)} (no matches use it)`);
             } else if (side.rank > poolUses.get(side.pool).size) {
@@ -398,11 +398,11 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
     }
 
     if (m.games !== undefined && !Array.isArray(m.games)) err(where, `games must be an array of {a, b} game objects, got ${JSON.stringify(m.games)}`);
-    if (m.result !== undefined && (typeof m.result !== 'object' || m.result === null || Array.isArray(m.result))) {
+    if (m.result !== undefined && !plainObject(m.result)) {
       err(where, `result must be an object with a status (${RESULT_STATUSES.join(', ')}), got ${JSON.stringify(m.result)}`);
     }
     const hasGames = Array.isArray(m.games);
-    const r = (m.result && typeof m.result === 'object' && !Array.isArray(m.result)) ? m.result : undefined;
+    const r = plainObject(m.result) ? m.result : undefined;
     let target;
     if (hasGames) {
       // match > stage override precedence, per derive.js — a bad bestOf is

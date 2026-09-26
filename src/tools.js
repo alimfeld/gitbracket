@@ -13,6 +13,10 @@ const { ID_RE, makeCat, matchesOf, schedTime, isDone, matchSlotMs } = require('.
 // occupancy — one predicate, no drift.
 const slotsOverlap = (a0, a1, b0, b1) => a0 < b1 && b0 < a1;
 
+// A non-null, non-array object — every JSON-shape guard in the tool layer reads
+// this, so the three-clause test is written once.
+const plainObject = v => v !== null && typeof v === 'object' && !Array.isArray(v);
+
 // A match's known players as a Set, null when a side is a slot (match/pool) —
 // such sides resolve only after results. Shared by the validator and generator.
 function fixedPlayers(m) {
@@ -283,4 +287,4 @@ function pairBusy(a, b) {
   return kinds;
 }
 
-module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, fixedPlayers, schedEntries, pairBusy, consumedSlots, descendants, winTarget, reachedWinner, feederBounds, isRealDate, findRoot, catCtx, tournamentText, cnameOf, branchOf, isSimBranch, cleanTree, git, defaultSlug };
+module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, plainObject, fixedPlayers, schedEntries, pairBusy, consumedSlots, descendants, winTarget, reachedWinner, feederBounds, isRealDate, findRoot, catCtx, tournamentText, cnameOf, branchOf, isSimBranch, cleanTree, git, defaultSlug };

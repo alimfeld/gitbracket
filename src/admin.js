@@ -15,7 +15,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
-const { loadRepo, catCtx, schedEntries, pairBusy, fixedPlayers, consumedSlots, descendants, slotsOverlap, feederBounds, cleanTree, git, cnameOf, defaultSlug } = require('./tools.js');
+const { loadRepo, catCtx, schedEntries, pairBusy, fixedPlayers, consumedSlots, descendants, slotsOverlap, feederBounds, plainObject, cleanTree, git, cnameOf, defaultSlug } = require('./tools.js');
 const { execEdit, parseResult } = require('./edits.js');
 const { matchSlotMs, schedTime } = require('../site/derive.js');
 const { validateRepo } = require('./validate.js');
@@ -124,7 +124,7 @@ function legalSlots(tjson, cat, matchId, day, gcd) {
   const slotMin = matchSlotMs(m, ctx) / 60000;
   const players = fixedPlayers(m);
   const fb = feederBounds(m, ctx, tz);
-  let floor = fb.floor; // m's own bound: its feeder slots' ends, gate-mirrored
+  const floor = fb.floor; // m's own bound: its feeder slots' ends, gate-mirrored
   let ceiling = fb.ceiling; // match-edge consumers' starts — a pool's rank consumers are invisible to feederBounds, so the pool scan extends it
   // A pool match carries no own bound, but a move is gated by every scheduled
   // knockout match holding a rank slot of its pool. Only committed data reaches
@@ -200,7 +200,7 @@ function sideOpts(tjson, cat, matchId, si) {
   // who happen to appear in a match — a late-show hand-added to players[] is
   // legal for the gate and must be reachable from the page.
   const roster = Array.isArray(tjson.players)
-    ? tjson.players.map(p => p && typeof p === 'object' && typeof p.id === 'string' ? p.id : null).filter(Boolean)
+    ? tjson.players.filter(p => p && typeof p === 'object' && typeof p.id === 'string').map(p => p.id)
     : [];
   return {
     roster,
@@ -309,7 +309,7 @@ function serve(state) {
         // Untrusted input, two ways: JSON.parse admits null/"x"/[], and a stale
         // page or a stray local process can name any slug. Refuse both — a body
         // dereference here throws out of the async handler and kills the daemon.
-        if (!body || typeof body !== 'object' || Array.isArray(body)) return json(res, 400, { error: 'bad JSON body' });
+        if (!plainObject(body)) return json(res, 400, { error: 'bad JSON body' });
         if (body.slug) {
           if (!state.repo.tournaments.has(body.slug)) return json(res, 400, { error: `unknown tournament ${body.slug}` });
           if (body.slug !== state.slug) { state.slug = body.slug; reload(state); }

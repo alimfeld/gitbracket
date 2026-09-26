@@ -53,14 +53,17 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
 // every render, so a stale memo can never outlive its render.
 const ctxMemo = ctx => ctx._memo || (ctx._memo = {});
 
+// id -> display name — the one shape both shared maps have. A non-list, or a
+// malformed entry in it, renders as absent, never a throw.
+const nameMap = x => new Map((Array.isArray(x) ? x : []).filter(e => e && typeof e === 'object').map(e => [e.id, e.name]));
+
 // Tournament-level facts (names, venues, tz) — toCats builds them once per
 // render; standalone makeCat calls build a fresh map.
 function sharedFacts(tjson) {
-  const arr = x => Array.isArray(x) ? x : [];
   return {
-    names: new Map(arr(tjson && tjson.players).filter(p => p && typeof p === 'object').map(p => [p.id, p.name])),
+    names: nameMap(tjson && tjson.players),
     tz: (tjson && tjson.timezone) || 'UTC',
-    venues: new Map(arr(tjson && tjson.venues).filter(v => v && typeof v === 'object').map(v => [v.id, v.name])),
+    venues: nameMap(tjson && tjson.venues),
   };
 }
 
@@ -273,6 +276,15 @@ function resolveSide(side, ctx, memo = new Map()) {
   return null;
 }
 
+// A match's placement range (a classification match) or its main-bracket
+// column, plus the bundle ref key naming that slot — the one derivation the
+// unresolved-slot label and the possible-stage chip share.
+function refInfo(m, ctx) {
+  const pr = plRange(m, ctx);
+  const col = pr === null ? koColumn(m, ctx) : null;
+  return { pr, col, key: pr === null ? roundKeyOf(col) : pr.win ? 'pl-place' : 'pl-semi' };
+}
+
 // Unresolved slot keeps what the slot IS: "Winner of SF1", "2nd in Pool A".
 // The words and their declined articles ride the bundle (refs/slot-*); a
 // numbered bracket code names its own card, a named round or placement takes
@@ -284,9 +296,7 @@ function slotLabel(side, ctx) {
   const who = t(LOCALE, side.result === 'winner' ? 'slot-winner' : 'slot-loser');
   const ref = ctx.byId.get(side.match);
   if (!ref) return t(LOCALE, 'slot-dangling', { who, id: side.match }); // dangling ref — the id is all there is
-  const pr = plRange(ref, ctx);
-  const col = pr === null ? koColumn(ref, ctx) : null;
-  const key = pr === null ? roundKeyOf(col) : pr.win ? 'pl-place' : 'pl-semi';
+  const { pr, col, key } = refInfo(ref, ctx);
   const code = pr === null && col !== 0; // a numbered main round, never the apex
   const label = code ? matchLabel(ref, ctx) : stageLabel(ref, ctx);
   return t(LOCALE, 'slot-of', { who, ref: code ? label : refWord(key, 'dat', label) });
@@ -476,8 +486,7 @@ function possibleStages(ctx, pid) {
     if (confIds.has(id)) continue;
     const m = ctx.byId.get(id);
     if (!m || !Array.isArray(m.sides)) continue;
-    const pr = plRange(m, ctx);
-    const col = pr === null ? koColumn(m, ctx) : null;
+    const { pr, col } = refInfo(m, ctx);
     // The label rides its structural row (lo/hi/win) so the merge logic below
     // classifies by shape, never by word position in a localized string.
     const label = stageLabel(m, ctx);
@@ -492,14 +501,9 @@ function possibleStages(ctx, pid) {
   }
 
   // ---- finalize: uniform bits, chips ---------------------------------------
-  const present = [];
-  for (const stage of stages.values()) {
-    present.push({
-      label: stage.label, col: stage.col, pl: stage.pl, ranks: stage.ranks, edges: stage.edges,
-      times: stage.times, courts: stage.courts, ids: stage.ids,
-      ...uniformBits(stage.ids.length, stage.times, stage.courts),
-    });
-  }
+  const present = [...stages.values()].map(stage => ({
+    ...stage, ...uniformBits(stage.ids.length, stage.times, stage.courts),
+  }));
   const merged = mergeTwinStages(present);
   // The chip names the entry gates in one phrase: the direct slot ranks, then
   // the result edges — so a rank-1 bye can't read as "everyone gets here".
@@ -518,9 +522,7 @@ function possibleStages(ctx, pid) {
       for (const e of stage.edges) {
         const parent = ctx.byId.get(e.parent);
         if (!parent || !Array.isArray(parent.sides)) continue;
-        const pr = plRange(parent, ctx);
-        const col = pr === null ? koColumn(parent, ctx) : null;
-        const key = pr === null ? roundKeyOf(col) : pr.win ? 'pl-place' : 'pl-semi';
+        const { key } = refInfo(parent, ctx);
         const label = stageLabel(parent, ctx);
         parts.add(stage.merged ? t(LOCALE, 'chip-via', { ref: refWord(key, 'acc', label) }) : t(LOCALE, 'chip-as', { kind: t(LOCALE, e.kind === 'winner' ? 'kind-winner' : 'kind-loser'), ref: refWord(key, 'dat', label) }));
       }
@@ -1104,16 +1106,12 @@ function currentWave(ctx, status) {
 // The prepositional article is bundle data keyed by the round kind the caller
 // already holds (artWord) — never parsed off the rendered name; the en
 // templates have no {art} slot, so one call serves both dialects.
-const inWord = col => {
-  if (col === 0) return t(LOCALE, 'in-final');
-  const r = roundName(col);
-  return t(LOCALE, 'in-round', { art: artWord(roundKeyOf(col), 'in'), round: r });
-};
-const elimWord = col => {
-  if (col === 0) return t(LOCALE, 'elim-final');
-  const r = roundName(col);
-  return t(LOCALE, 'elim-round', { art: artWord(roundKeyOf(col), 'elim'), round: r });
-};
+// The apex reads its own word; every deeper round takes the locale's article.
+const roundWord = (col, kind) => col === 0
+  ? t(LOCALE, `${kind}-final`)
+  : t(LOCALE, `${kind}-round`, { art: artWord(roundKeyOf(col), kind), round: roundName(col) });
+const inWord = col => roundWord(col, 'in');
+const elimWord = col => roundWord(col, 'elim');
 
 // A player's standing in one category, as a plain word.
 function playerStatus(ctx, pid) {
