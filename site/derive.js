@@ -29,10 +29,10 @@ const fmtOf = k => (bundle().fmt || {})[k];
 const ordNum = n => (fmtOf('ord') || (n => String(n)))(n);    // '3.' / '3rd' — range form
 const cardNum = n => (fmtOf('place') || (n => String(n)))(n); // '3' / '3rd' — pre-word form
 const bandShort = l => (fmtOf('bandShort') || (l => l))(l);   // the band a placement label names
-const stripWord = l => (fmtOf('stripWord') || (l => l))(l);   // a paired label's classification word
-// A declined chip ref ('the final', 'vom Finale'): per-key, per-case article
-// templates from the bundle, keyed by the round kind the caller already holds —
-// the label string is only a {label} parameter, never inspected.
+// A declined ref ('the final', 'vom Finale') — chips and unresolved slots:
+// per-key, per-case article templates from the bundle, keyed by the round kind
+// the caller already holds. The label string is only a {label} parameter,
+// never inspected.
 const refWord = (key, c, label) => {
   const refs = bundle().refs || {};
   const s = (refs[key] || refs[''] || {})[c] || label;
@@ -274,20 +274,23 @@ function resolveSide(side, ctx, memo = new Map()) {
   return null;
 }
 
-// ponytail: slot phrasing still ships English-only ("Winner of SF1", "2nd in
-// Pool A" — the /\d$/ 'the'-insertion is English grammar) — a decline-and-copy
-// bundle job of its own; localized when a venue asks.
 // Unresolved slot keeps what the slot IS: "Winner of SF1", "2nd in Pool A".
+// The words and their declined articles ride the bundle (refs/slot-*); a
+// numbered bracket code names its own card, a named round or placement takes
+// the locale's article ("the final" / "vom Finale").
 function slotLabel(side, ctx) {
-  if (side && side.kind === 'match') {
-    const who = side.result === 'winner' ? 'Winner' : 'Loser';
-    const ref = ctx.byId.get(side.match);
-    if (!ref) return `${who} of match ${side.match}`; // dangling ref — the id is all there is
-    const what = matchLabel(ref, ctx); // numbered rounds carry their bracket ordinal
-    return /\d$/.test(what) ? `${who} of ${what}` : `${who} of the ${what}`;
-  }
-  if (side && side.kind === 'pool') return `${ordNum(side.rank)} in Pool ${side.pool}`;
-  return 'TBD';
+  if (!side || typeof side !== 'object') return 'TBD';
+  if (side.kind === 'pool') return t(LOCALE, 'slot-pool', { rank: ordNum(side.rank), pool: side.pool });
+  if (side.kind !== 'match') return 'TBD';
+  const who = t(LOCALE, side.result === 'winner' ? 'slot-winner' : 'slot-loser');
+  const ref = ctx.byId.get(side.match);
+  if (!ref) return t(LOCALE, 'slot-dangling', { who, id: side.match }); // dangling ref — the id is all there is
+  const pr = plRange(ref, ctx);
+  const col = pr === null ? koColumn(ref, ctx) : null;
+  const key = pr === null ? roundKeyOf(col) : pr.win ? 'pl-place' : 'pl-semi';
+  const code = pr === null && col !== 0; // a numbered main round, never the apex
+  const label = code ? matchLabel(ref, ctx) : stageLabel(ref, ctx);
+  return t(LOCALE, 'slot-of', { who, ref: code ? label : refWord(key, 'dat', label) });
 }
 
 // Player-id set -> display name: "Ada / Ben". The one place names render.
@@ -571,14 +574,15 @@ function mergeTwinStages(present) {
     if (!other || other.length !== 1 || merged.has(list[0]) || merged.has(other[0])) continue;
     const [x, y] = [list[0], other[0]];
     // Classification vs round is a structural flag (pl), never a label sniff;
-    // the paired-label stripping rides the bundle's stripWord.
+    // the pair's numbers come from the pl ranks too, so no locale's label
+    // string is ever parsed back.
     const placeL = [x, y].filter(s => s.pl !== null);
     const roundL = [x, y].filter(s => s.pl === null);
     // "5th / 7th place" joins a decider pair's labels; a round with its
     // placement companion names the band like the bracket headings do.
     const label = roundL.length ? stageGroupName(roundL[0].label, placeL.map(s => s.label))
       : placeL.every(s => !s.pl.win) ? bandSemiLabel(placeL.map(s => s.pl))
-      : t(LOCALE, 'pl-pair', { a: stripWord(x.label), b: stripWord(y.label) });
+      : t(LOCALE, 'pl-pair', { a: cardNum(x.pl.lo), b: cardNum(y.pl.lo) });
     merged.add(x); merged.add(y);
     const times = [...x.times, ...y.times];
     const courts = [...x.courts, ...y.courts];
@@ -819,7 +823,10 @@ function tzOffset(tz, date) {
   // crashing a render.
   let parts;
   try {
-    parts = new Intl.DateTimeFormat(LOCALE, { timeZone: tz, timeZoneName: 'longOffset' })
+    // Pinned to en, never LOCALE: this reads the machine offset off the
+    // rendering, and some dialects spell it "UTC+02:00" (or worse) — which
+    // Date.parse can't read, silently nulling every scheduled time.
+    parts = new Intl.DateTimeFormat('en', { timeZone: tz, timeZoneName: 'longOffset' })
       .formatToParts(new Date(date + 'T12:00:00Z'));
   } catch {
     return null;
@@ -836,11 +843,12 @@ function fmtTime(t, tz) {
 }
 
 // Y-M-D from typed parts, calendar pinned to gregory — a non-Gregorian locale
-// (Buddhist, Hijri) would key days by a foreign year.
+// (Buddhist, Hijri) would key days by a foreign year, and a native-digit one
+// (Arabic, Persian) by foreign digits. Latn keeps the key the stored form.
 function dayKey(t, tz) {
   let p = null;
   try {
-    p = Object.fromEntries(new Intl.DateTimeFormat(LOCALE, { timeZone: tz, calendar: 'gregory', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(t).map(x => [x.type, x.value]));
+    p = Object.fromEntries(new Intl.DateTimeFormat(LOCALE, { timeZone: tz, calendar: 'gregory', numberingSystem: 'latn', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(t).map(x => [x.type, x.value]));
   } catch { return null; } // bad tz: no day key — callers' null paths render empty
   return `${p.year}-${p.month}-${p.day}`;
 }

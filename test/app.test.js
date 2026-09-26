@@ -10,7 +10,7 @@
 const fs = require('fs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, matchSlotMs, sideLabel, placementLabel, koColumn, koOrdinal, matchLabel, schedTime, toCats, isDeadTie, winners, catStatus, roundName, playerStatus, setLocale } = require('../site/derive.js');
+const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, matchSlotMs, sideLabel, placementLabel, koColumn, koOrdinal, matchLabel, schedTime, dayKey, toCats, isDeadTie, winners, catStatus, roundName, playerStatus, setLocale } = require('../site/derive.js');
 const { I18N } = require('../site/i18n.js');
 const { parseRoute, resolveLang, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset, paintBadRoute } = require('../site/app.js');
 const { generate } = require('../src/schedule.js');
@@ -731,6 +731,15 @@ test('i18n: the language override is accepted in either query position', () => {
   assert.equal(resolveLang('#slug', '?lang=fr'), 'en', 'an unknown language falls back to the browser language (en in tests)');
 });
 
+test('i18n: a native-digit locale still keys days in ISO — Intl digits never leak into the stored form', () => {
+  setLocale('ar-EG');
+  try {
+    assert.equal(dayKey(Date.parse('2026-05-02T12:00:00Z'), 'Europe/Zurich'), '2026-05-02', 'day keys stay latn Y-M-D, or grouping/sorting silently breaks');
+  } finally {
+    setLocale('en');
+  }
+});
+
 test('i18n: every translation key exists in both languages', () => {
   assert.deepEqual(Object.keys(I18N.de).sort(), Object.keys(I18N.en).sort(), 'a key missing from one language leaves a {placeholder} on the page');
 });
@@ -746,6 +755,8 @@ test('i18n: German derives domain labels and date spans — not just chrome', ()
     const poss = cards(page, 'data-status', 'possible');
     assert(poss[1].includes('als Sieger vom Viertelfinale'), 'the doer takes the dative — never "von das"');
     assert(poss[2].includes('über das Halbfinale'), 'the via takes the accusative');
+    const md = catOf('sample', 'md40');
+    assert.equal(sideLabel(md.byId.get(9).sides[1], md), 'Sieger SF-2', 'an unresolved slot names the bundle words, never an English "Winner of"');
   } finally {
     setLocale('en');
   }
@@ -784,7 +795,6 @@ test('i18n: a third locale with deviant word order and declined refs derives cle
     fmt: {
       ord: n => `${n}e`, place: n => String(n),
       bandShort: l => l.replace(/^(place|demi) /, ''),
-      stripWord: l => l.replace(/^place /, ''),
     },
     refs: {
       'round-final': { acc: 'la finale', dat: 'de la finale' },
@@ -807,6 +817,7 @@ test('i18n: a third locale with deviant word order and declined refs derives cle
     assert(poss.length && !poss.some(c => c.includes('{')), 'possible-stage chips render whole under the deviant locale');
     assert(poss.some(c => c.includes('du Quarts')), 'the dative chip ref declines from bundle data — never "vom"');
     assert(poss.some(c => c.includes('le Demi-finales')), 'the accusative chip ref too — never "the"');
+    assert.equal(schedTime({ scheduled: '2026-05-02T09:00:00' }, 'Europe/Zurich'), Date.parse('2026-05-02T09:00:00+02:00'), 'the offset parse is locale-independent — a dialect that spells the zone "UTC+02:00" must not null every time');
   } finally {
     setLocale('en');
     delete I18N.fr;

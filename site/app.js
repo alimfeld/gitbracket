@@ -233,7 +233,9 @@ const statusLine = (status, ctx) => {
 };
 
 // Compact court list — a round plays several matches at once, so "next" is a
-// block, not a card. Consecutive numbered courts collapse ("Courts 1–5").
+// block, not a card. Consecutive numbered courts collapse ("Court 1–5"): the
+// shared head stays singular, so a German venue name ("Halle 1") isn't forced
+// into an English plural.
 const fmtCourts = names => {
   const ns = [...new Set(names)];
   if (ns.length === 1) return ns[0];
@@ -243,7 +245,7 @@ const fmtCourts = names => {
     const nums = m.map(x => +x[2]).sort((a, b) => a - b);
     if (new Set(nums).size === nums.length &&
         nums[nums.length - 1] - nums[0] === nums.length - 1) {
-      return `${head}s ${nums[0]}–${nums[nums.length - 1]}`;
+      return `${head} ${nums[0]}–${nums[nums.length - 1]}`;
     }
   }
   return ns.join(' · ');

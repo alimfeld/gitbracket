@@ -81,14 +81,19 @@ const I18N = {
     'kind-winner': 'winner',
     'kind-loser': 'loser',
     'chip-or': ' or ',
+    // unresolved-slot phrasing (derive.js slotLabel)
+    'slot-winner': 'Winner',
+    'slot-loser': 'Loser',
+    'slot-of': '{who} of {ref}',
+    'slot-pool': '{rank} in Pool {pool}',
+    'slot-dangling': '{who} of match {id}',
     // per-locale word rules (derive.js dispatches by name): bandShort strips the
-    // classification word from a band heading, stripWord from a paired label;
-    // place is the pre-word number ("3rd place"), ord the range form ("3rd–5th").
+    // classification word from a band heading; place is the pre-word number
+    // ("3rd place"), ord the range form ("3rd–5th").
     fmt: {
       ord: enOrd,
       place: enOrd,
       bandShort: l => l.replace(/ semi$/, ''),
-      stripWord: l => l.replace(/ place$/, ''),
     },
     // declined chip refs per round key and case — the default covers every key
     // without an entry; only the one lowercase quirk ("the final") earns its own.
@@ -156,9 +161,9 @@ const I18N = {
     'round-quart': 'Viertelfinale',
     'round-16': 'Achtelfinale',
     'round-of': 'Runde der letzten {n}',
-    'pl-place': 'Platz {n}',
+    'pl-place': '{n}. Platz',
     'pl-semi': '{a}–{b} Halbfinale',
-    'pl-pair': 'Platz {a} / {b}',
+    'pl-pair': '{a}. Platz / {b}. Platz',
     placement: 'Platzierung',
     'chip-any': 'jede Platzierung in Pool {pool}',
     'chip-rank': 'als {range} in Pool {pool}',
@@ -167,15 +172,20 @@ const I18N = {
     'kind-winner': 'Sieger',
     'kind-loser': 'Verlierer',
     'chip-or': ' oder ',
+    // unresolved-slot phrasing (derive.js slotLabel)
+    'slot-winner': 'Sieger',
+    'slot-loser': 'Verlierer',
+    'slot-of': '{who} {ref}',
+    'slot-pool': '{rank} in Pool {pool}',
+    'slot-dangling': '{who} von Spiel {id}',
     fmt: {
       ord: n => `${n}.`,
       place: n => String(n),
       bandShort: l => l.replace(/ Halbfinale$/, ''),
-      stripWord: l => l.replace(/^Platz /, ''),
     },
     refs: {
       'round-of': { acc: 'die {label}', dat: 'von der {label}' }, // "die Runde der letzten 32" — feminine
-      'pl-place': { acc: 'den {label}', dat: 'vom {label}' },     // "den Platz 3" — masculine
+      'pl-place': { acc: 'den {label}', dat: 'vom {label}' },     // "den 3. Platz" — masculine
       '': { acc: 'das {label}', dat: 'vom {label}' },             // the default: neuter "das/vom"
     },
     // prepositional article per round kind — "Im Finale" (neuter) vs
