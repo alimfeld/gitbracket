@@ -146,6 +146,12 @@ test('conflicts carry the cards they name: match-scoped refs and both double-boo
   const cross = validateFixture('bad-cross-overlap').conflicts.find(c => /overlap/.test(c));
   assert.equal(cross.refs.length, 2, 'a double-book names both ends');
   assert(cross.refs.some(r => r.cat === 'k1') && cross.refs.some(r => r.cat === 'k2'), 'across categories too');
+
+  const roots = validateFixture('unfed-roots').conflicts.find(c => /unfed knockout/.test(c));
+  assert.deepEqual(roots.refs, [{ cat: 't', matchId: 7 }, { cat: 't', matchId: 10 }], 'the one-final rule names every unfed root, so both highlight');
+
+  const cyc = validateFixture('cycle').conflicts.find(c => /cycle/.test(c));
+  assert.deepEqual(cyc.refs, [{ cat: 't', matchId: 1 }], 'a cycle lights the match it was detected at');
 });
 
 test('filterSlug: validate <slug> narrows to that tournament', () => {

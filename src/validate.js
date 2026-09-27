@@ -345,7 +345,7 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, con
     if (cycle) break;
   }
   if (cycle) {
-    conflict(cFile, `slot cycle detected at match ${cycle}`);
+    conflict(cFile, `slot cycle detected at match ${cycle}`, [{ cat: cat.id, matchId: cycle }]);
     return; // a cycle is the finding; pass B's derived reads would only add noise on top
   }
 
@@ -455,10 +455,13 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, con
   // ---- the one-final rule: exactly one unfed champion-tree match, or the bracket
   // renders two "Final" labels and ordinal numbering picks an arbitrary root.
   const { winnerParent } = parentsOf(ctx);
-  const finals = matches.filter(m => m && typeof m === 'object' && m.pool === undefined
+  const roots = matches.filter(m => m && typeof m === 'object' && m.pool === undefined
     && Array.isArray(m.sides) && m.sides.length === 2
-    && placementLabel(m, ctx) === null && !winnerParent.has(m.id)).length;
-  if (finals > 1) conflict(cFile, `${finals} unfed knockout matches — exactly one championship final is allowed`);
+    && placementLabel(m, ctx) === null && !winnerParent.has(m.id));
+  if (roots.length > 1) {
+    conflict(cFile, `${roots.length} unfed knockout matches — exactly one championship final is allowed`,
+      roots.map(m => ({ cat: cat.id, matchId: m.id })));
+  }
 }
 
 function validateGames(games, target, where, err, conflict) {
