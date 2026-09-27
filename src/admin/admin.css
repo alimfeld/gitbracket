@@ -100,11 +100,11 @@ main { flex: 1; display: flex; min-height: 0; }
    which wins by rule order — green returns on mouseout */
 .match.done { background: var(--done-wash); border-left-color: var(--now); }
 .match .winmark { flex: none; }
-/* a match that can't be scored yet — a side can't resolve; a quiet sand wash
-   and amber spine say "waiting", while the grip and the per-side pencils stay
-   live (the side label already names the blocker) */
-.match.pending { background: var(--pending-wash); border-left-color: var(--pending); cursor: default; }
+/* a match whose side can't resolve yet — a quiet sand wash and amber spine say
+   "waiting"; the card still scores, which lands as a conflict */
+.match.pending { background: var(--pending-wash); border-left-color: var(--pending); }
 .match.dragging { opacity: .4; }
+.match.dragging .grip { cursor: grabbing; }
 /* the grip is the card's only drag surface; absolute on the left edge spans the card height */
 .match .grip {
   position: absolute; left: 0; top: 0; bottom: 0; width: .9rem;

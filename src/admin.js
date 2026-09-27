@@ -10,9 +10,8 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
-const { loadRepo, catCtx, schedEntries, pairBusy, resolvedPlayers, consumedSlots, descendants, slotsOverlap, feederBounds, plainObject, cleanTree, git, cnameOf, defaultSlug } = require('./tools.js');
+const { loadRepo, plainObject, cleanTree, git, cnameOf, defaultSlug } = require('./tools.js');
 const { execEdit, parseResult } = require('./edits.js');
-const { matchSlotMs, schedTime } = require('../site/derive.js');
 const { findings } = require('./validate.js');
 const { ship, deployRole } = require('./publish.js');
 
@@ -85,106 +84,6 @@ function redo(state) {
   stack.pop();
   reload(state);
   return { sha: top.sha.slice(0, 7), msg: top.msg };
-}
-
-// wall "HH:MM" of a stored schedule string; the scan works in wall minutes.
-const wallMinOf = s => { const x = /T(\d{2}):(\d{2})/.exec(String(s || '')); return x ? +x[1] * 60 + +x[2] : null; };
-
-// Legal starts for one match as wall-clock minutes per venue, using the gate's own
-// rules (schedEntries, pairBusy, feederBounds) so preview and write can't disagree.
-// The dragged match is off the board during the query.
-function legalSlots(tjson, cat, matchId, day, gcd) {
-  const tz = tjson.timezone || 'UTC';
-  // The query param is untrusted: floor the step so the scan advances.
-  const step = Number.isInteger(gcd) && gcd > 0 ? Math.max(gcd, 5) : 15;
-  const { entries } = schedEntries(tjson);
-  const others = entries.filter(e => !(e.cat === cat && e.m.id === Number(matchId)));
-  const ctx = catCtx(tjson, cat);
-  const m = ctx.byId.get(Number(matchId));
-  if (!m || !Array.isArray(m.sides) || m.sides.length !== 2) return {}; // malformed match: the gate reports, the preview never offers
-  const slotMin = matchSlotMs(m, ctx) / 60000;
-  const players = resolvedPlayers(m, ctx); // resolved sides double-book like explicit ones
-  const fb = feederBounds(m, ctx, tz);
-  const floor = fb.floor; // m's own bound: its feeder slots' ends, gate-mirrored
-  let ceiling = fb.ceiling; // match-edge consumers' starts — a pool's rank consumers are invisible to feederBounds, so the pool scan extends it
-  // A pool match has no own bound, but a move is gated by every scheduled knockout
-  // match holding a rank slot of its pool. Only committed data reaches the daemon, so
-  // this collapses to the earliest scheduled consumer's start.
-  if (m.pool !== undefined) {
-    for (const C of ctx.matches) {
-      if (!C || C.pool !== undefined || C.scheduled === undefined) continue;
-      if (!C.sides || !C.sides.some(s => s && s.kind === 'pool' && s.pool === m.pool)) continue;
-      const cs = schedTime(C, tz);
-      if (cs === null) continue;
-      ceiling = ceiling === null ? cs : Math.min(ceiling, cs);
-    }
-  }
-  const out = {};
-  // The generator anchors at the category block start, which need not divide
-  // the slot length — scan the schedule's lattice, not midnight's.
-  const wms = ctx.matches.map(x => wallMinOf(x && x.scheduled)).filter(w => w !== null);
-  const offset = wms.length ? Math.min(...wms) % step : 0;
-  for (const venue of (tjson.venues || []).filter(plainObject).map(v => v.id)) {
-    const ticks = [];
-    for (let wm = offset; wm < 1440; wm += step) {
-      if (!Number.isFinite(slotMin) || wm + slotMin > 1440) continue;
-      const iso = `${day}T${String(Math.floor(wm / 60)).padStart(2, '0')}:${String(wm % 60).padStart(2, '0')}:00`;
-      const t = schedTime({ scheduled: iso }, tz);
-      if (t === null) continue;
-      if (floor !== null && t < floor) continue;
-      const slotEnd = t + slotMin * 60000;
-      if (ceiling !== null && slotEnd > ceiling) continue;
-      let busy = false;
-      // the candidate carries the real match so pairBusy sizes its window
-      // exactly as the gate sizes the same match
-      const cand = { m: { ...m, scheduled: iso, venue }, t, ctx, players };
-      for (const e of others) if (pairBusy(cand, e).length) { busy = true; break; }
-      if (!busy) ticks.push(wm);
-    }
-    out[venue] = ticks;
-  }
-  return out;
-}
-
-// Legality for one side, mirroring the gate's atoms. The side being replaced frees
-// its own slot; busy players come from overlapping scheduled+undone matches.
-function sideOpts(tjson, cat, matchId, si) {
-  // The param is untrusted: clamp to the two sides the grid renders.
-  si = si === 1 ? 1 : 0;
-  const ms = (tjson.matches || {})[cat] || [];
-  const ctx = catCtx(tjson, cat);
-  const m = ctx.byId.get(Number(matchId));
-  if (!m) return {};
-  const { pool, edge } = consumedSlots(ms);
-  const cur = m.sides && m.sides[si];
-  if (cur && cur.kind === 'match') edge.delete(`${cur.match}:${cur.result}`);
-  else if (cur && cur.kind === 'pool') pool.delete(`pool:${cur.pool}:${cur.rank}`);
-  const { entries } = schedEntries(tjson);
-  const mine = entries.find(e => e.cat === cat && e.m.id === Number(matchId));
-  let busy = [];
-  if (mine) {
-    // A player is busy when already scheduled in another overlapping match — venue-blind,
-    // since adding any of its players would double-book them. Resolved sides count too.
-    const mineMs = matchSlotMs(mine.m, mine.ctx);
-    const busySet = new Set();
-    for (const e of entries) {
-      if (e.cat === cat && e.m.id === Number(matchId)) continue;
-      if (!Number.isFinite(mineMs) || !e.players) continue;
-      if (slotsOverlap(mine.t, mine.t + mineMs, e.t, e.t + matchSlotMs(e.m, e.ctx))) for (const id of e.players) busySet.add(id);
-    }
-    busy = [...busySet];
-  }
-  // The full registered roster, not just players appearing in a match.
-  const roster = Array.isArray(tjson.players)
-    ? tjson.players.filter(p => p && typeof p === 'object' && typeof p.id === 'string').map(p => p.id)
-    : [];
-  return {
-    roster,
-    busy,
-    consumedRanks: [...pool.keys()],
-    consumedEdges: [...edge.keys()],
-    descendants: [...descendants(ms, Number(matchId))],
-  };
 }
 
 // Reload from disk — undo (git reset) rewrites files.
@@ -260,15 +159,12 @@ function serve(state) {
         if (state.slug) out.sort((a, b) => a.slug === state.slug ? -1 : b.slug === state.slug ? 1 : 0);
         return json(res, 200, out);
       }
-      if (url === '/api/data' || url === '/api/slots' || url === '/api/sideopts') {
+      if (url === '/api/data') {
         const q = new URL(req.url, 'http://x').searchParams;
         const slug = q.get('slug') || state.slug;
         const info = state.repo.tournaments.get(slug);
         if (!info || !info.tjson) return json(res, 404, { error: `unknown tournament ${slug}` });
-        const body = url === '/api/data' ? info.tjson
-          : url === '/api/slots' ? { ok: legalSlots(info.tjson, q.get('cat'), q.get('id'), q.get('day'), +(q.get('gcd') || '15')) }
-          : { ok: sideOpts(info.tjson, q.get('cat'), q.get('id'), +(q.get('si') || '0')) };
-        return json(res, 200, body);
+        return json(res, 200, info.tjson);
       }
       if (url === '/api/pending') {
         const p = unpushed(state.root);
@@ -349,4 +245,4 @@ function main(root, args) {
   return 0;
 }
 
-module.exports = { legalSlots, sideOpts, doEdit, unpushed, undo, redo, serve, main };
+module.exports = { doEdit, unpushed, undo, redo, serve, main };

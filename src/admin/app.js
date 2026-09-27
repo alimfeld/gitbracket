@@ -17,7 +17,7 @@ const STEP = 5;
 const S = {
   slug: null, day: null, tjson: null, tz: 'UTC',
   pxPerMin: 1.2, dayStart: 0, dayEnd: 0,
-  cats: [], venues: [], days: [], dragSource: null, ghost: null, legal: null,
+  cats: [], venues: [], days: [], dragSource: null, ghost: null,
 };
 
 // ---- derive wrappers (derive.js globals) ----
@@ -129,7 +129,6 @@ function fitScale(sShort) {
 // ---- the grid ----
 function renderGrid() {
   const grid = $('grid');
-  S.legal = null; // a re-render (day switch, edit, undo) invalidates the slots
   const dayMatches = [];
   for (const c of S.cats) for (const m of c.matches) {
     const t = schedTime(m, S.tz);
@@ -197,7 +196,7 @@ function cardHtml(c, m, venue) {
     ? ` style="top:${(wm - S.dayStart) * S.pxPerMin}px;min-height:${slot * S.pxPerMin}px;"` : '';
   const k = keyOf(c, m);
   // one side row per side, meta last; a drag grip leads — only the grip drags
-  const tip = pend ? `can't score yet — waiting on ${pend}` : '';
+  const tip = pend ? `waiting on ${pend} — scoring now records a conflict` : '';
   return `<article class="match${stCls}" data-key="${esc(k)}" data-venue="${esc(venue || '')}"${tip ? ` title="${esc(tip)}"` : ''}${pos}>
     <span class="grip" draggable="true" title="Drag to move"></span>
     ${sideRow(c, m, 0)}${sideRow(c, m, 1)}
@@ -236,11 +235,8 @@ function wireGrid() {
     el.addEventListener('click', e => {
       if (e.target.closest('.grip, .edit-side')) return;
       const [cid, mid] = keyParts(el.dataset.key);
-      const m = matchOf(cid, mid);
-      const why = pendingReason(m, cat(cid));
-      if (why) { flash(`can't score yet — waiting on ${why}`); return; }
       modalTrigger = { key: el.dataset.key };
-      openResult(cid, m);
+      openResult(cid, matchOf(cid, mid));
     });
     el.addEventListener('dragstart', e => {
       S.dragSource = el.dataset.key;
@@ -251,15 +247,12 @@ function wireGrid() {
       // default — anchor the whole card where the grip was grabbed instead
       const r = el.getBoundingClientRect();
       e.dataTransfer.setDragImage(el, e.clientX - r.left, e.clientY - r.top);
-      const [cid, mid] = keyParts(S.dragSource);
-      loadSlots(cid, mid); // legal starts for the dragged match — the ghost snaps to these
     });
     el.addEventListener('dragend', () => { clearGhost(); S.dragSource = null; renderGrid(); });
   });
 }
 
-// The candidate (venue, wallMin) under the pointer; legal snapping happens against
-// the daemon's slot list.
+// The candidate (venue, wallMin) under the pointer; the placement is free.
 function hitTest(e) {
   const grid = $('grid');
   const gr = grid.getBoundingClientRect();
@@ -274,27 +267,14 @@ function hitTest(e) {
   return { venue, wm, align: x - (rect.left - gr.left) > rect.width / 2 ? 'left' : 'right' };
 }
 
-// The legal start whose own slot covers this minute, else null: no ghost, no drop.
-function legalSnap(venue, wm, slot) {
-  const ticks = S.legal && S.legal.get(venue);
-  if (!ticks || !ticks.length) return null;
-  let best = null;
-  for (const t of ticks) {
-    const start = +t;
-    if (start <= wm && wm < start + slot && (best === null || start > best)) best = start;
-  }
-  return best;
+// The wall minute a drop lands on: the pointer rounded to the STEP grid, clamped so
+// the whole slot stays inside the day.
+function dropMin(wm, slot) {
+  const snapped = Math.round(wm / STEP) * STEP;
+  return Math.max(S.dayStart, Math.min(snapped, S.dayEnd - slot));
 }
 
-// Legal start-minutes per venue from the daemon, computed once per drag.
-async function loadSlots(cid, mid) {
-  const r = await get(`/api/slots?slug=${S.slug}&cat=${cid}&id=${mid}&day=${S.day}&gcd=${STEP}`);
-  // A superseded reply — an earlier drag's fetch landing late.
-  if (S.dragSource !== `${cid}:${mid}`) return;
-  S.legal = new Map(Object.entries((r && r.ok) || {}));
-}
-
-// One ghost element — the drop preview; legal starts only.
+// One ghost element — the drop preview.
 function addGhost(col, { time = '', align = '', top, height }) {
   const g = document.createElement('div');
   g.className = 'ghost';
@@ -307,7 +287,8 @@ function addGhost(col, { time = '', align = '', top, height }) {
   S.ghost = g;
 }
 
-// Live ghost preview: position by the pointer, legality by the daemon's slot list.
+// Live ghost preview: the pointer's wall mark, snapped and clamped — the position
+// the drop writes, whatever conflicts it creates.
 function ghost(e) {
   const src = S.dragSource;
   if (!src) return;
@@ -326,11 +307,9 @@ function ghost(e) {
     addGhost(col, { top: '.5rem', height: '2.5rem' });
     return;
   }
-  // The slot list is still in flight from dragstart — no preview beats a wrong one.
-  if (!S.legal) return;
-  const wm = legalSnap(ht.venue, ht.wm, slot);
-  if (wm === null) return;
-  // the wall start the drop would write, padded as the rail and the daemon's lattice pad it
+  if (!Number.isFinite(slot)) return; // a malformed match has no window to draw
+  const wm = dropMin(ht.wm, slot);
+  // the wall start the drop writes, padded as the rail pads it
   addGhost(col, { time: `${pad(Math.floor(wm / 60))}:${pad(wm % 60)}`, align: ht.align, top: (wm - S.dayStart) * S.pxPerMin + 'px', height: slot * S.pxPerMin + 'px' });
 }
 function clearGhost() { if (S.ghost) { S.ghost.remove(); S.ghost = null; } }
@@ -348,11 +327,9 @@ async function dropAt(e) {
     if ((m.scheduled || m.venue) && !confirm("Clear this match's time and court?")) return;
     time = null; venue = null;
   } else {
-    if (!S.legal) await loadSlots(cid, mid); // a drop can beat the dragstart fetch
-    // the same rule the ghost showed: the pointer must sit in the box it drew
-    const wm = legalSnap(ht.venue, ht.wm, slotMinOf(matchOf(cid, mid), cat(cid)));
-    if (wm === null) { flash('no legal slot here'); return; }
-    time = isoOf(S.day, wm); venue = ht.venue;
+    const slot = slotMinOf(matchOf(cid, mid), cat(cid));
+    if (!Number.isFinite(slot)) { flash('this match has no slot length — set its slotMinutes first'); return; }
+    time = isoOf(S.day, dropMin(ht.wm, slot)); venue = ht.venue;
   }
   await sendEdit('move', cid, mid, { time, venue });
 }
@@ -437,18 +414,12 @@ function openResult(cid, m) {
 }
 
 // ---- the side picker (modal) ----
-// Legality comes from /api/sideopts (the daemon's view of the gate, like /api/slots).
-// Illegal options that aren't the current value are greyed; the current value stays
-// selectable so it can be moved away.
-async function openSide(cid, m, si) {
+// Editing is unrestricted: any player, pool rank, or feeder is selectable, and an
+// edit that contradicts the model rides through as a conflict (publish blocks).
+function openSide(cid, m, si) {
   if (!reachable) return; // the offline banner says why
   const ctx = cat(cid);
   const size = teamSize(ctx);
-  const L = (await get(`/api/sideopts?cat=${cid}&id=${m.id}&si=${si}`))?.ok || {};
-  const busy = new Set(L.busy || []);
-  const consumedRanks = new Set(L.consumedRanks || []);
-  const consumedEdges = new Set(L.consumedEdges || []);
-  const descendants = new Set(L.descendants || []);
   const other = m.sides[1 - si];
   const otherIds = other && other.kind === 'players' && Array.isArray(other.ids) ? other.ids : [];
   const modal = $('modal');
@@ -471,24 +442,20 @@ async function openSide(cid, m, si) {
   const setKind = kind => {
     modal.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.kind === kind));
     if (kind === 'players') {
+      const names = new Map((S.tjson.players || []).filter(p => p && typeof p === 'object' && typeof p.id === 'string').map(p => [p.id, p.name]));
+      const roster = [...names.keys()];
       const ids = cur && cur.kind === 'players' ? cur.ids : [];
-      const names = new Map((S.tjson.players || []).filter(p => p && typeof p === 'object').map(p => [p.id, p.name]));
-      // the full roster from /api/sideopts; a registered player in no match yet is
-      // still a legal side
-      const all = L.roster || [];
       body.innerHTML = `<p class="hint" id="pickhint"></p><div class="players">` +
-        [...new Set(all)].map(id => {
-          const checked = ids.includes(id);
-          const illegal = busy.has(id) || otherIds.includes(id);
-          const why = busy.has(id) ? 'plays in an overlapping scheduled match' : otherIds.includes(id) ? 'already on the other side' : '';
-          return `<label${illegal ? ' class="illegal"' : ''}><input type="checkbox" value="${esc(id)}"${checked ? ' checked' : ''}${illegal ? ' data-illegal="1" disabled' : ''} title="${esc(why)}"><span>${esc(names.get(id) ?? id)}</span></label>`;
+        roster.map(id => {
+          const isOther = otherIds.includes(id);
+          return `<label${isOther ? ' class="illegal"' : ''}><input type="checkbox" value="${esc(id)}"${ids.includes(id) ? ' checked' : ''}${isOther ? ' disabled' : ''} title="${esc(isOther ? 'already on the other side' : '')}"><span>${esc(names.get(id) ?? id)}</span></label>`;
         }).join('') + '</div>';
-      // Tick at most teamSize — a third tick is never offered, and the count says why.
-      const boxes = [...body.querySelectorAll('input')];
+      // At most teamSize ticks — a third is never offered, and the count says why.
+      const boxes = [...body.querySelectorAll('.players input')];
       const hint = body.querySelector('#pickhint');
       const sync = () => {
         const n = boxes.filter(b => b.checked).length;
-        for (const b of boxes) b.disabled = b.dataset.illegal === '1' || (!b.checked && n >= size);
+        for (const b of boxes) b.disabled = otherIds.includes(b.value) || (!b.checked && n >= size);
         hint.textContent = `pick ${size} player${size === 1 ? '' : 's'} · ${n}/${size}`;
       };
       for (const b of boxes) b.addEventListener('change', sync);
@@ -504,22 +471,20 @@ async function openSide(cid, m, si) {
         const n = poolFacts(ctx).get(pool)?.sigs.size || 6; // ponytail: 6 if a pool's teams can't be resolved
         const want = cur && cur.kind === 'pool' && cur.pool === pool ? cur.rank : 1;
         body.querySelector('#ranksel').innerHTML = Array.from({ length: n }, (_, i) => i + 1)
-          .map(r => `<option${r === want ? ' selected' : ''}${consumedRanks.has(`pool:${pool}:${r}`) ? ' disabled' : ''}>${r}</option>`).join('');
+          .map(r => `<option${r === want ? ' selected' : ''}>${r}</option>`).join('');
       };
       fillRanks();
       body.querySelector('#poolsel').addEventListener('change', fillRanks);
     } else {
-      const undone = ctx.matches.filter(mm => !isDone(mm));
-      // the current feeder may already be decided — it must stay an option so an
-      // untouched modal no-ops rather than re-seating
-      const curFeeder = cur && cur.kind === 'match' ? ctx.matches.find(X => X && X.id === cur.match) : null;
-      const feeders = curFeeder && !undone.includes(curFeeder) ? [...undone, curFeeder] : undone;
+      // every match is a legal feeder — a decided one still resolves winner/loser, and
+      // a cycle or a consumed edge surfaces as a conflict, not a disabled option
+      const feeders = ctx.matches.filter(mm => mm && typeof mm === 'object' && (mm.id !== m.id || (cur && cur.kind === 'match' && cur.match === mm.id)));
       body.innerHTML = `<p class="hint">feeder match result</p>
-        <label class="field">Match <select id="matchsel">${feeders.map(mm => `<option value="${mm.id}"${cur && cur.kind === 'match' && cur.match === mm.id ? ' selected' : ''}${descendants.has(mm.id) || mm.id === m.id ? ' disabled' : ''}>${mm.id} · ${esc(matchLabel(mm, ctx))}</option>`).join('')}</select></label>
+        <label class="field">Match <select id="matchsel">${feeders.map(mm => `<option value="${esc(mm.id)}"${cur && cur.kind === 'match' && cur.match === mm.id ? ' selected' : ''}>${esc(mm.id)} · ${esc(matchLabel(mm, ctx))}</option>`).join('')}</select></label>
         <label class="field">Result <select id="resel"></select></label>`;
       const fillRes = () => {
         const mmId = +body.querySelector('#matchsel').value;
-        body.querySelector('#resel').innerHTML = ['winner', 'loser'].map(r => `<option value="${r}"${cur && cur.kind === 'match' && cur.match === mmId && cur.result === r ? ' selected' : ''}${consumedEdges.has(`${mmId}:${r}`) ? ' disabled' : ''}>${r}</option>`).join('');
+        body.querySelector('#resel').innerHTML = ['winner', 'loser'].map(r => `<option value="${r}"${cur && cur.kind === 'match' && cur.match === mmId && cur.result === r ? ' selected' : ''}>${r}</option>`).join('');
       };
       fillRes();
       body.querySelector('#matchsel').addEventListener('change', fillRes);
