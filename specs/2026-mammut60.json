@@ -88,6 +88,7 @@
         "slotMinutes": 60
       },
       "knockout": true,
+      "placements": 16,
       "courts": [
         "court-5",
         "court-4",

@@ -1434,6 +1434,23 @@
         "sides": [
           {
             "kind": "match",
+            "match": 21,
+            "result": "loser"
+          },
+          {
+            "kind": "match",
+            "match": 22,
+            "result": "loser"
+          }
+        ],
+        "venue": "court-1",
+        "scheduled": "2026-10-03T16:00:00"
+      },
+      {
+        "id": 28,
+        "sides": [
+          {
+            "kind": "match",
             "match": 23,
             "result": "winner"
           },
@@ -1447,7 +1464,7 @@
         "scheduled": "2026-10-03T16:25:00"
       },
       {
-        "id": 28,
+        "id": 29,
         "sides": [
           {
             "kind": "match",
@@ -1464,16 +1481,50 @@
         "scheduled": "2026-10-03T16:25:00"
       },
       {
-        "id": 29,
+        "id": 30,
         "sides": [
           {
             "kind": "match",
-            "match": 27,
+            "match": 23,
+            "result": "loser"
+          },
+          {
+            "kind": "match",
+            "match": 26,
+            "result": "loser"
+          }
+        ],
+        "venue": "court-3",
+        "scheduled": "2026-10-03T16:25:00"
+      },
+      {
+        "id": 31,
+        "sides": [
+          {
+            "kind": "match",
+            "match": 24,
+            "result": "loser"
+          },
+          {
+            "kind": "match",
+            "match": 25,
+            "result": "loser"
+          }
+        ],
+        "venue": "court-2",
+        "scheduled": "2026-10-03T16:25:00"
+      },
+      {
+        "id": 32,
+        "sides": [
+          {
+            "kind": "match",
+            "match": 28,
             "result": "winner"
           },
           {
             "kind": "match",
-            "match": 28,
+            "match": 29,
             "result": "winner"
           }
         ],
@@ -1483,22 +1534,56 @@
         "scheduled": "2026-10-03T16:50:00"
       },
       {
-        "id": 30,
+        "id": 33,
         "sides": [
           {
             "kind": "match",
-            "match": 27,
+            "match": 28,
             "result": "loser"
           },
           {
             "kind": "match",
-            "match": 28,
+            "match": 29,
             "result": "loser"
           }
         ],
         "bestOf": 3,
         "slotMinutes": 60,
         "venue": "court-4",
+        "scheduled": "2026-10-03T16:50:00"
+      },
+      {
+        "id": 34,
+        "sides": [
+          {
+            "kind": "match",
+            "match": 30,
+            "result": "winner"
+          },
+          {
+            "kind": "match",
+            "match": 31,
+            "result": "winner"
+          }
+        ],
+        "venue": "court-3",
+        "scheduled": "2026-10-03T16:50:00"
+      },
+      {
+        "id": 35,
+        "sides": [
+          {
+            "kind": "match",
+            "match": 30,
+            "result": "loser"
+          },
+          {
+            "kind": "match",
+            "match": 31,
+            "result": "loser"
+          }
+        ],
+        "venue": "court-2",
         "scheduled": "2026-10-03T16:50:00"
       }
     ]
