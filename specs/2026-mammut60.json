@@ -8,7 +8,7 @@
   "blocks": {
     "md": "09:00",
     "wd": "09:00",
-    "xd": "13:30"
+    "xd": "14:00"
   },
   "venues": {
     "court-1": "Court 1",
@@ -50,10 +50,10 @@
       "id": "md",
       "name": "Men's Doubles",
       "bestOf": 1,
-      "slotMinutes": 25,
+      "slotMinutes": 30,
       "final": {
         "bestOf": 3,
-        "slotMinutes": 50
+        "slotMinutes": 60
       },
       "knockout": true,
       "courts": [
@@ -71,10 +71,10 @@
       ],
       "name": "Women's Doubles",
       "bestOf": 1,
-      "slotMinutes": 25,
+      "slotMinutes": 30,
       "final": {
         "bestOf": 3,
-        "slotMinutes": 50
+        "slotMinutes": 60
       },
       "knockout": true
     },
@@ -82,10 +82,10 @@
       "id": "xd",
       "name": "Mixed",
       "bestOf": 1,
-      "slotMinutes": 25,
+      "slotMinutes": 30,
       "final": {
         "bestOf": 3,
-        "slotMinutes": 50
+        "slotMinutes": 60
       },
       "knockout": true,
       "courts": [
