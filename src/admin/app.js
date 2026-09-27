@@ -289,7 +289,7 @@ function hitTest(e) {
 // ghost exists exactly where a drop would land: no ghost, no drop. Keys arrive
 // as JSON object keys, so they are strings.
 function legalSnap(venue, wm, slot) {
-  const ticks = S.legal && S.legal.byVenue.get(venue);
+  const ticks = S.legal && S.legal.get(venue);
   if (!ticks || !ticks.length) return null;
   let best = null;
   for (const t of ticks) {
@@ -305,7 +305,7 @@ async function loadSlots(cid, mid) {
   const r = await get(`/api/slots?slug=${S.slug}&cat=${cid}&id=${mid}&day=${S.day}&gcd=${STEP}`);
   // A superseded reply — an earlier drag's fetch landing late.
   if (S.dragSource !== `${cid}:${mid}`) return;
-  S.legal = { byVenue: new Map(Object.entries((r && r.ok) || {})) };
+  S.legal = new Map(Object.entries((r && r.ok) || {}));
 }
 
 // One ghost element — the drop target's preview. Legal starts only, so its

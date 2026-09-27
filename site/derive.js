@@ -113,7 +113,7 @@ function gameDiff(games) {
   let gd = 0, pd = 0;
   if (Array.isArray(games)) for (const g of games) {
     if (!g || typeof g !== 'object') continue;
-    gd += (g.a > g.b) - (g.a < g.b);
+    gd += Math.sign(g.a - g.b);
     pd += g.a - g.b;
   }
   return { gd, pd };
@@ -677,9 +677,12 @@ function plBuild(ctx) {
     // loser- links so tied terminals rank in winner order.
     const seen = new Set([champ.id]);
     const queue = [champ];
-    const candsOf = (N) => (adj.get(N.id) || [])
-      .filter(x => !seen.has(x) && member(byId.get(x)))
-      .sort((a, b) => (winnerParent.get(N.id) === byId.get(b)) - (winnerParent.get(N.id) === byId.get(a)));
+    const candsOf = (N) => {
+      const wp = winnerParent.get(N.id); // the winner-parent neighbor sorts first
+      return (adj.get(N.id) || [])
+        .filter(x => !seen.has(x) && member(byId.get(x)))
+        .sort((a, b) => (byId.get(b) === wp) - (byId.get(a) === wp));
+    };
     const spec = new Map(); // id -> [winner edge, loser edge]: a rank, or the consuming match's id
     for (let qi = 0; qi < queue.length; qi++) {
       const N = queue[qi];
