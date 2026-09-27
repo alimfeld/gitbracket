@@ -104,7 +104,7 @@ for (const [name, dir, channel, re] of V) {
         assert(!hasErr(r, re), 'that message belongs to conflicts, not errs');
       }
     }
-    assert(![...r.errs, ...r.conflicts].some(e => e.endsWith(': undefined')), 'no message may end in ": undefined" (err(f, m) called with one arg?)');
+    assert(![...r.errs, ...r.conflicts].some(e => String(e).endsWith(': undefined')), 'no message may end in ": undefined" (err(f, m) called with one arg?)');
   });
 }
 
@@ -128,6 +128,20 @@ test('filterSlug: an index-entry error carries its slug — validate <slug> keep
   const idxErr = r.errs.find(e => e.startsWith('tournaments.json'));
   assert(idxErr && idxErr.includes('(sample)'), `index errors name their entry, got: ${idxErr}`);
   assert(filterSlug(r.errs, 'sample').includes(idxErr), "a per-slug run keeps the entry's own errors");
+});
+
+test('conflicts carry the cards they name: match-scoped refs and both double-book ends', () => {
+  const one = validateFixture('bad-two-pools').conflicts.find(c => /plays in two pools/.test(c));
+  assert.deepEqual(one.refs, [{ cat: 't', matchId: 2 }], 'a match-scoped conflict names its own match');
+  assert.equal(String(one), `${one.where}: ${one.message}`, 'the gate line survives the object');
+
+  const dup = validateFixture('bad-consumed-twice').conflicts.find(c => /consumed twice \(also by/.test(c));
+  assert.equal(dup.refs.length, 2, 'a shared slot lights both holders');
+  assert(dup.refs.some(r => r.matchId === 3), 'the first owner is among them');
+
+  const cross = validateFixture('bad-cross-overlap').conflicts.find(c => /overlap/.test(c));
+  assert.equal(cross.refs.length, 2, 'a double-book names both ends');
+  assert(cross.refs.some(r => r.cat === 'k1') && cross.refs.some(r => r.cat === 'k2'), 'across categories too');
 });
 
 test('filterSlug: validate <slug> narrows to that tournament', () => {

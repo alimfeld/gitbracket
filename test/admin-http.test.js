@@ -155,9 +155,10 @@ test('admin HTTP: a semantic conflict rides the edit, shows in pending, and bloc
   const r = await postJson(base, '/api/edit', JSON.stringify({ slug: 'sample', verb: 'move', cat: 'md40', matchId: '9', value: { time: m10.scheduled, venue: m10.venue } }));
   assert.equal(r.status, 200, 'the conflicting edit still commits — it is repairable, not refused');
   const body = await r.json();
-  assert(body.conflicts && body.conflicts.some(c => /overlap/.test(c)), 'the receipt carries the conflict');
+  assert(body.conflicts && body.conflicts.some(c => /overlap/.test(c.message)), 'the receipt carries the conflict');
   const pend = await (await fetch(base + '/api/pending')).json();
-  assert(pend.conflicts.some(c => /overlap/.test(c)), 'pending exposes the conflict for the badge');
+  assert(pend.conflicts.some(c => /overlap/.test(c.message)), 'pending exposes the conflict for the badge');
+  assert(pend.conflicts.some(c => (c.refs || []).length === 2), 'pending carries the cards to highlight');
   const pub = await postJson(base, '/api/publish', '{}');
   assert.equal(pub.status, 400, 'publish refuses while a conflict stands');
   assert((await pub.json()).conflicts.length > 0, 'the refusal carries the conflicts');

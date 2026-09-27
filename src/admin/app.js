@@ -17,7 +17,7 @@ const STEP = 5;
 const S = {
   slug: null, day: null, tjson: null, tz: 'UTC',
   pxPerMin: 1.2, dayStart: 0, dayEnd: 0,
-  cats: [], venues: [], days: [], dragSource: null, ghost: null,
+  cats: [], venues: [], days: [], dragSource: null, ghost: null, conflicts: [],
 };
 
 // ---- derive wrappers (derive.js globals) ----
@@ -100,6 +100,8 @@ function pools(ctx) { return [...new Set(ctx.matches.filter(m => m && m.pool).ma
 
 async function setSlug(slug, keepDay = false) {
   S.slug = slug;
+  S.conflicts = []; // a fresh tournament's cards must not inherit the old slug's highlights
+
   S.tjson = await get('/api/data?slug=' + slug);
   if (!S.tjson) return;
   S.tz = S.tjson.timezone || 'UTC';
@@ -176,6 +178,7 @@ function renderGrid() {
 
   grid.innerHTML = html;
   wireGrid();
+  paintConflicts(S.conflicts); // a day change rebuilds the cards — re-light the conflicting ones
 }
 
 // time · category · match id · label; the id lets feeder dropdowns map to board cards.
@@ -517,6 +520,27 @@ function openSide(cid, m, si) {
   modal.querySelector('.tabs button.active').focus(); // open inside the dialog, not behind it
 }
 
+// ---- conflict display ----
+// The daemon filters conflicts to this slug, so the file path is always redundant.
+// A line leads with the card it names; the symptom shows, the rationale (and the
+// rest) rides the title.
+const stripPath = s => String(s || '').replace(/site\/tournaments\/[\w.-]+\.json\s*/g, '').trim();
+function conflictParts(c) {
+  const where = stripPath(c.where);
+  const ref = (c.refs && c.refs[0]) || null;
+  const catId = ref ? ref.cat : (/matches\.([a-z0-9-]+)/.exec(where) || [])[1];
+  const name = catId ? (cat(catId)?.name || catId) : '';
+  const label = ref && ref.matchId != null ? `${name} · match ${ref.matchId}` : name || where;
+  const short = String(c.message || '').split(' — ')[0];
+  return { line: label ? `${label} — ${short}` : short, full: `${where}: ${c.message}` };
+}
+// Every match a conflict names lights up; category/file-level conflicts name none.
+function paintConflicts(conflicts) {
+  const keys = new Set();
+  for (const c of conflicts || []) for (const r of (c.refs || [])) keys.add(`${r.cat}:${r.matchId}`);
+  for (const el of $('grid').querySelectorAll('.match')) el.classList.toggle('conflict', keys.has(el.dataset.key));
+}
+
 // ---- pending + publish + undo/redo ----
 // set while /api/publish is in flight, so the pending poll can't re-enable the button
 let publishing = false;
@@ -540,9 +564,11 @@ async function refreshPending() {
   $('redo').title = p.redo ? `Redo ${p.redo.msg}` : '';
   // Semantic conflicts never block an edit, only the ship.
   const conflicts = p.conflicts || [];
+  S.conflicts = conflicts;
   $('issues').hidden = conflicts.length === 0;
   $('issueBadge').textContent = conflicts.length ? `${conflicts.length} conflict${conflicts.length === 1 ? '' : 's'}` : '';
-  $('issueList').innerHTML = conflicts.map(c => `<li>${esc(c)}</li>`).join('');
+  $('issueList').innerHTML = conflicts.map(c => { const p = conflictParts(c); return `<li title="${esc(p.full)}">${esc(p.line)}</li>`; }).join('');
+  paintConflicts(conflicts);
   // A failed deploy after its push leaves nothing pending, so Publish can't gate on
   // the count; re-deploying is idempotent.
   $('publish').disabled = publishing || p.dirty || conflicts.length > 0;
@@ -576,7 +602,7 @@ $('publish').onclick = async () => {
     const r = await post('/api/publish', {});
     if (!r.ok) {
       const msg = r.errors && r.errors.length ? r.errors.join('\n')
-        : r.conflicts && r.conflicts.length ? 'resolve before publishing:\n' + r.conflicts.join('\n')
+        : r.conflicts && r.conflicts.length ? 'resolve before publishing:\n' + r.conflicts.map(c => conflictParts(c).line).join('\n')
         : r.error;
       flash(msg);
       return;

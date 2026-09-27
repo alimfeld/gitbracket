@@ -14,6 +14,16 @@ const { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, matchesOf
 
 const RESULTS = ['winner', 'loser'];
 const RESULT_STATUSES = ['played', 'walkover', 'void'];
+
+// A semantic conflict. `where` + `message` print as the gate's one line; `refs` are
+// the {cat, matchId} cards the admin highlights. A match-scoped `where` yields its
+// own ref; a cross-match rule (double-book, shared slot) passes the partner too.
+function makeConflict(where, message, refs) {
+  const hit = /matches\.([a-z0-9-]+) match (\d+)/.exec(where);
+  const base = hit ? [{ cat: hit[1], matchId: Number(hit[2]) }] : [];
+  return { where, message, refs: base.concat(refs || []), toString() { return `${this.where}: ${this.message}`; } };
+}
+
 // One rule per status: played counts win + gd/pd from games; walkover a win only;
 // void nothing.
 function validateResultShape(r, hasGames, target, m, where, err, conflict) {
@@ -80,7 +90,7 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
   const tjson = info.tjson;
   if (tjson === undefined) return; // unreadable — readErrs carries the message
   const err = (f, m) => errs.push(`${f}: ${m}`);
-  const conflict = (f, m) => conflicts.push(`${f}: ${m}`);
+  const conflict = (f, m, refs) => conflicts.push(makeConflict(f, m, refs));
   if (tjson === null) { err(tFile, 'must be an object, got null'); return; }
 
   // The tournament page loads only this file; the index copy exists for the list page — keep equal.
@@ -202,11 +212,13 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
       const aMs = matchSlotMs(a.m, a.ctx), bMs = matchSlotMs(b.m, b.ctx);
       const aF = `${tFile} matches.${a.cat}`, bF = `${tFile} matches.${b.cat}`;
       for (const kind of pairBusy(a, b)) {
+        // both ends of the collision are named for the board — aF alone can't carry them
+        const both = [{ cat: a.cat, matchId: a.m.id }, { cat: b.cat, matchId: b.m.id }];
         if (kind === 'venue') {
-          conflict(aF, `${a.m.id} and ${b.m.id} overlap at venue ${a.m.venue} (${aMs / 60000}-minute and ${bMs / 60000}-minute slots) — ${bF} also schedules ${b.m.id}`);
+          conflict(aF, `${a.m.id} and ${b.m.id} overlap at venue ${a.m.venue} (${aMs / 60000}-minute and ${bMs / 60000}-minute slots) — ${bF} also schedules ${b.m.id}`, both);
         } else {
           const shared = [...a.players].filter(p => b.players.has(p)).join(', ');
-          conflict(aF, `player ${shared} double-booked — ${a.m.id} (${a.m.scheduled}) and ${b.m.id} (${b.m.scheduled}, ${bF})`);
+          conflict(aF, `player ${shared} double-booked — ${a.m.id} (${a.m.scheduled}) and ${b.m.id} (${b.m.scheduled}, ${bF})`, both);
         }
       }
     }
@@ -215,7 +227,7 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
 
 function validateCategory(cFile, matches, cat, players, venues, tjson, errs, conflicts, tzOk) {
   const err = (f, m) => errs.push(`${f}: ${m}`);
-  const conflict = (f, m) => conflicts.push(`${f}: ${m}`);
+  const conflict = (f, m, refs) => conflicts.push(makeConflict(f, m, refs));
   if (!Array.isArray(matches)) { err(cFile, 'matches must be an array'); return; }
 
   const bestOf = cat.bestOf;
@@ -373,8 +385,9 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, con
         const claim = (key, owner) => {
           if (seen.has(key)) conflict(where, `slot source ${key} is consumed twice by this match`);
           seen.add(key);
-          // every holder but the first is a duplicate — the gate names the first owner
-          if (owner.get(key) !== m.id) conflict(where, `slot source ${key} is consumed twice (also by ${owner.get(key)})`);
+          // every holder but the first is a duplicate — the gate names the first owner,
+          // and both cards light up
+          if (owner.get(key) !== m.id) conflict(where, `slot source ${key} is consumed twice (also by ${owner.get(key)})`, [{ cat: cat.id, matchId: owner.get(key) }]);
         };
         if (side.kind === 'match') {
           claim(`${side.match}:${side.result}`, sources.edge);
