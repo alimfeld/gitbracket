@@ -16,17 +16,17 @@ prints the next steps.
 ```bash
 node gb.js sim
 # → sim/k3f2x — start the daemon: node gb.js admin
-# → after publishing, open the scratch site and press the LIVE chip on a venue board
+# → after publishing, open the scratch site: the clock chip on a venue board runs the sim clock
 ```
 
 - **Score the day in the admin** — drag to reschedule, click to score, through
   the same validate-write-commit funnel as every other edit, so the deployed
   kiosk progresses like a real day.
-- **Sim the kiosk clock** — on a venue board, the bare `LIVE` chip in the
-  lower-right corner (it appears only there) toggles the sim clock: `◀`/`▶`
-  (or `]`/`[`) step it ±30 minutes, switching it on aims it at the event's
-  first scheduled match, and `✕` puts it back on real time. The clock is a
-  view only — it never changes what's scoreable.
+- **Sim the kiosk clock** — off match day a venue board's clock chip shows the
+  date; clicking it starts the sim clock, aimed at that day's first scheduled
+  match. While it runs, `j`/`k` step it ±5 minutes and Esc (or a click on the
+  running time) stops it. The clock is a view only — it never changes what's
+  scoreable.
 - **Iterate** — edit in admin, hit Publish (validate + push + deploy to the
   scratch domain), watch the kiosk. Every edit validates and commits itself,
   so nothing is lost mid-process.
