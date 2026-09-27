@@ -426,16 +426,14 @@ function renderVenue(route, data, now, simOn) {
     const list = byVenue.get(w.r.m.venue);
     if (list) list.push(w);
   }
-  // The day's frame: first start to last slot end plus a quarter-hour below it.
+  // Day frame: first start to last slot end — no pad, the board hugs its cards.
   const dayStart = Math.min(...win.map(w => w.s));
   const endMax = Math.max(...win.map(w => w.e ?? -Infinity));
-  let dayEnd = Number.isFinite(endMax) ? endMax : dayStart + 60;
-  dayEnd = Math.ceil((dayEnd + 15) / 15) * 15;
   // One rule for any slot length: a 60-min match reads six times a 10-min one and the
   // shortest card always fits. (30: no known slot lengths)
   const lens = win.filter(w => w.e !== null).map(w => w.e - w.s);
   const sShort = lens.length ? Math.min(...lens) : 30;
-  const total = dayEnd - dayStart; // never 0 — the trailing pad clears the last card
+  const total = (Number.isFinite(endMax) ? endMax : dayStart + 60) - dayStart; // never 0 — a length-less day still spans an hour
   const avail = typeof document !== 'undefined' ? document.documentElement.clientHeight : 0;
   // + CARD_GAP: the card subtracts it below, else the shortest card clips its last line
   const ppm = Math.max(1.6, avail ? (avail - 116) / total : 0, (CARD_PX + CARD_GAP) / sShort);
