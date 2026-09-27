@@ -133,7 +133,7 @@ main { flex: 1; display: flex; min-height: 0; }
   .match .edit-side { opacity: 1; }
 }
 .match .side[data-win] { font-weight: 600; }
-.match:hover { background: #0a66c21a; }
+.match:hover { background-image: linear-gradient(#0a66c21a, #0a66c21a); }
 .match .score { display: flex; gap: .2rem; margin-left: .4rem; }
 .match .score span { font-weight: 600; min-width: 1.3em; text-align: right; }
 .match .score span.ph { font-weight: normal; opacity: .4; }
