@@ -409,18 +409,16 @@ function renderVenue(route, data, now) {
     const list = byVenue.get(w.r.m.venue);
     if (list) list.push(w);
   }
-  // The day's frame: first start to last slot end, padded to a quarter-hour.
-  let dayStart = Math.min(...win.map(w => w.s));
+  // The day's frame: first start to last slot end plus a quarter-hour below it.
+  const dayStart = Math.min(...win.map(w => w.s));
   const endMax = Math.max(...win.map(w => w.e ?? -Infinity));
   let dayEnd = Number.isFinite(endMax) ? endMax : dayStart + 60;
-  dayStart = Math.floor((dayStart - 15) / 15) * 15;
   dayEnd = Math.ceil((dayEnd + 15) / 15) * 15;
-  if (dayStart < 0) dayStart = 0;
   // One rule for any slot length: a 60-min match reads six times a 10-min one and the
   // shortest card always fits. (30: no known slot lengths)
   const lens = win.filter(w => w.e !== null).map(w => w.e - w.s);
   const sShort = lens.length ? Math.min(...lens) : 30;
-  const total = dayEnd - dayStart; // ≥ 30 by the quarter-hour padding — never 0
+  const total = dayEnd - dayStart; // never 0 — the trailing pad clears the last card
   const avail = typeof document !== 'undefined' ? document.documentElement.clientHeight : 0;
   const ppm = Math.max(1.6, avail ? (avail - 140) / total : 0, CARD_PX / sShort);
   const y = min => (min - dayStart) * ppm;
