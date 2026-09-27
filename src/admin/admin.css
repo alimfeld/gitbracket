@@ -44,6 +44,7 @@ h2 { font-size: .95rem; margin: 0 0 .5rem; }
 .actions { margin-left: auto; display: flex; gap: .5rem; align-items: center; }
 button { font: inherit; padding: .3rem .7rem; border: 1px solid var(--line); background: #fff; border-radius: .375rem; cursor: pointer; }
 button.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+button.danger { margin-right: auto; color: var(--danger); border-color: var(--danger); }
 button:disabled { opacity: .5; cursor: default; }
 /* publish blocks for the whole push + deploy — spin while it runs */
 #publish[aria-busy="true"] { opacity: .7; }

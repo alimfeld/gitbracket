@@ -62,6 +62,16 @@ function applySide(matches, matchId, value) {
   });
 }
 
+// Remove a match from the bracket. The syntactic gate refuses a match other matches
+// still reference, so its consumers must be reseated first; its own feeders may orphan
+// and ride back as conflicts, cleared by the next edit (delete or repoint).
+function applyDelete(matches, matchId) {
+  return findMatch(matches, matchId, m => {
+    matches.splice(matches.indexOf(m), 1);
+    return null;
+  });
+}
+
 // Time and venue together — one commit, so a drag never lands a half-moved match.
 function applyMove(matches, matchId, value) {
   return findMatch(matches, matchId, m => {
@@ -169,6 +179,7 @@ function applyFor(verb, matchId, value) {
     if (value.shape === 'clear') return applyClear(ms, matchId);
     return `unknown result shape ${JSON.stringify(value.shape)}`;
   };
+  if (verb === 'delete') return ms => applyDelete(ms, matchId);
   return verb === 'move' ? c => applyMove(c, matchId, value)
     : verb === 'side' ? c => applySide(c, matchId, value)
     : () => `unknown edit verb ${JSON.stringify(verb)}`;
@@ -184,6 +195,7 @@ function commitMessage(kind, slug, cat, matchId, detail) {
 // so a move on a decided match reports the move. A side op on a decided match keeps
 // its result, flagged so history can't read as a silent rewrite.
 function editDetail(kind, m, value, ctx) {
+  if (kind === 'delete') return 'deleted';
   if (kind === 'result') {
     if (value.shape === 'score') return (m.games || []).map(gg => `${gg.a}-${gg.b}`).join(' · '); // dashes — the detail reads like the board column
     if (value.shape === 'walkover') return `side ${value.winner} wins by walkover`;
@@ -229,4 +241,4 @@ function execEdit(state, verb, cat, matchId, value) {
   return { sha, conflicts: res.conflicts };
 }
 
-module.exports = { applyScore, applyResult, applyMove, applySide, writeEdit, commitMessage, editDetail, parseResult, execEdit };
+module.exports = { applyScore, applyResult, applyMove, applySide, applyDelete, writeEdit, commitMessage, editDetail, parseResult, execEdit };

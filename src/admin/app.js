@@ -343,7 +343,7 @@ async function sendEdit(verb, cid, mid, value) {
   if (!r.ok) { const msg = r.errors ? r.errors.join('\n') : (r.error || 'edit refused'); flash(msg); return msg; }
   if (r.unchanged) { flash('no change — the same data is already stored'); return true; }
   await reload(); // setSlug re-renders the grid + editor and refreshes pending
-  flash({ result: 'result saved', move: 'match moved', side: 'side updated' }[verb] || 'saved');
+  flash({ result: 'result saved', move: 'match moved', side: 'side updated', delete: 'match deleted' }[verb] || 'saved');
   return true;
 }
 
@@ -378,7 +378,7 @@ function openResult(cid, m) {
       <button type="button" data-fill="">No result</button>
     </div>
     <p class="err" id="resulterr" hidden></p>
-    <div class="foot"><button data-x="cancel">Cancel</button><button data-x="apply" class="primary">Apply</button></div>
+    <div class="foot"><button data-x="delete" class="danger">Delete match</button><button data-x="cancel">Cancel</button><button data-x="apply" class="primary">Apply</button></div>
   </div>`;
   const input = modal.querySelector('#scoreinput');
   // the inline error parks the daemon's words under the input, unlike the fading toast
@@ -410,6 +410,13 @@ function openResult(cid, m) {
   };
   modal.querySelector('[data-x="cancel"]').onclick = closeModal;
   modal.querySelector('[data-x="apply"]').onclick = submit;
+  // destructive: the match leaves the data (git keeps the record). The syntactic gate
+  // refuses a match other matches still reference — reseat its sides first.
+  modal.querySelector('[data-x="delete"]').onclick = async () => {
+    if (!confirm(`Delete ${cardMeta(ctx, m)}?`)) return;
+    const msg = await sendEdit('delete', cid, m.id, {});
+    if (msg === true) closeModal(); else { errEl.textContent = msg; errEl.hidden = false; }
+  };
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); submit(); }
   });

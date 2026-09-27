@@ -306,3 +306,23 @@ test('editor editDetail: the side op reports the applied slot label; a move repo
   const d2 = editor.editDetail('side', done, { si: 0, side: { kind: 'players', ids: ['p3', 'p4'] } }, ctx);
   assert(/result kept/.test(d2), 'a side op on a decided match flags the kept result — history never reads as a silent rewrite');
 });
+
+test('editor applyDelete: a still-referenced match dangles (syntactic gate refuses); a detached one clears the orphan', () => {
+  // still referenced — the validator reports the dangling slot that writeEdit's gate refuses
+  const dangling = loadRepo(FIX('sample'));
+  const ms1 = dangling.tournaments.get('sample').tjson.matches.md40;
+  assert.equal(editor.applyDelete(ms1, '7'), null, 'applyDelete reports no error');
+  assert(!ms1.some(m => m.id === 7), 'match 7 is gone from the list');
+  assert(hasErr(validateRepo(dangling), /unknown match slot 7/), 'the final/bronze still reference it — a syntactic error, so the write is refused');
+  assert.equal(editor.applyDelete(ms1, '999'), 'unknown match 999', 'deleting an unknown match reports, never throws');
+
+  // the repair path: reseat the consumers (final + bronze) away from the voided semi, then delete it
+  const repo = loadRepo(FIX('sample'));
+  const ms = repo.tournaments.get('sample').tjson.matches.md40;
+  editor.applySide(ms, '9', { si: 0, side: { kind: 'players', ids: ['p1', 'p2'] } });
+  editor.applySide(ms, '10', { si: 0, side: { kind: 'players', ids: ['p3', 'p4'] } });
+  editor.applyDelete(ms, '7');
+  const { errs, conflicts } = validateRepo(repo);
+  assert.equal(errs.length + conflicts.length, 0, 'detached delete lands clean: ' + [...errs, ...conflicts].join('; '));
+  assert.equal(editor.editDetail('delete', { id: 7 }, {}, null), 'deleted', 'the delete detail reads in history');
+});
