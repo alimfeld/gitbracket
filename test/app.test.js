@@ -630,7 +630,7 @@ test('multi-day kiosk: one day at a time, previewing day one early, falling back
   assert(text(fri).includes('Katherine Johnson') && !text(fri).includes('SF') && !text(fri).includes('Final'), 'a day before day one: the board previews the first day, pools only');
 });
 
-test('kiosk: the header stamps freshness and announces completed results via a live region', () => {
+test('kiosk: the header stamp never pretends live without a successful fetch', () => {
   const tjson = () => ({
     name: 'Live', location: 'Hall', timezone: 'UTC', venues: [{ id: 'c1', name: 'Court 1' }],
     players: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }],
@@ -638,17 +638,12 @@ test('kiosk: the header stamps freshness and announces completed results via a l
     matches: { t: [{ id: 1, pool: 'A', scheduled: '2026-05-02T09:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p1'] }, { kind: 'players', ids: ['p2'] }] }] },
   });
   const rt = { slug: 'kiosk-live', view: 'venues' };
-  const at = Date.parse('2026-05-02T09:30:00Z');
-  const open = renderVenue(rt, pageData(tjson(), 'kiosk-live'), at);
-  assert(open.includes('aria-live="polite"'), 'a11y: the latest-results line is a live region');
+  const open = renderVenue(rt, pageData(tjson(), 'kiosk-live'), Date.parse('2026-05-02T09:30:00Z'));
   assert(open.includes('data-status="stale"'), 'no successful fetch yet — the stamp reads stale, never pretends live');
-  const t2 = tjson();
-  t2.matches.t[0].result = { status: 'played', winner: 'a' }; // the match completes between polls
-  const done = renderVenue(rt, pageData(t2, 'kiosk-live'), at + 61000);
-  assert(text(done).includes('Court 1') && text(done).includes('won'), 'a completed match lands on the latest line');
+  assert(open.includes('role="status"'), 'a11y: the state dot carries its own live region, not the counting time');
 });
 
-test('tournament views: a poll that changed the file flashes an updated stamp, an unchanged one stays quiet', () => {
+test('tournament views: a poll that changed the file flashes the stamp, an unchanged one stays quiet', () => {
   const tjson = () => ({
     name: 'Cue', location: 'Hall', timezone: 'UTC', venues: [{ id: 'c1', name: 'Court 1' }],
     players: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }],
@@ -656,11 +651,11 @@ test('tournament views: a poll that changed the file flashes an updated stamp, a
     matches: { t: [{ id: 1, pool: 'A', scheduled: '2026-05-02T09:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p1'] }, { kind: 'players', ids: ['p2'] }] }] },
   });
   const rt = { slug: 'updated-cue', view: 'tournament' };
-  assert(!renderTournament(rt, pageData(tjson(), 'updated-cue')).includes('Updated'), 'the first render is a baseline, not a change');
-  assert(!renderTournament(rt, pageData(tjson(), 'updated-cue')).includes('Updated'), 'an unchanged poll stays quiet');
+  assert(!renderTournament(rt, pageData(tjson(), 'updated-cue')).includes('data-flash'), 'the first render is a baseline, not a change');
+  assert(!renderTournament(rt, pageData(tjson(), 'updated-cue')).includes('data-flash'), 'an unchanged poll stays quiet');
   const t2 = tjson();
   t2.matches.t[0].result = { status: 'played', winner: 'a' };
-  assert(renderTournament(rt, pageData(t2, 'updated-cue')).includes('Updated'), 'a poll that changed the file flashes the stamp');
+  assert(renderTournament(rt, pageData(t2, 'updated-cue')).includes('data-flash'), 'a poll that changed the file flashes the stamp');
 });
 
 test('category tabs: every category renders as a switcher link', () => {

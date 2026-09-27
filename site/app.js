@@ -2,7 +2,6 @@
 
 const POLL_MS = 30000;
 const FOLLOW_MS = 60000; // the kiosk re-follows the play on this cadence, data change or not
-const RECENT_MS = 2 * 60 * 1000; // how long a completed result stays on the kiosk's latest line
 // The dense-day floor for the kiosk calendar: one card-height per shortest
 // slot, so a 10-min slot day renders as a walkable strip, a 60-min day as a
 // screen. 135px is the card's measured height at base zoom — under-tune it
@@ -187,16 +186,21 @@ const catNav = (slug, ctxs, route) => {
   }).join('');
 };
 
-// The tournament views' change cue: a poll that actually changed the file
-// flashes "Updated HH:MM" for one cycle — proof the page refreshes itself,
-// gone the moment nothing changed. One baseline per slug.
-let viewSnap = null; // { slug, hash, changedAt }
-function updatedLine(data, tz) {
+// The polling views' shared stamp: "Last updated: HH:MM" is the last successful
+// poll, so the number moving is the proof the page is live; a poll that actually
+// changed the file flashes the line, and a failing poll flips the state dot. One
+// baseline per slug.
+let stampSnap = null; // { slug, hash } — the change detector behind the flash
+function updateStamp(data, tz) {
   const hash = JSON.stringify(data.tjson);
-  const now = Date.now();
-  if (!viewSnap || viewSnap.slug !== data.t.slug) { viewSnap = { slug: data.t.slug, hash, changedAt: 0 }; return ''; }
-  if (viewSnap.hash !== hash) { viewSnap.hash = hash; viewSnap.changedAt = now; }
-  return now - viewSnap.changedAt < POLL_MS ? `<p class="meta">${u('updated', { time: fmtTime(viewSnap.changedAt, tz) })}</p>` : '';
+  const flash = !!stampSnap && stampSnap.slug === data.t.slug && stampSnap.hash !== hash;
+  stampSnap = { slug: data.t.slug, hash };
+  const stale = !lastPoll || Date.now() - lastPoll > POLL_MS * 2;
+  const state = stale ? u('reconnect') : u('live');
+  const dot = `<span class="dot" role="status" aria-label="${esc(state)}">${stale ? '◌' : '●'}</span>`;
+  const when = lastPoll ? fmtTime(lastPoll, tz) : '—';
+  const stamp = `<time datetime="${lastPoll ? new Date(lastPoll).toISOString() : ''}">${u('updated', { time: when })}</time>${stale ? ` · ${esc(state)}` : ''}`;
+  return `<p class="meta"${flash ? ' data-flash' : ''}${stale ? ' data-status="stale"' : ''}>${dot} ${stamp}</p>`;
 }
 
 function renderTournament(route, data) {
@@ -209,7 +213,7 @@ function renderTournament(route, data) {
   const parts = [segmentBar(route), `<header><h1>${esc(data.t.name)}<a href="#">${u('tournaments')}</a></h1>`];
   // the heading states the span and the location once — single-day cards never repeat the date
   const range = fmtRange(days);
-  parts.push(`<p>${[range, esc(data.tjson.location)].filter(Boolean).join(' · ')}</p>${updatedLine(data, tz)}</header>`);
+  parts.push(`<p>${[range, esc(data.tjson.location)].filter(Boolean).join(' · ')}</p>${updateStamp(data, tz)}</header>`);
   parts.push(`<nav class="cats" aria-label="${u('categories')}">${catNav(data.t.slug, ctxs, route)}</nav>`);
   // a tournament with no categories (hand-edited or staged) renders the shell — "missing data renders empty", never a throw
   if (show) parts.push(catSection(show, { multi, href: href(data.t.slug, 'tournament', route) }));
@@ -426,16 +430,10 @@ function renderVenue(route, data, now) {
   // the same map every category context already carries (sharedFacts) — never rebuilt
   const venueNames = ctxs.length ? ctxs[0].venues : new Map();
   const cols = declared.map(v => v.id).filter(id => open.some(r => r.m.venue === id));
-  // the header's foot: one line, the freshness stamp (never the sim clock)
-  // holding the latest results — the board must not look live while polls
-  // fail; the live region stays scoped to the ticker, so the stamp, which
-  // churns every poll, never announces itself
-  const rec = venueRecency(data, data.cats);
-  const recText = rec.length ? rec.slice(0, 3).map(e => e.text).join(' · ') + (rec.length > 3 ? ` · ${u('more', { n: rec.length - 3 })}` : '') : '';
-  const stale = Date.now() - lastPoll > POLL_MS * 2;
-  const stamp = `${u('updated', { time: fmtTime(lastPoll, tz) })}${stale ? ` · ${u('reconnect')}` : ''}`;
-  const ticker = `<span aria-live="polite">${recText ? ` · ${esc(recText)}` : ''}</span>`;
-  const header = `<header><div><h1>${esc(data.t.name)}</h1><p>${shownDay === today ? u('today') : dayLabel(shownDay)}</p><p class="meta"${stale ? ' data-status="stale"' : ''}>${esc(stamp)}${ticker}</p></div><time id="clock"></time></header>`;
+  // the header's foot: the shared freshness stamp (never the sim clock) — the
+  // board must not look live while polls fail; the stamp churns every poll, so
+  // only the state dot is a live region, and it never announces the time
+  const header = `<header><div><h1>${esc(data.t.name)}</h1><p>${shownDay === today ? u('today') : dayLabel(shownDay)}</p>${updateStamp(data, tz)}</div><time id="clock"></time></header>`;
   // header and venue titles stick as one block — the titles ride the running
   // clock, aligned to the board by the shared --cols track
   const top = `<div class="kiosk-top" style="--cols: ${cols.length}">${header}${cols.map(id => `<h2>${esc(venueNames.get(id) || id)}</h2>`).join('')}</div>`;
@@ -504,47 +502,9 @@ function renderVenue(route, data, now) {
 const multiDay = ctxs => schedDays(ctxs.flatMap(c => c.matches), (ctxs[0] && ctxs[0].tz) || 'UTC').length > 1;
 
 
-// ---- the kiosk's freshness + latest-results state. Renderer bookkeeping, not
-// domain — module state the venue view owns; kept per slug, so a hop away and
-// back compares against the last visit instead of announcing from zero.
-let lastPoll = 0; // real time of the last successful fetch — never the sim clock
-const slugSnap = new Map(); // slug -> { done: Map } — previous poll's done-ness per match
-const slugRecent = new Map(); // slug -> [{ text, at }] — completed results, pruned at render
-
-// One completed match's announcement: court · wall time · winner (or void).
-const resultText = (ctx, m) => {
-  const t = schedTime(m, ctx.tz);
-  const when = t !== null ? fmtTime(t, ctx.tz) : 'TBD';
-  const where = m.venue ? venueName(ctx, m.venue) : 'TBD';
-  const w = winnerIdx(m);
-  // a scored match with no sides (invalid via the gate, but the recency line
-  // must not die on it — bad-sides-knockout's played m5 has none)
-  const s = m.sides && m.sides[w];
-  return w === null ? u('result-void', { where, when }) : u('result', { where, when, winner: s ? sideLabel(s, ctx) : u('the-match') });
-};
-
-// Matches that completed since the last poll, merged into the rolling window.
-function venueRecency(data, cats) {
-  const slug = data.t.slug;
-  let lastSnap = slugSnap.get(slug);
-  if (!lastSnap) { lastSnap = { done: new Map() }; slugSnap.set(slug, lastSnap); }
-  let recent = slugRecent.get(slug);
-  if (!recent) { recent = []; slugRecent.set(slug, recent); }
-  const done = new Map();
-  const fresh = [];
-  for (const c of cats) for (const m of c.matches) {
-    if (!m) continue;
-    const k = `${c.id}:${m.id}`;
-    const d = isDone(m);
-    done.set(k, d);
-    if (!lastSnap.done.get(k) && d) fresh.push(resultText(c, m));
-  }
-  lastSnap.done = done;
-  const at = Date.now();
-  recent = [...recent.filter(e => at - e.at < RECENT_MS), ...fresh.map(text => ({ text, at }))];
-  slugRecent.set(slug, recent);
-  return recent;
-}
+// The last successful fetch, in real time — the stamp's freshness source,
+// never the sim clock.
+let lastPoll = 0;
 
 // A possible stage: the round the player could reach once the pools decide —
 // the certain bits inline, the chip carrying the rank or outcome that gets in.
@@ -620,7 +580,7 @@ function playerSchedule(route, data, p) {
     blocks.push(`<p>${esc(ctx.name || ctx.id)}: <strong>${esc(s)}</strong></p>`);
     if (nextEv && nextEv.ctx === ctx) blocks.push(`<p data-status="next">${next}</p>`);
   }
-  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}<a href="${esc(href(data.t.slug, 'schedule', { ...route, player: null }))}">${u('change-player')}</a></h1>${blocks.join('')}${updatedLine(data, data.tjson.timezone || 'UTC')}</header>`];
+  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}<a href="${esc(href(data.t.slug, 'schedule', { ...route, player: null }))}">${u('change-player')}</a></h1>${blocks.join('')}${updateStamp(data, data.tjson.timezone || 'UTC')}</header>`];
   const out = [];
   let curDay = null;
   for (const e of events) {
