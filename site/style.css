@@ -382,10 +382,15 @@ body.venue header {
   padding: calc(var(--space)*2) 0 var(--space);
 }
 
-/* the date line hangs off the title's own margin — its own 2S bottom would
-   escape the header div and double the gap to the venue titles */
-.kiosk-top p {
+/* the day line hangs off the title's own margin, and the stamp keeps the shared
+   top gap — but neither's bottom margin may escape the header div and double
+   the gap to the venue titles */
+.kiosk-top p:first-of-type {
   margin: 0;
+}
+
+.kiosk-top .meta {
+  margin-bottom: 0;
 }
 
 @keyframes stick {
