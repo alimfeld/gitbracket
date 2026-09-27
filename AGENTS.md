@@ -64,10 +64,11 @@ implement them; treat them as rules, not style.
   (`gb.js sim`) practice the whole pipeline on a branch that is never merged:
   their scores are fabricated and their scratch CNAME must not ride into
   production history (`gb.js sim --teardown` is the only exit). The venue
-  board is operated, never handed to the public — its corner sim-clock chip
-  is a deliberate control, practice mode's entry point; don't gate or remove
-  it. Publishing sits outside git: last write wins on the CDN, safe because
-  one director ships, everyone else pulls and reviews.
+  board is operated, never handed to the public — off match day its clock
+  shows the date, and that date is a deliberate control, practice mode's
+  entry point; don't gate or remove it. Publishing sits outside git: last
+  write wins on the CDN, safe because one director ships, everyone else
+  pulls and reviews.
 - **Every editor edit validates, writes, and commits itself** — the process
   can die at any instant with nothing lost.
 - **Never weaken a check to make data pass — fix the data.** Pre-commit runs

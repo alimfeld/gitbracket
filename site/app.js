@@ -3,8 +3,9 @@
 const POLL_MS = 30000;
 const FOLLOW_MS = 60000; // the kiosk re-follows the play on this cadence, data change or not
 // 135px = the card's measured height at base zoom; under-tune it and cards overlap
-// their next slot. ponytail: re-tune on the wall screen beside the 1.6px/min viewport
-// floor and the 140px header allowance.
+// their next slot. 116px = the kiosk-top header (h1 + stamp) at base zoom; a taller
+// header clips the day's last card. ponytail: re-tune on the wall screen beside the
+// 1.6px/min viewport floor.
 const CARD_PX = 135;
 
 // Cards end this many px short of their slot so tops stay pinned and bottoms read as
@@ -45,11 +46,14 @@ const wallClockMin = (t, tz) => {
   return f.length === 2 ? +f[0] * 60 + +f[1] : null;
 };
 
-// The sim clock's aim: the event's first scheduled match. Pure.
-function simAimOffset(tjson, now) {
+// The sim clock's aim: a day's first match, or the event's first when no day is
+// given (or that day has none). Pure.
+function simAimOffset(tjson, now, day) {
   const tz = tjson.timezone || 'UTC';
   const ts = Object.values(tjson.matches || {}).flat().map(m => m ? schedTime(m, tz) : NaN).filter(Number.isFinite);
-  return ts.length ? Math.min(...ts) - now : null;
+  const onDay = day ? ts.filter(t => dayKey(t, tz) === day) : ts;
+  const aim = onDay.length ? onDay : ts;
+  return aim.length ? Math.min(...aim) - now : null;
 }
 
 // A dead deep link (httpError — permanent, stop polling) versus a transient
@@ -365,7 +369,7 @@ function sideRow(m, ctx, i) {
   return `<div class="side"${w === i ? ' data-win' : ''}><span>${esc(sideLabel(side, ctx))}</span>${w === i ? `<span class="winmark" aria-label="${u('won')}">✓</span>` : ''}<span class="score">${scoreCells(m, i, ctx)}</span></div>`;
 }
 
-function renderVenue(route, data, now) {
+function renderVenue(route, data, now, simOn) {
   if (!data.tjson) return MISSING();
   const v = route.venue;
   const rows = [];
@@ -382,6 +386,7 @@ function renderVenue(route, data, now) {
   const shown = v ? rows.filter(r => r.m.venue === v) : rows;
   const tz = data.tjson.timezone || 'UTC';
   const today = dayKey(now, tz); // one day per screen — an overnight board must not list yesterday
+  const isMatchDay = schedDays(ctxs.flatMap(c => c.matches), tz).includes(today); // a scheduled day, never a gap day
   const firstDay = rows.length ? dayKey(rows[0].t, rows[0].ctx.tz) : null;
   const lastDay = rows.length ? dayKey(rows.at(-1).t, rows.at(-1).ctx.tz) : null;
   // Before day one preview day one, after the last day show its board.
@@ -392,8 +397,18 @@ function renderVenue(route, data, now) {
   // sharedFacts' map, never rebuilt
   const venueNames = ctxs.length ? ctxs[0].venues : new Map();
   const cols = declared.map(v => v.id).filter(id => open.some(r => r.m.venue === id));
-  // the shared freshness stamp (never the sim clock) — only the state dot is a live region
-  const header = `<header><div><h1>${esc(data.t.name)}</h1><p>${shownDay === today ? u('today') : dayLabel(shownDay)}</p>${updateStamp(data, tz)}</div><time id="clock"></time></header>`;
+  // the clock is the board's only control: a bare time on a match day, the shown
+  // day's date otherwise — click the date to sim that day, the running time to stop
+  // (the stamp carries the real last-fetch; only its state dot is a live region)
+  const dayText = fmtRange([shownDay]); // null when the day or tz is unreadable
+  const time = esc(fmtTime(now, tz));
+  const clock = isMatchDay && !simOn
+    ? `<time id="clock" data-mode="time">${time}</time>`
+    : simOn || dayText
+      ? `<button type="button" id="clock" data-sim-toggle data-mode="${simOn ? 'time' : 'date'}"${simOn ? '' : ` data-day="${esc(shownDay)}"`}>${simOn ? time : esc(dayText)}</button>`
+      : '';
+  const simRow = simOn ? `<div class="sim" role="group" aria-label="sim clock"><button type="button" data-sim-step="-5" aria-label="sim clock 5 minutes back">◀</button><button type="button" data-sim-step="5" aria-label="sim clock 5 minutes forward">▶</button><span class="sim-mark">${u('sim')}</span></div>` : '';
+  const header = `<header><div><h1>${esc(data.t.name)}</h1>${updateStamp(data, tz)}</div><div class="kiosk-clock">${clock}${simRow}</div></header>`;
   // header and venue titles stick as one block, aligned by the shared --cols track
   const top = `<div class="kiosk-top" style="--cols: ${cols.length}">${header}${cols.map(id => `<h2>${esc(venueNames.get(id) || id)}</h2>`).join('')}</div>`;
   if (!cols.length) return top + `<p>${u('nothing')}</p>`;
@@ -420,7 +435,7 @@ function renderVenue(route, data, now) {
   const sShort = lens.length ? Math.min(...lens) : 30;
   const total = dayEnd - dayStart; // never 0 — the trailing pad clears the last card
   const avail = typeof document !== 'undefined' ? document.documentElement.clientHeight : 0;
-  const ppm = Math.max(1.6, avail ? (avail - 140) / total : 0, CARD_PX / sShort);
+  const ppm = Math.max(1.6, avail ? (avail - 116) / total : 0, CARD_PX / sShort);
   const y = min => (min - dayStart) * ppm;
   const card = (r, h) => {
     const status = kioskStatus(r, now);
@@ -540,58 +555,25 @@ function playerSchedule(route, data, p) {
   return parts.join('');
 }
 
-// The sim clock: while the offset key exists, now() rides it; ◀▶, ]/[, and the
-// corner toggle move it. The panel lives outside main, so no render touches it.
+// The sim clock's state — the board's clock button toggles it, ◀▶ and ]/[ step it.
 function mountSimClock({ tjsonOf, onChange }) {
   const SIM_KEY = 'gitbracket.sim.offset';
   const simOffset = () => Number(localStorage.getItem(SIM_KEY)) || 0;
   const simOn = () => localStorage.getItem(SIM_KEY) !== null;
   const now = () => Date.now() + simOffset();
-
-  const aside = document.createElement('aside');
-  aside.id = 'sim-clock';
-  aside.setAttribute('role', 'group');
-  aside.setAttribute('aria-label', 'sim clock');
-  const toggle = document.createElement('button'); toggle.type = 'button';
-  const back = document.createElement('button'); back.type = 'button'; back.textContent = '◀'; back.setAttribute('aria-label', 'sim clock 30 minutes back');
-  const fwd = document.createElement('button'); fwd.type = 'button'; fwd.textContent = '▶'; fwd.setAttribute('aria-label', 'sim clock 30 minutes forward');
-  const readout = document.createElement('span');
-  const steps = [back, readout, fwd]; // shown only while the clock is on
-
-  const panel = () => {
-    const on = simOn();
-    // the box belongs to the controls; at rest the chip is bare
-    aside.toggleAttribute('data-sim', on);
-    // the one chip is both: ● LIVE at rest, ✕ while the sim clock runs
-    toggle.textContent = on ? '✕' : '● LIVE';
-    toggle.setAttribute('aria-label', on ? 'turn the sim clock off' : '');
-    toggle.setAttribute('aria-pressed', String(on));
-    for (const el of steps) el.hidden = !on;
-    if (!on) return;
-    const t = now();
-    const tz = (tjsonOf() || {}).timezone || 'UTC';
-    readout.textContent = `${dayShort(t, tz)} · ${fmtTime(t, tz)}`;
-  };
   // a clock change re-renders the board — statuses and the now-line recompute
-  const apply = () => { panel(); onChange(); };
-  const step = ms => { localStorage.setItem(SIM_KEY, String(simOffset() + ms)); apply(); };
-  toggle.onclick = () => {
+  const step = ms => { localStorage.setItem(SIM_KEY, String(simOffset() + ms)); onChange(); };
+  const toggle = day => {
     if (simOn()) localStorage.removeItem(SIM_KEY);
-    else {
-      const tjson = tjsonOf();
-      localStorage.setItem(SIM_KEY, String((tjson && simAimOffset(tjson, Date.now())) || 0));
-    }
-    apply();
+    else localStorage.setItem(SIM_KEY, String(simAimOffset(tjsonOf() || {}, Date.now(), day) || 0));
+    onChange();
   };
-  back.onclick = () => step(-30 * 60000);
-  fwd.onclick = () => step(30 * 60000);
-  aside.append(toggle, back, readout, fwd);
   window.addEventListener('keydown', e => {
-    if (!simOn() || !aside.parentNode) return; // the keys move the board's clock, and only where it is
-    if (e.key === '[') { e.preventDefault(); step(-30 * 60000); }
-    else if (e.key === ']') { e.preventDefault(); step(30 * 60000); }
+    if (!simOn() || !document.body.classList.contains('venue')) return; // the keys move the board's clock, and only where it is
+    if (e.key === '[') { e.preventDefault(); step(-5 * 60000); }
+    else if (e.key === ']') { e.preventDefault(); step(5 * 60000); }
   });
-  return { aside, panel, now };
+  return { simOn, now, step, toggle };
 }
 
 // The index loads once; every tournament view polls while the tab is visible.
@@ -603,14 +585,14 @@ function boot() {
   setLocale(lang);
   document.documentElement.lang = lang;
 
-  // The sim clock drives now() and the venue board's corner panel.
+  // The sim clock drives now() and the venue board's clock controls.
   const sim = mountSimClock({
     tjsonOf: () => data && data.tjson,
     onChange: () => { if (data && route) render(route, data); },
   });
   const now = sim.now;
 
-  const renderers = { index: renderIndex, tournament: renderTournament, venues: (r, d) => renderVenue(r, d, now()), schedule: renderPlayer };
+  const renderers = { index: renderIndex, tournament: renderTournament, venues: (r, d) => renderVenue(r, d, now(), sim.simOn()), schedule: renderPlayer };
   const pageTitle = (r, d) => {
     if (r.view === 'index' || !d.t) return 'Bracket';
     if (r.view === 'schedule') {
@@ -639,17 +621,15 @@ function boot() {
     stopPoll();
     pollTimer = setInterval(tick, POLL_MS);
     if (pollOn === 'venues') {
-      // Clock lives in an element the change-guard never re-renders; look it
-      // up fresh each tick.
+      // The clock's label lives in an element the change-guard never re-renders;
+      // look it up fresh each tick — a date stays static, only a time ticks.
       clockTimer = setInterval(() => {
         const t = now();
-        const tz = (data && data.tjson && data.tjson.timezone) || 'UTC';
         const el = document.getElementById('clock');
-        if (el) {
-          el.textContent = `${dayShort(t, tz)} · ${fmtTime(t, tz)}`; // the kiosk clock carries its date
+        if (el && el.dataset.mode === 'time') {
+          el.textContent = fmtTime(t, (data && data.tjson && data.tjson.timezone) || 'UTC');
           el.dateTime = new Date(t).toISOString(); // the instant, derived — the label stays wall clock
         }
-        sim.panel(); // the sim panel's readout rides the kiosk tick
         // once a minute, re-follow from the last snapshot — statuses and the
         // now-line recompute against now
         if (t - lastFollow >= FOLLOW_MS && data) {
@@ -715,9 +695,6 @@ function boot() {
   // Fragment navigation: same-slug hops re-render from the cached snapshot.
   const navigate = () => {
     const r = parseRoute();
-    // the sim clock is the venue board's alone — attached there, gone elsewhere
-    if (!r || r.view !== 'venues') sim.aside.remove();
-    else if (!sim.aside.parentNode) document.body.appendChild(sim.aside);
     if (!r) {
       route = null;
       pollOn = false; stopPoll();
@@ -753,13 +730,15 @@ function boot() {
     });
   };
   document.addEventListener('click', e => {
+    const step = e.target.closest('button[data-sim-step]');
+    if (step) return sim.step(Number(step.dataset.simStep) * 60000);
+    const toggle = e.target.closest('button[data-sim-toggle]');
+    if (toggle) return sim.toggle(toggle.dataset.day);
     const a = e.target.closest('a[data-jump]');
     if (!a) return;
     e.preventDefault();
     jumpTo(a.dataset.jump);
   });
-
-  sim.panel(); // the corner chip's first paint
 
   navigate();
   window.addEventListener('hashchange', navigate);

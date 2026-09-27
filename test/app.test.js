@@ -19,12 +19,14 @@ const { loadRepo } = require('../src/tools.js');
 
 const sameRecord = (a, b) => a.wins === b.wins && a.gd === b.gd && a.pd === b.pd; // test-only — derive.js doesn't ship it
 
-test('simAimOffset: the sim clock aims at the event\'s first scheduled match', () => {
+test('simAimOffset: the sim clock aims at a day\'s first match, else the event\'s', () => {
   const tjson = { timezone: 'UTC', matches: { md: [
     { id: 1, scheduled: '2026-05-02T09:00:00' },
-    { id: 2, scheduled: '2026-05-02T13:00:00' } ] } };
+    { id: 2, scheduled: '2026-05-03T09:00:00' } ] } };
   const now = Date.parse('2026-05-02T06:00:00Z');
-  assert.equal(simAimOffset(tjson, now), Date.parse('2026-05-02T09:00:00Z') - now, 'the offset lands now() on the earliest scheduled match');
+  assert.equal(simAimOffset(tjson, now), Date.parse('2026-05-02T09:00:00Z') - now, 'no day given — the offset lands on the earliest scheduled match');
+  assert.equal(simAimOffset(tjson, now, '2026-05-03'), Date.parse('2026-05-03T09:00:00Z') - now, 'a day lands on its own first match');
+  assert.equal(simAimOffset(tjson, now, '2026-05-04'), Date.parse('2026-05-02T09:00:00Z') - now, 'a day with no matches falls back to the event');
   assert.equal(simAimOffset({ timezone: 'UTC', matches: {} }, now), null, 'nothing scheduled — no aim');
 });
 
@@ -595,6 +597,20 @@ test('multi-day kiosk: one day at a time, previewing day one early, falling back
   assert(text(fri).includes('Katherine Johnson') && !text(fri).includes('SF') && !text(fri).includes('Final'), 'a day before day one: the board previews the first day, pools only');
   assert(sat.includes('id="now-line"') && sun.includes('id="now-line"'), 'a match day carries the now-line — the follow has something to track');
   assert(!fri.includes('id="now-line"') && !mon.includes('id="now-line"'), 'off match day there is no now-line — the board never jumps to a day edge');
+});
+
+test('kiosk clock: a match day shows a bare time; off day the shown date, the sim entry point', () => {
+  const repo = loadRepo(FIX('multiday'));
+  const data = pageData(repo.tournaments.get('multiday').tjson, 'multiday', repo.index);
+  const rt = { slug: 'multiday', view: 'venues' };
+  const mon = renderVenue(rt, data, Date.parse('2026-07-13T12:00:00-04:00')); // after the last day: the board falls back to Sunday
+  assert(mon.includes('id="clock" data-sim-toggle data-mode="date"') && mon.includes('data-day="2026-07-12"'), 'off match day the clock is the shown day, clickable');
+  assert(!mon.includes('data-sim-step'), 'no steppers while the sim clock is off');
+  const sat = renderVenue(rt, data, Date.parse('2026-07-11T12:00:00-04:00'));
+  assert(sat.includes('<time id="clock" data-mode="time"'), 'a match day shows a plain time, never a control');
+  const simmed = renderVenue(rt, data, Date.parse('2026-07-13T12:00:00-04:00'), true);
+  assert(simmed.includes('data-mode="time"') && simmed.includes('data-sim-step="-5"') && simmed.includes('data-sim-step="5"'), 'while sim runs: the time, with steppers');
+  assert(simmed.includes('sim-mark'), 'the sim marker names the running state');
 });
 
 test('kiosk: the header stamp never pretends live without a successful fetch', () => {

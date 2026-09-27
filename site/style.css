@@ -373,7 +373,7 @@ body.venue {
 .kiosk-top {
   position: sticky;
   top: 0;
-  z-index: 1; /* the board's cards and lines stick under it; the sim chip (10) stays on top */
+  z-index: 1; /* the board's cards and lines stick under it */
 }
 
 body.venue header {
@@ -390,8 +390,8 @@ body.venue header {
   padding: calc(var(--space)*2) 0 var(--space);
 }
 
-/* neither the day line's nor the stamp's bottom margin may escape the header div
-   and double the gap to the venue titles */
+/* the stamp hugs the h1 — neither its top nor bottom margin may escape the header
+   div and double the gap to the venue titles */
 .kiosk-top p:first-of-type {
   margin: 0;
 }
@@ -440,13 +440,46 @@ body.venue header {
   right: 0;
 }
 
-#clock {
+/* the clock is the board's control: a bare time on a match day, the offline date
+   otherwise — sticky so it stays on screen while the board pans sideways */
+.kiosk-clock {
   position: sticky;
   right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: calc(var(--space)/2);
+}
+
+.kiosk-clock button {
+  font-family: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+#clock {
   font-size: 1.5rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+/* the sim steppers: one compact line under the clock, never tall enough to grow
+   the header past its left column */
+.sim {
+  display: flex;
+  align-items: center;
+  gap: var(--space);
+  font-size: .875rem;
+  color: var(--muted);
+}
+
+.sim-mark {
+  color: var(--accent);
+  font-weight: 600;
 }
 
 /* status rides the spine — a 3px left edge, the admin board's vocabulary */
@@ -499,36 +532,4 @@ article[data-status="possible"] .head {
 .tbd {
   color: var(--muted);
   text-decoration: underline dotted;
-}
-
-/* the sim clock — a bare LIVE chip at rest, a bordered panel while running;
-   created by app.js outside the render tree, so it styles by id */
-#sim-clock {
-  position: fixed;
-  right: 1em;
-  bottom: 1em;
-  z-index: 10;
-  display: flex;
-  gap: .4em;
-  align-items: center;
-  padding: 0;
-  border: none;
-  background: none;
-  font: 14px/1.2 system-ui, sans-serif;
-}
-
-/* the panel: box and border appear only with the controls */
-#sim-clock[data-sim] {
-  padding: var(--space) .7em;
-  background: var(--page);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-}
-
-/* the rest-state chip reads green and bare — the class stays off the markup */
-#sim-clock:not([data-sim]) button:first-child {
-  border: none;
-  background: none;
-  padding: 0;
-  color: var(--live);
 }
