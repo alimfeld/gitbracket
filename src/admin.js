@@ -251,6 +251,8 @@ function readBody(req) {
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml', '.png': 'image/png',
 };
 
 // One static GET under a serving root — MIME by extension, traversal-guarded,
@@ -348,8 +350,16 @@ function serve(state) {
       }
       return json(res, 404, { error: 'unknown api' });
     }
-    // static: admin page files + the shared domain modules (derive.js and its
-    // translation bundle — the admin renders derive's labels, in English)
+    // static: admin page files, the shared domain modules (derive.js and its
+    // translation bundle — the admin renders derive's labels, in English), and
+    // the site preview under /preview/ (the working tree, loopback only —
+    // publish alone ships site/)
+    if (url === '/preview' || url.startsWith('/preview/')) {
+      const f = staticFile(state.siteRoot, url.replace(/^\/preview\/?/, ''));
+      if (!f) { res.statusCode = 404; return res.end('not found'); }
+      res.setHeader('Content-Type', f.type);
+      return res.end(f.body);
+    }
     const rel = url.replace(/^\/+/, '') || 'index.html';
     const f = staticFile(rel === 'derive.js' || rel === 'i18n.js' ? state.siteRoot : pageRoot, rel);
     if (!f) { res.statusCode = 404; return res.end('not found'); }

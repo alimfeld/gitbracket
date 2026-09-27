@@ -36,6 +36,8 @@ h2 { font-size: .95rem; margin: 0 0 .5rem; }
 .picks { display: flex; gap: 1rem; }
 .picks label { color: var(--muted); font-size: .8rem; }
 .links { display: flex; gap: .75rem; font-size: .8rem; }
+.links .grp { display: flex; gap: .4rem; align-items: baseline; }
+.links .lbl { color: var(--muted); }
 .links a { color: var(--accent); text-decoration: none; }
 .links a:hover { text-decoration: underline; }
 .actions { margin-left: auto; display: flex; gap: .5rem; align-items: center; }

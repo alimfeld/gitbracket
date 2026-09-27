@@ -573,10 +573,13 @@ let publishing = false;
 async function refreshPending() {
   const p = await get('/api/pending');
   if (!p) return;
-  const site = $('siteLink');
-  site.href = `https://${p.domain}/#${S.slug}`;
-  $('kioskLink').href = `${site.href}/venues`;
-  $('links').hidden = !(p.domain && S.slug); // the CNAME is where the last publish went — without it there is nothing to link to
+  const live = !!(p.domain && S.slug);
+  $('publishedGroup').hidden = !live; // the CNAME is where the last publish went — without it there is nothing live to link to
+  $('siteLink').href = `https://${p.domain}/#${S.slug}`;
+  $('kioskLink').href = `https://${p.domain}/#${S.slug}/venues`;
+  $('previewLink').href = `/preview/#${S.slug}`; // the working tree, always — publish alone ships
+  $('previewKiosk').href = `/preview/#${S.slug}/venues`;
+  $('links').hidden = !S.slug;
   $('pendingBadge').textContent = p.dirty ? 'dirty' : p.commits.length ? `${p.commits.length} pending` : p.deployFailed ? 'not live' : 'clean';
   $('pendingList').innerHTML = (p.commits.length
     ? p.commits.map(c => `<li>${esc(c.msg)}</li>`).join('')
