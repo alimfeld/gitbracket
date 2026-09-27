@@ -586,6 +586,20 @@ function mountSimClock({ tjsonOf, onChange }) {
   return { simOn, now, step, toggle };
 }
 
+// Browser-tab title per view: the tournament tab is the event name.
+function pageTitle(r, d) {
+  if (r.view === 'index' || !d.t) return 'Bracket';
+  if (r.view === 'tournament') return d.t.name;
+  if (r.view === 'schedule') {
+    if (r.player) {
+      const p = ((d.tjson && d.tjson.players) || []).find(x => x && x.id === r.player);
+      if (p) return `${d.t.name} — ${p.name || p.id}`;
+    }
+    return `${d.t.name} — ${u('schedule')}`;
+  }
+  return `${d.t.name} — ${u('venue-board')}`; // the venues view names itself — the kiosk tab distinguishes boards from schedules
+}
+
 // The index loads once; every tournament view polls while the tab is visible.
 function boot() {
   const app = document.querySelector('main');
@@ -603,17 +617,6 @@ function boot() {
   const now = sim.now;
 
   const renderers = { index: renderIndex, tournament: renderTournament, venues: (r, d) => renderVenue(r, d, now(), sim.simOn()), schedule: renderPlayer };
-  const pageTitle = (r, d) => {
-    if (r.view === 'index' || !d.t) return 'Bracket';
-    if (r.view === 'schedule') {
-      if (r.player) {
-        const p = ((d.tjson && d.tjson.players) || []).find(x => x && x.id === r.player);
-        if (p) return `${d.t.name} — ${p.name || p.id}`;
-      }
-      return `${d.t.name} — ${u('schedule')}`;
-    }
-    return `${d.t.name} — ${u('venue-board')}`; // the venues view names itself — the kiosk tab distinguishes boards from schedules
-  };
   let route = null;    // current fragment route — the poll reads it each tick
   let data = null;     // last good snapshot — a failed poll keeps the board up
   let lastHtml = '';   // skip re-render when nothing changed (keeps selection/focus)
@@ -761,5 +764,5 @@ if (typeof document !== 'undefined') boot();
 
 // CommonJS exports for node tests; the browser ignores these.
 if (typeof module !== 'undefined') {
-  module.exports = { parseRoute, resolveLang, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset, paintBadRoute };
+  module.exports = { parseRoute, resolveLang, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset, paintBadRoute, pageTitle };
 }

@@ -12,7 +12,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, matchSlotMs, sideLabel, placementLabel, koColumn, koOrdinal, matchLabel, schedTime, dayKey, toCats, isDeadTie, winners, catStatus, roundName, playerStatus, setLocale } = require('../site/derive.js');
 const { I18N } = require('../site/i18n.js');
-const { parseRoute, resolveLang, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset, paintBadRoute } = require('../site/app.js');
+const { parseRoute, resolveLang, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset, paintBadRoute, pageTitle } = require('../site/app.js');
 const { generate } = require('../src/schedule.js');
 const { FIX, catOf, pageData, repoPage, withTjson, text, vals, card, cards, links } = require('./helpers.js');
 const { loadRepo } = require('../src/tools.js');
@@ -107,6 +107,12 @@ test('renderers: every fixture renders every view — the never-throw contract, 
     assert.doesNotThrow(() => renderVenue({ slug: dir, view: 'venues' }, data, now), `${dir}: venue view`);
     assert.doesNotThrow(() => renderPlayer({ slug: dir, view: 'schedule' }, data), `${dir}: player view`);
   }
+});
+
+test('pageTitle: the tournament tab names the event, the kiosk names its own board', () => {
+  const data = repoPage('sample');
+  assert.equal(pageTitle({ slug: 'sample', view: 'tournament' }, data), data.t.name, 'the tournament view titles the event');
+  assert.notEqual(pageTitle({ slug: 'sample', view: 'venues' }, data), data.t.name, 'the venue view carries its own board label');
 });
 
 test('a rejected fragment route paints the bad-link page — a call, never the builder reference', () => {
