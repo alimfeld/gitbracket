@@ -61,18 +61,18 @@ implement them; treat them as rules, not style.
 ### Process & Deploy
 
 - **Git is the record, not the transport.** No server, no accounts — the repo
-  is data, history, and frontend. Only `gb.js publish` ships `site/`, and the
-  deploy follows the branch, never the operator's intent: `main` ships the
-  production domain, proved equal to `origin/main`'s CNAME; a branch ships
-  only a CNAME proved different from it — a missing anchor (no `origin/main`)
-  refuses every deploy. Sim branches
-  (`gb.js sim`) practice the whole pipeline on a branch that is never merged:
-  their scores are fabricated and their scratch CNAME must not ride into
-  production history (`gb.js sim --teardown` is the only exit). The venue
-  board is public — off match day its clock shows the date, and that date is
-  a deliberate control, practice mode's entry point; don't gate or remove it.
-  Publishing sits outside git: last write wins on the CDN, safe because one
-  director ships, everyone else pulls and reviews.
+  is data, history, and frontend. Only publish ships `site/` (the `gb.js` verb
+  or the admin button), and the deploy follows the branch, never the operator's
+  intent: `main` ships the production domain, proved equal to `origin/main`'s
+  CNAME; a branch ships only a CNAME proved different from it — a missing
+  anchor (no `origin/main`) refuses every deploy. Sim branches (`gb.js sim`)
+  practice the whole pipeline on a branch that is never merged: their scores
+  are fabricated and their scratch CNAME must not ride into production history
+  (`gb.js sim --teardown` is the only exit). The venue board is public — off
+  match day its clock shows the date, and that date is a deliberate control,
+  practice mode's entry point; don't gate or remove it. Publishing sits outside
+  git: last write wins on the CDN, safe because one director ships, everyone
+  else pulls and reviews.
 - **Every editor edit commits itself; only the ship is gated.** An edit
   passes the syntactic check — unparseable or unreferenceable data blocks it
   — then writes and commits. Semantic conflicts (data that parses but
@@ -135,5 +135,6 @@ agreements; if one doesn't fit, raise it instead of breaking it silently.
   report it as such.
 - **Conventional commits** — `feat:`, `fix:`, `refactor:`, `perf:`, `ci:`,
   with a scope when it helps, as the existing history does.
-- **No package.json, no npm** — scripts run with `node` directly, tests with
-  `node --test` from the repo root, as the pre-commit hook runs them.
+- **No package.json, no npm scripts** — scripts run with `node` directly,
+  tests with `node --test` from the repo root, as the pre-commit hook runs
+  them.

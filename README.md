@@ -2,7 +2,7 @@
 
 GitBracket runs tournaments as code. A tournament lives in a git repo — the
 data, the history, and the frontend are the whole system. No accounts, no
-server, no app: a publish deploys, and anyone with the link can follow along.
+backend: a publish deploys, and anyone with the link can follow along.
 
 Works for any win/lose tournament — pickleball, tennis, darts, quiz. Draws
 are not supported.
@@ -18,7 +18,7 @@ are not supported.
 - **Venue** — a court, the physical place a match happens.
 - **Pool** — a round-robin group; every team plays every other. Rankings
   decide who advances.
-- **Group stage** — the first phase: every team plays the others in its pool.
+- **Group stage** — the first phase: the pools, before the knockout.
 - **Knockout stage** — the second phase: single-elimination matches; lose and
   you're out. Teams enter as pool ranks or as the winner/loser of an earlier
   match.
@@ -48,10 +48,11 @@ names a file in `site/tournaments/`:
 ]
 ```
 
-- `location` — shown on the list page and the tournament heading (instead of
-  the timezone). Required, and must match the file's like `name`.
-- `dates` — the list page's day list (ascending ISO dates). Once the
-  tournament is scheduled it must match the schedule, like `name`.
+- `name` / `location` — required, and must match the tournament file's.
+  `location` shows on the list page and in the heading, in place of the
+  timezone.
+- `dates` — the list page's day list, ascending ISO dates. Required once the
+  tournament is scheduled, and must match the schedule's days.
 
 The tournament file holds everything — venues, categories, players, and all
 matches keyed by category:
@@ -111,9 +112,9 @@ done when it has one, in play without one. `winner` is a side letter (`a` or
 | `walkover` | a\|b | win only, no gd/pd | a side can't play — no games |
 | `void` | — | nothing counts | neither side can play — pools still complete |
 
-Nothing else stored can be derived — standings and brackets follow from the
-data. A `winner` names a side, not a team, so correcting a side reinterprets
-the result; re-score if the new meaning is wrong.
+Standings and brackets are derived from these facts, never stored. A `winner`
+names a side, not a team, so correcting a side reinterprets the result;
+re-score if the new meaning is wrong.
 
 A team that can't play is a `walkover` — the opponent advances, which keeps
 the bracket's feeder chain resolved. `void` means neither side can play; in a
@@ -130,18 +131,19 @@ the organizer to settle.
 
 ## Views
 
-One page, fragment-routed: `#<slug>[/schedule|venues][?cat=&player=&venue=]`.
-The player pick is URL state, never device state — links carry only the
-params legal on their target: `cat` and `player` ride between tournament and
-schedule so switching views keeps the focus; `venue` lives on the kiosk
-alone.
+One page, fragment-routed:
+`#<slug>[/schedule|venues][?cat=&player=&venue=&lang=]`. Every pick is URL
+state, never device state — links carry only the params legal on their target:
+`cat`, `player`, and `lang` ride between tournament and schedule so switching
+views keeps the focus; `venue` lives on the kiosk alone. `lang` (`en`/`de`)
+picks the UI language, defaulting to the browser's.
 
 - `#` — the index, listing past and current tournaments; the only page with
   kiosk links.
 - `#<slug>` / `#<slug>?cat=<category-id>` — the tournament, one category at a
   time (the first by default); date span and location in the heading, the
-  category's span and status under its title. A floating
-  `Tournament | Schedule` switch sits above the two views.
+  category's status under its title (its span too, on a multi-day event). A
+  floating `Tournament | Schedule` switch sits above the two views.
 - `#<slug>/schedule?player=<player-id>` — a player's Schedule. Without a
   valid `player` (or via "Change") it shows a picker of participating
   players. The URL is the only memory of a pick — share or bookmark it.
@@ -205,8 +207,8 @@ spec — the single source of the schedule:
   surfaces as a conflict), click-to-score/wo/void, a side picker, a
   pending-changes panel (unpushed commits), a conflict panel, undo/redo, and a
   publish button. Every edit goes through the one edit engine — syntactic check,
-  write, byte-identical diff, commit; semantic conflicts ride back in the panel
-  and block publish, so the browser can never outrun the gate.
+  write, minimal diff, commit; semantic conflicts ride back in the panel and
+  block publish, so the browser can never outrun the gate.
 - `node gb.js validate [slug]` — checks data; syntactic errors fail, semantic
   conflicts only report (publish re-checks and refuses them).
 - `node gb.js schedule <specs/xxx.json>` — generates a tournament file (see

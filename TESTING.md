@@ -44,10 +44,9 @@ happens on `main`.
 
 ## Real day: admin on main
 
-`node gb.js` (or `node gb.js admin`) starts the admin daemon — the one
-match-day interface: drag to reschedule, click to score/wo/void, side picker,
-pending list (unpushed commits), undo/redo, and publish. The daemon reads
-`site/` at startup, so restart it after edits made in another terminal.
+`node gb.js` (or `node gb.js admin`) starts the admin daemon: score,
+reschedule, undo/redo, publish. The daemon reads `site/` at startup, so restart
+it after edits made in another terminal.
 
 The deploy gate (shared by the admin Publish button and `node gb.js publish`):
 
