@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
-// GitBracket CLI — every command dispatches into src/. Run from anywhere under
-// the repo root; the bare `node gb.js` is the admin daemon.
+// GitBracket CLI — dispatch only; bare `node gb.js` is the admin daemon. Run from anywhere under the repo root.
 
 const { findRoot } = require('./src/tools.js');
 const validate = require('./src/validate.js');
@@ -25,6 +24,5 @@ function main(argv) {
   process.exit(1);
 }
 
-// publish returns a promise (the deploy is async) — await it so the CLI exits
-// with the deploy's code; sync verbs resolve immediately.
+// Await promise verbs so the CLI exits with the deploy's code.
 Promise.resolve(main(process.argv.slice(2))).then(code => { if (code) process.exitCode = code; });

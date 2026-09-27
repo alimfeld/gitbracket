@@ -1,18 +1,13 @@
 'use strict';
 
-// English ordinal suffixes — the only per-locale formatter that needs code;
-// every other word rule lives in the maps below as data.
+// The only per-locale formatter that needs code; every other word rule is data.
 const enOrdRules = new Intl.PluralRules('en', { type: 'ordinal' });
 const enOrd = n => n + ({ one: 'st', two: 'nd', few: 'rd' }[enOrdRules.select(n)] || 'th');
 
-// One translation bundle for the public page — every user-facing string ships
-// through these maps (completeness is pinned by a test). Repo data (names,
-// courts, pools, players) is never translated — proper nouns stay as authored;
-// TBD, void, W/O, and the W/L/GD/PD table headers are international scoring
-// shorthand and stay too.
-// fmt/refs/art carry the per-locale word rules (ordinal styles, declined chip
-// refs, prepositional articles) as data — derive.js only dispatches them, so a
-// third language is a bundle edit, never a code branch.
+// Every user-facing string ships through these maps (completeness pinned by a
+// test). Repo data (names, courts, pools, players) and scoring shorthand (TBD,
+// void, W/O, W/L/GD/PD) stay as authored. fmt/refs/art carry the word rules as
+// data; derive.js only dispatches them.
 const I18N = {
   en: {
     // chrome (app.js)
@@ -84,15 +79,14 @@ const I18N = {
     'slot-pool': '{rank} in Pool {pool}',
     'slot-dangling': '{who} of match {id}',
     // per-locale word rules (derive.js dispatches by name): bandShort strips the
-    // classification word from a band heading; place is the pre-word number
-    // ("3rd place"), ord the range form ("3rd–5th").
+    // classification word, place is the pre-word number, ord the range form.
     fmt: {
       ord: enOrd,
       place: enOrd,
       bandShort: l => l.replace(/ semi$/, ''),
     },
     // declined chip refs per round key and case — the default covers every key
-    // without an entry; only the one lowercase quirk ("the final") earns its own.
+    // without an entry.
     refs: {
       'round-final': { acc: 'the final', dat: 'the final' }, // the one lowercase quirk
       '': { acc: 'the {label}', dat: 'the {label}' },
@@ -138,8 +132,7 @@ const I18N = {
     'change-player': 'Spieler wechseln',
     'time-tbd': 'Zeit offen',
     'no-matches': 'Keine Spiele.',
-    // structural labels (derive.js) — {art} carries the German article:
-    // "Im Finale" vs "In der Runde der letzten 32" (neuter vs feminine)
+    // structural labels (derive.js) — {art} carries the German article ("Im" vs "In der")
     'in-final': 'Im Finale',
     'in-round': '{art} {round}',
     'elim-final': 'Ausgeschieden im Finale',
@@ -179,8 +172,7 @@ const I18N = {
       'pl-place': { acc: 'den {label}', dat: 'vom {label}' },     // "den 3. Platz" — masculine
       '': { acc: 'das {label}', dat: 'vom {label}' },             // the default: neuter "das/vom"
     },
-    // prepositional article per round kind — "Im Finale" (neuter) vs
-    // "In der Runde der letzten 32" (feminine), in/eliminated phrasing.
+    // prepositional article per round kind, in/eliminated phrasing.
     art: {
       'round-final': { in: 'Im', elim: 'im' },
       'round-semi': { in: 'Im', elim: 'im' },
@@ -191,13 +183,10 @@ const I18N = {
   },
 };
 
-// One place decides that a missing bundle renders English — t() and derive's
-// per-locale dispatchers both read it through this, so the fallback can't drift.
+// A missing bundle renders English — t() and derive's dispatchers share this.
 const bundle = lang => I18N[lang] || I18N.en;
 
-// {param} substitution, nothing else — values are pre-scaped/rendered by the
-// caller, so HTML passes through untouched. A missing key or param renders its
-// placeholder visibly — never blank, never a throw.
+// {param} substitution only; values are pre-escaped, and a missing key renders its placeholder.
 const t = (lang, key, params) => {
   const s = bundle(lang)[key];
   if (s === undefined) return `{${key}}`;

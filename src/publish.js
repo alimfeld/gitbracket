@@ -1,10 +1,8 @@
 'use strict';
 
-// Publish — the only thing that ships: validate, then upload site/ to the
-// domain in site/CNAME. Tests are the dev gate (pre-commit), validate the data
-// gate here — a bypassed hook can't ship. The deploy role follows the branch,
-// never the operator's intent: production is the CNAME as origin/main has it,
-// and without that anchor only main deploys.
+// Publish — the only thing that ships: validate, then upload site/ to the domain in
+// site/CNAME. The deploy role follows the branch: production is the CNAME as
+// origin/main has it, and without that anchor only main deploys.
 
 const fs = require('fs');
 const os = require('os');
@@ -13,8 +11,7 @@ const path = require('path');
 const validate = require('./validate.js');
 const { branchOf, git, cnameOf } = require('./tools.js');
 
-// CLI entry (from gb.js): validate exits 1 on data errors, so nothing dirty ships.
-// Returns ship's promise — gb.js awaits it, so the CLI and the daemon share one path.
+// CLI entry: validate exits 1 on data errors, so nothing dirty ships.
 function main(root) {
   validate.main(root);
   return ship(root);
@@ -26,8 +23,7 @@ function productionCNAME(root) {
   return c.code === 0 ? c.out.trim() : null;
 }
 
-// The deploy decision: ok + the target domain, or a refusal that names the
-// reason — shown by the CLI and the admin page.
+// ok + target domain, or a refusal naming the reason.
 function deployRole(root) {
   const branch = branchOf(root);
   if (!branch) return { ok: false, why: 'detached HEAD — checkout main or a sim branch first' };
@@ -52,14 +48,11 @@ function deployRole(root) {
   return { ok: true, domain: cname };
 }
 
-// The one pre-deploy gate both ship paths run: the branch role and site/
-// cleanliness. An error string, or null when the deploy may proceed.
+// Pre-deploy gate: branch role and site/ cleanliness. Error string, else null.
 function deployPreflight(root) {
   const role = deployRole(root);
   if (!role.ok) return `publish: ${role.why}`;
-  // git is the record — ship only what the repo has, so a fresh clone + publish
-  // reproduces live exactly; the daemon commits every edit, so a dirty site/
-  // is a hand-edit history would never see.
+  // Ship only what the repo has: a dirty site/ is a hand-edit history would never see.
   const st = git(root, ['status', '--porcelain', '--', 'site/']);
   const dirty = (st.code === 0 ? st.out : '').trim();
   if (dirty) {
@@ -68,22 +61,16 @@ function deployPreflight(root) {
   return null;
 }
 
-// A synchronous copy of a site root into a fresh temp dir, taken on the event
-// loop before the async deploy — no edit can interleave with it, and the copy
-// is the immutable thing surge uploads. Deploying the live tree instead would
-// let a mid-deploy edit half-reach the CDN: live could get ahead of origin and
-// the admin's pending list would lie. With a snapshot, live is always exactly
-// what was pushed at publish time.
+// Snapshot site/ on the event loop before the async deploy, so a mid-deploy edit
+// can't half-reach the CDN and live is exactly what was pushed.
 function snapshotSite(siteRoot) {
   const snap = fs.mkdtempSync(path.join(os.tmpdir(), 'gbship-'));
   fs.cpSync(siteRoot, snap, { recursive: true });
   return snap;
 }
 
-// Upload site/ to the domain in site/CNAME — the one deploy path, shared by
-// the CLI and the daemon, and split from main so the daemon never goes through
-// validate.main's process.exit. Async keeps the server answering while a
-// multi-minute push+deploy runs; gb.js awaits it for the CLI.
+// Upload site/ to the domain in site/CNAME. Async keeps the server answering while
+// a multi-minute deploy runs; split from main so the daemon avoids process.exit.
 function ship(root) {
   return new Promise((resolve) => {
     const pre = deployPreflight(root);

@@ -1,8 +1,6 @@
 'use strict';
 
-// The translation bundle is a sibling classic script in the browser; under
-// node (tests, the gate) it lands on globalThis the same way app.js gets this
-// file's names.
+// Under node the sibling bundle must land on globalThis as it does in the browser.
 if (typeof module !== 'undefined') {
   Object.assign(globalThis, require('./i18n.js'));
 }
@@ -11,55 +9,40 @@ const ID_RE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-// The presentation dialect — render-facing labels and date phrasing follow it;
-// derivation (day keys, offsets) stays locale-independent by design. The admin
-// page never calls setLocale, so its labels stay English. The value is the
-// bundle code ('de'/'en'…) — Intl accepts it as a language-only locale, and
-// resolveLang pre-checks it against I18N, so a missing bundle renders English
-// rather than a half-translated page.
+// Render-facing labels follow this dialect; derivation (day keys, offsets) stays
+// locale-independent. The admin page never calls setLocale, so its labels stay English.
 let LOCALE = 'en';
 const setLocale = l => { LOCALE = l; };
 
-// Every per-locale decision (word positions, articles, ordinal styles) lives in
-// the bundle as data or tiny formatters; this file only dispatches, so a third
-// language is a bundle edit, never a code branch. A stray setLocale to a
-// missing bundle lands on en, matching t()'s fallback.
+// Per-locale word rules live in the bundle as data; this file only dispatches.
 const fmtOf = k => (bundle(LOCALE).fmt || {})[k];
 const ordNum = n => (fmtOf('ord') || (n => String(n)))(n);    // '3.' / '3rd' — range form
 const cardNum = n => (fmtOf('place') || (n => String(n)))(n); // '3' / '3rd' — pre-word form
 const bandShort = l => (fmtOf('bandShort') || (l => l))(l);   // the band a placement label names
-// A declined ref ('the final', 'vom Finale') — chips and unresolved slots:
-// per-key, per-case article templates from the bundle, keyed by the round kind
-// the caller already holds. The label string is only a {label} parameter,
-// never inspected.
+// Declined ref word from the bundle's per-key/per-case templates, keyed by the
+// round kind the caller holds. The label is only a {label} parameter, never inspected.
 const refWord = (key, c, label) => {
   const refs = bundle(LOCALE).refs || {};
   const s = (refs[key] || refs[''] || {})[c] || label;
   return s.replace('{label}', () => label); // function form: a label containing $& or $' is data, never a replacement pattern
 };
 const artWord = (key, c) => ((bundle(LOCALE).art || {})[key] || {})[c] || ''; // 'Im' / 'In der' per round key
-const ROUND_KEYS = ['round-final', 'round-semi', 'round-quart', 'round-16']; // keyed by depth from the final, mirroring roundName
+const ROUND_KEYS = ['round-final', 'round-semi', 'round-quart', 'round-16']; // keyed by depth from the final
 const roundKeyOf = d => ROUND_KEYS[d] ?? 'round-of';
 
-// Shared side identity: sorted '|'-joined ids.
 const pairSig = ids => [...ids].sort().join('|');
 
-// The one escaper for every data render — the site page and the admin page
-// both load this file, so a fix lands on both surfaces at once and a drift
-// can't leave one surface unescaped.
+// One escaper for both pages.
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-// Per-category render cache, one bag on the context — toCats rebuilds contexts
-// every render, so a stale memo can never outlive its render.
+// Per-render cache; toCats rebuilds contexts every render, so a memo can't outlive it.
 const ctxMemo = ctx => ctx._memo || (ctx._memo = {});
 
-// id -> display name — the one shape both shared maps have. A non-list, or a
-// malformed entry in it, renders as absent, never a throw.
+// id -> display name; a malformed entry renders absent, never throws.
 const nameMap = x => new Map((Array.isArray(x) ? x : []).filter(e => e && typeof e === 'object').map(e => [e.id, e.name]));
 
-// Tournament-level facts (names, venues, tz) — toCats builds them once per
-// render; standalone makeCat calls build a fresh map.
+// Built once per render by toCats; standalone makeCat calls make a fresh map.
 function sharedFacts(tjson) {
   return {
     names: nameMap(tjson && tjson.players),
@@ -85,16 +68,13 @@ function makeCat(c, tjson, shared) {
   };
 }
 
-// The one matches-field shape guard: an object map of category id → match
-// array, or null when malformed (the validator reports it). Every consumer
-// reads the map through this — a copy per layer would drift (arrays slip one
-// guard and trip the rest).
+// The one matches-map shape guard; null when malformed.
 const matchesOf = tjson => (tjson && tjson.matches && typeof tjson.matches === 'object' && !Array.isArray(tjson.matches)) ? tjson.matches : null;
 
 function toCats(tjson) {
   const byCat = matchesOf(tjson) || {};
   const cats = (tjson && Array.isArray(tjson.categories)) ? tjson.categories : [];
-  const shared = sharedFacts(tjson); // once per render — every category's context shares the one map
+  const shared = sharedFacts(tjson); // once per render — every category shares the one map
   // A non-object entry renders as absent — the gate reports it, the page never throws.
   return cats.filter(c => c && typeof c === 'object').map(c => makeCat({ meta: c, matches: Array.isArray(byCat[c.id]) ? byCat[c.id] : [] }, tjson, shared));
 }
@@ -123,14 +103,12 @@ function bestOfOf(m, ctx) {
   return m.bestOf ?? ctx.bestOf[stageOf(m)];
 }
 
-// In a best-of-1 pool every match's GD is ±1, so the standings' GD column
-// would just restate W−L. One match overridden to best-of-3 brings it back.
+// A best-of-1 pool's GD just restates W−L; one match overridden to best-of-3 brings it back.
 function poolBo1(ctx, pool) {
   return ctx.matches.filter(m => m && m.pool === pool).every(m => bestOfOf(m, ctx) === 1);
 }
 
 function winnerIdx(m) {
-  // The stored winner IS the outcome; in-play matches have no result -> null.
   return m && m.result && m.result.winner !== undefined ? sideIdx(m.result.winner) : null;
 }
 
@@ -144,8 +122,7 @@ function isDeadTie(std, rank) {
   return !!rec && !!rec.tie; // tie cluster id: the ladder exhausted without separating it
 }
 
-// A dead-tie cluster shares its first rank (1 1 3 3); the flag's cluster id
-// keeps adjacent ties from merging.
+// A dead-tie cluster shares its first rank (1 1 3 3); the cluster id keeps adjacent ties from merging.
 function poolRanks(std) {
   const ranks = [];
   for (let i = 0; i < std.length; i++) {
@@ -154,8 +131,7 @@ function poolRanks(std) {
   return ranks;
 }
 
-// Rank cells stay blank until a pool has a decided match — before that every
-// team ties at zero and a wall of 1s reads as "all ranked first".
+// Rank cells stay blank until a pool has a decided match.
 const poolDecided = std => !!std && std.some(r => r.wins || r.losses);
 
 function poolStandings(ctx, pool, partial) {
@@ -172,7 +148,7 @@ function poolStandings(ctx, pool, partial) {
   };
   for (const m of ms) {
     if (!Array.isArray(m.sides)) continue;
-    // rec() builds both records on first sight — Map insertion order is the tie display order.
+    // Map insertion order is the tie display order.
     const s0 = m.sides[0], s1 = m.sides[1];
     const r0 = rec(s0), r1 = rec(s1);
     if (!r0 || !r1) continue;
@@ -214,8 +190,8 @@ function mutualKeys(list, ms) {
   return h;
 }
 
-// Ladder: wins, then per wins-block h2h wins/gd/pd, then overall gd/pd. A rung
-// that splits a cluster recurses on it; a still-tied block is a dead tie (renders TBD).
+// Ladder: wins, then per wins-block h2h wins/gd/pd, then overall gd/pd. A rung that
+// splits a cluster recurses; a still-tied block is a dead tie (renders TBD).
 function poolLadder(list, ms) {
   const out = [];
   let tieCluster = 0; // one id per dead-tie cluster — poolRanks shares a rank only within it
@@ -277,19 +253,14 @@ function resolveSide(side, ctx, memo = new Map()) {
   return null;
 }
 
-// A match's placement range (a classification match) or its main-bracket
-// column, plus the bundle ref key naming that slot — the one derivation the
-// unresolved-slot label and the possible-stage chip share.
+// Placement range or main-bracket column, plus the ref key naming the slot.
 function refInfo(m, ctx) {
   const pr = plRange(m, ctx);
   const col = pr === null ? koColumn(m, ctx) : null;
   return { pr, col, key: pr === null ? roundKeyOf(col) : pr.win ? 'pl-place' : 'pl-semi' };
 }
 
-// Unresolved slot keeps what the slot IS: "Winner of SF1", "2nd in Pool A".
-// The words and their declined articles ride the bundle (refs/slot-*); a
-// numbered bracket code names its own card, a named round or placement takes
-// the locale's article ("the final" / "vom Finale").
+// "Winner of SF1", "2nd in Pool A" — words and articles come from the bundle.
 function slotLabel(side, ctx) {
   if (!side || typeof side !== 'object') return 'TBD';
   if (side.kind === 'pool') return t(LOCALE, 'slot-pool', { rank: ordNum(side.rank), pool: side.pool });
@@ -303,7 +274,7 @@ function slotLabel(side, ctx) {
   return t(LOCALE, 'slot-of', { who, ref: code ? label : refWord(key, 'dat', label) });
 }
 
-// Player-id set -> display name: "Ada / Ben". The one place names render.
+// Player-id set -> display name, "Ada / Ben".
 const teamLabel = (ids, ctx) => [...ids].map(id => ctx.names.get(id) || id).join(' / ');
 
 function sideLabel(side, ctx) {
@@ -312,9 +283,7 @@ function sideLabel(side, ctx) {
   return teamLabel(ids, ctx);
 }
 
-// One score-cell renderer for both pages — the site's sideRow and the admin's
-// board show the same per-side game scores; a shared source, so a display fix
-// lands on both surfaces at once.
+// Shared by the site's sideRow and the admin's board.
 function scoreCells(m, i, ctx) {
   const r = m.result;
   const games = m.games || [];
@@ -348,18 +317,14 @@ function playerMatches(ctx, pid) {
   return rows;
 }
 
-// The matches consuming a match's result edges — both winner and loser edges
-// count: a loss drops the player into the placement tree. Read from the
-// parentsOf index — the validator's single-consumer rule leaves at most one
-// winner and one loser parent — never a scan.
+// Both result edges count — a loss drops the player into the placement tree. Reads parentsOf, never a scan.
 function koConsumers(ctx, id) {
   const { winnerParent, loserParent } = parentsOf(ctx);
   const out = [winnerParent.get(id), loserParent.get(id)].filter(X => X && X.pool === undefined);
   return [...new Set(out)]; // one match may consume both edges of id
 }
 
-// Knockout-entry facts per pool, from stored sides only — standings never gate
-// the pool view. sigs: the pool's side count; slots: rank -> the consuming match.
+// Per pool: sigs (side count) and slots (rank -> consuming match), from stored sides only.
 function poolFacts(ctx) {
   const out = new Map();
   for (const m of ctx.matches) {
@@ -383,9 +348,7 @@ function poolFacts(ctx) {
   return out;
 }
 
-// Ranks of one pool the player could still hold: every rank while any pool
-// match is out, the dead-tie cluster once it is decided. A resolved slot is a
-// confirmed seat (handled elsewhere); an unslotted rank is eliminated.
+// Ranks a player could still hold: every rank while any pool match is out, else the dead-tie cluster.
 function playerRanks(ctx, pool, pid, roster) {
   const std = poolStandings(ctx, pool);
   if (!std) return Array.from({ length: roster }, (_, i) => i + 1);
@@ -412,18 +375,13 @@ function rankRange(ranks) {
 const matchEdge = s => s && s.kind === 'match';
 
 
-// Any match's possible-stage label: a placement match's band (via
-// placementLabel), else the round's name. Stage cards and their chips read
-// it — matchLabel keeps the abbr+ordinal form the bracket cards need.
+// A placement match's band, else the round's name (matchLabel keeps the abbr+ordinal form).
 function stageLabel(m, ctx) {
   return placementLabel(m, ctx) ?? roundName(koColumn(m, ctx));
 }
 
-// Possible stages: one entry per knockout round a player could still reach —
-// certain bits (label, uniform time/court) plus a chip naming the ranks or
-// outcomes that get in. A confirmed knockout seat follows only the branches
-// the outcome leaves open; a group-stage player sees their pool's slots at
-// every rank they could still hold.
+// One entry per knockout round a player could still reach: certain bits plus a
+// chip naming the ranks/outcomes that get in.
 function possibleStages(ctx, pid) {
   const rows = playerMatches(ctx, pid);
   const koRows = rows.filter(r => r.m.pool === undefined);
@@ -502,10 +460,8 @@ function possibleStages(ctx, pid) {
     ...stage, ...uniformBits(stage.ids.length, stage.times, stage.courts),
   }));
   const merged = mergeTwinStages(present);
-  // The chip names the entry gates in one phrase: the direct slot ranks, then
-  // the result edges — so a rank-1 bye can't read as "everyone gets here".
-  // Only a stage every pool rank has a slot in (no gates) shortens to "any
-  // rank". A merged stage's edges read once, as the seat: "via the Semifinals".
+  // The chip names the entry gates: direct slot ranks, then result edges ("via
+  // the Semifinals" once merged); a stage with no gates reads "any rank".
   const chipOf = stage => {
     const chips = [];
     if (facts && stage.ranks.size) {
@@ -543,16 +499,14 @@ const uniformBits = (n, times, courts) => ({
   court: n > 0 && courts.length === n && courts.every(c => c === courts[0]) ? courts[0] : null,
 });
 
-// Two sibling classification semis of one seat ('5th–8th' + '9th–12th') name
-// their full band ('5th–12th semi') — appending ' place' would mangle a semi
-// label.
-const bandSemiLabel = ps => { // ps: the pair's structural rows — min/max over their ranges, no label parsing
+// Sibling classification semis name their full band ("5th–12th semi"); " place"
+// would mangle a semi label.
+const bandSemiLabel = ps => { // ps: the pair's structural rows — min/max over their ranges
   return t(LOCALE, 'pl-semi', { a: ordNum(Math.min(...ps.map(p => p.lo))), b: ordNum(Math.max(...ps.map(p => p.hi))) });
 };
 
-// Mutually exclusive outcomes of one seat (winner- and loser-fed entries of
-// the same feeders) merge into one stage ("Final / 3rd place — reached via the
-// Semifinals"). Rank-fed stages and ambiguous gates stay separate.
+// Winner- and loser-fed entries of one seat merge into one stage; rank-fed and
+// ambiguous gates stay separate.
 function mergeTwinStages(present) {
   const merged = new Set();
   const byGate = new Map();
@@ -595,8 +549,7 @@ function mergeTwinStages(present) {
 }
 
 
-// Placement label (3rd/5th/7th place, classification semis), null for main-
-// bracket matches.
+// 3rd/5th/7th place or a classification semi; null for main-bracket matches.
 function placementLabel(m, ctx) {
   const r = plRange(m, ctx);
   if (!r) return null;
@@ -604,11 +557,9 @@ function placementLabel(m, ctx) {
   return r.win ? t(LOCALE, 'pl-place', { n: cardNum(r.lo) }) : t(LOCALE, 'pl-semi', { a: ordNum(r.lo), b: ordNum(r.hi) });
 }
 
-// Possible-rank range of every classification match. One rule: a slot reaches
-// the range of whichever match consumes that edge (winner edges climb the
-// better ranks, loser edges the worse); an edge nothing consumes holds a fixed
-// rank, stepped out from the pool's champion in bracket order. So the middle
-// loser of a 5-loser pool reaches [A, A+2], not the pool's bottom.
+// Possible-rank range of every classification match: a slot reaches the range of
+// whichever match consumes that edge (winner edges climb, loser edges drop); an
+// edge nothing consumes holds a fixed rank stepped out from the pool champion.
 function plBuild(ctx) {
   const pl = new Map(); // id -> { lo, hi, win } (win: winner edge unconsumed)
   const byId = ctx.byId;
@@ -642,10 +593,8 @@ function plBuild(ctx) {
     memMemo.set(m.id, yes);
     return yes;
   };
-  // Pool champion: a match nothing winner-consumes whose all-winner chain
-  // bottoms out at a main-round loser edge — a sub-bracket final's chain
-  // passes through another classification match first, so only the pool's
-  // champion qualifies. Returns the anchor round's winner depth d.
+  // Pool champion: a match nothing winner-consumes whose all-winner chain bottoms
+  // out at a main-round loser edge. Returns the anchor round's winner depth d.
   const champAnchor = (m, seen) => {
     if (seen.has(m.id) || !Array.isArray(m.sides)) return null;
     seen.add(m.id);
@@ -709,19 +658,15 @@ function plBuild(ctx) {
   return pl;
 }
 
-// Range of a classification match, null for main-bracket matches (including
-// matches the walk never visits). The bronze finder (winners) reads lo here.
+// Range of a classification match; null for main-bracket matches. winners reads lo.
 function plRange(m, ctx) {
   const memo = ctxMemo(ctx);
   if (!memo.pl) memo.pl = plBuild(ctx);
   return memo.pl.get(m.id) ?? null;
 }
 
-// Depth band of every classification match: the column one below its anchor's,
-// minus further loser-chain edges — a 5th/7th decider sits one band deeper
-// than its feeder. One pass records each band's distinct placement labels for
-// the merged headings. Byes can't skew it: the anchor is the main match whose
-// loser edge starts the chain.
+// Depth band of every classification match, one below its anchor's column minus
+// further loser-chain edges; records each band's distinct placement labels.
 function plBands(ctx) {
   const memo = ctxMemo(ctx);
   if (!memo.plBand) {
@@ -760,28 +705,24 @@ function plBands(ctx) {
   return memo.plBand;
 }
 
-// The band column a classification match renders in; a main match never
-// appears in the band map, so `?? null` covers it.
+// Band column of a classification match; null elsewhere.
 function placementColumn(m, ctx) {
   return plBands(ctx).col.get(m && m.id) ?? null;
 }
 
-// Distinct placement labels of one band — the headings' companion (order is
-// free: stageGroupName dedupes).
+// Distinct placement labels of one band (order free — stageGroupName dedupes).
 function bandLabels(ctx, col) {
   return [...(plBands(ctx).labels.get(col) || [])];
 }
 
-// Merged heading of a band: the round name plus its placement companions. One
-// distinct label names it exactly; several fall back to "Final / Placement";
-// none keeps the plain round name.
+// Round name plus its placement companions; several distinct labels fall back to
+// "Final / Placement".
 function stageGroupName(round, labels) {
   const uniq = [...new Set(labels.map(bandShort))];
   return uniq.length === 1 ? `${round} / ${uniq[0]}` : uniq.length > 1 ? `${round} / ${t(LOCALE, 'placement')}` : round;
 }
 
-// The deepest band with a playable card — nextKoWave's counterpart for the
-// classification tree.
+// The deepest band with a playable card — nextKoWave's counterpart for placement.
 function placeWave(ctx) {
   let best = null;
   for (const X of ctx.matches) {
@@ -794,9 +735,8 @@ function placeWave(ctx) {
   return best;
 }
 
-// Winner-edge distance to the final (0 = the final itself). Its own memo, not
-// koColumn's — this is read while koColumn's build is mid-flight. Walks the
-// winner-parent index — O(N) per build, where a per-id scan would be O(N²).
+// Winner-edge distance to the final (0 = the final). Its own memo, not koColumn's
+// — this can be read while koColumn's build is mid-flight.
 function wdOf(ctx, id) {
   const memo = ctxMemo(ctx);
   if (!memo.wd) {
@@ -815,8 +755,7 @@ function wdOf(ctx, id) {
   return memo.wd.get(id);
 }
 
-// "+02:00"-style offset for a date, noon-UTC anchor — parsed from the GMT±HH:MM
-// rendering, so the locale stays pinned.
+// "+02:00" offset for a date via a noon-UTC anchor.
 // ponytail: wall times before a same-day DST shift get the post-transition
 // offset, off by one hour — exact only if a tournament opens on a changeover day.
 function tzOffset(tz, date) {
@@ -843,9 +782,8 @@ function fmtTime(t, tz) {
   } catch { return ''; }
 }
 
-// Y-M-D from typed parts, calendar pinned to gregory — a non-Gregorian locale
-// (Buddhist, Hijri) would key days by a foreign year, and a native-digit one
-// (Arabic, Persian) by foreign digits. Latn keeps the key the stored form.
+// Y-M-D from typed parts, calendar pinned to gregory/Latn — a non-Gregorian or
+// native-digit locale would key days by a foreign year or digits.
 function dayKey(t, tz) {
   let p = null;
   try {
@@ -870,8 +808,7 @@ const dayShort = (t, tz) => {
   } catch { return ''; }
 };
 
-// The calendar-day label — a Y-M-D key needs no timezone, the weekday/month/day
-// are absolute. Built once per dialect, never per call.
+// Calendar-day label; a Y-M-D key needs no timezone. Format built once per dialect.
 const locFmts = new Map();
 const L = loc => {
   let f = locFmts.get(loc);
@@ -890,9 +827,8 @@ function schedDays(ms, tz) {
   return [...ks].sort();
 }
 
-// Human span from ISO day keys (null = nothing scheduled). One day-label per
-// day, joined — the locale's own word and ordering rules ("Jul 11–12" vs
-// "11.–12. Juli") come from Intl, so no dialect branches live here.
+// Human span from ISO day keys; the locale's own ordering rules ("Jul 11–12" vs
+// "11.–12. Juli") come from Intl.
 function fmtRange(keys) {
   const ks = (Array.isArray(keys) ? keys : []).filter(k => DATE_RE.test(k));
   if (!ks.length) return null;
@@ -913,11 +849,8 @@ function kioskStatus(r, now) {
   return 'upcoming';
 }
 
-// Round names by distance from the final (2 -> Final, 4 -> Semifinals, ...);
-// keyed off koColumn, so a bye'd semi still reads as a semifinal. Which round
-// size takes a dedicated word (n=16: "Achtelfinale" vs "Runde der letzten 16")
-// is a per-locale key decision — the n=16 key applies whenever the bundle
-// defines it, no language branch here.
+// Round name by distance from the final (0 -> Final, 1 -> Semifinals, ...). Which
+// round size takes a dedicated word is a per-locale bundle key, no branch here.
 function roundName(depthFromEnd) {
   const key = roundKeyOf(depthFromEnd);
   return t(LOCALE, key, key === 'round-of' ? { n: 2 << depthFromEnd } : undefined);
@@ -930,7 +863,7 @@ const mainFinal = (ctx, parented) =>
 
 // Bracket parent-adjacency in one scan: winnerParent (fed id -> parent), kids
 // (parent -> feeder ids, side order), loserFed, loserParent. Every bracket
-// consumer reads this one map — one edge classification, no drift.
+// consumer reads this one map.
 function parentsOf(ctx) {
   const memo = ctxMemo(ctx);
   if (!memo.parents) {
@@ -957,10 +890,8 @@ function parentsOf(ctx) {
   return memo.parents;
 }
 
-// Column: 0 is the final, one back per winner edge. Depth-from-leaves can't
-// place a bye'd semi. Main-tree columns read ctx._memo.wd (built before this,
-// so no interleaved in-progress values); the fallback sizes classification
-// rounds and the final anchors 0.
+// Column: 0 is the final, one back per winner edge; depth-from-leaves can't place
+// a bye'd semi. Main-tree columns read wd (built before this).
 function koColumn(m, ctx) {
   const memo = ctxMemo(ctx);
   if (!memo.koCol) {
@@ -987,9 +918,8 @@ function koColumn(m, ctx) {
   return memo.koCol.get(m.id);
 }
 
-// Ordinal within a round, from who each winner feeds — Final 1, its feeders
-// 1–2 by side, and so on down. Reads bracket structure, never `scheduled`, so
-// editing times can't renumber anything. 0 = off the championship tree.
+// Ordinal within a round, from who each winner feeds. Reads bracket structure,
+// never `scheduled`, so editing times can't renumber anything. 0 = off the tree.
 function koOrdinal(m, ctx) {
   const memo = ctxMemo(ctx);
   if (!memo.koOrd) {
@@ -1017,9 +947,7 @@ function matchLabel(m, ctx) {
   const col = koColumn(m, ctx);
   const n = 2 << col;
   if (n === 2) return roundName(col); // the apex reads its localized name
-  // Every round carries its bracket ordinal so a slot reference names a visible
-  // card ("Winner of R16-3"); the abbreviations are alpha-numeric shorthand,
-  // identical in both languages.
+  // Every round carries its bracket ordinal so a slot reference names a visible card.
   const abbr = n === 4 ? 'SF' : n === 8 ? 'QF' : `R${n}`;
   const ord = koOrdinal(m, ctx);
   return ord ? `${abbr}-${ord}` : abbr;
@@ -1030,8 +958,7 @@ function matchLabel(m, ctx) {
 // The lowest column whose undone matches are playable — a scheduled final
 // doesn't claim the status while its semifinals still decide it.
 function nextKoWave(ctx) {
-  // Championship-only: a placement match resolves as a consequence of the
-  // bracket above it, so it is never the wave in play.
+  // Placement matches resolve as a consequence of the bracket and are never the wave in play.
   const undone = ctx.matches.filter(m => m.pool === undefined && !m.result && placementLabel(m, ctx) === null);
   if (!undone.length) return null;
   const playable = undone.filter(m => !Array.isArray(m.sides) || m.sides.every(s => resolveSide(s, ctx)));
@@ -1041,10 +968,8 @@ function nextKoWave(ctx) {
   return Math.min(...(playable.length ? playable : undone).map(m => koColumn(m, ctx)));
 }
 
-// The podium from played results: first/second off the final, third off the
-// bronze, fourth off its loser. Null when nothing is decided. Final and bronze
-// found structurally, never by rendered label — a vocabulary change to
-// "Final"/"3rd place" must not kill the podium.
+// Podium from played results; null when nothing is decided. Final and bronze are
+// found structurally, never by rendered label.
 function winners(ctx) {
   const { winnerParent, loserFed } = parentsOf(ctx);
   const m = mainFinal(ctx, winnerParent); // the one knockout match nothing winner-feeds
@@ -1070,8 +995,7 @@ function winners(ctx) {
   return out;
 }
 
-// Category status line: the facts a renderer turns into the subline.
-// kind: groups (zero played included) | ko | finished | winners.
+// Category status facts: kind groups | ko | finished | winners.
 function catStatus(ctx) {
   const ms = ctx.matches;
   if (!ms.length) return null;
@@ -1091,7 +1015,7 @@ function catStatus(ctx) {
 }
 
 // Unplayed matches with both sides resolved, at the earliest scheduled time —
-// starts included, so page and editor share one "scoreable now" predicate.
+// starts included.
 function currentWave(ctx, status) {
   if (!status || status.kind === 'finished' || status.kind === 'winners') return [];
   const ready = ctx.matches.filter(m => !isDone(m) &&
@@ -1103,10 +1027,8 @@ function currentWave(ctx, status) {
   return ready.filter(m => schedTime(m, ctx.tz) === t);
 }
 
-// The prepositional article is bundle data keyed by the round kind the caller
-// already holds (artWord) — never parsed off the rendered name; the en
-// templates have no {art} slot, so one call serves both dialects.
-// The apex reads its own word; every deeper round takes the locale's article.
+// The apex reads its own word; every deeper round takes the locale's prepositional
+// article (bundle data, never parsed off the rendered name).
 const roundWord = (col, kind) => col === 0
   ? t(LOCALE, `${kind}-final`)
   : t(LOCALE, `${kind}-round`, { art: artWord(roundKeyOf(col), kind), round: roundName(col) });

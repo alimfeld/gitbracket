@@ -12,8 +12,8 @@
   /* role, not status — a match state and a board state share each hue */
   --alert: #b3261e;
   --live: #15803d;
-  /* one sticky nav bar's total height — segments stick at 0, cats below it,
-  and jump targets clear one bar (player page) or two (tournament page).
+  /* one sticky nav bar's height — segments at 0, cats below, jump targets clear
+  one bar (player) or two (tournament).
   ponytail: padding + 1.5rem line + link padding + border — revisit on font change */
   --bar-h: calc(var(--space)*2 + 1.5rem + var(--space)*2 + 1px);
 }
@@ -77,8 +77,7 @@ article[id] {
   scroll-margin-top: calc(var(--bar-h) + var(--space)*2);
 }
 
-/* the jump receipt: a brief accent wash on the arrived-at target — state rides
-   data-*, set and cleared by the data-jump click handler */
+/* the jump receipt: accent wash on the arrived-at target (data-*, toggled by the click handler) */
 [data-flash] {
   animation: flash 1.2s ease-out;
 }
@@ -166,8 +165,8 @@ p {
   gap: calc(var(--space)*2);
 }
 
-/* the index: one card per tournament — the card itself opens the tournament, the
-   venue board is a sibling chip pinned to the corner (a link can't nest a link) */
+/* the index: one card per tournament — the venue board is a sibling chip in the
+   corner, since a link can't nest a link */
 .tcard-wrap {
   position: relative;
 }
@@ -227,8 +226,7 @@ a.tcard h2 {
   margin: var(--space) 0 0;
 }
 
-/* grid-item margins never collapse — a cell heading's top margin would stack
-   on the gap and read one step wider than the same heading in flow */
+/* grid-item margins never collapse — a cell heading's top margin would stack on the gap */
 .grid h4 {
   margin-top: 0;
 }
@@ -248,8 +246,7 @@ article {
   gap: calc(var(--space)*2);
 }
 
-/* the gap owns all spacing — a child margin would stack on top of it and
-   double a step; the day heading keeps one extra so a day break still reads */
+/* the gap owns all spacing — a child margin would stack on it and double a step */
 .stack>* {
   margin: 0;
 }
@@ -357,8 +354,7 @@ body.venue {
   max-width: none;
 }
 
-/* header + venue titles stick as one block; the h2s share the board's --cols
-   track so a title stays pinned above its column */
+/* header + venue titles stick as one block, h2s sharing the board's --cols track */
 .kiosk-top {
   position: sticky;
   top: 0;
@@ -382,9 +378,8 @@ body.venue header {
   padding: calc(var(--space)*2) 0 var(--space);
 }
 
-/* the day line hangs off the title's own margin, and the stamp keeps the shared
-   top gap — but neither's bottom margin may escape the header div and double
-   the gap to the venue titles */
+/* neither the day line's nor the stamp's bottom margin may escape the header div
+   and double the gap to the venue titles */
 .kiosk-top p:first-of-type {
   margin: 0;
 }
@@ -412,10 +407,8 @@ body.venue header {
   height: calc(var(--day-h) * 1px);
 }
 
-/* where the day is right now: the renderer places it at the wall-minute y;
-   the per-minute re-render advances it with the clock; it never intercepts a tap.
-   Painted above the cards so it reads as a true timeline; the alpha keeps the
-   content it crosses readable */
+/* where the day is right now: placed at the wall-minute y and advanced by the
+   per-minute re-render; above the cards but never intercepts a tap */
 .now {
   position: absolute;
   left: 0;
@@ -430,8 +423,8 @@ body.venue header {
   position: relative;
 }
 
-/* one card per slot, placed by wall clock: top = its start, slot minutes are
-   its height; the seam between stacked cards is CARD_GAP (app.js), inline */
+/* one card per slot, placed by wall clock: top = its start, slot minutes are its
+   height; the seam between stacked cards is CARD_GAP (app.js), inline */
 .bcard {
   position: absolute;
   left: 0;
@@ -445,8 +438,7 @@ body.venue header {
   white-space: nowrap;
 }
 
-/* status rides the spine — a 3px left edge, the admin board's vocabulary;
-   the head keeps its word in plain ink, the color carries no message */
+/* status rides the spine — a 3px left edge, the admin board's vocabulary */
 article[data-status="overdue"] {
   border-left: 3px solid var(--alert);
 }
@@ -483,9 +475,7 @@ p[data-status="stale"] {
   color: var(--alert);
 }
 
-/* possible stages: a dashed, muted card that reads "not a match yet"; the
-   time survives in full ink — the TBD bits and the condition chip carry the
-   uncertainty that is left */
+/* possible stages: dashed muted card; the time survives in full ink */
 article[data-status="possible"] {
   border-style: dashed;
   color: var(--muted);
@@ -500,8 +490,8 @@ article[data-status="possible"] .head {
   text-decoration: underline dotted;
 }
 
-/* the sim clock — a bare LIVE chip at rest, a bordered panel of controls while
-   the sim runs. Created by app.js outside the render tree, so it styles by id */
+/* the sim clock — a bare LIVE chip at rest, a bordered panel while running;
+   created by app.js outside the render tree, so it styles by id */
 #sim-clock {
   position: fixed;
   right: 1em;
@@ -524,8 +514,7 @@ article[data-status="possible"] .head {
   border-radius: var(--radius);
 }
 
-/* the rest-state chip reads green and bare — it reports the state, it is not a
-   button; first-child keeps the class off the markup */
+/* the rest-state chip reads green and bare — the class stays off the markup */
 #sim-clock:not([data-sim]) button:first-child {
   border: none;
   background: none;

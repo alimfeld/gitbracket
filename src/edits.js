@@ -1,9 +1,7 @@
 'use strict';
 
-// Edit engine — the one write path. Every edit validates, writes, and commits
-// itself, so the process can die at any instant with nothing lost. The result
-// grammar (parseResult) is shared with the daemon's result field — browser and
-// typed entries can never drift.
+// Edit engine — the one write path: every edit validates, writes, and commits itself.
+// parseResult is shared with the daemon's result field.
 
 const fs = require('fs');
 const path = require('path');
@@ -18,17 +16,15 @@ function parseGame(s) {
   return mm ? { a: +mm[1], b: +mm[2] } : null;
 }
 
-// Mutate the category's match list in memory; return an error string or null.
-// Never touches disk — the caller rolls back on validation failure.
+// Mutate in memory; return an error string or null. Never touches disk.
 function findMatch(matches, matchId, fn) {
   const m = (matches || []).find(x => x && x.id === Number(matchId));
   if (!m) return `unknown match ${matchId}`;
   return fn(m) ?? null;
 }
 
-// Score a match: games are the evidence; once they reach the best-of target
-// the outcome is recorded as played (the validator proves the games agree). A
-// prefix update stays in play; re-scoring replaces any earlier result.
+// Games are the evidence; at the best-of target the outcome is recorded as played.
+// A prefix update stays in play; re-scoring replaces any earlier result.
 function applyScore(matches, matchId, games, ctx) {
   return findMatch(matches, matchId, m => {
     m.games = games;
@@ -50,17 +46,13 @@ function applyResult(matches, matchId, status, winner) {
   });
 }
 
-// games and result are one round-trip pair — a clear removes both, and the
-// match returns to the unresolved board.
+// A clear removes both, returning the match to the unresolved board.
 function applyClear(matches, matchId) {
   return findMatch(matches, matchId, m => { delete m.games; delete m.result; return null; });
 }
 
-// Rewrite one side to any validator-valid slot — players, pool rank, or match
-// edge. All validity is the validator's (unknown ids, pair-fixing, same-set,
-// consumed-twice, rank range, cycles, double-books); writeEdit validates the
-// whole repo and rolls back. A dead-tie break is just explicit players over a
-// pool slot that renders TBD.
+// Rewrite one side to any validator-valid slot (players, pool rank, or match edge);
+// all validity is the validator's — writeEdit validates the whole repo and rolls back.
 function applySide(matches, matchId, value) {
   return findMatch(matches, matchId, m => {
     if (!Array.isArray(m.sides) || m.sides.length !== 2) return 'match has no two sides';
@@ -69,8 +61,7 @@ function applySide(matches, matchId, value) {
   });
 }
 
-// Time and venue together — one writeEdit, one commit, so a drag on the admin
-// grid never lands a half-moved match. null clears the field.
+// Time and venue together — one commit, so a drag never lands a half-moved match.
 function applyMove(matches, matchId, value) {
   return findMatch(matches, matchId, m => {
     if (value.time == null) delete m.scheduled; else m.scheduled = value.time;
@@ -79,14 +70,9 @@ function applyMove(matches, matchId, value) {
   });
 }
 
-// Apply an edit, validate the whole repo, write — or roll back and report the
-// validator's errors. (writeTournament's byte-identical formatting keeps the
-// commit diff to the one edited match.) An edit whose result is byte-identical
-// to the stored file changes nothing: no write, no commit — execEdit reports
-// unchanged.
-// skipId exempts the match being edited from the reattribution guard: re-seating
-// a decided match keeps its result by design (editDetail flags it), while a
-// change that reaches a *different* decided match's side is refused.
+// Apply, validate the whole repo, write — or roll back and report the errors. An edit
+// byte-identical to the stored file changes nothing. skipId exempts the edited match
+// from the reattribution guard (re-seating keeps its result by design).
 function writeEdit(siteRoot, repo, slug, catId, apply, skipId) {
   const info = repo.tournaments.get(slug);
   if (!info || !info.tjson) return { err: `unknown tournament ${slug}` };
@@ -97,7 +83,7 @@ function writeEdit(siteRoot, repo, slug, catId, apply, skipId) {
   if (!ms) return { err: `no matches for category ${catId}` };
   const ctx = catCtx(tjson, catId);
   const file = path.join(siteRoot, 'tournaments', `${slug}.json`);
-  // A hand-edited disk can be malformed between load and write: refuse, never throw out of the daemon's handler (an unhandled rejection kills the match day).
+  // A hand-edited disk can be malformed between load and write: refuse, never throw.
   let before, beforeJson;
   try {
     before = fs.readFileSync(file, 'utf8');
@@ -105,12 +91,9 @@ function writeEdit(siteRoot, repo, slug, catId, apply, skipId) {
   } catch (e) {
     return { err: `site/tournaments/${slug}.json is not readable JSON on disk (${e.message}) — fix the file and retry; nothing was written` };
   }
-  // The daemon's memory snapshot can outlive an out-of-band hand edit; writing
-  // from it would silently drop that edit in the next commit (the pre-commit's
-  // disk-side validate can't see it either). Refuse — the daemon reloads on
-  // failure, so a retry applies onto the fresh state. Compared through the
-  // same normalizer, so byte-layout-only differences (a minified fixture) are
-  // not a change; data changes are.
+  // The memory snapshot can outlive an out-of-band hand edit; writing from it would
+  // silently drop that edit. Compared through the same normalizer, so byte-layout-only
+  // differences aren't a change.
   if (tournamentText(beforeJson) !== tournamentText(tjson)) {
     return { err: `the file changed on disk (${slug}.json) since it was loaded — refusing to overwrite it; reload and retry` };
   }
@@ -118,11 +101,8 @@ function writeEdit(siteRoot, repo, slug, catId, apply, skipId) {
   const restore = () => ms.splice(0, ms.length, ...((beforeJson.matches || {})[catId] || []));
   const aerr = apply(ms, ctx);
   if (aerr) return { err: aerr };
-  // The published days (the index dates) are fixed: only the schedule
-  // generator rewrites them, and that's off the table once results are in. An
-  // edit that moves a match off a day — or clears the last match of one —
-  // would desync the index with no edit path to follow, so it's refused here;
-  // the validator's dates-mismatch error stays for out-of-band hand edits.
+  // Published days are fixed: an edit that moves a match off a day (or clears a day's
+  // last match) would desync the index, which no edit path follows. Refused here.
   const daysOf = tj => schedDays(Object.values(tj.matches || {}).flat(), tj.timezone || 'UTC');
   const beforeDays = daysOf(beforeJson);
   const afterDays = daysOf(tjson);
@@ -131,12 +111,10 @@ function writeEdit(siteRoot, repo, slug, catId, apply, skipId) {
     restore();
     return { err: `refused: this edit changes the tournament's scheduled days (${fmtDays(beforeDays)} → ${fmtDays(afterDays)}) — the index dates are fixed once the schedule is published and no edit follows them; keep the match on a published day, or change the days by hand-editing the file and its tournaments.json entry together` };
   }
-  // tjson is the single view of the data, so the validator sees exactly what
-  // writeTournament will write.
+  // The validator sees exactly what writeTournament will write.
   const { errs } = validateRepo(repo);
   if (errs.length) {
-    // Nothing was written — writeTournament runs only past this gate — so the
-    // in-memory undo is the whole rollback.
+    // Nothing was written — writeTournament runs only past this gate.
     restore();
     return { errs };
   }
@@ -164,12 +142,10 @@ function writeEdit(siteRoot, repo, slug, catId, apply, skipId) {
 
 // ---------- the result grammar ----------
 
-// The result field's one grammar — games (bare) · wo a|b · void · empty
-// clears. The shape rides the value; grammar errors are caught here, before any
-// I/O, and data errors belong to the validator. Shaped JSON skips this
-// entirely, so the browser and typed entries share the same shapes.
+// games (bare) · wo a|b · void · empty clears. Grammar errors are caught here,
+// before any I/O; data errors belong to the validator.
 function parseResult(tokens) {
-  if (!tokens.length) return { value: { shape: 'clear' } }; // empty clears
+  if (!tokens.length) return { value: { shape: 'clear' } };
   const head = tokens[0];
   if (head === 'wo') {
     const side = tokens[1];
@@ -188,15 +164,11 @@ function parseResult(tokens) {
   return { value: { shape: 'score', games } };
 }
 
-// 'result' folds score / walkover / void / clear into one entry — the shape
-// dispatches to the domain applies; anything else is refused by name, never
-// silently treated as one of them. 'side' names the side in its value (si) —
-// the verb doesn't repeat it.
+// 'result' dispatches by shape to the domain applies; unknown shapes are refused by
+// name. 'side' names the side in its value (si).
 function applyFor(verb, matchId, value) {
-  // The daemon's value is untrusted: a body can name any verb with any value,
-  // and move/side/result dereference the value — a non-object would throw out
-  // of the async handler and kill the match-day daemon. Refuse the shape here,
-  // before any field is read; the page always sends shaped objects.
+  // The daemon's value is untrusted: a non-object would throw out of the async handler.
+  // Refuse the shape before any field is read.
   if ((verb === 'result' || verb === 'move' || verb === 'side') && !plainObject(value)) {
     return () => `${verb} edits carry a value object — got ${JSON.stringify(value)}`;
   }
@@ -223,10 +195,9 @@ function commitMessage(kind, slug, cat, matchId, detail) {
   return `${kind}(${slug}): ${cat}/${matchId} ${detail}`;
 }
 
-// One-line summary of what changed — keyed off the edit kind, never the match
-// state, so a venue or time edit on a decided match reports the move, not the
-// result. A side op on a decided match keeps the stored games/result for the
-// NEW team, so the detail flags it — history must never read as a silent rewrite.
+// One-line summary of what changed, keyed off the edit kind — never the match state,
+// so a move on a decided match reports the move. A side op on a decided match keeps
+// its result, flagged so history can't read as a silent rewrite.
 function editDetail(kind, m, value, ctx) {
   if (kind === 'result') {
     if (value.shape === 'score') return (m.games || []).map(gg => `${gg.a}-${gg.b}`).join(' · '); // dashes — the detail reads like the board column
@@ -241,14 +212,11 @@ function editDetail(kind, m, value, ctx) {
 
 // ---------- the edit funnel (edits commit per AGENTS.md) ----------
 
-// Validate, write, and always commit — git is the record and the daemon is the
-// only writer. The error or rolled-back report becomes the page's flash.
+// Validate, write, and always commit; the error/rollback report becomes the page's flash.
 function execEdit(state, verb, cat, matchId, value) {
   const { root, siteRoot, repo, slug } = state;
   const info = repo.tournaments.get(slug);
-  // An unknown slug is a report, never a throw: the daemon's request handler is
-  // the one caller that can be handed a stale or hostile slug, and writeEdit's
-  // own guard runs too late to save this lookup.
+  // An unknown slug is a report, never a throw; writeEdit's guard runs too late for this lookup.
   if (!info || !info.tjson) return { error: `unknown tournament ${slug}` };
   const ctx = catCtx(info.tjson, cat);
   const m = ctx.byId.get(Number(matchId)); // the same object writeEdit mutates in place
@@ -258,8 +226,7 @@ function execEdit(state, verb, cat, matchId, value) {
   if (res.err) return { error: res.err };
   if (res.errs) return { errors: res.errs };
   if (res.unchanged) return { unchanged: true }; // same data — nothing written, nothing committed
-  // a result edit keeps its shape kind; a clear takes the kind of what it
-  // removed — greps like ^score( still find it
+  // a clear takes the kind of what it removed, so greps like ^score( still find it
   const kind = verb === 'result'
     ? (value.shape === 'clear' ? (preStatus === 'walkover' ? 'walkover' : preStatus === 'void' ? 'void' : 'score') : value.shape)
     : verb;

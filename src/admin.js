@@ -1,15 +1,10 @@
 'use strict';
 
-// Admin daemon — the localhost page and tiny API over the repo. The browser is
-// the UI; this process is the only writer (git is the record), and every edit
-// reuses the editor's writeEdit funnel — validate, write, commit — so the
-// browser can never outrun the gate. Pending = commits this branch's own
-// upstream hasn't seen (@{upstream}..HEAD); publish = validate + push +
-// deploy, the branch role gating the target (main: production, a branch only
-// its scratch CNAME); undo = reset the last unpushed commit; redo = restore
-// the commit the last undo dropped, live only while the undo is still the last
-// act. Nothing ships — the page lives under src/admin/ and the daemon serves
-// it locally.
+// Admin daemon — the localhost page and tiny API over the repo. The browser is the
+// UI; this process is the only writer, and every edit reuses the editor's
+// validate/write/commit funnel. Pending = unpushed commits (@{upstream}..HEAD);
+// publish = validate + push + deploy; undo/redo rewind only unpushed history.
+// Nothing ships — the page lives under src/admin/ and the daemon serves it locally.
 
 const http = require('http');
 const fs = require('fs');
@@ -21,11 +16,8 @@ const { matchSlotMs, schedTime } = require('../site/derive.js');
 const { validateRepo } = require('./validate.js');
 const { ship, deployRole } = require('./publish.js');
 
-// The unpushed commits as [{sha, msg}]. The window is the current branch's own
-// upstream (@{upstream}..HEAD), not origin/main — a window over origin/main
-// would keep counting pushed sim commits forever and let undo strand the
-// branch behind its remote. No upstream yet: fall back to origin/main —
-// hasRemote then still says whether a bare push could go out.
+// Unpushed commits [{sha, msg}] over the branch's own upstream, not origin/main —
+// that would count pushed sim commits forever. No upstream: fall back to origin/main.
 function unpushed(root) {
   const up = git(root, ['rev-parse', '--verify', '--quiet', '@{upstream}']);
   const ref = up.code === 0 ? '@{upstream}' : 'origin/main';
@@ -38,22 +30,17 @@ function unpushed(root) {
   return { commits, hasRemote: true };
 }
 
-// One path for every verb the page can send — score/wo/void/clear via
-// 'result', side, or a combined 'move' (a drag sets time+venue atomically:
-// one validate, one commit). The editor owns the funnel; this is the JSON view.
+// One path for every verb the page can send; 'move' sets time+venue atomically
+// (one validate, one commit). The editor owns the funnel.
 function doEdit(state, verb, cat, matchId, value) {
-  // The result field is the page's one free-text entry — parsed here with the
-  // editor's grammar, so browser and typed entries can never drift. Everything
-  // else arrives pre-shaped.
+  // The result field is free text — parsed here with the editor's grammar.
   if (verb === 'result' && typeof value === 'string') {
     const p = parseResult(value.trim().split(/\s+/).filter(Boolean));
     if (p.err) return { ok: false, error: p.err }; // the modal keeps the draft and flashes the grammar's own words
     value = p.value;
   }
   const r = execEdit(state, verb, cat, matchId, value);
-  // A failure can mean the disk moved since the daemon loaded it (an out-of-band
-  // hand edit) — reload so a retry applies onto the fresh state, never onto
-  // stale memory. Memory is already the written truth on success.
+  // A failure may mean the disk moved since load — reload so a retry isn't stale.
   if (r.errors) { reload(state); return { ok: false, errors: r.errors }; }
   if (r.error) { reload(state); return { ok: false, error: r.error }; }
   if (r.unchanged) return { ok: true, unchanged: true };
@@ -61,21 +48,15 @@ function doEdit(state, verb, cat, matchId, value) {
   return { ok: true, sha: r.sha };
 }
 
-// Mirror resets across the same edge. Both reset --hard, so the clean check
-// must cover the whole working tree — a site/-only scope would silently wipe
-// an in-progress edit elsewhere (README, a spec); untracked files are safe.
-// Redo lives only while its undo is still the last act, and it verifies HEAD
-// is still the undone commit's parent, so the reset can only move back along
-// the exact edge the undo took — pushed history is never rewritten.
+// Both undo and redo reset --hard, so the clean check covers the whole tree.
+// Redo verifies HEAD is still the undone commit's parent, so pushed history is
+// never rewritten.
 function undo(state) {
   if (!cleanTree(state.root)) return { error: 'the repo has uncommitted changes — commit or stash before undoing' };
   const p = unpushed(state.root);
   if (!p.commits.length) return { error: 'nothing to undo' };
-  // The undo window falls back to origin/main when the branch has no upstream,
-  // so a branch pushed without -u would count pushed commits as pending — and
-  // resetting past one would strand the branch behind its remote, turning the
-  // next push into a loud failure. Any remote ref containing HEAD means the tip
-  // is already out: undo stays local to unpushed commits only.
+  // The window can fall back to origin/main, so a remote ref containing HEAD means the
+  // tip is already out — undo stays local to unpushed commits.
   const hosted = git(state.root, ['branch', '-r', '--contains', 'HEAD']);
   if (hosted.code === 0 && hosted.out.trim()) return { error: 'HEAD is already pushed — undo only rewinds unpushed commits' };
   const head = git(state.root, ['rev-parse', 'HEAD']).out.trim();
@@ -106,19 +87,15 @@ function redo(state) {
   return { sha: top.sha.slice(0, 7), msg: top.msg };
 }
 
-// wall "HH:MM" of a stored schedule string — the scan works in wall minutes,
-// never offsets (the tz only anchors instants)
+// wall "HH:MM" of a stored schedule string; the scan works in wall minutes.
 const wallMinOf = s => { const x = /T(\d{2}):(\d{2})/.exec(String(s || '')); return x ? +x[1] * 60 + +x[2] : null; };
 
-// The day's legal starts for one match, as wall-clock minutes per venue — the
-// grid ticks where the move passes the gate's own rules (schedEntries +
-// pairBusy, feederBounds), so the preview and the write gate can't disagree.
+// Legal starts for one match as wall-clock minutes per venue, using the gate's own
+// rules (schedEntries, pairBusy, feederBounds) so preview and write can't disagree.
 // The dragged match is off the board during the query.
 function legalSlots(tjson, cat, matchId, day, gcd) {
   const tz = tjson.timezone || 'UTC';
-  // The query param is untrusted: a non-positive step would never advance the
-  // scan below, and a pathological gcd would widen it toward 1440 ticks per
-  // venue. Floor the step — every real slot length lands on ≥5-minute marks.
+  // The query param is untrusted: floor the step so the scan advances.
   const step = Number.isInteger(gcd) && gcd > 0 ? Math.max(gcd, 5) : 15;
   const { entries } = schedEntries(tjson);
   const others = entries.filter(e => !(e.cat === cat && e.m.id === Number(matchId)));
@@ -130,10 +107,9 @@ function legalSlots(tjson, cat, matchId, day, gcd) {
   const fb = feederBounds(m, ctx, tz);
   const floor = fb.floor; // m's own bound: its feeder slots' ends, gate-mirrored
   let ceiling = fb.ceiling; // match-edge consumers' starts — a pool's rank consumers are invisible to feederBounds, so the pool scan extends it
-  // A pool match carries no own bound, but a move is gated by every scheduled
-  // knockout match holding a rank slot of its pool. Only committed data reaches
-  // the daemon (every edit validates), so a move can only raise the pool end —
-  // the whole set collapses to the earliest scheduled consumer's start.
+  // A pool match has no own bound, but a move is gated by every scheduled knockout
+  // match holding a rank slot of its pool. Only committed data reaches the daemon, so
+  // this collapses to the earliest scheduled consumer's start.
   if (m.pool !== undefined) {
     for (const C of ctx.matches) {
       if (!C || C.pool !== undefined || C.scheduled === undefined) continue;
@@ -170,13 +146,10 @@ function legalSlots(tjson, cat, matchId, day, gcd) {
   return out;
 }
 
-// The side picker's legality for one side, mirroring the gate's own atoms
-// (consumedSlots, schedEntries, slotsOverlap, descendants) — same no-drift
-// deal as legalSlots. The side being replaced frees its own slot; busy players
-// come only from scheduled+undone matches overlapping this one.
+// Legality for one side, mirroring the gate's atoms. The side being replaced frees
+// its own slot; busy players come from overlapping scheduled+undone matches.
 function sideOpts(tjson, cat, matchId, si) {
-  // The param is untrusted: a NaN or out-of-range side would free no current
-  // slot and grey nothing — clamp to the two sides the grid renders.
+  // The param is untrusted: clamp to the two sides the grid renders.
   si = si === 1 ? 1 : 0;
   const ms = (tjson.matches || {})[cat] || [];
   const ctx = catCtx(tjson, cat);
@@ -190,11 +163,8 @@ function sideOpts(tjson, cat, matchId, si) {
   const mine = entries.find(e => e.cat === cat && e.m.id === Number(matchId));
   let busy = [];
   if (mine) {
-    // A player is busy when already scheduled in any other overlapping,
-    // scheduled+undone match — venue-blind, and independent of whether the two
-    // matches share a player, because adding any of that match's players here
-    // would double-book them. Only fixed players count (a slot side resolves
-    // later).
+    // A player is busy when already scheduled in another overlapping match — venue-blind,
+    // since adding any of its players would double-book them. Only fixed players count.
     const mineMs = matchSlotMs(mine.m, mine.ctx);
     const busySet = new Set();
     for (const e of entries) {
@@ -204,9 +174,7 @@ function sideOpts(tjson, cat, matchId, si) {
     }
     busy = [...busySet];
   }
-  // The picker's player pool is the full registered roster, not the players
-  // who happen to appear in a match — a late-show hand-added to players[] is
-  // legal for the gate and must be reachable from the page.
+  // The full registered roster, not just players appearing in a match.
   const roster = Array.isArray(tjson.players)
     ? tjson.players.filter(p => p && typeof p === 'object' && typeof p.id === 'string').map(p => p.id)
     : [];
@@ -219,8 +187,7 @@ function sideOpts(tjson, cat, matchId, si) {
   };
 }
 
-// Reload from disk — undo (git reset) rewrites files, or the next edit would
-// validate against stale data.
+// Reload from disk — undo (git reset) rewrites files.
 function reload(state) {
   state.repo = loadRepo(state.siteRoot);
 }
@@ -255,22 +222,20 @@ const MIME = {
   '.svg': 'image/svg+xml', '.png': 'image/png',
 };
 
-// One static GET under a serving root — MIME by extension, traversal-guarded,
-// null when missing.
+// One static GET under a serving root — MIME by extension, traversal-guarded.
 function staticFile(root, rel) {
   const file = path.join(root, rel === '' ? 'index.html' : rel);
   if (path.relative(root, file).startsWith('..') || !fs.existsSync(file) || fs.statSync(file).isDirectory()) return null;
   return { body: fs.readFileSync(file), type: MIME[path.extname(file)] || 'application/octet-stream' };
 }
 
-// Open the admin page in the platform browser; CI skips the launch (no
-// display, a spawn would only fail).
+// Open the admin page in the platform browser; CI skips the launch.
 function openBrowser(url) {
   const cmd = process.platform === 'darwin' ? 'open' : process.platform === 'linux' ? 'xdg-open' : null;
   if (cmd && !process.env.CI) spawn(cmd, [url], { detached: true, stdio: 'ignore' }).unref();
 }
 
-// Serve the admin page (src/admin/) plus site/derive.js (the shared domain model).
+// Serve the admin page (src/admin/) plus site/derive.js.
 function serve(state) {
   const pageRoot = path.join(__dirname, 'admin');
   let server;
@@ -282,9 +247,8 @@ function serve(state) {
       // Reject cross-origin writes so a stray page can't score matches or deploy.
       const o = req.headers.origin;
       const self = `http://127.0.0.1:${server.address().port}`;
-      // Origin: null (a sandboxed iframe, a file:// page) is a cross-origin
-      // page like any other: the string is truthy and matches neither self —
-      // the one condition below refuses it with the rest.
+      // Origin: null (sandboxed iframe, file://) is truthy and matches neither self, so
+      // the check refuses it with the rest.
       if (o && o !== self && o !== self.replace('127.0.0.1', 'localhost')) return json(res, 403, { error: 'forbidden origin' });
     }
     if (url.startsWith('/api/')) {
@@ -292,8 +256,7 @@ function serve(state) {
         const out = (Array.isArray(state.repo.index) ? state.repo.index : [])
           .filter(t => state.repo.tournaments.has(t.slug) && state.repo.tournaments.get(t.slug).tjson)
           .map(t => ({ slug: t.slug, name: t.name }));
-        // the daemon's own default first, so the page boots on the same
-        // tournament the serve log names — one source of truth for the active one
+        // the daemon's own default first, matching the serve log
         if (state.slug) out.sort((a, b) => a.slug === state.slug ? -1 : b.slug === state.slug ? 1 : 0);
         return json(res, 200, out);
       }
@@ -316,9 +279,9 @@ function serve(state) {
       if (url === '/api/edit' && req.method === 'POST') {
         let body;
         try { body = JSON.parse(await readBody(req)); } catch { return json(res, 400, { error: 'bad JSON' }); }
-        // Untrusted input, two ways: JSON.parse admits null/"x"/[], and a stale
-        // page or a stray local process can name any slug. Refuse both — a body
-        // dereference here throws out of the async handler and kills the daemon.
+        // Untrusted input: JSON.parse admits null/"x"/[], and a stale page can name
+        // any slug. Refuse both — a body dereference would throw out of the async
+        // handler and kill the daemon.
         if (!plainObject(body)) return json(res, 400, { error: 'bad JSON body' });
         if (body.slug) {
           if (!state.repo.tournaments.has(body.slug)) return json(res, 400, { error: `unknown tournament ${body.slug}` });
@@ -350,10 +313,8 @@ function serve(state) {
       }
       return json(res, 404, { error: 'unknown api' });
     }
-    // static: admin page files, the shared domain modules (derive.js and its
-    // translation bundle — the admin renders derive's labels, in English), and
-    // the site preview under /preview/ (the working tree, loopback only —
-    // publish alone ships site/)
+    // static: admin page files, the shared domain modules, and /preview/ (the working
+    // tree, loopback only — publish alone ships site/)
     if (url === '/preview' || url.startsWith('/preview/')) {
       const f = staticFile(state.siteRoot, url.replace(/^\/preview\/?/, ''));
       if (!f) { res.statusCode = 404; return res.end('not found'); }

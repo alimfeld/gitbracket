@@ -1,19 +1,16 @@
 'use strict';
 
-// Admin page — the browser UI for the local daemon. Pure client: every write
-// goes through /api/edit, which validates + commits server-side, so the
-// browser can never outrun the gate. derive.js loads above as a classic script
-// — its top-level names are page globals.
+// Admin page — the browser UI for the local daemon. Every write goes through
+// /api/edit, which validates + commits server-side; derive.js's names are page globals.
 
 const $ = id => document.getElementById(id);
 
-// A card's measured height (~49px: two side rows + meta). The day's scale
-// floors at one card per shortest slot, so the shortest card never overflows
-// into the next. ponytail: re-tune with the card's font/padding.
+// A card's measured height; the scale floors at one card per shortest slot.
+// ponytail: re-tune with the card's font/padding.
 const CARD_PX = 50;
 
-// Drops land on any 5-minute wall mark — the slot-minute gcd only aligned them
-// with the generated layout. ponytail: raise if 5-minute drops feel too fine.
+// Drops land on a 5-minute wall mark; the slot-minute gcd only aligned the generated
+// layout. ponytail: raise if 5-minute drops feel too fine.
 const STEP = 5;
 
 // ---- tiny state ----
@@ -34,8 +31,7 @@ const pendingReason = (m, ctx) => {
   return bad ? sideLabel(bad, ctx) : null;
 };
 
-// wall "HH:MM" from an ISO scheduled string; the grid works in wall-clock
-// minutes — never offsets (the tz only anchors instants)
+// wall "HH:MM" from an ISO scheduled string; the grid works in wall minutes.
 const wallMin = iso => { const m = /T(\d{2}):(\d{2})/.exec(String(iso || '')); return m ? +m[1] * 60 + +m[2] : null; };
 const pad = n => String(n).padStart(2, '0');
 const isoOf = (day, wm) => `${day}T${pad(Math.floor(wm / 60))}:${pad(wm % 60)}:00`;
@@ -82,8 +78,7 @@ function flash(msg) {
   flashTimer = setTimeout(() => { el.hidden = true; }, 3500);
 }
 let modalTrigger = null; // { key } — the card that opened the modal; focus returns there
-// A modal closes and its trigger regains focus — by key, because apply
-// reloads rebuild the cards under it (a captured node would be detached).
+// Focus returns by key: apply reloads rebuild the cards (a captured node would be detached).
 function closeModal() {
   $('modal').close();
   if (modalTrigger) {
@@ -122,9 +117,8 @@ async function setSlug(slug, keepDay = false) {
 // keep slug/day/selection, just re-fetch the data after an edit or undo
 async function reload() { await setSlug(S.slug, true); }
 
-// Fill the board's height when the day fits; floor the scale so the day's
-// shortest slot is at least one card tall — the shortest card can never
-// overflow into its next slot.
+// Fill the board's height when the day fits; floor the scale so the shortest slot is
+// at least one card tall.
 function fitScale(sShort) {
   const sc = $('board');
   const avail = sc ? sc.clientHeight : 0;
@@ -159,8 +153,7 @@ function renderGrid() {
   const cols = S.venues.map(v => v.id);
   grid.style.gridTemplateColumns = `4.5rem ${cols.map(() => 'minmax(9rem,1fr)').join(' ')} 13rem`;
 
-  // the day's hour ticks, shared by the label rail and every venue column —
-  // each column draws them behind its own cards
+  // hour ticks, shared by the label rail and each venue column
   let hourHtml = '', labelHtml = '';
   for (let hm = Math.floor(dayStart / 60) * 60; hm <= dayEnd && hm < 1440; hm += 60) {
     const y = (hm - dayStart) * S.pxPerMin;
@@ -186,8 +179,7 @@ function renderGrid() {
   wireGrid();
 }
 
-// time · category · match id · label — the id sits on the category so feeder
-// dropdown ids map to board cards.
+// time · category · match id · label; the id lets feeder dropdowns map to board cards.
 function cardMeta(c, m) {
   const t = schedTime(m, S.tz);
   const time = t !== null ? fmtTime(t, S.tz) : '—';
@@ -213,12 +205,9 @@ function cardHtml(c, m, venue) {
   </article>`;
 }
 
-// One row per side: the pencil is the only side-edit surface, the score rides
-// the row. The pencil sits inside .who with its name — it edits that side,
-// never the score.
+// The pencil is the only side-edit surface; the score rides the row.
 function sideRow(c, m, i) {
-  // the site's sideRow guards the same shape — a malformed match (hand-edit)
-  // renders TBD rows here too, never a TypeError off the operator's board
+  // the site's sideRow guards the same shape — a malformed match renders TBD rows, never a TypeError
   const side = m.sides && m.sides[i];
   const sideName = esc(sideLabel(side, c));
   const win = winnerIdx(m) === i;
@@ -269,8 +258,8 @@ function wireGrid() {
   });
 }
 
-// The candidate (venue, wallMin) under the pointer — legal snapping happens
-// against the daemon's slot list.
+// The candidate (venue, wallMin) under the pointer; legal snapping happens against
+// the daemon's slot list.
 function hitTest(e) {
   const grid = $('grid');
   const gr = grid.getBoundingClientRect();
@@ -285,9 +274,7 @@ function hitTest(e) {
   return { venue, wm, align: x - (rect.left - gr.left) > rect.width / 2 ? 'left' : 'right' };
 }
 
-// The legal start whose own slot covers this minute — null when none does, so a
-// ghost exists exactly where a drop would land: no ghost, no drop. Keys arrive
-// as JSON object keys, so they are strings.
+// The legal start whose own slot covers this minute, else null: no ghost, no drop.
 function legalSnap(venue, wm, slot) {
   const ticks = S.legal && S.legal.get(venue);
   if (!ticks || !ticks.length) return null;
@@ -299,8 +286,7 @@ function legalSnap(venue, wm, slot) {
   return best;
 }
 
-// Legal start-minutes per venue from the daemon (the gate's own rules),
-// computed once per drag.
+// Legal start-minutes per venue from the daemon, computed once per drag.
 async function loadSlots(cid, mid) {
   const r = await get(`/api/slots?slug=${S.slug}&cat=${cid}&id=${mid}&day=${S.day}&gcd=${STEP}`);
   // A superseded reply — an earlier drag's fetch landing late.
@@ -308,8 +294,7 @@ async function loadSlots(cid, mid) {
   S.legal = new Map(Object.entries((r && r.ok) || {}));
 }
 
-// One ghost element — the drop target's preview. Legal starts only, so its
-// absence is the refusal the flash then repeats.
+// One ghost element — the drop preview; legal starts only.
 function addGhost(col, { time = '', align = '', top, height }) {
   const g = document.createElement('div');
   g.className = 'ghost';
@@ -322,8 +307,7 @@ function addGhost(col, { time = '', align = '', top, height }) {
   S.ghost = g;
 }
 
-// Live ghost preview of the drop target — position by the pointer, legality by
-// the daemon's slot list.
+// Live ghost preview: position by the pointer, legality by the daemon's slot list.
 function ghost(e) {
   const src = S.dragSource;
   if (!src) return;
@@ -346,8 +330,7 @@ function ghost(e) {
   if (!S.legal) return;
   const wm = legalSnap(ht.venue, ht.wm, slot);
   if (wm === null) return;
-  // the wall start the drop would write, padded exactly as the rail and the
-  // daemon's slot lattice pad it
+  // the wall start the drop would write, padded as the rail and the daemon's lattice pad it
   addGhost(col, { time: `${pad(Math.floor(wm / 60))}:${pad(wm % 60)}`, align: ht.align, top: (wm - S.dayStart) * S.pxPerMin + 'px', height: slot * S.pxPerMin + 'px' });
 }
 function clearGhost() { if (S.ghost) { S.ghost.remove(); S.ghost = null; } }
@@ -385,8 +368,8 @@ async function sendEdit(verb, cid, mid, value) {
 }
 
 // ---- the result modal ----
-// raw entry — bare games · wo a/b · void · empty clears. The daemon parses it
-// with the editor's grammar; the modal keeps a rejected draft for fixing.
+// raw entry — bare games · wo a/b · void · empty clears; the daemon parses it and
+// the modal keeps a rejected draft for fixing.
 
 function openResult(cid, m) {
   if (!reachable) return; // the offline banner says why
@@ -418,12 +401,9 @@ function openResult(cid, m) {
     <div class="foot"><button data-x="cancel">Cancel</button><button data-x="apply" class="primary">Apply</button></div>
   </div>`;
   const input = modal.querySelector('#scoreinput');
-  // the inline error parks the daemon's words under the input — the corner
-  // toast fades, this line stays until the draft changes
+  // the inline error parks the daemon's words under the input, unlike the fading toast
   const errEl = modal.querySelector('#resulterr');
-  // the fill buttons set the machine token (or clear); pressed mirrors the
-  // field on every key — "No result" presses only when an outcome is actually
-  // exposed to removal
+  // the fill buttons set the machine token; "No result" presses only when an outcome exists
   const btns = [...modal.querySelectorAll('.fillbtns button')];
   const sync = () => {
     errEl.hidden = true; // any edit makes the last rejection stale
@@ -457,10 +437,9 @@ function openResult(cid, m) {
 }
 
 // ---- the side picker (modal) ----
-// Legality comes from /api/sideopts — the daemon's view of the gate, same
-// deal as the drag's /api/slots. Illegal options that aren't the current value
-// are greyed; the current value stays selectable so it can be moved away, and
-// Apply blocks anything still illegal.
+// Legality comes from /api/sideopts (the daemon's view of the gate, like /api/slots).
+// Illegal options that aren't the current value are greyed; the current value stays
+// selectable so it can be moved away.
 async function openSide(cid, m, si) {
   if (!reachable) return; // the offline banner says why
   const ctx = cat(cid);
@@ -494,8 +473,8 @@ async function openSide(cid, m, si) {
     if (kind === 'players') {
       const ids = cur && cur.kind === 'players' ? cur.ids : [];
       const names = new Map((S.tjson.players || []).filter(p => p && typeof p === 'object').map(p => [p.id, p.name]));
-      // the full roster from /api/sideopts — a registered player who appears in
-      // no match yet is still a legal side and must be placeable
+      // the full roster from /api/sideopts; a registered player in no match yet is
+      // still a legal side
       const all = L.roster || [];
       body.innerHTML = `<p class="hint">pick ${size} player${size === 1 ? '' : 's'}</p><div class="players">` +
         [...new Set(all)].map(id => {
@@ -521,9 +500,8 @@ async function openSide(cid, m, si) {
       body.querySelector('#poolsel').addEventListener('change', fillRanks);
     } else {
       const undone = ctx.matches.filter(mm => !isDone(mm));
-      // the current feeder may already be decided — it must stay an option so
-      // the select represents the value being edited (Apply on an untouched
-      // modal must no-op, not re-seat to the first undone match)
+      // the current feeder may already be decided — it must stay an option so an
+      // untouched modal no-ops rather than re-seating
       const curFeeder = cur && cur.kind === 'match' ? ctx.matches.find(X => X && X.id === cur.match) : null;
       const feeders = curFeeder && !undone.includes(curFeeder) ? [...undone, curFeeder] : undone;
       body.innerHTML = `<p class="hint">feeder match result</p>
@@ -539,9 +517,7 @@ async function openSide(cid, m, si) {
   };
   modal.querySelectorAll('.tabs button').forEach(b => b.onclick = () => setKind(b.dataset.kind));
   setKind(curKind);
-  // Enter applies without hijacking a select (dropdown), a checkbox (space
-  // toggles) or a foot button (its native click would apply twice); Escape is
-  // the dialog's native cancel
+  // Enter applies without hijacking a select, checkbox, or foot button; Escape is native.
   const apply = async () => {
     const kind = modal.querySelector('.tabs button.active').dataset.kind;
     let side;
@@ -567,8 +543,7 @@ async function openSide(cid, m, si) {
 }
 
 // ---- pending + publish + undo/redo ----
-// set while /api/publish is in flight — the response can take minutes (push +
-// surge deploy), so the button must not be re-enabled by the pending poll
+// set while /api/publish is in flight, so the pending poll can't re-enable the button
 let publishing = false;
 async function refreshPending() {
   const p = await get('/api/pending');
@@ -588,8 +563,8 @@ async function refreshPending() {
   $('undo').disabled = p.commits.length === 0 || p.dirty;
   $('redo').disabled = !p.redo || p.dirty;
   $('redo').title = p.redo ? `Redo ${p.redo.msg}` : '';
-  // A deploy can fail after its push already landed, leaving nothing pending —
-  // so Publish can't gate on the count; re-deploying is idempotent.
+  // A failed deploy after its push leaves nothing pending, so Publish can't gate on
+  // the count; re-deploying is idempotent.
   $('publish').disabled = publishing || p.dirty;
 }
 // the pending popover is a native <details> — close it when the pointer lands

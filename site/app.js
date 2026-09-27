@@ -2,41 +2,29 @@
 
 const POLL_MS = 30000;
 const FOLLOW_MS = 60000; // the kiosk re-follows the play on this cadence, data change or not
-// The dense-day floor for the kiosk calendar: one card-height per shortest
-// slot, so a 10-min slot day renders as a walkable strip, a 60-min day as a
-// screen. 135px is the card's measured height at base zoom — under-tune it
-// and cards overlap their next slot. ponytail: re-tune on the wall screen
-// with the 1.6px/min floor and the 140px header allowance beside it.
+// 135px = the card's measured height at base zoom; under-tune it and cards overlap
+// their next slot. ponytail: re-tune on the wall screen beside the 1.6px/min viewport
+// floor and the 140px header allowance.
 const CARD_PX = 135;
 
-// The seam between stacked cards: each card's box ends this many px short of
-// its slot, so tops stay pinned to the start minute and bottoms read as
-// separate blocks. Rendered inline — the flex wrapper can't be trusted to
-// shrink (its height is content-driven).
+// Cards end this many px short of their slot so tops stay pinned and bottoms read as
+// separate blocks; rendered inline because a content-driven flex wrapper won't shrink.
 const CARD_GAP = 4;
 
-// derive.js loads first as a classic script, so its names are already page
-// globals; under node, the module lands on globalThis.
+// Under node the classic-script globals must be reproduced on globalThis.
 if (typeof module !== 'undefined') {
   Object.assign(globalThis, require('./derive.js'));
   Object.assign(globalThis, require('./i18n.js'));
 }
 
-// The venue's display name — a missing id (hand-edited or staged) falls back to the id.
+// Missing venue id falls back to the id.
 const venueName = (ctx, id) => ctx.venues.get(id) || id;
 
-// The page language, resolved once at boot (?lang= wins, else the browser's,
-// else English); renders read it through u(). Node tests never boot, so they
-// stay English by default.
+// Page language, resolved once at boot: ?lang= wins, else the browser's, else English.
 let lang = 'en';
 const u = (k, p) => t(lang, k, p);
-// The override is accepted in either query position — the fragment (`#s?lang=de`,
-// the form that rides the links) or the URL (?lang=de#s, where people type it);
-// neither present, the browser's language decides. lang stays 'en' under node.
-// A language is usable only when its bundle ships — anything else is en, so a
-// half-translated page never renders (t() and derive's dispatchers agree on
-// the same fallback).
-// The one language-acceptance rule: a two-letter code with a shipped bundle.
+// ?lang= is accepted in the fragment (#s?lang=de) or the query (?lang=de#s); a
+// language is usable only when its bundle ships.
 const langOf = v => { const l = String(v || '').toLowerCase(); return /^[a-z]{2}$/.test(l) && I18N[l] ? l : null; };
 const resolveLang = (hash, search) => {
   const r = parseRoute(hash);
@@ -51,23 +39,21 @@ const resolveLang = (hash, search) => {
   return 'en';
 };
 
-// Wall-clock minutes of an instant — the day grid and the now-line both live
-// in wall minutes, never offsets.
+// Wall-clock minutes of an instant; the grid and now-line never use offsets.
 const wallClockMin = (t, tz) => {
   const f = fmtTime(t, tz).split(':');
   return f.length === 2 ? +f[0] * 60 + +f[1] : null;
 };
 
-// The sim clock's aim: land it on the event's first scheduled match, so the
-// kiosk opens where the tournament starts. Pure — tests pin it.
+// The sim clock's aim: the event's first scheduled match. Pure.
 function simAimOffset(tjson, now) {
   const tz = tjson.timezone || 'UTC';
   const ts = Object.values(tjson.matches || {}).flat().map(m => m ? schedTime(m, tz) : NaN).filter(Number.isFinite);
   return ts.length ? Math.min(...ts) - now : null;
 }
 
-// A dead deep link (the slug's file 404s — permanent, stop polling) versus a
-// transient network failure (null — the poll retries next tick).
+// A dead deep link (httpError — permanent, stop polling) versus a transient
+// network failure (null — the poll retries next tick).
 const HTTP_ERR = { httpError: true };
 
 async function fetchJson(url) {
@@ -84,10 +70,8 @@ async function fetchJson(url) {
   }
 }
 
-// One page, fragment routing: #<slug>[/schedule|venues][?cat=&player=&venue=].
-// Segments and params are id-regex-checked — raw input never reaches a URL;
-// unknown names and bad values are ignored, never fatal. Cat is a param, never
-// a path segment, so a category id can't shadow a view.
+// One page, fragment routing. Segments and params are id-regex-checked; cat is a
+// param, never a path segment, so a category id can't shadow a view.
 function parseRoute(hash) {
   if (hash === undefined) hash = location.hash;
   const [path, query] = String(hash).replace(/^#/, '').split('?');
@@ -109,10 +93,9 @@ function parseRoute(hash) {
   return r;
 }
 
-// Fragment URLs with params in fixed order. cat and player ride along between
-// tournament and schedule so switching keeps the focus and Schedule restores
-// the pick; the kiosk carries only venue.
-const CARRY = ['cat', 'player', 'lang']; // the tournament and schedule views carry the pick between them
+// Fragment URLs with params in fixed order; cat/player/lang ride between the
+// tournament and schedule views so switching keeps the pick.
+const CARRY = ['cat', 'player', 'lang'];
 const LEGAL = { tournament: CARRY, schedule: CARRY, venues: ['venue', 'lang'] };
 const href = (slug, view, p = {}) => {
   const q = LEGAL[view].filter(k => p[k]).map(k => `${k}=${p[k]}`).join('&');
@@ -137,18 +120,14 @@ const segmentBar = r => {
   return `<nav class="segments" aria-label="${u('views')}"><a href="${esc(href(r.slug, 'tournament', r))}"${t ? ' aria-current="true"' : ''}>${u('tournament')}</a><a href="${esc(href(r.slug, 'schedule', r))}"${m ? ' aria-current="true"' : ''}>${u('schedule')}</a></nav>`;
 };
 
-// The one missing-data message, verbatim in every view.
 const MISSING = () => `<p>${u('missing')}</p>`;
 
-// The one bad-route message, verbatim wherever a dead link lands: a rejected
-// fragment route, or a slug whose tournament file is a permanent 404.
+// A rejected fragment route or a slug whose file is a permanent 404.
 const BAD_LINK = () => `<p>${u('bad-link')}</p><p><a href="#">${u('all-tournaments')}</a></p>`;
 
-// The invalid-route page, painted through a named seam so the branch is DOM-testable — it once shipped the builder's source.
+// Painted through a named seam so the branch is DOM-testable.
 const paintBadRoute = el => { el.innerHTML = BAD_LINK(); };
 
-// The one failed-render message, verbatim in the renderer's catch and the
-// load path — data the model can't digest never blanks the page.
 const FAILED = () => `<p>${u('failed')}</p>`;
 
 
@@ -175,8 +154,7 @@ function renderIndex(route, data) {
   return `<header><h1>${u('tournaments')}</h1></header><section class="stack">${items.join('')}</section>`;
 }
 
-// One category per page; the switcher is the navigation — the first category
-// stays canonical at the bare slug, the rest select via ?cat=.
+// One category per page; the first stays canonical at the bare slug, the rest select via ?cat=.
 const catNav = (slug, ctxs, route) => {
   // an unknown cat renders the first category — the tabs must agree with the page
   const activeId = route.cat && ctxs.some(x => x.id === route.cat) ? route.cat : ctxs[0]?.id;
@@ -186,10 +164,7 @@ const catNav = (slug, ctxs, route) => {
   }).join('');
 };
 
-// The polling views' shared stamp: "Last updated: HH:MM" is the last successful
-// poll, so the number moving is the proof the page is live; a poll that actually
-// changed the file flashes the line, and a failing poll flips the state dot. One
-// baseline per slug.
+// The polling views' shared stamp; a changed file flashes the line, a failing poll flips the dot.
 let stampSnap = null; // { slug, hash } — the change detector behind the flash
 function updateStamp(data, tz) {
   const hash = JSON.stringify(data.tjson);
@@ -215,14 +190,12 @@ function renderTournament(route, data) {
   const range = fmtRange(days);
   parts.push(`<p>${[range, esc(data.tjson.location)].filter(Boolean).join(' · ')}</p>${updateStamp(data, tz)}</header>`);
   parts.push(`<nav class="cats" aria-label="${u('categories')}">${catNav(data.t.slug, ctxs, route)}</nav>`);
-  // a tournament with no categories (hand-edited or staged) renders the shell — "missing data renders empty", never a throw
+  // a tournament with no categories renders the shell, never a throw
   if (show) parts.push(catSection(show, { multi, href: href(data.t.slug, 'tournament', route) }));
   return parts.join('');
 }
 
-// The status line is progress only, linkless — the page's one link lives in the
-// anticipation (Next) line. Nothing played is zero progress, so the first stage
-// always has a status.
+// Progress only, linkless — the page's one link is the Next line.
 const statusLine = (status, ctx) => {
   if (!status) return '';
   if (status.kind === 'groups') return `<p>${u('group-status', { played: status.played, count: status.count })}</p>`;
@@ -239,10 +212,8 @@ const statusLine = (status, ctx) => {
     .join('');
 };
 
-// Compact court list — a round plays several matches at once, so "next" is a
-// block, not a card. Consecutive numbered courts collapse ("Court 1–5"): the
-// shared head stays singular, so a German venue name ("Halle 1") isn't forced
-// into an English plural.
+// Compact court list; consecutive numbered courts collapse ("Court 1–5") without
+// pluralizing the shared head.
 const fmtCourts = names => {
   const ns = [...new Set(names)];
   if (ns.length === 1) return ns[0];
@@ -258,8 +229,7 @@ const fmtCourts = names => {
   return ns.join(' · ');
 };
 
-// The anticipation line: "Next" at every stage — bracket and schedule share
-// the word; data-only, never the clock (the 30s poll keeps it current).
+// The "Next" line — data-only, never the clock.
 const anticipationLine = (ctx, status, href, day, wave) => {
   if (!status || status.kind === 'finished' || status.kind === 'winners') return '';
   if (!wave.length) return ''; // no playable match (feeders undecided): the progress line carries the page
@@ -329,22 +299,18 @@ function catSection(ctx, opts) {
 }
 
 
-// Bracket order first: a card's position must match its QF/SF ordinal, which
-// schedule edits can't move. Time breaks ties and orders unnumbered matches;
-// a TBD-time match trails (Infinity), like every other time-ordered list.
+// Bracket order first (a card's position must match its QF/SF ordinal), then time;
+// TBD-time trails.
 const koOrder = (ms, ctx) => [...ms].sort((a, b) =>
   (koOrdinal(a, ctx) || Infinity) - (koOrdinal(b, ctx) || Infinity) ||
   (schedTime(a, ctx.tz) ?? Infinity) - (schedTime(b, ctx.tz) ?? Infinity));
 
-// By prize (3rd before 5th) then time — rank is structural, view-stable;
-// koOrdinal numbers only the championship tree.
+// By prize (3rd before 5th) then time.
 const placeOrder = ctx => (a, b) =>
   ((plRange(a, ctx) || {}).lo ?? Infinity) - ((plRange(b, ctx) || {}).lo ?? Infinity) ||
   (schedTime(a, ctx.tz) ?? Infinity) - (schedTime(b, ctx.tz) ?? Infinity);
 
-// Brackets merged by depth band: each column holds the round's matches plus the
-// classification matches at the same edge count — the bronze under the Final's
-// heading ("Final / 3rd place"), the 5th–8th semis under the Semifinals'.
+// Each column holds the round's matches plus classification matches at the same edge count.
 function bracketHtml(ctx, ko, multi, next) {
   const main = ko.filter(m => placementLabel(m, ctx) === null);
   const placement = ko.filter(m => placementLabel(m, ctx) !== null);
@@ -377,8 +343,8 @@ function bracketHtml(ctx, ko, multi, next) {
 // prefix the date
 const timeEl = (t, tz, day) => `<time datetime="${new Date(t).toISOString()}">${esc((day ? `${dayShort(t, tz)}, ` : '') + fmtTime(t, tz))}</time>`;
 
-// opts.meta picks the meta items (fixed vocabulary); opts.head is an optional
-// [left, right] headline row — a cell is { key: item field } or { html: pre-rendered }.
+// opts.meta picks the meta items; opts.head is an optional [left, right] row —
+// a cell is { key: item field } or { html: pre-rendered }.
 function matchCard(m, ctx, opts = {}) {
   const t = schedTime(m, ctx.tz);
   const item = {
@@ -394,8 +360,7 @@ function matchCard(m, ctx, opts = {}) {
 
 function sideRow(m, ctx, i) {
   const w = winnerIdx(m);
-  // a malformed match (missing sides) renders TBD rows — the gate reports the
-  // file, the renderer must never take the board down with it
+  // a malformed match (missing sides) renders TBD rows, never takes the board down
   const side = m.sides && m.sides[i];
   return `<div class="side"${w === i ? ' data-win' : ''}><span>${esc(sideLabel(side, ctx))}</span>${w === i ? `<span class="winmark" aria-label="${u('won')}">✓</span>` : ''}<span class="score">${scoreCells(m, i, ctx)}</span></div>`;
 }
@@ -414,34 +379,26 @@ function renderVenue(route, data, now) {
     }
   }
   rows.sort((a, b) => a.t - b.t);
-  // courts with no matches are simply absent
   const shown = v ? rows.filter(r => r.m.venue === v) : rows;
   const tz = data.tjson.timezone || 'UTC';
   const today = dayKey(now, tz); // one day per screen — an overnight board must not list yesterday
-  const firstDay = rows.length ? dayKey(rows[0].t, rows[0].ctx.tz) : null; // rows are time-sorted above — the first instant's day
-  const lastDay = rows.length ? dayKey(rows.at(-1).t, rows.at(-1).ctx.tz) : null; // … and the last instant's
-  // No "today" inside the event's span: before day one preview day one, after
-  // the last day show its board — "Today · Nothing scheduled." reads stale
+  const firstDay = rows.length ? dayKey(rows[0].t, rows[0].ctx.tz) : null;
+  const lastDay = rows.length ? dayKey(rows.at(-1).t, rows.at(-1).ctx.tz) : null;
+  // Before day one preview day one, after the last day show its board.
   const shownDay = firstDay && today < firstDay ? firstDay : lastDay && today > lastDay ? lastDay : today;
   const open = shown.filter(r => dayKey(r.t, r.ctx.tz) === shownDay); // the full day stays on the board; the scroll follows the current slot
-  // the day's columns: declared courts with matches on it — a match on a
-  // venue the file never declares (the gate reports it) renders absent
+  // a match on an undeclared venue (the gate reports it) renders absent
   const declared = (data.tjson.venues || []).filter(venue => venue && typeof venue === 'object');
-  // the same map every category context already carries (sharedFacts) — never rebuilt
+  // sharedFacts' map, never rebuilt
   const venueNames = ctxs.length ? ctxs[0].venues : new Map();
   const cols = declared.map(v => v.id).filter(id => open.some(r => r.m.venue === id));
-  // the header's foot: the shared freshness stamp (never the sim clock) — the
-  // board must not look live while polls fail; the stamp churns every poll, so
-  // only the state dot is a live region, and it never announces the time
+  // the shared freshness stamp (never the sim clock) — only the state dot is a live region
   const header = `<header><div><h1>${esc(data.t.name)}</h1><p>${shownDay === today ? u('today') : dayLabel(shownDay)}</p>${updateStamp(data, tz)}</div><time id="clock"></time></header>`;
-  // header and venue titles stick as one block — the titles ride the running
-  // clock, aligned to the board by the shared --cols track
+  // header and venue titles stick as one block, aligned by the shared --cols track
   const top = `<div class="kiosk-top" style="--cols: ${cols.length}">${header}${cols.map(id => `<h2>${esc(venueNames.get(id) || id)}</h2>`).join('')}</div>`;
   if (!cols.length) return top + `<p>${u('nothing')}</p>`;
-  // Wall-clock minutes drive the day's layout — never instants or offsets, so
-  // the board stays right if DST rules change. One window per row (start +
-  // slot end) feeds the frame, the scale, and the placement alike. A missing
-  // slot length (hand-edited data — the gate tolerates it) leaves e null.
+  // Wall-clock minutes drive the layout, never offsets. One window per row feeds the
+  // frame, scale, and placement; a missing slot length leaves e null.
   const win = open.map(r => {
     const s = wallClockMin(r.t, r.ctx.tz);
     const sl = matchSlotMs(r.m, r.ctx) / 60000;
@@ -452,17 +409,15 @@ function renderVenue(route, data, now) {
     const list = byVenue.get(w.r.m.venue);
     if (list) list.push(w);
   }
-  // The day's frame: first start to last slot end, padded to a quarter-hour so
-  // the first/last cards breathe.
+  // The day's frame: first start to last slot end, padded to a quarter-hour.
   let dayStart = Math.min(...win.map(w => w.s));
   const endMax = Math.max(...win.map(w => w.e ?? -Infinity));
   let dayEnd = Number.isFinite(endMax) ? endMax : dayStart + 60;
   dayStart = Math.floor((dayStart - 15) / 15) * 15;
   dayEnd = Math.ceil((dayEnd + 15) / 15) * 15;
   if (dayStart < 0) dayStart = 0;
-  // Scale: sparse days spread to the screen, dense days to one card per slot —
-  // one rule for any slot length, so a 60-min match reads six times a 10-min
-  // one and the shortest card always fits. (30: no known slot lengths)
+  // One rule for any slot length: a 60-min match reads six times a 10-min one and the
+  // shortest card always fits. (30: no known slot lengths)
   const lens = win.filter(w => w.e !== null).map(w => w.e - w.s);
   const sShort = lens.length ? Math.min(...lens) : 30;
   const total = dayEnd - dayStart; // ≥ 30 by the quarter-hour padding — never 0
@@ -476,18 +431,15 @@ function renderVenue(route, data, now) {
     return matchCard(r.m, r.ctx, { meta: ['catName', 'label'],
       head: [{ html: when }, { html: flag }], status, style: `height:${h}px` });
   };
-  // Cards sit at their wall-clock top; ordering can't drift. The follow's
-  // scroll target is the now-line — the render places it at the wall-minute y.
+  // Cards sit at their wall-clock top; the scroll target is the now-line.
   const placed = w => {
     const { r, s, e } = w;
     return `<div class="bcard" style="top:${y(s)}px">${card(r, (e !== null ? (e - s) * ppm : CARD_PX) - CARD_GAP)}</div>`;
   };
   const dayH = Math.ceil(total * ppm);
   const nowMin = wallClockMin(now, tz);
-  // The line sits at the wall-minute y while the clock is in the shown day;
-  // a clock on any other day has no wall minute here, so the line pins to the
-  // day's top (before) or bottom (after) — the follow rests at the day's
-  // start or end instead of wandering mid-board on a stray date.
+  // The line sits at the wall-minute y while the clock is in the shown day; on any
+  // other day it pins to the day's top (before) or bottom (after).
   const nowDay = dayKey(now, tz);
   let nowY = null;
   if (nowMin !== null && nowDay !== null) {
@@ -496,18 +448,15 @@ function renderVenue(route, data, now) {
   return top + `<div class="board" style="--cols: ${cols.length}; --day-h: ${dayH}">${nowY !== null ? `<div class="now" id="now-line" style="top:${nowY}px"></div>` : ''}${cols.map((id, i) => `<div class="col" style="grid-column: ${i + 1}">${byVenue.get(id).map(placed).join('')}</div>`).join('')}</div>`;
 }
 
-// Do scheduled matches span more than one wall-clock day? Gates the date on
-// match cards — single-day pages state the date once. (Same day-key source as
-// the index's stored dates.)
+// Do scheduled matches span more than one wall-clock day? Gates the date on cards.
 const multiDay = ctxs => schedDays(ctxs.flatMap(c => c.matches), (ctxs[0] && ctxs[0].tz) || 'UTC').length > 1;
 
 
-// The last successful fetch, in real time — the stamp's freshness source,
-// never the sim clock.
+// The last successful fetch, in real time — never the sim clock.
 let lastPoll = 0;
 
-// A possible stage: the round the player could reach once the pools decide —
-// the certain bits inline, the chip carrying the rank or outcome that gets in.
+// The round a player could reach once the pools decide; the chip carries the rank
+// or outcome that gets in.
 function possibleCard(stage, ctx, opts) {
   const when = stage.time !== null ? timeEl(stage.time, ctx.tz, opts.day) : '<span class="tbd">TBD</span>';
   const where = stage.court !== null ? esc(venueName(ctx, stage.court)) : '<span class="tbd">TBD</span>';
@@ -522,8 +471,8 @@ function renderPlayer(route, data) {
   return p ? playerSchedule(route, data, p) : playerPicker(route, data, players);
 }
 
-// Only participants are pickable — a pick must always render a schedule. One
-// section per category: the picker doubles as "who is in which category".
+// Only participants are pickable, so a pick always renders a schedule; one section
+// per category makes the picker double as "who is in which category".
 function playerPicker(route, data, players) {
   const secs = data.cats.map(c => {
     const items = players
@@ -537,17 +486,14 @@ function playerPicker(route, data, players) {
   return secs ? head + secs : head + `<p>${u('no-players')}</p>`;
 }
 
-// One flat timeline for the picked player — confirmed matches and possible
-// stages, under date headings.
+// One flat timeline for the picked player: confirmed matches and possible stages.
 function playerSchedule(route, data, p) {
   const pid = p.id;
   const ctxs = data.cats;
   const multi = multiDay(ctxs); // the stage times need their date on multi-day pages
   const rows = ctxs.flatMap(ctx => playerMatches(ctx, pid).map(pm => ({ m: pm.m, ctx })));
   rows.sort((a, b) => (schedTime(a.m, a.ctx.tz) ?? Infinity) - (schedTime(b.m, b.ctx.tz) ?? Infinity));
-  // One flat timeline under date headings — the day owns the context, so cards
-  // never repeat it. Possible stages merge in at their own time, next to the
-  // match cards.
+  // The day owns the context; possible stages merge in at their own time.
   const events = [];
   for (const ctx of ctxs) {
     for (const stage of possibleStages(ctx, pid)) events.push({ t: stage.time ?? Infinity, stage, ctx });
@@ -555,8 +501,7 @@ function playerSchedule(route, data, p) {
   for (const r of rows) events.push({ t: schedTime(r.m, r.ctx.tz) ?? Infinity, r, ctx: r.ctx });
   // times ascending; a confirmed row wins an exact tie against a possible stage
   events.sort((a, b) => a.t - b.t || (a.r ? 0 : 1) - (b.r ? 0 : 1));
-  // the "what's next" line names the earliest playable event — a confirmed
-  // match, or the earliest possible stage
+  // the "what's next" line names the earliest playable event
   const nextEv = events.find(e => e.r ? !isDone(e.r.m) : true);
   let next = null;
   if (nextEv) {
@@ -571,8 +516,7 @@ function playerSchedule(route, data, p) {
       next = `${link}${u('next', { body: `${esc(stage.label)}${stage.time !== null ? ' · ' + timeEl(stage.time, nctx.tz, multi) : ''}${stage.chip ? ` (${esc(stage.chip)})` : ''}` })}<span aria-hidden="true"> ↓</span></a>`;
     }
   }
-  // the one next line rides under the progress of the category that hosts it:
-  // a player has one next match, and the category lead above it says whose it is
+  // the one next line rides under the category that hosts it
   const blocks = [];
   for (const ctx of ctxs) {
     const s = playerStatus(ctx, pid);
@@ -602,10 +546,8 @@ function playerSchedule(route, data, p) {
   return parts.join('');
 }
 
-// The sim clock: while the offset key exists, now() rides it — the ◀▶ panel
-// and ]/[ keys move it, the toggle in the corner clears it. No key, real time.
-// The panel lives outside main, so no render touches it, and it reads the
-// current page through tjsonOf.
+// The sim clock: while the offset key exists, now() rides it; ◀▶, ]/[, and the
+// corner toggle move it. The panel lives outside main, so no render touches it.
 function mountSimClock({ tjsonOf, onChange }) {
   const SIM_KEY = 'gitbracket.sim.offset';
   const simOffset = () => Number(localStorage.getItem(SIM_KEY)) || 0;
@@ -658,13 +600,11 @@ function mountSimClock({ tjsonOf, onChange }) {
   return { aside, panel, now };
 }
 
-// The index loads once; every tournament view polls while the tab is visible,
-// so results land on their own — no reload, no manual refresh.
+// The index loads once; every tournament view polls while the tab is visible.
 function boot() {
   const app = document.querySelector('main');
 
-  // The language is decided once per load: ?lang= wins (the kiosk operator's
-  // control, and the tester's), else the browser's first matching language.
+  // The language is decided once per load: ?lang= wins, else the browser's first match.
   lang = resolveLang(location.hash, location.search);
   setLocale(lang);
   document.documentElement.lang = lang;
@@ -696,8 +636,7 @@ function boot() {
   let pollTimer = null, clockTimer = null;
   let pollOn = false;  // view whose timers should run; false on the index
 
-  // Every view but the index auto-refreshes while the tab is visible; a return
-  // fetches immediately. The kiosk's clock is a view, not a mode.
+  // Every view but the index auto-refreshes while visible; a return fetches immediately.
   const stopPoll = () => {
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
     if (clockTimer) { clearInterval(clockTimer); clockTimer = null; }
@@ -763,8 +702,7 @@ function boot() {
     // full-width board layout keys off body.venue — present only on the venue view
     document.body.classList.toggle('venue', r.view === 'venues');
     document.title = pageTitle(r, d);
-    // a view, category, or player change is new content — start at the top; a
-    // venue hop keeps the position (the kiosk re-aims each minute)
+    // a view, category, or player change starts at the top; a venue hop keeps position
     const key = `${r.view}|${r.cat || ''}|${r.player || ''}`;
     const contentChanged = key !== lastKey;
     lastKey = key;
@@ -806,10 +744,9 @@ function boot() {
     }
   };
 
-  // the receipt and the scroll target are the same: the first spined card —
-  // a deep group stage buries the wave below its heading, and the match the
-  // line names is what the jump owes the user, not the section label. Centering
-  // keeps the target clear of the sticky bars on both pages.
+  // The receipt and the scroll target are the first spined card — a deep group
+  // stage buries the wave below its heading, and the match the line names is what
+  // the jump owes the user. Centering clears the sticky bars on both pages.
   const jumpTo = id => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -841,7 +778,7 @@ function boot() {
 
 if (typeof document !== 'undefined') boot();
 
-// CommonJS exports for node tests; the browser <script> ignores these.
+// CommonJS exports for node tests; the browser ignores these.
 if (typeof module !== 'undefined') {
   module.exports = { parseRoute, resolveLang, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset, paintBadRoute };
 }

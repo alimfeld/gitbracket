@@ -1,10 +1,8 @@
 'use strict';
 
-// Sim launcher — the whole pipeline practiced end to end: a sim/<rand> branch
-// off clean main, a scratch surge CNAME (the deploy gate derives production
-// from origin/main, so the scratch can never reach it), and one push. Practice,
-// never merged — teardown deletes branch and domain, then the real day happens
-// on main. The daemon is the operator's to start: `node gb.js admin`.
+// Sim launcher — the whole pipeline on a sim/<rand> branch off clean main with a
+// scratch surge CNAME (the deploy gate derives production from origin/main, so it
+// can never reach it). Never merged; teardown deletes branch and domain.
 
 const fs = require('fs');
 const path = require('path');
@@ -14,9 +12,8 @@ const { productionCNAME } = require('./publish.js');
 
 const rand = () => Date.now().toString(36).slice(-5);
 
-// Teardown, the mirror of setup: the surge domain first (it stays hosted until
-// torn down), the branch last — it must outlive the domain so the CNAME stays
-// readable.
+// Teardown, the mirror of setup: domain first, branch last (the branch keeps the
+// CNAME readable).
 function teardown(root) {
   const branch = branchOf(root);
   if (!isSimBranch(branch)) {
@@ -37,9 +34,8 @@ function teardown(root) {
     console.error(`sim: surge teardown ${cname} failed — the domain stays hosted until it succeeds; the branch stays so its CNAME stays readable`);
     process.exit(1);
   }
-  // The branch must not be deleted while it is checked out, and a failed
-  // checkout would leave the operator stranded on a sim branch — verify both
-  // before claiming anything is gone.
+  // The branch can't be deleted while checked out; verify both steps before claiming
+  // anything is gone.
   const co = git(root, ['checkout', 'main']);
   if (co.code !== 0) {
     console.error(`sim: checkout main failed — the branch stays, its CNAME stays readable:\n${co.err}`);
@@ -55,8 +51,7 @@ function teardown(root) {
   console.log(`sim: ${cname} torn down; ${branch} deleted (local${del.code === 0 ? ' + origin' : ''})`);
 }
 
-// CLI entry (dispatched from gb.js): args = ['--teardown'] | anything, ignored —
-// a sim covers the whole site, not one tournament.
+// CLI entry: args = ['--teardown'] or anything (ignored — a sim covers the whole site).
 function main(root, args) {
   if (args.includes('--teardown')) return teardown(root);
   if (!productionCNAME(root)) {
