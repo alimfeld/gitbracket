@@ -1,0 +1,20 @@
+{
+  "name": "Bad Dangling Ref",
+  "location": "Test Hall",
+  "timezone": "UTC",
+  "categories": [{ "id": "t", "name": "T", "bestOf": { "groups": 1, "knockout": 1 } }],
+  "players": [
+    { "id": "p1", "name": "P1" }, { "id": "p2", "name": "P2" },
+    { "id": "p3", "name": "P3" }, { "id": "p4", "name": "P4" }
+  ],
+  "matches": { "t": [
+    { "id": 1, "pool": "A", "sides": [{ "kind": "players", "ids": ["p1"] }, { "kind": "players", "ids": ["p2"] }] },
+    { "id": 2, "pool": "A", "sides": [{ "kind": "players", "ids": ["p3"] }, { "kind": "players", "ids": ["p4"] }] },
+    { "id": 3, "pool": "A", "sides": [{ "kind": "players", "ids": ["p1"] }, { "kind": "players", "ids": ["p3"] }] },
+    { "id": 4, "pool": "A", "sides": [{ "kind": "players", "ids": ["p2"] }, { "kind": "players", "ids": ["p4"] }] },
+    { "id": 5, "sides": 5 },
+    { "id": 6, "sides": [{ "kind": "pool", "pool": "A", "rank": 2 }, { "kind": "pool", "pool": "A", "rank": 3 }] },
+    { "id": 7, "sides": [{ "kind": "match", "match": 99, "result": "winner" }, { "kind": "match", "match": 6, "result": "winner" }] },
+    { "id": 8, "sides": [{ "kind": "match", "match": 5, "result": "loser" }, { "kind": "match", "match": 6, "result": "loser" }] }
+  ] }
+}

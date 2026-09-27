@@ -10,7 +10,7 @@
 
 const path = require('path');
 const { loadRepo, plainObject, isRealDate, schedEntries, pairBusy, consumedSlots, winTarget, reachedWinner, feederBounds, sameSet } = require('./tools.js');
-const { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, matchesOf, resolveSide, bestOfOf, schedTime, schedDays, placementLabel, parentsOf } = require('../site/derive.js');
+const { LOCALE, DATE_RE, ID_RE, ISO_RE, MAX_BEST_OF, pairSig, matchSlotMs, makeCat, matchesOf, resolveSide, bestOfOf, schedTime, schedDays, placementLabel, parentsOf } = require('../site/derive.js');
 
 const RESULTS = ['winner', 'loser'];
 const RESULT_STATUSES = ['played', 'walkover', 'void'];
@@ -166,9 +166,9 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
     if (!checkEntry('category', c, categories, where)) return;
     categories.set(c.id, c);
     const b = c.bestOf;
-    if (b !== undefined && (typeof b !== 'object' || b === null)) err(where, 'bestOf must be an object with odd positive groups/knockout numbers');
+    if (b !== undefined && !plainObject(b)) err(where, `bestOf must be an object with odd groups/knockout numbers 1–${MAX_BEST_OF}`);
     const sm = c.slotMinutes;
-    if (sm !== undefined && (typeof sm !== 'object' || sm === null)) err(where, 'slotMinutes must be an object with positive-integer groups/knockout minutes');
+    if (sm !== undefined && !plainObject(sm)) err(where, 'slotMinutes must be an object with positive-integer groups/knockout minutes');
     else if (sm !== undefined) {
       for (const k of ['groups', 'knockout']) {
         if (sm[k] !== undefined && (!Number.isInteger(sm[k]) || sm[k] < 1)) err(where, `slotMinutes.${k} must be a positive integer, got ${JSON.stringify(sm[k])}`);
@@ -231,7 +231,7 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, con
   if (!Array.isArray(matches)) { err(cFile, 'matches must be an array'); return; }
 
   const bestOf = cat.bestOf;
-  const stageBest = stage => (bestOf && typeof bestOf[stage] === 'number' && bestOf[stage] % 2 === 1 && bestOf[stage] > 0)
+  const stageBest = stage => (bestOf && typeof bestOf[stage] === 'number' && bestOf[stage] % 2 === 1 && bestOf[stage] > 0 && bestOf[stage] <= MAX_BEST_OF)
     ? bestOf[stage] : undefined;
 
   const byId = new Map();
@@ -316,8 +316,8 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, con
   for (const [pool, sigs] of poolUses) {
     if (sigs.size < 2) conflict(cFile, `pool ${JSON.stringify(pool)} has fewer than two distinct sides`);
   }
-  if (hasPool && !stageBest('groups')) err(cFile, `category ${cat.id}: groups stage in use but bestOf.groups is not an odd positive number`);
-  if (hasKnockout && !stageBest('knockout')) err(cFile, `category ${cat.id}: knockout stage in use but bestOf.knockout is not an odd positive number`);
+  if (hasPool && !stageBest('groups')) err(cFile, `category ${cat.id}: groups stage in use but bestOf.groups must be an odd number 1–${MAX_BEST_OF}`);
+  if (hasKnockout && !stageBest('knockout')) err(cFile, `category ${cat.id}: knockout stage in use but bestOf.knockout must be an odd number 1–${MAX_BEST_OF}`);
 
   // ---- acyclicity (must precede pass B — resolveSide recurses through slots) ----
   const state = new Map(); // 1 = visiting, 2 = done
@@ -371,8 +371,8 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, con
   for (const m of matches) {
     if (!m || typeof m !== 'object') continue;
     const where = `${cFile} match ${m.id || '?'}`;
-    if (m.bestOf !== undefined && (typeof m.bestOf !== 'number' || m.bestOf % 2 !== 1 || m.bestOf < 1)) {
-      err(where, `bestOf override must be an odd positive integer, got ${JSON.stringify(m.bestOf)}`);
+    if (m.bestOf !== undefined && (typeof m.bestOf !== 'number' || m.bestOf % 2 !== 1 || m.bestOf < 1 || m.bestOf > MAX_BEST_OF)) {
+      err(where, `bestOf override must be an odd number 1–${MAX_BEST_OF}, got ${JSON.stringify(m.bestOf)}`);
     }
 
     if (Array.isArray(m.sides) && m.sides.length === 2) {
@@ -395,7 +395,7 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, con
           claim(`pool:${side.pool}:${side.rank}`, sources.pool);
           if (typeof side.pool === 'string' && Number.isInteger(side.rank) && side.rank >= 1) {
             if (!poolUses.has(side.pool)) {
-              conflict(where, `pool slot references unknown pool ${JSON.stringify(side.pool)} (no matches use it)`);
+              err(where, `pool slot references unknown pool ${JSON.stringify(side.pool)} (no matches use it)`);
             } else if (side.rank > poolUses.get(side.pool).size) {
               conflict(where, `pool slot rank ${side.rank} out of range — pool ${JSON.stringify(side.pool)} has ${poolUses.get(side.pool).size} side(s)`);
             }

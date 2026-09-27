@@ -1,0 +1,9 @@
+{
+  "name": "Bad Lists",
+  "location": "Test Hall",
+  "timezone": "UTC",
+  "venues": 5,
+  "categories": [{ "id": "t", "name": "T", "bestOf": { "groups": 1, "knockout": 1 } }],
+  "players": "x",
+  "matches": { "t": [] }
+}

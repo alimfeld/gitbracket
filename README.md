@@ -200,8 +200,9 @@ spec — the single source of the schedule:
 
 - `node gb.js` (or `node gb.js admin [slug]`) — the admin daemon, the single
   match-day interface: a calendar grid (venues across, wall-clock minutes
-  down, matches as slot-sized blocks), drag-to-reschedule (drops snap to the
-  gate's own legal starts), click-to-score/wo/void, a side picker, a
+  down, matches as slot-sized blocks), drag-to-reschedule (drops land on a
+  5-minute wall mark — a placement that contradicts the model is written and
+  surfaces as a conflict), click-to-score/wo/void, a side picker, a
   pending-changes panel (unpushed commits), a conflict panel, undo/redo, and a
   publish button. Every edit goes through the one edit engine — syntactic check,
   write, byte-identical diff, commit; semantic conflicts ride back in the panel

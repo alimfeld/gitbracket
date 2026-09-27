@@ -8,6 +8,8 @@ if (typeof module !== 'undefined') {
 const ID_RE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+// A score row renders one placeholder per possible game; the gate rejects larger overrides.
+const MAX_BEST_OF = 9;
 
 // Render-facing labels follow this dialect; derivation (day keys, offsets) stays
 // locale-independent. The admin page never calls setLocale, so its labels stay English.
@@ -292,7 +294,7 @@ function sideLabel(side, ctx) {
 function scoreCells(m, i, ctx) {
   const r = m.result;
   const games = m.games || [];
-  const bo = bestOfOf(m, ctx) || 1; // unset stage config -> one unmarked slot
+  const bo = Math.min(bestOfOf(m, ctx) || 1, MAX_BEST_OF); // unset stage config -> one unmarked slot; a malformed override stays finite
   // placeholder dots keep the best-of shape; the winner carries the W/O mark
   const slot = () => Array.from({ length: bo }, (_, g) => {
     const game = games[g];
@@ -586,6 +588,7 @@ function plBuild(ctx) {
   // only winner and player sides), or a slot from a classified match.
   const memMemo = new Map();
   const member = (m) => {
+    if (!m || !Array.isArray(m.sides)) return false; // dangling ref or malformed sides — the gate reports it, the walk skips it
     if (memMemo.has(m.id)) return memMemo.get(m.id);
     memMemo.set(m.id, false);
     let yes = false;
@@ -601,7 +604,7 @@ function plBuild(ctx) {
   // Pool champion: a match nothing winner-consumes whose all-winner chain bottoms
   // out at a main-round loser edge. Returns the anchor round's winner depth d.
   const champAnchor = (m, seen) => {
-    if (seen.has(m.id) || !Array.isArray(m.sides)) return null;
+    if (!m || !Array.isArray(m.sides) || seen.has(m.id)) return null; // a dangling feeder is the gate's finding, never a throw
     seen.add(m.id);
     for (const s of m.sides) {
       if (!s || s.kind !== 'match' || s.result !== 'loser') continue;
@@ -1070,5 +1073,5 @@ function playerStatus(ctx, pid) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { LOCALE, setLocale, DATE_RE, ID_RE, ISO_RE, pairSig, esc, makeCat, matchesOf, toCats, matchSlotMs, bestOfOf, poolBo1, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, poolFacts, resolveSide, teamLabel, sideLabel, scoreCells, playerMatches, possibleStages, placementLabel, plRange, placementColumn, bandLabels, stageGroupName, parentsOf, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dayShort, dayLabel, fmtDiff, kioskStatus, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, currentWave, playerStatus };
+  module.exports = { LOCALE, setLocale, DATE_RE, ID_RE, ISO_RE, MAX_BEST_OF, pairSig, esc, makeCat, matchesOf, toCats, matchSlotMs, bestOfOf, poolBo1, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, poolFacts, resolveSide, teamLabel, sideLabel, scoreCells, playerMatches, possibleStages, placementLabel, plRange, placementColumn, bandLabels, stageGroupName, parentsOf, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dayShort, dayLabel, fmtDiff, kioskStatus, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, currentWave, playerStatus };
 }

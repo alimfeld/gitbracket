@@ -106,7 +106,7 @@ async function setSlug(slug, keepDay = false) {
   if (!S.tjson) return;
   S.tz = S.tjson.timezone || 'UTC';
   S.cats = toCats(S.tjson);
-  S.venues = (S.tjson.venues || []).filter(v => v && typeof v === 'object');
+  S.venues = (Array.isArray(S.tjson.venues) ? S.tjson.venues : []).filter(v => v && typeof v === 'object');
   S.days = schedDays(S.cats.flatMap(c => c.matches), S.tz);
   const daySel = $('day');
   daySel.innerHTML = S.days.map(d => `<option value="${esc(d)}">${esc(dayLabel(d))}</option>`).join('');
@@ -361,7 +361,7 @@ function openResult(cid, m) {
   else if (m.result && m.result.status === 'void') pre = 'void';
   // a realistic example for this match's best-of, winners alternating so the
   // shape is legible — games 1,3,5… go A, games 2,4… go B
-  const bo = bestOfOf(m, ctx) || 1;
+  const bo = Math.min(bestOfOf(m, ctx) || 1, MAX_BEST_OF); // a malformed override stays a finite hint row
   const ex = Array.from({ length: bo }, (_, g) => g % 2 ? '17-21' : '21-19').join(' ');
   const modal = $('modal');
   modal.showModal();
@@ -445,7 +445,7 @@ function openSide(cid, m, si) {
   const setKind = kind => {
     modal.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.kind === kind));
     if (kind === 'players') {
-      const names = new Map((S.tjson.players || []).filter(p => p && typeof p === 'object' && typeof p.id === 'string').map(p => [p.id, p.name]));
+      const names = new Map((Array.isArray(S.tjson.players) ? S.tjson.players : []).filter(p => p && typeof p === 'object' && typeof p.id === 'string').map(p => [p.id, p.name]));
       const roster = [...names.keys()];
       const ids = cur && cur.kind === 'players' ? cur.ids : [];
       body.innerHTML = `<p class="hint" id="pickhint"></p><div class="players">` +

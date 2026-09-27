@@ -242,24 +242,6 @@ function consumedSlots(matches) {
   return { pool, edge };
 }
 
-// Everything downstream of `id` — the side picker keeps feeder choices acyclic with it.
-// ponytail: O(n²) scan — revisit past a few hundred matches (the validator's DFS is linear).
-function descendants(matches, id) {
-  const out = new Set();
-  const stack = [id];
-  while (stack.length) {
-    const cur = stack.pop();
-    for (const m of Array.isArray(matches) ? matches : []) {
-      if (!m || m.id === id || out.has(m.id)) continue;
-      if (Array.isArray(m.sides) && m.sides.some(s => s && s.kind === 'match' && s.match === cur)) {
-        out.add(m.id);
-        stack.push(m.id);
-      }
-    }
-  }
-  return out;
-}
-
 // Conflicts between two entries in the same window: venue double-book, else player
 // double-book. The one definition of "busy".
 function pairBusy(a, b) {
@@ -271,4 +253,4 @@ function pairBusy(a, b) {
   return kinds;
 }
 
-module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, plainObject, fixedPlayers, resolvedPlayers, schedEntries, pairBusy, consumedSlots, descendants, winTarget, reachedWinner, feederBounds, isRealDate, findRoot, catCtx, tournamentText, cnameOf, branchOf, isSimBranch, cleanTree, git, defaultSlug, sameSet };
+module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, plainObject, fixedPlayers, resolvedPlayers, schedEntries, pairBusy, consumedSlots, winTarget, reachedWinner, feederBounds, isRealDate, findRoot, catCtx, tournamentText, cnameOf, branchOf, isSimBranch, cleanTree, git, defaultSlug, sameSet };

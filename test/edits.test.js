@@ -271,7 +271,7 @@ test('editor applySide: rewrites a side in place; the generic domain is the vali
   expect(ms => editor.applySide(ms, '7', { si: 0, side: { kind: 'players', ids: ['nobody'] } }), 'err', /unknown player/);
   expect(ms => editor.applySide(ms, '7', { si: 0, side: { kind: 'match', match: 8, result: 'winner' } }), 'conflict', /consumed twice/);
   expect(ms => editor.applySide(ms, '7', { si: 0, side: { kind: 'pool', pool: 'A', rank: 99 } }), 'conflict', /out of range/);
-  expect(ms => editor.applySide(ms, '7', { si: 0, side: { kind: 'pool', pool: 'X', rank: 1 } }), 'conflict', /unknown pool/);
+  expect(ms => editor.applySide(ms, '7', { si: 0, side: { kind: 'pool', pool: 'X', rank: 1 } }), 'err', /unknown pool/);
   // re-seating the final orphans the semifinals' winner edges — two unfed roots
   expect(ms => editor.applySide(ms, '9', { si: 0, side: { kind: 'players', ids: ['p1', 'p2'] } }), 'conflict', /exactly one championship final/);
 });

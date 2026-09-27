@@ -143,7 +143,7 @@ const matchGrid = (ms, ctx, day, next) => `<div class="grid">${ms.map(m => match
 
 // Date leads, undated entries defer to the end, ties hold index order (stable sort).
 function renderIndex(route, data) {
-  const items = data.index
+  const items = (Array.isArray(data.index) ? data.index : [])
     .filter(e => e && typeof e.slug === 'string' && ID_RE.test(e.slug))
     .sort((a, b) => {
       const ad = a.dates && a.dates[0], bd = b.dates && b.dates[0];
@@ -399,7 +399,7 @@ function renderVenue(route, data, now, simOn) {
   const shownDay = firstDay && today < firstDay ? firstDay : lastDay && today > lastDay ? lastDay : today;
   const open = shown.filter(r => dayKey(r.t, r.ctx.tz) === shownDay); // the full day stays on the board; the scroll follows the current slot
   // a match on an undeclared venue (the gate reports it) renders absent
-  const declared = (data.tjson.venues || []).filter(venue => venue && typeof venue === 'object');
+  const declared = (Array.isArray(data.tjson.venues) ? data.tjson.venues : []).filter(venue => venue && typeof venue === 'object');
   // sharedFacts' map, never rebuilt
   const venueNames = ctxs.length ? ctxs[0].venues : new Map();
   const cols = declared.map(v => v.id).filter(id => open.some(r => r.m.venue === id));
@@ -484,7 +484,7 @@ function possibleCard(stage, ctx, opts) {
 
 function renderPlayer(route, data) {
   if (!data.tjson) return MISSING();
-  const players = (data.tjson.players || []).filter(p => p && typeof p === 'object' && typeof p.id === 'string');
+  const players = (Array.isArray(data.tjson.players) ? data.tjson.players : []).filter(p => p && typeof p === 'object' && typeof p.id === 'string');
   const p = route.player ? players.find(x => x.id === route.player) : null;
   return p ? playerSchedule(route, data, p) : playerPicker(route, data, players);
 }
@@ -495,7 +495,7 @@ function playerPicker(route, data, players) {
   const secs = data.cats.map(c => {
     const items = players
       .filter(pl => playerMatches(c, pl.id).length)
-      .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id))
+      .sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)))
       .map(pl => `<li><a href="${esc(href(data.t.slug, 'schedule', { ...route, player: pl.id }))}">${esc(pl.name || pl.id)}</a></li>`)
       .join('');
     return items ? `<section><h2>${esc(c.name || c.id)}</h2><ul>${items}</ul></section>` : '';
