@@ -347,12 +347,14 @@ function bracketHtml(ctx, ko, multi, next) {
 // prefix the date
 const timeEl = (t, tz, day) => `<time datetime="${new Date(t).toISOString()}">${esc((day ? `${dayShort(t, tz)}, ` : '') + fmtTime(t, tz))}</time>`;
 
+const catChip = ctx => `<span class="cat" data-cat="${ctx.order + 1}">${esc(ctx.name)}</span>`;
+
 // opts.meta picks the meta items; opts.head is an optional [left, right] row —
 // a cell is { key: item field } or { html: pre-rendered }.
 function matchCard(m, ctx, opts = {}) {
   const t = schedTime(m, ctx.tz);
   const item = {
-    catName: esc(ctx.name),
+    catName: catChip(ctx),
     label: esc(matchLabel(m, ctx)),
     court: m.venue ? esc(venueName(ctx, m.venue)) : 'TBD',
     time: t !== null ? timeEl(t, ctx.tz, opts.day) : 'TBD',
@@ -435,7 +437,8 @@ function renderVenue(route, data, now, simOn) {
   const sShort = lens.length ? Math.min(...lens) : 30;
   const total = dayEnd - dayStart; // never 0 — the trailing pad clears the last card
   const avail = typeof document !== 'undefined' ? document.documentElement.clientHeight : 0;
-  const ppm = Math.max(1.6, avail ? (avail - 116) / total : 0, CARD_PX / sShort);
+  // + CARD_GAP: the card subtracts it below, else the shortest card clips its last line
+  const ppm = Math.max(1.6, avail ? (avail - 116) / total : 0, (CARD_PX + CARD_GAP) / sShort);
   const y = min => (min - dayStart) * ppm;
   const card = (r, h) => {
     const status = kioskStatus(r, now);
@@ -447,7 +450,7 @@ function renderVenue(route, data, now, simOn) {
   // Cards sit at their wall-clock top; the scroll target is the now-line.
   const placed = w => {
     const { r, s, e } = w;
-    return `<div class="bcard" style="top:${y(s)}px">${card(r, (e !== null ? (e - s) * ppm : CARD_PX) - CARD_GAP)}</div>`;
+    return `<div class="bcard" style="top:${y(s)}px">${card(r, e !== null ? (e - s) * ppm - CARD_GAP : CARD_PX)}</div>`;
   };
   const dayH = Math.ceil(total * ppm);
   const nowMin = wallClockMin(now, tz);
@@ -470,7 +473,7 @@ function possibleCard(stage, ctx, opts) {
   const when = stage.time !== null ? timeEl(stage.time, ctx.tz, opts.day) : '<span class="tbd">TBD</span>';
   const where = stage.court !== null ? esc(venueName(ctx, stage.court)) : '<span class="tbd">TBD</span>';
   const label = esc(stage.label);
-  return `<article${opts.id ? ` id="${opts.id}"` : ''} data-status="possible"><div class="head"><span>${when}</span><span>${where}</span></div><div class="meta">${esc(ctx.name)} · ${label}</div>${stage.chip ? `<div class="meta">(${esc(stage.chip)})</div>` : ''}</article>`;
+  return `<article${opts.id ? ` id="${opts.id}"` : ''} data-status="possible"><div class="head"><span>${when}</span><span>${where}</span></div><div class="meta">${catChip(ctx)} · ${label}</div>${stage.chip ? `<div class="meta">(${esc(stage.chip)})</div>` : ''}</article>`;
 }
 
 function renderPlayer(route, data) {

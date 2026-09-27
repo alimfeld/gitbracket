@@ -341,6 +341,18 @@ test('result statuses render: W/O and void on cards, settled matches stay on the
   assert(vals(venue, 'data-status').includes('upcoming'), 'the open 11:00 final is still upcoming at 09:30');
 });
 
+test('category chip: the category name rides a per-category slot on the board and the schedule, escaped', () => {
+  const data = repoPage('sample');
+  const venue = renderVenue({ slug: 'sample', view: 'venues' }, data, Date.parse('2025-07-14T10:00:00Z'));
+  assert.deepEqual([...new Set(vals(venue, 'data-cat'))].sort(), ['1', '2'], 'both categories ride the venue board, each on its own slot');
+  const ppage = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p1' }, data);
+  assert.equal(new Set(vals(ppage, 'data-cat')).size, 2, 'the player schedule carries both categories too');
+  const evil = JSON.parse(JSON.stringify(data.tjson));
+  evil.categories[0].name = '<b>C</b>';
+  const out = renderVenue({ slug: 'sample', view: 'venues' }, withTjson(data, evil), Date.parse('2025-07-14T10:00:00Z'));
+  assert(!out.includes('<b>C</b>') && out.includes('&lt;b&gt;C&lt;/b&gt;'), 'the chip name is escaped, never HTML');
+});
+
 test('kiosk calendar: cards sit by wall-clock top — a slot only on a late venue never drops below earlier times', () => {
   // The old row-union ordered rows by per-venue insertion, so a 12:00 match on
   // the second court only landed after the whole afternoon. The calendar has

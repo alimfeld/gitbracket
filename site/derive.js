@@ -51,7 +51,7 @@ function sharedFacts(tjson) {
   };
 }
 
-function makeCat(c, tjson, shared) {
+function makeCat(c, tjson, shared, order = 0) {
   // Never throws on broken shape — the validator calls this while reporting it.
   const matches = (c.matches || []).filter(m => m && typeof m === 'object');
   const s = shared || sharedFacts(tjson);
@@ -64,7 +64,8 @@ function makeCat(c, tjson, shared) {
     slotMinutes: (c.meta && c.meta.slotMinutes) || {},
     venues: s.venues,
     name: (c.meta && c.meta.name) || '',
-    id: (c.meta && c.meta.id) || ''
+    id: (c.meta && c.meta.id) || '',
+    order
   };
 }
 
@@ -76,7 +77,7 @@ function toCats(tjson) {
   const cats = (tjson && Array.isArray(tjson.categories)) ? tjson.categories : [];
   const shared = sharedFacts(tjson); // once per render — every category shares the one map
   // A non-object entry renders as absent — the gate reports it, the page never throws.
-  return cats.filter(c => c && typeof c === 'object').map(c => makeCat({ meta: c, matches: Array.isArray(byCat[c.id]) ? byCat[c.id] : [] }, tjson, shared));
+  return cats.filter(c => c && typeof c === 'object').map((c, i) => makeCat({ meta: c, matches: Array.isArray(byCat[c.id]) ? byCat[c.id] : [] }, tjson, shared, i));
 }
 
 const stageOf = m => m?.pool !== undefined ? 'groups' : 'knockout';

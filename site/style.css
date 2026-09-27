@@ -12,6 +12,10 @@
   /* role, not status — a match state and a board state share each hue */
   --alert: #b3261e;
   --live: #15803d;
+  /* category washes — off the status hues, so a chip reads as identity, not state */
+  --cat-1: #fde68a;
+  --cat-2: #e9d5ff;
+  --cat-3: #99f6e4;
   /* one sticky nav bar's height — segments at 0, cats below, jump targets clear
   one bar (player) or two (tournament).
   ponytail: padding + 1.5rem line + link padding + border — revisit on font change */
@@ -303,6 +307,20 @@ article .meta {
 .meta .dot {
   color: var(--accent);
 }
+
+/* the category name in a card's meta wears its category's wash — identity on
+   every board card, never a state (the status spine keeps red/green/blue) */
+.cat {
+  padding: 0 calc(var(--space)/2);
+  border-radius: var(--radius);
+  color: var(--ink);
+}
+
+.cat[data-cat="1"] { background: var(--cat-1); }
+
+.cat[data-cat="2"] { background: var(--cat-2); }
+
+.cat[data-cat="3"] { background: var(--cat-3); }
 
 ul {
   list-style: none;
