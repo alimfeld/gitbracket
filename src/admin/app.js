@@ -353,6 +353,8 @@ async function sendEdit(verb, cid, mid, value) {
 
 function openResult(cid, m) {
   if (!reachable) return; // the offline banner says why
+  // a sideless match renders as TBD rows (cardHtml guards it) but has nothing to score
+  if (!m || !Array.isArray(m.sides) || m.sides.length !== 2) { flash('this match has no two sides — fix it in the file first'); return; }
   const ctx = cat(cid);
   const hasOutcome = !!(m.games || m.result);
   let pre = '';
@@ -428,6 +430,7 @@ function openResult(cid, m) {
 // edit that contradicts the model rides through as a conflict (publish blocks).
 function openSide(cid, m, si) {
   if (!reachable) return; // the offline banner says why
+  if (!m || !Array.isArray(m.sides) || m.sides.length !== 2) { flash('this match has no two sides — fix it in the file first'); return; }
   const ctx = cat(cid);
   const size = teamSize(ctx);
   const other = m.sides[1 - si];
