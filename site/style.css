@@ -487,19 +487,14 @@ body.venue header {
   white-space: nowrap;
 }
 
-/* the sim steppers: one compact line under the clock, never tall enough to grow
-   the header past its left column */
-.sim {
-  display: flex;
-  align-items: center;
-  gap: var(--space);
-  font-size: .875rem;
-  color: var(--muted);
+/* the running sim marks itself: accent border + the key hint, inline with the clock */
+.kiosk-clock:has(.sim-hint) {
+  border-color: var(--accent);
 }
 
-.sim-mark {
-  color: var(--accent);
-  font-weight: 600;
+.sim-hint {
+  font-size: .875rem;
+  color: var(--muted);
 }
 
 /* status rides the spine — a 3px left edge, the admin board's vocabulary */

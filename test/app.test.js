@@ -617,12 +617,11 @@ test('kiosk clock: a match day shows a bare time; off day the shown date, the si
   const rt = { slug: 'multiday', view: 'venues' };
   const mon = renderVenue(rt, data, Date.parse('2026-07-13T12:00:00-04:00')); // after the last day: the board falls back to Sunday
   assert(mon.includes('id="clock" data-sim-toggle data-mode="date"') && mon.includes('data-day="2026-07-12"'), 'off match day the clock is the shown day, clickable');
-  assert(!mon.includes('data-sim-step'), 'no steppers while the sim clock is off');
+  assert(mon.includes('<div class="kiosk-clock">') && !mon.includes('sim-hint') && !mon.includes('data-sim-step'), 'off match day the chip is unmarked, with no steppers');
   const sat = renderVenue(rt, data, Date.parse('2026-07-11T12:00:00-04:00'));
   assert(sat.includes('<time id="clock" data-mode="time"'), 'a match day shows a plain time, never a control');
   const simmed = renderVenue(rt, data, Date.parse('2026-07-13T12:00:00-04:00'), true);
-  assert(simmed.includes('data-mode="time"') && simmed.includes('data-sim-step="-5"') && simmed.includes('data-sim-step="5"'), 'while sim runs: the time, with steppers');
-  assert(simmed.includes('sim-mark'), 'the sim marker names the running state');
+  assert(simmed.includes('<div class="kiosk-clock">') && simmed.includes('sim-hint') && simmed.includes('data-mode="time"') && !simmed.includes('data-sim-step'), 'while sim runs: the chip carries the hint, with no steppers');
 });
 
 test('kiosk: the board title links back to the tournaments index', () => {
