@@ -209,13 +209,6 @@ a.tcard:focus-visible {
   color: var(--on-accent);
 }
 
-/* the court columns only fit a big screen — the index hides its link below it */
-@media (max-width: 1280px) {
-  .board-link {
-    display: none;
-  }
-}
-
 a.tcard h2 {
   margin: 0;
   /* the corner chip overlaps the title row — long names must not run under it */
@@ -265,10 +258,22 @@ article {
 
 .head {
   font-weight: 600;
+  white-space: nowrap;
+}
+
+/* a wrapped name/meta/title breaks the card height and the sticky row */
+.side > span:first-child,
+.kiosk-top h2,
+article .meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .score {
   display: flex;
+  flex: none;
   gap: calc(var(--space)/2);
 }
 
@@ -354,14 +359,21 @@ body.venue {
   max-width: none;
 }
 
-/* header + venue titles stick as one block, h2s sharing the board's --cols track */
+/* the titles and the board share one --cols track and width, so the document pans them together */
+.kiosk-top,
+.board {
+  --col-min: 12em;
+  display: grid;
+  grid-template-columns: repeat(var(--cols), minmax(var(--col-min), 1fr));
+  min-width: calc(var(--cols)*var(--col-min) + (var(--cols) - 1)*var(--space)*4);
+  column-gap: calc(var(--space)*4);
+}
+
+/* header + venue titles stick as one block */
 .kiosk-top {
   position: sticky;
   top: 0;
   z-index: 1; /* the board's cards and lines stick under it; the sim chip (10) stays on top */
-  display: grid;
-  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
-  column-gap: calc(var(--space)*4);
 }
 
 body.venue header {
@@ -399,10 +411,7 @@ body.venue header {
 .board {
   position: relative;
   z-index: 0; /* one stacking context: the now-line never escapes above the sticky kiosk-top (1) */
-  display: grid;
-  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
   grid-auto-rows: 1fr;
-  column-gap: calc(var(--space)*4);
   margin-top: calc(var(--space)*2);
   height: calc(var(--day-h) * 1px);
 }
@@ -432,6 +441,8 @@ body.venue header {
 }
 
 #clock {
+  position: sticky;
+  right: 0;
   font-size: 1.5rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
