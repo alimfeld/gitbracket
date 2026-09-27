@@ -425,6 +425,28 @@ test('admin sideOpts: the picker greys what the gate would reject — consumed s
   assert.deepEqual(admin.sideOpts(tjson, 'md', 999, 0), {});
 });
 
+test('admin legalSlots/sideOpts/doEdit: non-object entity entries report, never throw — a shape-broken hand edit must not kill the daemon', () => {
+  // null venue + null player entries: the validator reports them, the site
+  // renders them absent; the daemon's read paths must honor the same contract.
+  // A throw here is an unhandled rejection out of the async handler.
+  const tjson = {
+    name: 'T', location: 'L', timezone: 'UTC', dates: ['2026-05-02'],
+    venues: [null, { id: 'c1', name: 'C1' }],
+    players: [null, { id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }],
+    categories: [{ id: 't', name: 'T', bestOf: { groups: 1, knockout: 1 }, slotMinutes: { groups: 30, knockout: 30 } }],
+    matches: { t: [{ id: 1, pool: 'A', scheduled: '2026-05-02T09:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p1'] }, { kind: 'players', ids: ['p2'] }] }] },
+  };
+  assert.deepEqual(Object.keys(admin.legalSlots(tjson, 't', '1', '2026-05-02', 15)), ['c1'], 'the real court is offered, the null entry skipped');
+  assert.doesNotThrow(() => admin.sideOpts(tjson, 't', 1, 0), 'sideOpts survives a null player entry');
+  // the committed bad-null-category fixture: the category is simply absent
+  const repo = loadRepo(FIX('bad-null-category'));
+  const nullCat = repo.tournaments.get('bad-null-category').tjson;
+  assert.deepEqual(admin.sideOpts(nullCat, 't', 1, 0), {}, 'a null category reports empty, never throws');
+  // doEdit's catCtx runs before the write — the unknown category must report
+  const state = { root: '/', siteRoot: FIX('bad-null-category'), repo, slug: 'bad-null-category', redo: [] };
+  assert.equal(admin.doEdit(state, 'move', 't', '1', { time: null, venue: null }).ok, false, 'the unknown category is reported');
+});
+
 test('admin undo: a root commit (orphan branch) reports the ceiling, never git\'s raw error', () => {
   const { tmp, state } = scratchWithRemote();
   try {

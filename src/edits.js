@@ -91,7 +91,7 @@ function writeEdit(siteRoot, repo, slug, catId, apply, skipId) {
   const info = repo.tournaments.get(slug);
   if (!info || !info.tjson) return { err: `unknown tournament ${slug}` };
   const tjson = info.tjson;
-  const cats = (tjson.categories || []).map(c => c.id);
+  const cats = (tjson.categories || []).filter(plainObject).map(c => c.id);
   if (!cats.includes(catId)) return { err: `unknown category ${catId} — have: ${cats.join(', ')}` };
   const ms = matchesOf(tjson)?.[catId];
   if (!ms) return { err: `no matches for category ${catId}` };

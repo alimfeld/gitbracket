@@ -32,7 +32,8 @@ function fixedPlayers(m) {
 // The one category context a tool pass iterates — editor and admin both build
 // it, so the find+makeCat lookup lives here.
 function catCtx(tjson, cid) {
-  return makeCat({ meta: (tjson.categories || []).find(c => c.id === cid), matches: (tjson.matches || {})[cid] || [] }, tjson);
+  // A non-object entry renders as absent (toCats' guard) — never throws.
+  return makeCat({ meta: (tjson.categories || []).find(c => plainObject(c) && c.id === cid), matches: (tjson.matches || {})[cid] || [] }, tjson);
 }
 
 // Evidence to winner, derived the same way by validator and editor. The site

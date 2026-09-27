@@ -148,7 +148,7 @@ function legalSlots(tjson, cat, matchId, day, gcd) {
   // the slot length — scan the schedule's lattice, not midnight's.
   const wms = ctx.matches.map(x => wallMinOf(x && x.scheduled)).filter(w => w !== null);
   const offset = wms.length ? Math.min(...wms) % step : 0;
-  for (const venue of (tjson.venues || []).map(v => v.id)) {
+  for (const venue of (tjson.venues || []).filter(plainObject).map(v => v.id)) {
     const ticks = [];
     for (let wm = offset; wm < 1440; wm += step) {
       if (!Number.isFinite(slotMin) || wm + slotMin > 1440) continue;

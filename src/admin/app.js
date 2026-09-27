@@ -109,7 +109,7 @@ async function setSlug(slug, keepDay = false) {
   if (!S.tjson) return;
   S.tz = S.tjson.timezone || 'UTC';
   S.cats = toCats(S.tjson);
-  S.venues = S.tjson.venues || [];
+  S.venues = (S.tjson.venues || []).filter(v => v && typeof v === 'object');
   S.days = schedDays(S.cats.flatMap(c => c.matches), S.tz);
   const daySel = $('day');
   daySel.innerHTML = S.days.map(d => `<option value="${esc(d)}">${esc(dayLabel(d))}</option>`).join('');
@@ -493,7 +493,7 @@ async function openSide(cid, m, si) {
     modal.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.kind === kind));
     if (kind === 'players') {
       const ids = cur && cur.kind === 'players' ? cur.ids : [];
-      const names = new Map((S.tjson.players || []).map(p => [p.id, p.name]));
+      const names = new Map((S.tjson.players || []).filter(p => p && typeof p === 'object').map(p => [p.id, p.name]));
       // the full roster from /api/sideopts — a registered player who appears in
       // no match yet is still a legal side and must be placeable
       const all = L.roster || [];
