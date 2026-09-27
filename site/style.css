@@ -377,14 +377,18 @@ body.venue {
   max-width: none;
 }
 
-/* the titles and the board share one --cols track and width, so the document pans them together */
+/* the titles and the board share one --cols track and width, so the document pans them together.
+   The gutter rides their border box — body's right padding sits at the viewport edge, leaving no gap */
 .kiosk-top,
 .board {
   --col-min: 12em;
+  --gutter: calc(var(--space)*2);
   display: grid;
   grid-template-columns: repeat(var(--cols), minmax(var(--col-min), 1fr));
-  min-width: calc(var(--cols)*var(--col-min) + (var(--cols) - 1)*var(--space)*4);
+  min-width: calc(var(--cols)*var(--col-min) + (var(--cols) - 1)*var(--space)*4 + var(--gutter)*2);
   column-gap: calc(var(--space)*4);
+  margin-inline: calc(var(--gutter)*-1);
+  padding-inline: var(--gutter);
 }
 
 /* header + venue titles stick as one block */
@@ -434,8 +438,7 @@ body.venue header {
    per-minute re-render; above the cards but never intercepts a tap */
 .now {
   position: absolute;
-  left: 0;
-  right: 0;
+  inset-inline: var(--gutter);
   border-top: 1px solid var(--live);
   z-index: 1;
   opacity: .35;
