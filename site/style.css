@@ -395,10 +395,6 @@ body.venue {
 }
 
 body.venue header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: calc(var(--space)*4);
   padding-top: var(--space);
   grid-column: 1 / -1;
 }
@@ -459,14 +455,20 @@ body.venue header {
 }
 
 /* the clock is the board's control: a bare time on a match day, the offline date
-   otherwise — sticky so it stays on screen while the board pans sideways */
+   otherwise — fixed low and centred so it never competes with the title for width */
 .kiosk-clock {
-  position: sticky;
-  right: 0;
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--space)*2);
+  transform: translateX(-50%);
+  z-index: 2; /* over the sticky kiosk-top (1) and the board (0) */
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: calc(var(--space)/2);
+  align-items: center;
+  gap: var(--space);
+  padding: var(--space) calc(var(--space)*3);
+  background: var(--page);
+  border: 1px solid var(--line);
+  border-radius: 999px;
 }
 
 .kiosk-clock button {

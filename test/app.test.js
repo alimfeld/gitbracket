@@ -625,6 +625,13 @@ test('kiosk clock: a match day shows a bare time; off day the shown date, the si
   assert(simmed.includes('sim-mark'), 'the sim marker names the running state');
 });
 
+test('kiosk: the board title links back to the tournaments index', () => {
+  const repo = loadRepo(FIX('multiday'));
+  const data = pageData(repo.tournaments.get('multiday').tjson, 'multiday', repo.index);
+  const board = renderVenue({ slug: 'multiday', view: 'venues' }, data, Date.parse('2026-07-11T12:00:00-04:00'));
+  assert(links(board).some(l => l.href === '#'), 'the board header carries the trail link, so the kiosk is never a dead end');
+});
+
 test('kiosk: the header stamp never pretends live without a successful fetch', () => {
   const tjson = () => ({
     name: 'Live', location: 'Hall', timezone: 'UTC', venues: [{ id: 'c1', name: 'Court 1' }],

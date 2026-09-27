@@ -12,6 +12,10 @@ const CARD_PX = 135;
 // separate blocks; rendered inline because a content-driven flex wrapper won't shrink.
 const CARD_GAP = 4;
 
+// The fixed bottom clock chip's reserved band, so no card scrolls under it.
+// ponytail: re-tune beside the header constant on the wall screen.
+const CHIP_PX = 60;
+
 // Under node the classic-script globals must be reproduced on globalThis.
 if (typeof module !== 'undefined') {
   Object.assign(globalThis, require('./derive.js'));
@@ -410,10 +414,13 @@ function renderVenue(route, data, now, simOn) {
       ? `<button type="button" id="clock" data-sim-toggle data-mode="${simOn ? 'time' : 'date'}"${simOn ? '' : ` data-day="${esc(shownDay)}"`}>${simOn ? time : esc(dayText)}</button>`
       : '';
   const simRow = simOn ? `<div class="sim" role="group" aria-label="sim clock"><button type="button" data-sim-step="-5" aria-label="sim clock 5 minutes back">◀</button><button type="button" data-sim-step="5" aria-label="sim clock 5 minutes forward">▶</button><span class="sim-mark">${u('sim')}</span></div>` : '';
-  const header = `<header><div><h1>${esc(data.t.name)}</h1>${updateStamp(data, tz)}</div><div class="kiosk-clock">${clock}${simRow}</div></header>`;
+  // the title carries the same trail link as the tournament page; the clock is a
+  // fixed bottom chip so it never competes with the title for width
+  const header = `<header><h1>${esc(data.t.name)}<a href="#">${u('tournaments')}</a></h1>${updateStamp(data, tz)}</header>`;
+  const chip = clock ? `<div class="kiosk-clock">${clock}${simRow}</div>` : '';
   // header and venue titles stick as one block, aligned by the shared --cols track
   const top = `<div class="kiosk-top" style="--cols: ${cols.length}">${header}${cols.map(id => `<h2>${esc(venueNames.get(id) || id)}</h2>`).join('')}</div>`;
-  if (!cols.length) return top + `<p>${u('nothing')}</p>`;
+  if (!cols.length) return top + `<p>${u('nothing')}</p>` + chip;
   // Wall-clock minutes drive the layout, never offsets. One window per row feeds the
   // frame, scale, and placement; a missing slot length leaves e null.
   const win = open.map(r => {
@@ -436,7 +443,8 @@ function renderVenue(route, data, now, simOn) {
   const total = (Number.isFinite(endMax) ? endMax : dayStart + 60) - dayStart; // never 0 — a length-less day still spans an hour
   const avail = typeof document !== 'undefined' ? document.documentElement.clientHeight : 0;
   // + CARD_GAP: the card subtracts it below, else the shortest card clips its last line
-  const ppm = Math.max(1.6, avail ? (avail - 116) / total : 0, (CARD_PX + CARD_GAP) / sShort);
+  // the fixed bottom clock chip owns its own band, same as the sticky header above
+  const ppm = Math.max(1.6, avail ? (avail - 116 - CHIP_PX) / total : 0, (CARD_PX + CARD_GAP) / sShort);
   const y = min => (min - dayStart) * ppm;
   const card = (r, h) => {
     const status = kioskStatus(r, now);
@@ -455,7 +463,7 @@ function renderVenue(route, data, now, simOn) {
   // The line is the day's "now" — it exists only while the board's day is today;
   // on any other day there is nothing for aim() to follow.
   const nowY = nowMin !== null && dayKey(now, tz) === shownDay ? Math.min(Math.max(y(nowMin), 0), dayH) : null;
-  return top + `<div class="board" style="--cols: ${cols.length}; --day-h: ${dayH}">${nowY !== null ? `<div class="now" id="now-line" style="top:${nowY}px"></div>` : ''}${cols.map((id, i) => `<div class="col" style="grid-column: ${i + 1}">${byVenue.get(id).map(placed).join('')}</div>`).join('')}</div>`;
+  return top + `<div class="board" style="--cols: ${cols.length}; --day-h: ${dayH}">${nowY !== null ? `<div class="now" id="now-line" style="top:${nowY}px"></div>` : ''}${cols.map((id, i) => `<div class="col" style="grid-column: ${i + 1}">${byVenue.get(id).map(placed).join('')}</div>`).join('')}</div>` + chip;
 }
 
 // Do scheduled matches span more than one wall-clock day? Gates the date on cards.
