@@ -438,13 +438,9 @@ function renderVenue(route, data, now) {
   };
   const dayH = Math.ceil(total * ppm);
   const nowMin = wallClockMin(now, tz);
-  // The line sits at the wall-minute y while the clock is in the shown day; on any
-  // other day it pins to the day's top (before) or bottom (after).
-  const nowDay = dayKey(now, tz);
-  let nowY = null;
-  if (nowMin !== null && nowDay !== null) {
-    nowY = nowDay === shownDay ? Math.min(Math.max(y(nowMin), 0), dayH) : nowDay < shownDay ? 0 : dayH;
-  }
+  // The line is the day's "now" — it exists only while the board's day is today;
+  // on any other day there is nothing for aim() to follow.
+  const nowY = nowMin !== null && dayKey(now, tz) === shownDay ? Math.min(Math.max(y(nowMin), 0), dayH) : null;
   return top + `<div class="board" style="--cols: ${cols.length}; --day-h: ${dayH}">${nowY !== null ? `<div class="now" id="now-line" style="top:${nowY}px"></div>` : ''}${cols.map((id, i) => `<div class="col" style="grid-column: ${i + 1}">${byVenue.get(id).map(placed).join('')}</div>`).join('')}</div>`;
 }
 

@@ -593,6 +593,8 @@ test('multi-day kiosk: one day at a time, previewing day one early, falling back
   assert(text(mon).includes('SF') && text(mon).includes('Final') && !text(mon).includes('Katherine Johnson'), 'after the last day: the board falls back to the last day (Sunday knockout), not a stale today');
   const fri = renderVenue({ slug: 'multiday', view: 'venues' }, data, at('2026-07-10T12:00:00-04:00'));
   assert(text(fri).includes('Katherine Johnson') && !text(fri).includes('SF') && !text(fri).includes('Final'), 'a day before day one: the board previews the first day, pools only');
+  assert(sat.includes('id="now-line"') && sun.includes('id="now-line"'), 'a match day carries the now-line — the follow has something to track');
+  assert(!fri.includes('id="now-line"') && !mon.includes('id="now-line"'), 'off match day there is no now-line — the board never jumps to a day edge');
 });
 
 test('kiosk: the header stamp never pretends live without a successful fetch', () => {
