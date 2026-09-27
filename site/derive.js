@@ -264,7 +264,11 @@ function refInfo(m, ctx) {
 // "Winner of SF1", "2nd in Pool A" — words and articles come from the bundle.
 function slotLabel(side, ctx) {
   if (!side || typeof side !== 'object') return 'TBD';
-  if (side.kind === 'pool') return t(LOCALE, 'slot-pool', { rank: ordNum(side.rank), pool: side.pool });
+  if (side.kind === 'pool') {
+    const st = poolStandings(ctx, side.pool);
+    const key = st && isDeadTie(st, side.rank) ? 'slot-pool-tie' : 'slot-pool';
+    return t(LOCALE, key, { rank: ordNum(side.rank), pool: side.pool });
+  }
   if (side.kind !== 'match') return 'TBD';
   const who = t(LOCALE, side.result === 'winner' ? 'slot-winner' : 'slot-loser');
   const ref = ctx.byId.get(side.match);

@@ -77,6 +77,7 @@ const I18N = {
     'slot-loser': 'Loser',
     'slot-of': '{who} of {ref}',
     'slot-pool': '{rank} in Pool {pool}',
+    'slot-pool-tie': '{rank} in Pool {pool} — tie not broken',
     'slot-dangling': '{who} of match {id}',
     // per-locale word rules (derive.js dispatches by name): bandShort strips the
     // classification word, place is the pre-word number, ord the range form.
@@ -161,6 +162,7 @@ const I18N = {
     'slot-loser': 'Verlierer',
     'slot-of': '{who} {ref}',
     'slot-pool': '{rank} in Pool {pool}',
+    'slot-pool-tie': '{rank} in Pool {pool} — Gleichstand',
     'slot-dangling': '{who} von Spiel {id}',
     fmt: {
       ord: n => `${n}.`,

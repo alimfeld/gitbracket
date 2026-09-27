@@ -229,6 +229,13 @@ test('slot resolution: walkover winner vs in-play TBD', () => {
   assert(resolveSide(m9.sides[1], md) === null, 'winner of in-play m8 -> TBD');
 });
 
+test('slot resolution: a dead tie is labelled, not silently unresolved', () => {
+  const ctx = catOf('tie', 't');
+  const ko = ctx.byId.get(3);
+  assert.equal(resolveSide(ko.sides[0], ctx), null, 'a dead-tie rank resolves to nothing');
+  assert.match(sideLabel(ko.sides[0], ctx), /tie not broken/, 'the slot says why it is TBD — the gate no longer warns');
+});
+
 test('resolveSide: string ids on a players side is TBD, never a char-split team', () => {
   const ctx = makeCat({ meta: {}, matches: [
     { id: 1, sides: [{ kind: 'players', ids: 'p1' }, { kind: 'players', ids: ['p2'] }] },

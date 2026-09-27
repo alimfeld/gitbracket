@@ -2,33 +2,38 @@
 
 // GitBracket validator — schema + cross-file checks. I/O (loadRepo) is separate from
 // checks (validateRepo), so tests run against fixtures/ in memory. Never writes.
+//
+// Two channels, two gates: `errs` are syntactic (unparseable, unreferenceable, or
+// missing required config) and block an edit; `conflicts` are semantic (the data
+// parses but contradicts the model) and block publish only — an edit may pass
+// through one so its next step can repair it.
 
 const path = require('path');
 const { loadRepo, plainObject, isRealDate, schedEntries, pairBusy, consumedSlots, winTarget, reachedWinner, feederBounds, sameSet } = require('./tools.js');
-const { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, matchesOf, poolStandings, resolveSide, isDeadTie, bestOfOf, schedTime, schedDays, placementLabel, parentsOf } = require('../site/derive.js');
+const { LOCALE, DATE_RE, ID_RE, ISO_RE, pairSig, matchSlotMs, makeCat, matchesOf, resolveSide, bestOfOf, schedTime, schedDays, placementLabel, parentsOf } = require('../site/derive.js');
 
 const RESULTS = ['winner', 'loser'];
 const RESULT_STATUSES = ['played', 'walkover', 'void'];
 // One rule per status: played counts win + gd/pd from games; walkover a win only;
 // void nothing.
-function validateResultShape(r, hasGames, target, m, where, err) {
+function validateResultShape(r, hasGames, target, m, where, err, conflict) {
   if (!RESULT_STATUSES.includes(r.status)) {
     err(where, `result.status must be one of ${RESULT_STATUSES.join(', ')}, got ${JSON.stringify(r.status)}`);
   } else if (r.status === 'void') {
-    if (r.winner !== undefined) err(where, 'a void result has no winner');
-    else if (hasGames) err(where, 'games and a void result are mutually exclusive');
+    if (r.winner !== undefined) conflict(where, 'a void result has no winner');
+    else if (hasGames) conflict(where, 'games and a void result are mutually exclusive');
   } else {
     if (r.winner !== 'a' && r.winner !== 'b') err(where, `result.winner must be 'a' or 'b', got ${JSON.stringify(r.winner)}`);
     if (r.status === 'played') {
-      if (!hasGames) err(where, 'a played result records the games it was decided by');
+      if (!hasGames) conflict(where, 'a played result records the games it was decided by');
       else if (typeof target === 'number') {
         // derived from the games — the stored winner must agree (and the games reach the target)
         const derived = reachedWinner(m.games, target);
-        if (derived === null) err(where, 'a played result needs games that reach the best-of target');
-        else if (derived !== r.winner) err(where, `result.winner '${r.winner}' does not match the games — side ${derived} won`);
+        if (derived === null) conflict(where, 'a played result needs games that reach the best-of target');
+        else if (derived !== r.winner) conflict(where, `result.winner '${r.winner}' does not match the games — side ${derived} won`);
       }
     } else if (hasGames) {
-      err(where, 'games and a walkover result are mutually exclusive');
+      conflict(where, 'games and a walkover result are mutually exclusive');
     }
   }
 }
@@ -36,14 +41,14 @@ function validateResultShape(r, hasGames, target, m, where, err) {
 // All checks, in memory. Labels are repo-relative paths (site/tournaments/<slug>/...).
 function validateRepo(repo) {
   const errs = [...repo.readErrs];
-  const warns = [];
+  const conflicts = [];
   const err = (f, m) => errs.push(`${f}: ${m}`);
   const { index, tournaments } = repo;
 
-  if (index === undefined) return { errs, warns }; // tournaments.json unreadable — readErrs carries the message
+  if (index === undefined) return { errs, conflicts }; // tournaments.json unreadable — readErrs carries the message
   if (!Array.isArray(index)) {
     err('tournaments.json', 'must be an array of tournament entries');
-    return { errs, warns };
+    return { errs, conflicts };
   }
 
   const seenSlugs = new Set();
@@ -64,17 +69,18 @@ function validateRepo(repo) {
     if (seenSlugs.has(t.slug)) err(where, `duplicate slug ${t.slug}`);
     seenSlugs.add(t.slug);
     const info = tournaments.get(t.slug);
-    if (info) validateTournamentData(t.slug, t.name, t.location, t.dates, info, errs, warns);
+    if (info) validateTournamentData(t.slug, t.name, t.location, t.dates, info, errs, conflicts);
   }
 
-  return { errs, warns };
+  return { errs, conflicts };
 }
 
-function validateTournamentData(slug, indexName, indexLocation, indexDates, info, errs, warns) {
+function validateTournamentData(slug, indexName, indexLocation, indexDates, info, errs, conflicts) {
   const tFile = `site/tournaments/${slug}.json`;
   const tjson = info.tjson;
   if (tjson === undefined) return; // unreadable — readErrs carries the message
   const err = (f, m) => errs.push(`${f}: ${m}`);
+  const conflict = (f, m) => conflicts.push(`${f}: ${m}`);
   if (tjson === null) { err(tFile, 'must be an object, got null'); return; }
 
   // The tournament page loads only this file; the index copy exists for the list page — keep equal.
@@ -177,15 +183,16 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
   for (const cat of categories.values()) {
     const ms = mjson ? mjson[cat.id] : undefined;
     if (ms === undefined) continue; // category with no matches entry is valid
-    validateCategory(`${tFile} matches.${cat.id}`, ms, cat, players, venues, tjson, errs, warns, tzOk);
+    validateCategory(`${tFile} matches.${cat.id}`, ms, cat, players, venues, tjson, errs, conflicts, tzOk);
   }
 
-  // ---- venue overlap on unplayed scheduled matches, across ALL categories ----
+  // ---- venue and player overlap on unplayed scheduled matches, across ALL categories ----
   // Per-category scope would miss a court double-booked across categories; windows use
   // the effective slot length, and schedEntries/pairBusy are the admin preview's atoms.
+  // players is the resolved set, so a pool/edge side double-books like an explicit one.
   const { entries: sched, noSlot } = schedEntries(tjson);
   for (const cid of noSlot) {
-    warns.push(`${tFile} matches.${cid}: scheduled matches resolve to no slot length — set slotMinutes (per stage or per match) or the kiosk can't mark matches overdue`);
+    err(`${tFile} matches.${cid}`, 'scheduled matches resolve to no slot length — set slotMinutes (per stage or per match) or the kiosk can\'t mark matches overdue');
   }
   // ponytail: O(n²) pair scan over one tournament file — small by construction;
   // a per-venue time index is the upgrade if a file ever grows past ~300 matches.
@@ -196,19 +203,19 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
       const aF = `${tFile} matches.${a.cat}`, bF = `${tFile} matches.${b.cat}`;
       for (const kind of pairBusy(a, b)) {
         if (kind === 'venue') {
-          err(aF, `${a.m.id} and ${b.m.id} overlap at venue ${a.m.venue} (${aMs / 60000}-minute and ${bMs / 60000}-minute slots) — ${bF} also schedules ${b.m.id}`);
+          conflict(aF, `${a.m.id} and ${b.m.id} overlap at venue ${a.m.venue} (${aMs / 60000}-minute and ${bMs / 60000}-minute slots) — ${bF} also schedules ${b.m.id}`);
         } else {
           const shared = [...a.players].filter(p => b.players.has(p)).join(', ');
-          err(aF, `player ${shared} double-booked — ${a.m.id} (${a.m.scheduled}) and ${b.m.id} (${b.m.scheduled}, ${bF})`);
+          conflict(aF, `player ${shared} double-booked — ${a.m.id} (${a.m.scheduled}) and ${b.m.id} (${b.m.scheduled}, ${bF})`);
         }
       }
     }
   }
 }
 
-function validateCategory(cFile, matches, cat, players, venues, tjson, errs, warns, tzOk) {
+function validateCategory(cFile, matches, cat, players, venues, tjson, errs, conflicts, tzOk) {
   const err = (f, m) => errs.push(`${f}: ${m}`);
-  const warn = (f, m) => warns.push(`${f}: ${m}`);
+  const conflict = (f, m) => conflicts.push(`${f}: ${m}`);
   if (!Array.isArray(matches)) { err(cFile, 'matches must be an array'); return; }
 
   const bestOf = cat.bestOf;
@@ -266,21 +273,21 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
           // possibleStages assumes one pool per pair — a pair in two pools would
           // read stage seats from whichever pool it finds first.
           const prevPool = poolOfSig.get(sig);
-          if (prevPool !== undefined && prevPool !== m.pool) err(where, `side ${sig} plays in two pools ${JSON.stringify(prevPool)} and ${JSON.stringify(m.pool)} — one pool per pair per category`);
+          if (prevPool !== undefined && prevPool !== m.pool) conflict(where, `side ${sig} plays in two pools ${JSON.stringify(prevPool)} and ${JSON.stringify(m.pool)} — one pool per pair per category`);
           else poolOfSig.set(sig, m.pool);
         }
         pairSizes.add(side.ids.length);
         for (const pid of side.ids) {
           const prev = pairByPlayer.get(pid);
-          if (prev && prev !== sig) err(where, `player ${pid} has two partners in category ${cat.id} (${prev} vs ${sig}) — pairs are fixed per category`);
+          if (prev && prev !== sig) conflict(where, `player ${pid} has two partners in category ${cat.id} (${prev} vs ${sig}) — pairs are fixed per category`);
           pairByPlayer.set(pid, sig);
         }
       } else if (side.kind === 'match') {
-        if (m.pool !== undefined) err(where, `side ${si}: a pool match cannot have a match slot — pools are round robin`);
+        if (m.pool !== undefined) conflict(where, `side ${si}: a pool match cannot have a match slot — pools are round robin`);
         if (!Number.isInteger(side.match) || !byId.has(side.match)) err(where, `side ${si}: unknown match slot ${JSON.stringify(side.match)}`);
         if (!RESULTS.includes(side.result)) err(where, `side ${si}: match slot result must be winner or loser, got ${JSON.stringify(side.result)}`);
       } else if (side.kind === 'pool') {
-        if (m.pool !== undefined) err(where, `side ${si}: a pool match cannot have a pool slot — pools are round robin`);
+        if (m.pool !== undefined) conflict(where, `side ${si}: a pool match cannot have a pool slot — pools are round robin`);
         if (typeof side.pool !== 'string') err(where, `side ${si}: pool slot needs a pool string`);
         if (!Number.isInteger(side.rank) || side.rank < 1) err(where, `side ${si}: pool slot rank must be a positive integer, got ${JSON.stringify(side.rank)}`);
       } else {
@@ -289,13 +296,13 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
     });
 
     if (m.sides[0] && m.sides[1] && m.sides[0].kind === 'players' && m.sides[1].kind === 'players') {
-      if (pairSig(m.sides[0].ids) === pairSig(m.sides[1].ids)) err(where, 'the two sides are the same player set');
+      if (pairSig(m.sides[0].ids) === pairSig(m.sides[1].ids)) conflict(where, 'the two sides are the same player set');
     }
   }
 
-  if (pairSizes.size > 1) err(cFile, `category ${cat.id} mixes singles and doubles sides (sizes ${[...pairSizes].join(', ')})`);
+  if (pairSizes.size > 1) conflict(cFile, `category ${cat.id} mixes singles and doubles sides (sizes ${[...pairSizes].join(', ')})`);
   for (const [pool, sigs] of poolUses) {
-    if (sigs.size < 2) err(cFile, `pool ${JSON.stringify(pool)} has fewer than two distinct sides`);
+    if (sigs.size < 2) conflict(cFile, `pool ${JSON.stringify(pool)} has fewer than two distinct sides`);
   }
   if (hasPool && !stageBest('groups')) err(cFile, `category ${cat.id}: groups stage in use but bestOf.groups is not an odd positive number`);
   if (hasKnockout && !stageBest('knockout')) err(cFile, `category ${cat.id}: knockout stage in use but bestOf.knockout is not an odd positive number`);
@@ -326,8 +333,8 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
     if (cycle) break;
   }
   if (cycle) {
-    err(cFile, `slot cycle detected at match ${cycle}`);
-    return; // pass B would recurse forever on a cyclic DAG
+    conflict(cFile, `slot cycle detected at match ${cycle}`);
+    return; // a cycle is the finding; pass B's derived reads would only add noise on top
   }
 
   // ---- derived state used below (shared with app.js) ----
@@ -364,10 +371,10 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
         if (!side || typeof side !== 'object') return;
         // the one claim rule for either kind — same-match reuse bites both
         const claim = (key, owner) => {
-          if (seen.has(key)) err(where, `slot source ${key} is consumed twice by this match`);
+          if (seen.has(key)) conflict(where, `slot source ${key} is consumed twice by this match`);
           seen.add(key);
           // every holder but the first is a duplicate — the gate names the first owner
-          if (owner.get(key) !== m.id) err(where, `slot source ${key} is consumed twice (also by ${owner.get(key)})`);
+          if (owner.get(key) !== m.id) conflict(where, `slot source ${key} is consumed twice (also by ${owner.get(key)})`);
         };
         if (side.kind === 'match') {
           claim(`${side.match}:${side.result}`, sources.edge);
@@ -375,14 +382,9 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
           claim(`pool:${side.pool}:${side.rank}`, sources.pool);
           if (typeof side.pool === 'string' && Number.isInteger(side.rank) && side.rank >= 1) {
             if (!poolUses.has(side.pool)) {
-              err(where, `pool slot references unknown pool ${JSON.stringify(side.pool)} (no matches use it)`);
+              conflict(where, `pool slot references unknown pool ${JSON.stringify(side.pool)} (no matches use it)`);
             } else if (side.rank > poolUses.get(side.pool).size) {
-              err(where, `pool slot rank ${side.rank} out of range — pool ${JSON.stringify(side.pool)} has ${poolUses.get(side.pool).size} side(s)`);
-            } else {
-              const st = poolStandings(ctx, side.pool);
-              if (st && isDeadTie(st, side.rank)) {
-                warn(where, `pool slot rank ${side.rank} is a dead tie — the slot renders TBD; replace the source with explicit players or a decider`);
-              }
+              conflict(where, `pool slot rank ${side.rank} out of range — pool ${JSON.stringify(side.pool)} has ${poolUses.get(side.pool).size} side(s)`);
             }
           }
         }
@@ -399,12 +401,12 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
     if (hasGames) {
       // match > stage override precedence; a bad bestOf is already reported above
       target = winTarget(bestOfOf(m, { bestOf }));
-      validateGames(m.games, target, where, err);
+      validateGames(m.games, target, where, err, conflict);
     }
     if (r !== undefined) {
-      validateResultShape(r, hasGames, target, m, where, err);
+      validateResultShape(r, hasGames, target, m, where, err, conflict);
     } else if (hasGames && reachedWinner(m.games, target) !== null) {
-      err(where, 'games reach the best-of target — record a result (status + winner)');
+      conflict(where, 'games reach the best-of target — record a result (status + winner)');
     }
     // A scored match must resolve both sides; one team on both is a self-match.
     // An unresolved match waits (the gate reports, never guesses).
@@ -412,9 +414,9 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
       const a = resolveSide(m.sides[0], ctx);
       const b = resolveSide(m.sides[1], ctx);
       if ((r !== undefined || hasGames) && (!a || !b)) {
-        err(where, 'scored match must have both sides resolved to players — check the pool or match feeding the unresolved side');
+        conflict(where, 'scored match must have both sides resolved to players — check the pool or match feeding the unresolved side');
       } else if (a && b && sameSet(a, b)) {
-        err(where, `both sides resolve to the same team (${[...a].join(', ')}) — a match needs two distinct sides`);
+        conflict(where, `both sides resolve to the same team (${[...a].join(', ')}) — a match needs two distinct sides`);
       }
     }
 
@@ -426,8 +428,8 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
       const t = schedTime(m, tjson.timezone);
       const ms = matchSlotMs(m, ctx);
       if (fb && t !== null && !Number.isNaN(ms)) {
-        if (fb.floor !== null && t < fb.floor) err(where, `match ${m.id} starts before its feeders end — a bracket can't start until its sources are done (move this match later or its feeders earlier)`);
-        if (fb.ceiling !== null && t + ms > fb.ceiling) err(where, `match ${m.id} ends after a match it feeds starts — a feeder must finish before its consumer begins (move this match earlier or the consumer later)`);
+        if (fb.floor !== null && t < fb.floor) conflict(where, `match ${m.id} starts before its feeders end — a bracket can't start until its sources are done (move this match later or its feeders earlier)`);
+        if (fb.ceiling !== null && t + ms > fb.ceiling) conflict(where, `match ${m.id} ends after a match it feeds starts — a feeder must finish before its consumer begins (move this match earlier or the consumer later)`);
       }
     }
     if (m.venue !== undefined && typeof m.venue !== 'string') {
@@ -443,10 +445,10 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, war
   const finals = matches.filter(m => m && typeof m === 'object' && m.pool === undefined
     && Array.isArray(m.sides) && m.sides.length === 2
     && placementLabel(m, ctx) === null && !winnerParent.has(m.id)).length;
-  if (finals > 1) err(cFile, `${finals} unfed knockout matches — exactly one championship final is allowed`);
+  if (finals > 1) conflict(cFile, `${finals} unfed knockout matches — exactly one championship final is allowed`);
 }
 
-function validateGames(games, target, where, err) {
+function validateGames(games, target, where, err, conflict) {
   const wins = [0, 0];
   for (let i = 0; i < games.length; i++) {
     const g = games[i];
@@ -459,36 +461,45 @@ function validateGames(games, target, where, err) {
     // already flags the config, and 0 >= null would invent a reached target.
     if (typeof target !== 'number') continue;
     if (wins[0] >= target || wins[1] >= target) {
-      err(where, `games[${i}] recorded after a side already reached the target of ${target}`);
+      conflict(where, `games[${i}] recorded after a side already reached the target of ${target}`);
       continue;
     }
     if (g.a > g.b) wins[0]++; else wins[1]++;
   }
 }
 
-// Errors touching that tournament's file or index entry. Exact matches only — a
-// substring would leak tie3 errors into `validate tie`.
-function filterErrs(errs, slug) {
+// Findings touching that tournament's file or index entry. Exact matches only — a
+// substring would leak tie3 findings into `validate tie`.
+function filterSlug(msgs, slug) {
   const re = new RegExp(`(?:tournaments/${slug}\\.json|\\(${slug}\\)|"${slug}"|slug ${slug}(?:\\s|$))`);
-  return errs.filter(e => re.test(e));
+  return msgs.filter(e => re.test(e));
 }
 
+// The two channels for an already-loaded repo, narrowed to one slug when given.
+function findings(repo, slug) {
+  const { errs, conflicts } = validateRepo(repo);
+  return {
+    errs: slug ? filterSlug(errs, slug) : errs,
+    conflicts: slug ? filterSlug(conflicts, slug) : conflicts,
+  };
+}
+
+// The dev gate: syntactic errors fail, semantic conflicts only report (publish re-checks).
 function main(root, slug) {
   const repo = loadRepo(path.join(root, 'site'));
   if (slug !== undefined && !repo.tournaments.has(slug)) {
     console.error(`unknown tournament ${slug} — have: ${[...repo.tournaments.keys()].join(', ')}`);
-    process.exit(1);
+    return 1;
   }
-  const { errs, warns } = validateRepo(repo);
-  const es = slug ? filterErrs(errs, slug) : errs;
-  const ws = slug ? filterErrs(warns, slug) : warns;
-  for (const w of ws) console.log(`warn: ${w}`);
+  const { errs: es, conflicts: cs } = findings(repo, slug);
+  for (const c of cs) console.log(`conflict: ${c}`);
   for (const e of es) console.log(`error: ${e}`);
   if (es.length) {
     console.log(`validate: ${es.length} error(s) — fix and re-commit`);
-    process.exit(1);
+    return 1;
   }
-  console.log(ws.length ? `validate: ok (${ws.length} warning(s))` : 'validate: ok');
+  console.log(cs.length ? `validate: ok (${cs.length} conflict(s) — publish blocked)` : 'validate: ok');
+  return 0;
 }
 
-module.exports = { validateRepo, filterErrs, main };
+module.exports = { validateRepo, filterSlug, findings, main };

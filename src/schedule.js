@@ -484,8 +484,8 @@ function generate(spec) {
         }
       }
     }
-    // A missing slotMinutes is only a validator warning, yet it NaNs every slot
-    // window and piles every match on the first court — fail fast instead.
+    // A missing slotMinutes is a validator error once a match is scheduled, but here
+    // it NaNs every slot window and piles every match on the first court — fail fast.
     if (!Number.isInteger(c.slotMinutes) || c.slotMinutes < 1) {
       throw new Error(`spec: category ${c.id}: slotMinutes must be a positive integer, got ${JSON.stringify(c.slotMinutes)}`);
     }
@@ -541,7 +541,7 @@ function generate(spec) {
     index: [{ slug, name, location, dates: schedDays(Object.values(out.matches).flat(), timezone) }],
     tournaments: new Map([[slug, { tjson: out }]]),
   });
-  if (g.errs.length) throw new Error('spec: output fails validation:\n' + g.errs.join('\n'));
+  if (g.errs.length || g.conflicts.length) throw new Error('spec: output fails validation:\n' + [...g.errs, ...g.conflicts].join('\n'));
 
   return out;
 }

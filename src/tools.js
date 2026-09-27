@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { ID_RE, makeCat, matchesOf, schedTime, isDone, matchSlotMs } = require('../site/derive.js');
+const { ID_RE, makeCat, matchesOf, schedTime, isDone, matchSlotMs, resolveSide } = require('../site/derive.js');
 
 // Window collision, shared by the validator and the generator.
 const slotsOverlap = (a0, a1, b0, b1) => a0 < b1 && b0 < a1;
@@ -17,10 +17,22 @@ const sameSet = (a, b) => a === null || b === null ? a === b : a.size === b.size
 // A non-null, non-array object.
 const plainObject = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 
-// Known players as a Set, null when a side is a slot (resolved only after results).
+// Explicit players as a Set, null when either side is a slot.
 function fixedPlayers(m) {
   return Array.isArray(m.sides) && m.sides.length === 2 && m.sides.every(s => s && s.kind === 'players' && Array.isArray(s.ids))
     ? new Set(m.sides.flatMap(s => s.ids)) : null;
+}
+
+// Players a match resolves to — explicit sides at once, pool/edge sides once their
+// source is decided. Null when no side resolves yet.
+function resolvedPlayers(m, ctx) {
+  if (!Array.isArray(m.sides) || m.sides.length !== 2) return null;
+  const ids = new Set();
+  for (const s of m.sides) {
+    const r = resolveSide(s, ctx);
+    if (r) for (const id of r) ids.add(id);
+  }
+  return ids.size ? ids : null;
 }
 
 // The category context a tool pass iterates (find + makeCat).
@@ -187,7 +199,8 @@ function writeTournamentIndex(siteRoot, entries) {
 }
 
 // Scheduled-unplayed windows: {m, t, ctx, players, cat}; noSlot names categories
-// with no resolvable slot length.
+// with no resolvable slot length. players is the resolved set, so a slot-fed side
+// double-books exactly like an explicit one.
 function schedEntries(tjson) {
   const entries = [];
   const noSlot = new Set();
@@ -203,7 +216,7 @@ function schedEntries(tjson) {
       const t = schedTime(m, tjson.timezone);
       if (t === null) continue;
       if (Number.isNaN(matchSlotMs(m, ctx))) noSlot.add(cat.id);
-      entries.push({ m, t, ctx, players: fixedPlayers(m), cat: cat.id });
+      entries.push({ m, t, ctx, players: resolvedPlayers(m, ctx), cat: cat.id });
     }
   }
   return { entries, noSlot };
@@ -258,4 +271,4 @@ function pairBusy(a, b) {
   return kinds;
 }
 
-module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, plainObject, fixedPlayers, schedEntries, pairBusy, consumedSlots, descendants, winTarget, reachedWinner, feederBounds, isRealDate, findRoot, catCtx, tournamentText, cnameOf, branchOf, isSimBranch, cleanTree, git, defaultSlug, sameSet };
+module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, plainObject, fixedPlayers, resolvedPlayers, schedEntries, pairBusy, consumedSlots, descendants, winTarget, reachedWinner, feederBounds, isRealDate, findRoot, catCtx, tournamentText, cnameOf, branchOf, isSimBranch, cleanTree, git, defaultSlug, sameSet };

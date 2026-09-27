@@ -169,3 +169,11 @@ test('admin legalSlots/sideOpts/doEdit: non-object entity entries report, never 
   assert.equal(admin.doEdit(state, 'move', 't', '1', { time: null, venue: null }).ok, false, 'the unknown category is reported');
 });
 
+
+test('admin sideOpts: a resolved pool-rank side double-books its players in the picker', () => {
+  const tjson = loadRepo(FIX('bad-resolved-doublebook')).tournaments.get('bad-resolved-doublebook').tjson;
+  // category y's match 1 sits at 11:00 with explicit p1/p2; category x's final at the
+  // same time resolves its pool-A rank-1 side to that same pair
+  const opts = admin.sideOpts(tjson, 'y', 1, 0);
+  assert(opts.busy.includes('p1') && opts.busy.includes('p2'), 'the resolved pair is busy, so the picker greys it');
+});

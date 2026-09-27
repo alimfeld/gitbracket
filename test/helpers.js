@@ -45,7 +45,7 @@ const MINI = {
 };
 
 const hasErr = (r, re) => r.errs.some(e => re.test(e));
-const hasWarn = (r, re) => r.warns.some(e => re.test(e));
+const hasConflict = (r, re) => r.conflicts.some(e => re.test(e));
 
 // validator case: run the real validator over a fixture repo root
 const validateFixture = name => validateRepo(loadRepo(FIX(name)));
@@ -98,4 +98,4 @@ const links = html => [...html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/g)].map(m =
   text: text(m[2]),
 }));
 
-module.exports = { FIX, MINI, hasErr, hasWarn, validateFixture, catOf, scratchSite, pageData, repoPage, withTjson, text, vals, card, cards, links };
+module.exports = { FIX, MINI, hasErr, hasConflict, validateFixture, catOf, scratchSite, pageData, repoPage, withTjson, text, vals, card, cards, links };

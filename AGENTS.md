@@ -23,6 +23,11 @@ implement them; treat them as rules, not style.
   instant is derived at render, so data stays readable and stays right if
   clock rules change.
 - **Slots are category-local, consumed at most once, acyclic.**
+- **A result is side-relative.** `winner` names a side (`a`/`b`), never a team;
+  the team is derived from the side, so correcting a side reinterprets the
+  result — including an already-decided match fed by that side, which keeps its
+  stored side-letter result and follows the new team; re-score it if the new
+  meaning is wrong. Nothing stores the attribution — no state to go stale.
 - **One file per tournament, minimal diffs.** Data edits stay byte-identical
   apart from the change, so a commit diff shows only the edit.
 
@@ -38,8 +43,8 @@ implement them; treat them as rules, not style.
   run in the browser and under node, so node-only modules stay out. Its
   internal laws: side identity derives from the player set, never from list
   order; memoized state resets every render, so a corrected score surfaces on
-  the next poll; resolution is cycle-proof — the validator rejects cycles
-  first, so a guard only prevents a hang.
+  the next poll; resolution is cycle-proof — a cycle is a reported conflict,
+  not a barrier, so the guard is what keeps a render from hanging.
 - **Renderers never throw, and neither does the gate.** Missing data renders
   empty, unresolvable slots a descriptive label, malformed data an error
   report — never a crash. Cycles and reference errors are the validator's
@@ -68,13 +73,20 @@ implement them; treat them as rules, not style.
   a deliberate control, practice mode's entry point; don't gate or remove it.
   Publishing sits outside git: last write wins on the CDN, safe because one
   director ships, everyone else pulls and reviews.
-- **Every editor edit validates, writes, and commits itself** — the process
-  can die at any instant with nothing lost.
+- **Every editor edit commits itself; only the ship is gated.** An edit
+  passes the syntactic check — unparseable or unreferenceable data blocks it
+  — then writes and commits. Semantic conflicts (data that parses but
+  contradicts the model: a double-booked court, a consumed-twice slot, a
+  second final) ride along, surface in the admin, and block `publish` until
+  resolved. A conflicting state is a repairable step, never a dead end, and
+  the process can die at any instant with nothing lost.
 - **Never weaken a check to make data pass — fix the data.** Pre-commit runs
-  validate + tests (the dev gate). A commit staging only tournament data
-  skips the suite — it reads fixtures, never live data, so it can't change
-  with an edit — but validate always runs, and `gb.js publish` re-runs it
-  (the data gate): a bypassed hook can't ship.
+  validate + tests (the dev gate); `gb.js validate` fails only on syntactic
+  errors and reports conflicts. A commit staging only tournament data skips
+  the suite — it reads fixtures, never live data, so it can't change with an
+  edit — but validate always runs, and `gb.js publish` re-runs the gate and
+  refuses on syntactic errors and conflicts alike (the data gate): a bypassed
+  hook can't ship.
 
 ## Where Code Lives
 

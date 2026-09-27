@@ -12,7 +12,7 @@ const { loadRepo } = require('../src/tools.js');
 const { validateRepo } = require('../src/validate.js');
 const { makeCat } = require('../site/derive.js');
 const editor = require('../src/edits.js');
-const { FIX, hasErr, scratchSite } = require('./helpers.js');
+const { FIX, hasErr, hasConflict, scratchSite } = require('./helpers.js');
 
 function md40Ctx(repo) {
   const tjson = repo.tournaments.get('sample').tjson;
@@ -90,16 +90,14 @@ test('editor applyMove: one call sets time+venue, nulls clear, the validator own
   assert(hasErr(validateRepo(repo2), /unknown venue "bogus-court"/), 'undeclared venue rejected');
 });
 
-test('editor rejects edits the validator would refuse', () => {
+test('editor surfaces the gate\'s semantic conflicts — the edit lands, publish is what blocks', () => {
   const repo = loadRepo(FIX('sample'));
   const { matches, ctx } = md40Ctx(repo);
   editor.applyScore(matches, '7', [{ a: 11, b: 5 }, { a: 11, b: 3 }], ctx); // knockout target is 1 game
-  const { errs } = validateRepo(repo);
-  assert(hasErr({ errs }, /after a side already reached the target/), 'game past the target is rejected');
+  assert(hasConflict(validateRepo(repo), /after a side already reached the target/), 'a game past the target is a conflict');
   const repo2 = loadRepo(FIX('sample'));
   editor.applyResult(repo2.tournaments.get('sample').tjson.matches.md40, '9', 'walkover', 'b'); // m8 unresolved
-  const r2 = validateRepo(repo2);
-  assert(hasErr(r2, /scored match must have both sides resolved/), 'scoring a match with an unresolved side is rejected');
+  assert(hasConflict(validateRepo(repo2), /scored match must have both sides resolved/), 'scoring an unresolved side is a conflict');
 });
 
 test('editor writeEdit: a cross-day time edit is refused with the cause named; days-unchanged edits still apply', () => {
@@ -224,8 +222,8 @@ test('editor writeEdit: rollback on validation failure, write on success (real d
     const repo = loadRepo(dataRoot);
     const file = path.join(dataRoot, 'tournaments', 'sample.json');
     const before = fs.readFileSync(file, 'utf8');
-    const bad = editor.writeEdit(dataRoot, repo, 'sample', 'md40', (c, ctx) => editor.applyScore(c, '7', [{ a: 11, b: 5 }, { a: 11, b: 3 }], ctx));
-    assert(bad.errs && bad.errs.length > 0 && !bad.file, 'bad edit reports validation errors');
+    const bad = editor.writeEdit(dataRoot, repo, 'sample', 'md40', (c) => editor.applySide(c, '7', { si: 0, side: { kind: 'players', ids: ['nobody'] } }));
+    assert(bad.errs && bad.errs.length > 0 && !bad.file, 'a syntactic edit reports errors');
     assert(fs.readFileSync(file, 'utf8') === before, 'rejected edit rolls the file back byte-identical');
     const m7mem = repo.tournaments.get('sample').tjson.matches.md40.find(m => m.id === 7);
     assert(m7mem.result.status === 'walkover' && m7mem.games === undefined, 'rejected edit restores the in-memory match too');
@@ -240,27 +238,16 @@ test('editor writeEdit: rollback on validation failure, write on success (real d
   }
 });
 
-test('editor writeEdit: correcting a result a decided match consumes is refused — no silent reattribution', () => {
+test('editor writeEdit: a result is side-relative — a feeder correction reinterprets its consumers, never a refusal', () => {
   const { tmp, dataRoot } = scratchSite('place');
   try {
     const repo = loadRepo(dataRoot);
-    const file = path.join(dataRoot, 'tournaments', 'place.json');
-    const before = fs.readFileSync(file, 'utf8');
-    const state = { root: tmp, siteRoot: dataRoot, repo, slug: 'place' };
     const m = id => repo.tournaments.get('place').tjson.matches.pl.find(x => x.id === id);
-    // m1's winner feeds m5 and m9, both already decided — flipping it would
-    // carry their stored results onto the other team
-    const flip = editor.execEdit(state, 'result', 'pl', '1', { shape: 'walkover', winner: 'b' });
-    assert(flip.error && /already decided/.test(flip.error), `the cascade is refused, got: ${flip.error || (flip.errs || []).join('; ')}`);
-    assert(fs.readFileSync(file, 'utf8') === before, 'nothing written');
-    assert(m(1).result.winner === 'a' && m(1).games, 'the in-memory edit rolled back');
-    // the final feeds nothing, so correcting it reattributes no stored result
-    const root = editor.writeEdit(dataRoot, repo, 'place', 'pl', (ms, ctx) => editor.applyResult(ms, '7', 'walkover', 'b'), 7);
-    assert(!root.err && !root.errs, `a leaf correction still applies, got: ${root.err || (root.errs || []).join('; ')}`);
-    assert(m(7).result.status === 'walkover' && m(7).result.winner === 'b', 'the leaf correction landed');
-    // re-seating the edited match itself keeps its result by design (skipId)
-    const reseat = editor.writeEdit(dataRoot, repo, 'place', 'pl', (ms) => editor.applySide(ms, '8', { si: 0, side: { kind: 'players', ids: ['p2'] } }), 8);
-    assert(!reseat.err && !reseat.errs, `re-seating a decided match keeps its result, got: ${reseat.err || (reseat.errs || []).join('; ')}`);
+    // m1's winner feeds m5 and m9 — flipping it is an edit now; the consumers keep
+    // their side-letter results, which follow whoever their side resolves to
+    const r = editor.writeEdit(dataRoot, repo, 'place', 'pl', (ms) => editor.applyResult(ms, '1', 'walkover', 'b'));
+    assert(!r.err && !r.errs, `the feeder correction applies, got: ${r.err || (r.errs || []).join('; ')}`);
+    assert(m(1).result.winner === 'b', 'the feeder result flipped');
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
@@ -272,19 +259,21 @@ test('editor applySide: rewrites a side in place; the generic domain is the vali
   const m7 = matches.find(m => m.id === 7); // QF — pool ranks A1/A4, still feeds 9 and 10
   editor.applySide(matches, '7', { si: 0, side: { kind: 'players', ids: ['p3', 'p4'] } });
   assert.deepEqual(m7.sides[0], { kind: 'players', ids: ['p3', 'p4'] }, 'side a rewritten to explicit players');
-  assert.equal(validateRepo(repo).errs.length, 0, 'a direct-entry QF still validates: ' + validateRepo(repo).errs.join('; '));
-  // the gate rejects what the grammar can't see — fresh repo per case
-  const reject = (fn, re) => {
+  const clean = validateRepo(repo);
+  assert.equal(clean.errs.length + clean.conflicts.length, 0, 'a direct-entry QF still validates: ' + [...clean.errs, ...clean.conflicts].join('; '));
+  // the gate names what the operation can't see — fresh repo per case, channel by kind
+  const expect = (fn, channel, re) => {
     const r = loadRepo(FIX('sample'));
     fn(r.tournaments.get('sample').tjson.matches.md40);
-    assert(hasErr(validateRepo(r), re), `expected rejection: ${re}`);
+    const res = validateRepo(r);
+    assert(channel === 'err' ? hasErr(res, re) : hasConflict(res, re), `expected ${channel} matching ${re}`);
   };
-  reject(ms => editor.applySide(ms, '7', { si: 0, side: { kind: 'players', ids: ['nobody'] } }), /unknown player/);
-  reject(ms => editor.applySide(ms, '7', { si: 0, side: { kind: 'match', match: 8, result: 'winner' } }), /consumed twice/);
-  reject(ms => editor.applySide(ms, '7', { si: 0, side: { kind: 'pool', pool: 'A', rank: 99 } }), /out of range/);
-  reject(ms => editor.applySide(ms, '7', { si: 0, side: { kind: 'pool', pool: 'X', rank: 1 } }), /unknown pool/);
+  expect(ms => editor.applySide(ms, '7', { si: 0, side: { kind: 'players', ids: ['nobody'] } }), 'err', /unknown player/);
+  expect(ms => editor.applySide(ms, '7', { si: 0, side: { kind: 'match', match: 8, result: 'winner' } }), 'conflict', /consumed twice/);
+  expect(ms => editor.applySide(ms, '7', { si: 0, side: { kind: 'pool', pool: 'A', rank: 99 } }), 'conflict', /out of range/);
+  expect(ms => editor.applySide(ms, '7', { si: 0, side: { kind: 'pool', pool: 'X', rank: 1 } }), 'conflict', /unknown pool/);
   // re-seating the final orphans the semifinals' winner edges — two unfed roots
-  reject(ms => editor.applySide(ms, '9', { si: 0, side: { kind: 'players', ids: ['p1', 'p2'] } }), /exactly one championship final/);
+  expect(ms => editor.applySide(ms, '9', { si: 0, side: { kind: 'players', ids: ['p1', 'p2'] } }), 'conflict', /exactly one championship final/);
 });
 
 test('editor feeder timing: a time move can\'t schedule a bracket before its feeders or past its consumers', () => {
@@ -295,13 +284,13 @@ test('editor feeder timing: a time move can\'t schedule a bracket before its fee
     return validateRepo(repo);
   };
   // m9 (12:15, fed by m7/m8 ending 12:00) moved to 11:00 — before its feeders
-  assert(hasErr(applyAt(9, '11:00'), /starts before its feeders end/), 'a bracket before its feeders is rejected');
-  assert(applyAt(9, '12:00').errs.length === 0, 'exactly at the feeder end is fine: ' + applyAt(9, '12:00').errs.join('; '));
+  assert(hasConflict(applyAt(9, '11:00'), /starts before its feeders end/), 'a bracket before its feeders is a conflict');
+  assert(applyAt(9, '12:00').conflicts.length === 0, 'exactly at the feeder end is fine: ' + applyAt(9, '12:00').conflicts.join('; '));
   // m8 moved to 11:45 — its slot ends 12:30, after m9 starts at 12:15
-  assert(hasErr(applyAt(8, '11:45'), /ends after a match it feeds starts/), 'a feeder past its consumer is rejected');
+  assert(hasConflict(applyAt(8, '11:45'), /ends after a match it feeds starts/), 'a feeder past its consumer is a conflict');
   // m8 moved to 11:00 — before its pool (A2/A3) finishes at 11:15
-  assert(hasErr(applyAt(8, '11:00'), /starts before its feeders end/), 'a slot before its pool ends is rejected');
-  assert(applyAt(8, '11:15').errs.length === 0, 'exactly at the pool end is fine: ' + applyAt(8, '11:15').errs.join('; '));
+  assert(hasConflict(applyAt(8, '11:00'), /starts before its feeders end/), 'a slot before its pool ends is a conflict');
+  assert(applyAt(8, '11:15').conflicts.length === 0, 'exactly at the pool end is fine: ' + applyAt(8, '11:15').conflicts.join('; '));
 });
 
 test('editor editDetail: the side op reports the applied slot label; a move reports the court', () => {

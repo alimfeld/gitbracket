@@ -112,7 +112,15 @@ done when it has one, in play without one. `winner` is a side letter (`a` or
 | `void` | — | nothing counts | neither side can play — pools still complete |
 
 Nothing else stored can be derived — standings and brackets follow from the
-data.
+data. A `winner` names a side, not a team, so correcting a side reinterprets
+the result; re-score if the new meaning is wrong.
+
+A team that can't play is a `walkover` — the opponent advances, which keeps
+the bracket's feeder chain resolved. `void` means neither side can play; in a
+knockout the downstream side then stays TBD, so repoint or replace it before
+scoring on. To reshuffle feeders, edit sides directly: an intermediate state
+(a source claimed twice, an orphaned match) is a conflict to clear in the next
+edit, never a refusal.
 
 **Pool rankings** use the standard round-robin ladder: wins, then
 head-to-head against the tied teams (mutual-match wins, game differential,
@@ -194,15 +202,17 @@ spec — the single source of the schedule:
   match-day interface: a calendar grid (venues across, wall-clock minutes
   down, matches as slot-sized blocks), drag-to-reschedule (drops snap to the
   gate's own legal starts), click-to-score/wo/void, a side picker, a
-  pending-changes panel (unpushed commits), undo/redo, and a publish button.
-  Every edit goes through the one edit engine — validate, write,
-  byte-identical diff, commit — so the browser can never outrun the gate.
-- `node gb.js validate [slug]` — checks data.
+  pending-changes panel (unpushed commits), a conflict panel, undo/redo, and a
+  publish button. Every edit goes through the one edit engine — syntactic check,
+  write, byte-identical diff, commit; semantic conflicts ride back in the panel
+  and block publish, so the browser can never outrun the gate.
+- `node gb.js validate [slug]` — checks data; syntactic errors fail, semantic
+  conflicts only report (publish re-checks and refuses them).
 - `node gb.js schedule <specs/xxx.json>` — generates a tournament file (see
   Specs).
-- `node gb.js publish` — ships `site/`: from `main` to the production domain
-  (proved equal to `origin/main`'s CNAME), from a branch only to its own
-  scratch domain.
+- `node gb.js publish` — refuses on syntactic errors or conflicts, then ships
+  `site/`: from `main` to the production domain (proved equal to
+  `origin/main`'s CNAME), from a branch only to its own scratch domain.
 - `node gb.js sim` — practices the whole pipeline on a `sim/<rand>` branch
   with a scratch surge domain and a kiosk sim clock; `--teardown` undoes it.
   Sim branches are practice, never merged.

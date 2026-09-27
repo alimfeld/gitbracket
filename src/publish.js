@@ -9,11 +9,15 @@ const os = require('os');
 const { spawn } = require('child_process');
 const path = require('path');
 const validate = require('./validate.js');
-const { branchOf, git, cnameOf } = require('./tools.js');
+const { branchOf, git, cnameOf, loadRepo } = require('./tools.js');
 
-// CLI entry: validate exits 1 on data errors, so nothing dirty ships.
+// CLI entry: syntactically broken data and unresolved semantic conflicts both stop the ship.
 function main(root) {
-  validate.main(root);
+  const { errs, conflicts } = validate.findings(loadRepo(path.join(root, 'site')));
+  for (const e of errs) console.error(`error: ${e}`);
+  for (const c of conflicts) console.error(`conflict: ${c}`);
+  if (errs.length) { console.error(`publish: ${errs.length} error(s) — fix before publishing`); return 1; }
+  if (conflicts.length) { console.error(`publish: ${conflicts.length} conflict(s) — resolve before publishing`); return 1; }
   return ship(root);
 }
 

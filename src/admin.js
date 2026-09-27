@@ -2,18 +2,18 @@
 
 // Admin daemon — the localhost page and tiny API over the repo. The browser is the
 // UI; this process is the only writer, and every edit reuses the editor's
-// validate/write/commit funnel. Pending = unpushed commits (@{upstream}..HEAD);
-// publish = validate + push + deploy; undo/redo rewind only unpushed history.
+// syntactic-check/write/commit funnel. Pending = unpushed commits (@{upstream}..HEAD);
+// publish = gate (errors + conflicts) + push + deploy; undo/redo rewind only unpushed history.
 // Nothing ships — the page lives under src/admin/ and the daemon serves it locally.
 
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
-const { loadRepo, catCtx, schedEntries, pairBusy, fixedPlayers, consumedSlots, descendants, slotsOverlap, feederBounds, plainObject, cleanTree, git, cnameOf, defaultSlug } = require('./tools.js');
+const { loadRepo, catCtx, schedEntries, pairBusy, resolvedPlayers, consumedSlots, descendants, slotsOverlap, feederBounds, plainObject, cleanTree, git, cnameOf, defaultSlug } = require('./tools.js');
 const { execEdit, parseResult } = require('./edits.js');
 const { matchSlotMs, schedTime } = require('../site/derive.js');
-const { validateRepo } = require('./validate.js');
+const { findings } = require('./validate.js');
 const { ship, deployRole } = require('./publish.js');
 
 // Unpushed commits [{sha, msg}] over the branch's own upstream, not origin/main —
@@ -45,7 +45,7 @@ function doEdit(state, verb, cat, matchId, value) {
   if (r.error) { reload(state); return { ok: false, error: r.error }; }
   if (r.unchanged) return { ok: true, unchanged: true };
   state.redo = []; // a committed edit builds on the post-undo history — redo would replay onto it
-  return { ok: true, sha: r.sha };
+  return { ok: true, sha: r.sha, conflicts: r.conflicts || [] };
 }
 
 // Both undo and redo reset --hard, so the clean check covers the whole tree.
@@ -103,7 +103,7 @@ function legalSlots(tjson, cat, matchId, day, gcd) {
   const m = ctx.byId.get(Number(matchId));
   if (!m || !Array.isArray(m.sides) || m.sides.length !== 2) return {}; // malformed match: the gate reports, the preview never offers
   const slotMin = matchSlotMs(m, ctx) / 60000;
-  const players = fixedPlayers(m);
+  const players = resolvedPlayers(m, ctx); // resolved sides double-book like explicit ones
   const fb = feederBounds(m, ctx, tz);
   const floor = fb.floor; // m's own bound: its feeder slots' ends, gate-mirrored
   let ceiling = fb.ceiling; // match-edge consumers' starts — a pool's rank consumers are invisible to feederBounds, so the pool scan extends it
@@ -164,7 +164,7 @@ function sideOpts(tjson, cat, matchId, si) {
   let busy = [];
   if (mine) {
     // A player is busy when already scheduled in another overlapping match — venue-blind,
-    // since adding any of its players would double-book them. Only fixed players count.
+    // since adding any of its players would double-book them. Resolved sides count too.
     const mineMs = matchSlotMs(mine.m, mine.ctx);
     const busySet = new Set();
     for (const e of entries) {
@@ -274,7 +274,8 @@ function serve(state) {
         const p = unpushed(state.root);
         const dirty = git(state.root, ['status', '--porcelain', '--', 'site/']);
         const top = state.redo && state.redo.length ? state.redo[state.redo.length - 1] : null;
-        return json(res, 200, { ...p, dirty: dirty.code === 0 && dirty.out.trim().length > 0, slug: state.slug, domain: cnameOf(state.root), deployFailed: !!state.deployFailed, redo: top ? { sha: top.sha.slice(0, 7), msg: top.msg } : null });
+        const { conflicts } = findings(state.repo, state.slug);
+        return json(res, 200, { ...p, dirty: dirty.code === 0 && dirty.out.trim().length > 0, slug: state.slug, domain: cnameOf(state.root), deployFailed: !!state.deployFailed, redo: top ? { sha: top.sha.slice(0, 7), msg: top.msg } : null, conflicts });
       }
       if (url === '/api/edit' && req.method === 'POST') {
         let body;
@@ -299,8 +300,10 @@ function serve(state) {
         return json(res, r.error ? 400 : 200, r);
       }
       if (url === '/api/publish' && req.method === 'POST') {
-        const errs = validateRepo(loadRepo(state.siteRoot)).errs; // the gate on disk, never memory — the same guarantee publish makes
-        if (errs.length) return json(res, 400, { errors: errs });
+        // The gate on disk, never memory — the same guarantee publish makes: syntax must
+        // be clean and every semantic conflict resolved.
+        const { errs, conflicts } = findings(loadRepo(state.siteRoot));
+        if (errs.length || conflicts.length) return json(res, 400, { errors: errs, conflicts });
         const role = deployRole(state.root); // the daemon's console names the failure either way — the page answers with the role's reason
         if (!role.ok) return json(res, 400, { error: role.why });
         const p = unpushed(state.root);
@@ -340,7 +343,7 @@ function main(root, args) {
   const server = serve(state);
   server.listen(0, '127.0.0.1', () => {
     const url = `http://127.0.0.1:${server.address().port}/`;
-    console.log(`GitBracket admin — ${state.slug || '(pick a tournament)'} — ${url}  (ctrl-c quits; every edit validates and commits)`);
+    console.log(`GitBracket admin — ${state.slug || '(pick a tournament)'} — ${url}  (ctrl-c quits; every edit commits — conflicts block publish)`);
     openBrowser(url);
   });
   return 0;

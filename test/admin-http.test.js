@@ -143,3 +143,22 @@ test('admin HTTP: a cross-origin POST is refused, a same-origin edit still commi
   const m = loadRepo(siteRoot).tournaments.get('sample').tjson.matches.md40.find(x => x.id === 8);
   assert.equal(m.result.status, 'walkover', 'the edit really reached the funnel');
 });
+
+
+test('admin HTTP: a semantic conflict rides the edit, shows in pending, and blocks publish', async t => {
+  const { tmp, siteRoot, state } = scratchWithRemote();
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  const base = await withServer(t, state);
+  // md40/9 and md40/10 would share court-2 at 12:15 — a venue double-book, a conflict
+  const ms = loadRepo(siteRoot).tournaments.get('sample').tjson.matches.md40;
+  const m10 = ms.find(m => m.id === 10);
+  const r = await postJson(base, '/api/edit', JSON.stringify({ slug: 'sample', verb: 'move', cat: 'md40', matchId: '9', value: { time: m10.scheduled, venue: m10.venue } }));
+  assert.equal(r.status, 200, 'the conflicting edit still commits — it is repairable, not refused');
+  const body = await r.json();
+  assert(body.conflicts && body.conflicts.some(c => /overlap/.test(c)), 'the receipt carries the conflict');
+  const pend = await (await fetch(base + '/api/pending')).json();
+  assert(pend.conflicts.some(c => /overlap/.test(c)), 'pending exposes the conflict for the badge');
+  const pub = await postJson(base, '/api/publish', '{}');
+  assert.equal(pub.status, 400, 'publish refuses while a conflict stands');
+  assert((await pub.json()).conflicts.length > 0, 'the refusal carries the conflicts');
+});

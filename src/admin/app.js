@@ -476,13 +476,23 @@ async function openSide(cid, m, si) {
       // the full roster from /api/sideopts; a registered player in no match yet is
       // still a legal side
       const all = L.roster || [];
-      body.innerHTML = `<p class="hint">pick ${size} player${size === 1 ? '' : 's'}</p><div class="players">` +
+      body.innerHTML = `<p class="hint" id="pickhint"></p><div class="players">` +
         [...new Set(all)].map(id => {
           const checked = ids.includes(id);
           const illegal = busy.has(id) || otherIds.includes(id);
           const why = busy.has(id) ? 'plays in an overlapping scheduled match' : otherIds.includes(id) ? 'already on the other side' : '';
-          return `<label${illegal ? ' class="illegal"' : ''}><input type="checkbox" value="${esc(id)}"${checked ? ' checked' : ''}${illegal ? ' disabled' : ''} title="${esc(why)}"><span>${esc(names.get(id) ?? id)}</span></label>`;
+          return `<label${illegal ? ' class="illegal"' : ''}><input type="checkbox" value="${esc(id)}"${checked ? ' checked' : ''}${illegal ? ' data-illegal="1" disabled' : ''} title="${esc(why)}"><span>${esc(names.get(id) ?? id)}</span></label>`;
         }).join('') + '</div>';
+      // Tick at most teamSize — a third tick is never offered, and the count says why.
+      const boxes = [...body.querySelectorAll('input')];
+      const hint = body.querySelector('#pickhint');
+      const sync = () => {
+        const n = boxes.filter(b => b.checked).length;
+        for (const b of boxes) b.disabled = b.dataset.illegal === '1' || (!b.checked && n >= size);
+        hint.textContent = `pick ${size} player${size === 1 ? '' : 's'} · ${n}/${size}`;
+      };
+      for (const b of boxes) b.addEventListener('change', sync);
+      sync();
     } else if (kind === 'pool') {
       const p = pools(ctx);
       body.innerHTML = `<p class="hint">pool slot — pool + rank</p>
@@ -563,9 +573,14 @@ async function refreshPending() {
   $('undo').disabled = p.commits.length === 0 || p.dirty;
   $('redo').disabled = !p.redo || p.dirty;
   $('redo').title = p.redo ? `Redo ${p.redo.msg}` : '';
+  // Semantic conflicts never block an edit, only the ship.
+  const conflicts = p.conflicts || [];
+  $('issues').hidden = conflicts.length === 0;
+  $('issueBadge').textContent = conflicts.length ? `${conflicts.length} conflict${conflicts.length === 1 ? '' : 's'}` : '';
+  $('issueList').innerHTML = conflicts.map(c => `<li>${esc(c)}</li>`).join('');
   // A failed deploy after its push leaves nothing pending, so Publish can't gate on
   // the count; re-deploying is idempotent.
-  $('publish').disabled = publishing || p.dirty;
+  $('publish').disabled = publishing || p.dirty || conflicts.length > 0;
 }
 // the pending popover is a native <details> — close it when the pointer lands
 // elsewhere
@@ -594,7 +609,13 @@ $('publish').onclick = async () => {
   btn.textContent = 'Publishing…';
   try {
     const r = await post('/api/publish', {});
-    if (!r.ok) { flash(r.errors ? r.errors.join('\n') : r.error); return; }
+    if (!r.ok) {
+      const msg = r.errors && r.errors.length ? r.errors.join('\n')
+        : r.conflicts && r.conflicts.length ? 'resolve before publishing:\n' + r.conflicts.join('\n')
+        : r.error;
+      flash(msg);
+      return;
+    }
     flash('published');
     await reload(); // setSlug refreshes pending
   } finally {

@@ -94,3 +94,19 @@ test('publish deployRole: no origin/main anchor — a branch cannot prove itself
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+
+test('publish main: a semantic conflict stops the ship at the gate', () => {
+  const { tmp, siteRoot } = scratchWithRemote();
+  try {
+    anchorCNAME(tmp, siteRoot);
+    const file = path.join(siteRoot, 'tournaments', 'sample.json');
+    const d = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const ms = d.matches.md40;
+    ms.find(m => m.id === 9).venue = ms.find(m => m.id === 10).venue; // shares m10's court and time
+    fs.writeFileSync(file, JSON.stringify(d, null, 2) + '\n');
+    assert.equal(publish.main(tmp), 1, 'a conflict refuses before any deploy');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});

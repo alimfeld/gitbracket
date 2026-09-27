@@ -1,12 +1,13 @@
 'use strict';
 
-// Edit engine — the one write path: every edit validates, writes, and commits itself.
+// Edit engine — the one write path: every edit passes the syntactic gate, writes, and
+// commits itself. Semantic conflicts ride back with the result; they block publish only.
 // parseResult is shared with the daemon's result field.
 
 const fs = require('fs');
 const path = require('path');
-const { isDone, sideLabel, resolveSide, schedDays, bestOfOf, matchesOf } = require('../site/derive.js');
-const { writeTournament, tournamentText, catCtx, winTarget, reachedWinner, plainObject, git, sameSet } = require('./tools.js');
+const { isDone, sideLabel, schedDays, bestOfOf, matchesOf } = require('../site/derive.js');
+const { writeTournament, tournamentText, catCtx, winTarget, reachedWinner, plainObject, git } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 
 // ---------- pure logic (tests drive these on fixture repos) ----------
@@ -70,10 +71,9 @@ function applyMove(matches, matchId, value) {
   });
 }
 
-// Apply, validate the whole repo, write — or roll back and report the errors. An edit
-// byte-identical to the stored file changes nothing. skipId exempts the edited match
-// from the reattribution guard (re-seating keeps its result by design).
-function writeEdit(siteRoot, repo, slug, catId, apply, skipId) {
+// Apply, gate on the syntactic whole-repo check, write — or roll back and report the
+// errors. Semantic conflicts ride back with the result: they never block the write.
+function writeEdit(siteRoot, repo, slug, catId, apply) {
   const info = repo.tournaments.get(slug);
   if (!info || !info.tjson) return { err: `unknown tournament ${slug}` };
   const tjson = info.tjson;
@@ -112,32 +112,17 @@ function writeEdit(siteRoot, repo, slug, catId, apply, skipId) {
     return { err: `refused: this edit changes the tournament's scheduled days (${fmtDays(beforeDays)} → ${fmtDays(afterDays)}) — the index dates are fixed once the schedule is published and no edit follows them; keep the match on a published day, or change the days by hand-editing the file and its tournaments.json entry together` };
   }
   // The validator sees exactly what writeTournament will write.
-  const { errs } = validateRepo(repo);
+  const { errs, conflicts } = validateRepo(repo);
   if (errs.length) {
     // Nothing was written — writeTournament runs only past this gate.
     restore();
     return { errs };
   }
-  // A stored result is side-letter-relative: correcting a score a decided match
-  // consumes would silently reattribute the result to another team.
-  const beforeMs = (beforeJson.matches || {})[catId] || [];
-  const beforeCtx = catCtx(beforeJson, catId);
-  const afterCtx = catCtx(tjson, catId);
-  for (const m of ms) {
-    if (!m || m.id === skipId || !isDone(m) || !Array.isArray(m.sides)) continue;
-    const b = beforeMs.find(x => x && x.id === m.id);
-    if (!b || !Array.isArray(b.sides)) continue;
-    const si = m.sides.findIndex((s, i) => !sameSet(resolveSide(s, afterCtx), resolveSide(b.sides[i], beforeCtx)));
-    if (si !== -1) {
-      restore();
-      return { err: `refused: match ${m.id} is already decided and this edit changes which team its side ${si === 0 ? 'a' : 'b'} resolves to — its stored result would follow the wrong team; clear match ${m.id}'s result, then correct this one` };
-    }
-  }
   // byte equality is data equality — "21:19" for a stored "21-9" lands on the
   // same bytes, as does a re-scored identical game list
   if (tournamentText(tjson) === before) return { unchanged: true };
   writeTournament(siteRoot, slug, tjson);
-  return { file };
+  return { file, conflicts };
 }
 
 // ---------- the result grammar ----------
@@ -221,7 +206,7 @@ function execEdit(state, verb, cat, matchId, value) {
   const ctx = catCtx(info.tjson, cat);
   const m = ctx.byId.get(Number(matchId)); // the same object writeEdit mutates in place
   const preStatus = m && m.result && m.result.status; // what a clear removes — its commit kind matches it
-  const res = writeEdit(siteRoot, repo, slug, cat, applyFor(verb, matchId, value), Number(matchId));
+  const res = writeEdit(siteRoot, repo, slug, cat, applyFor(verb, matchId, value));
   // the structured facts the admin daemon JSON-ifies
   if (res.err) return { error: res.err };
   if (res.errs) return { errors: res.errs };
@@ -241,7 +226,7 @@ function execEdit(state, verb, cat, matchId, value) {
     return { error: `${path.relative(root, file)} written but the commit failed:\n${c.err}\n(file staged — commit it manually)` };
   }
   const sha = git(root, ['rev-parse', '--short', 'HEAD']).out.trim();
-  return { sha };
+  return { sha, conflicts: res.conflicts };
 }
 
 module.exports = { applyScore, applyResult, applyMove, applySide, writeEdit, commitMessage, editDetail, parseResult, execEdit };
