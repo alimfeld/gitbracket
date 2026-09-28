@@ -877,6 +877,11 @@ test('i18n: German derives domain labels and date spans — not just chrome', ()
     assert(poss[2].includes('über das Halbfinale'), 'the via takes the accusative');
     const md = catOf('sample', 'md40');
     assert.equal(sideLabel(md.byId.get(9).sides[1], md), 'Sieger SF-2', 'an unresolved slot names the bundle words, never an English "Winner of"');
+    // the art map is per-key data, not a locale branch: the in-progress round and the
+    // finished band both render in the dialect, never a removed-key placeholder
+    const capped = catOf('capped', 't');
+    assert.equal(playerStatus(capped, 'p1'), 'Im Halbfinale', 'the in-progress round takes the bundle article — never an English "In the"');
+    assert.equal(playerStatus(capped, 'p6'), '5.\u20138.', 'a finished band renders in the dialect — no leftover elimination wording');
   } finally {
     setLocale('en');
   }

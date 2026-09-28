@@ -81,6 +81,7 @@ let modalTrigger = null; // { key } — the card that opened the modal; focus re
 // Focus returns by key: apply reloads rebuild the cards (a captured node would be detached).
 function closeModal() {
   $('modal').close();
+  $('modal').onkeydown = null; // a side modal's Enter handler must not outlive it — openResult never sets one
   if (modalTrigger) {
     const el = $('grid').querySelector(`[data-key="${modalTrigger.key}"]`);
     (el || $('grid')).focus();
