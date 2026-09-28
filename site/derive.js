@@ -37,12 +37,10 @@ const pairSig = ids => [...ids].sort().join('|');
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-// Per-render cache; toCats rebuilds contexts every render, so a memo can't outlive it.
-const ctxMemo = ctx => ctx._memo || (ctx._memo = {});
-
-// One per-render lazy field (see ctxMemo): built at most once, rebuilt next render.
+// One per-render lazy field: built at most once; toCats rebuilds contexts every
+// render, so a memo can't outlive it.
 const memoField = (ctx, key, build) => {
-  const memo = ctxMemo(ctx);
+  const memo = ctx._memo || (ctx._memo = {});
   if (memo[key] === undefined) memo[key] = build();
   return memo[key];
 };
@@ -388,9 +386,6 @@ function rankRange(ranks) {
 
 // rankRange collapses runs, so a band must arrive as every rank it spans — [5, 8] would render "5th, 8th".
 const rangeRanks = (lo, hi) => Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
-
-const matchEdge = s => s && s.kind === 'match';
-
 
 // A placement match's band, else the round's name (matchLabel keeps the abbr+ordinal form).
 function stageLabel(m, ctx) {
@@ -939,7 +934,7 @@ function parentsOf(ctx) {
     for (const X of ctx.matches) {
       if (!Array.isArray(X.sides)) continue; // malformed: report, never throw
       for (const s of X.sides) {
-        if (!matchEdge(s)) continue;
+        if (!s || s.kind !== 'match') continue;
         if (s.result === 'winner') {
           winnerParent.set(s.match, X);
           if (!kids.has(X.id)) kids.set(X.id, []);
