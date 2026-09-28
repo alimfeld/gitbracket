@@ -607,40 +607,6 @@
         "slotMinutes": 60,
         "venue": "court-4",
         "scheduled": "2026-10-03T11:55:00"
-      },
-      {
-        "id": 23,
-        "sides": [
-          {
-            "kind": "match",
-            "match": 20,
-            "result": "winner"
-          },
-          {
-            "kind": "match",
-            "match": 17,
-            "result": "winner"
-          }
-        ],
-        "venue": "court-5",
-        "scheduled": "2026-10-03T11:55:00"
-      },
-      {
-        "id": 24,
-        "sides": [
-          {
-            "kind": "match",
-            "match": 20,
-            "result": "loser"
-          },
-          {
-            "kind": "match",
-            "match": 17,
-            "result": "loser"
-          }
-        ],
-        "venue": "court-5",
-        "scheduled": "2026-10-03T12:20:00"
       }
     ],
     "wd": [
