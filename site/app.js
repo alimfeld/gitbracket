@@ -144,7 +144,7 @@ const paintBadRoute = el => { el.innerHTML = BAD_LINK(); };
 const FAILED = () => `<p>${u('failed')}</p>`;
 
 
-const matchGrid = (ms, ctx, day, next) => `<div class="grid">${ms.map(m => matchCard(m, ctx, { meta: ['label', 'court', 'time'], day, status: next && next(m) ? 'next' : undefined })).join('')}</div>`;
+const matchGrid = (ms, ctx, day, next) => `<div class="grid">${ms.map(m => matchCard(m, ctx, { meta: ['time', 'label', 'court'], day, status: next && next(m) ? 'next' : undefined })).join('')}</div>`;
 
 // Date leads, undated entries defer to the end, ties hold index order (stable sort).
 function renderIndex(route, data) {
