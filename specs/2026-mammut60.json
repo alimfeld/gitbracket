@@ -55,12 +55,12 @@
         "bestOf": 3,
         "slotMinutes": 60
       },
+      "placements": 8,
       "knockout": true,
       "courts": [
         "court-3",
         "court-4",
-        "court-5",
-        "court-2"
+        "court-5"
       ]
     },
     {
@@ -93,7 +93,8 @@
         "court-5",
         "court-4",
         "court-3",
-        "court-2"
+        "court-2",
+        "court-1"
       ]
     }
   ],
