@@ -8,10 +8,10 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { loadRepo } = require('../src/tools.js');
+const { loadRepo, gitEnv } = require('../src/tools.js');
 const { FIX } = require('./helpers.js');
 
-const git = (root, args) => { const r = spawnSync('git', args, { cwd: root, encoding: 'utf8' }); return { ...r, out: r.stdout || '' }; };
+const git = (root, args) => { const r = spawnSync('git', args, { cwd: root, encoding: 'utf8', env: gitEnv() }); return { ...r, out: r.stdout || '' }; };
 // the admin daemon's own git() renames stdout → out; the helper aliases it so
 // tests read the same shape the daemon does
 

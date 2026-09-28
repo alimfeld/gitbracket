@@ -139,10 +139,20 @@ function cleanTree(root) {
   return s.code === 0 && s.out.trim() === '';
 }
 
+// A hook commit exports GIT_INDEX_FILE/GIT_DIR pointing at the live repo (an
+// absolute temp index for a pathspec commit); a scratch repo's git would then
+// read/write the live one. Scrub them before every spawn.
+const GIT_ENV_TARGETS = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_PREFIX', 'GIT_COMMON_DIR', 'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES'];
+function gitEnv(base = process.env) {
+  const env = { ...base };
+  for (const k of GIT_ENV_TARGETS) delete env[k];
+  return env;
+}
+
 // spawnSync, not execSync — execSync has no argv array, so args would be baked
 // into the shell string, breaking ids with spaces or quotes.
 function git(root, args) {
-  const r = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+  const r = spawnSync('git', args, { cwd: root, encoding: 'utf8', env: gitEnv() });
   return { code: r.status === 0 ? 0 : 1, out: r.stdout || '', err: r.stderr || '' };
 }
 
@@ -253,4 +263,4 @@ function pairBusy(a, b) {
   return kinds;
 }
 
-module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, plainObject, fixedPlayers, schedEntries, pairBusy, consumedSlots, winTarget, reachedWinner, feederBounds, isRealDate, findRoot, catCtx, tournamentText, cnameOf, branchOf, isSimBranch, cleanTree, git, defaultSlug, sameSet };
+module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, plainObject, fixedPlayers, schedEntries, pairBusy, consumedSlots, winTarget, reachedWinner, feederBounds, isRealDate, findRoot, catCtx, tournamentText, cnameOf, branchOf, isSimBranch, cleanTree, git, gitEnv, defaultSlug, sameSet };

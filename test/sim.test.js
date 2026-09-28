@@ -13,6 +13,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const { gitEnv } = require('../src/tools.js');
 
 const GB = path.join(__dirname, '..', 'gb.js');
 const FIX = name => path.join(__dirname, '..', 'fixtures', name);
@@ -25,7 +26,7 @@ function scratch() {
   const siteRoot = path.join(tmp, 'site');
   fs.mkdirSync(siteRoot, { recursive: true });
   fs.cpSync(FIX('sample'), siteRoot, { recursive: true });
-  const git = (args) => { const r = spawnSync('git', args, { cwd: tmp, encoding: 'utf8' }); return { ...r, out: r.stdout || '' }; };
+  const git = (args) => { const r = spawnSync('git', args, { cwd: tmp, encoding: 'utf8', env: gitEnv() }); return { ...r, out: r.stdout || '' }; };
   git(['init', '-q']);
   git(['config', 'user.email', 't@t']);
   git(['config', 'user.name', 'test']);

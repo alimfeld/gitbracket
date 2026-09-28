@@ -13,6 +13,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const { gitEnv } = require('../src/tools.js');
 
 const HOOK_DIR = path.join(__dirname, '..', '.githooks');
 
@@ -21,7 +22,7 @@ function scratch() {
   fs.mkdirSync(path.join(tmp, 'site', 'tournaments'), { recursive: true });
   fs.writeFileSync(path.join(tmp, 'site', 'tournaments.json'), '[]\n');
   fs.writeFileSync(path.join(tmp, 'site', 'tournaments', 'a.json'), '{}\n');
-  const git = (args, env) => spawnSync('git', args, { cwd: tmp, encoding: 'utf8', env });
+  const git = (args, env) => spawnSync('git', args, { cwd: tmp, encoding: 'utf8', env: gitEnv(env) });
   git(['init', '-q']);
   git(['config', 'user.email', 't@t']);
   git(['config', 'user.name', 'test']);
@@ -65,4 +66,11 @@ test('pre-commit: data-only commits skip the suite, anything else runs it', () =
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
+});
+
+test('pre-commit: gitEnv scrubs a hook-shaped GIT_INDEX_FILE', () => {
+  const env = gitEnv({ ...process.env, GIT_INDEX_FILE: '/tmp/next-index-live.lock', GIT_DIR: '/tmp/live' });
+  assert.equal(env.GIT_INDEX_FILE, undefined, 'the leaked live index never reaches a scratch repo');
+  assert.equal(env.GIT_DIR, undefined, 'nor the live git dir');
+  assert.equal(env.PATH, process.env.PATH, 'everything else survives');
 });
