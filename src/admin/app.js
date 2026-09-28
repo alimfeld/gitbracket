@@ -182,10 +182,17 @@ function renderGrid() {
 }
 
 // time · category · match id · label; the id lets feeder dropdowns map to board cards.
-function cardMeta(c, m) {
+function metaParts(c, m) {
   const t = schedTime(m, S.tz);
-  const time = t !== null ? fmtTime(t, S.tz) : '—';
-  return `${time} · ${c.name || c.id} · ${m.id} · ${matchLabel(m, c)}`;
+  return [t !== null ? fmtTime(t, S.tz) : '—', c.name || c.id, m.id, matchLabel(m, c)];
+}
+// plain text — modal sub, h2, confirm
+const cardMeta = (c, m) => metaParts(c, m).join(' · ');
+// the card's meta line — the category wears its wash there, as on the boards,
+// so it's the one spot that carries markup
+function cardMetaHtml(c, m) {
+  const [time, catName, id, label] = metaParts(c, m);
+  return `${esc(time)} · <span class="cat" data-cat="${c.order + 1}">${esc(catName)}</span> · ${esc(id)} · ${esc(label)}`;
 }
 
 function cardHtml(c, m, venue) {
@@ -203,7 +210,7 @@ function cardHtml(c, m, venue) {
   return `<article class="match${stCls}" data-key="${esc(k)}" data-venue="${esc(venue || '')}"${tip ? ` title="${esc(tip)}"` : ''}${pos}>
     <span class="grip" draggable="true" title="Drag to move"></span>
     ${sideRow(c, m, 0)}${sideRow(c, m, 1)}
-    <div class="meta">${esc(cardMeta(c, m))}</div>
+    <div class="meta">${cardMetaHtml(c, m)}</div>
   </article>`;
 }
 
