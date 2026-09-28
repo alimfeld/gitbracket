@@ -74,6 +74,8 @@ const V = [
   ['tournament file name mismatches the index', 'bad-name-mismatch', 'err', /does not match the index/],
   ['index dates mismatch the schedule', 'bad-dates-mismatch', 'err', /does not match the schedule/],
   ['scheduled tournament missing index dates', 'bad-dates-missing', 'err', /dates missing/],
+  ['duplicate and missing pool round-robin pairings', 'bad-pool-pairing', 'conflict', /repeats the matchup/],
+  ['DST wall-time fixture validates', 'dst-wall-time', 'clean', null],
   ['non-array categories reported, not a crash', 'bad-not-array', 'err', /categories must be an array/],
   ['object-shaped categories reported, not a crash', 'bad-categories-object', 'err', /categories must be an array/],
   ['non-array venues and players reported, not a crash', 'bad-nonarray-lists', 'err', /must be an array/],
@@ -112,6 +114,12 @@ for (const [name, dir, channel, re] of V) {
     assert(![...r.errs, ...r.conflicts].some(e => String(e).endsWith(': undefined')), 'no message may end in ": undefined" (err(f, m) called with one arg?)');
   });
 }
+
+test('pool pairing conflict reports both the duplicate and the omitted opponent', () => {
+  const r = validateFixture('bad-pool-pairing');
+  assert(r.conflicts.some(c => /repeats the matchup p1 vs p2/.test(c)), 'the repeated fixture is named');
+  assert(r.conflicts.some(c => /missing the matchup p2 vs p3/.test(c)), 'the omitted fixture is named');
+});
 
 test('two malformed index entries: real shape errors, no bogus undefined-slug duplicate', () => {
   const r = validateFixture('bad-duplicate-slug');

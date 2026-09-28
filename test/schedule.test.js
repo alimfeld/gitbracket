@@ -70,6 +70,20 @@ test('the final override lands on the final and bronze match only', () => {
   assert.ok(generate(MINI).matches.xd.every((m) => m.bestOf === undefined && m.slotMinutes === undefined));
 });
 
+test('schedule blocks preserve wall time across DST and reject skipped local times', () => {
+  const spec = {
+    ...MINI,
+    date: '2026-03-29',
+    poolSize: 2,
+    blocks: { md: '01:30' },
+    categories: [{ ...MINI.categories[0], knockout: false }],
+    teams: { md: MINI.teams.md.slice(0, 2) },
+  };
+  const tourney = generate(spec);
+  assert.equal(tourney.matches.md[0].scheduled, '2026-03-29T01:30:00', 'the generated match keeps its requested pre-transition wall time');
+  assert.throws(() => generate({ ...spec, blocks: { md: '02:30' } }), /not a real local time/, 'a skipped spring-forward time is rejected');
+});
+
 test('spec guards reject bad input fast', () => {
   assert.throws(() => generate({ ...MINI, poolSize: 1 }), /poolSize/);
   assert.throws(() => generate({ ...MINI, date: '2026-02-30' }), /not a real calendar date/);

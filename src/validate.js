@@ -248,6 +248,8 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, con
   let hasPool = false;
   let hasKnockout = false;
   const poolUses = new Map(); // pool -> Set<side sig>
+  const poolPairings = new Map(); // pool -> matchup sig -> match ids
+  const invalidPoolPairings = new Set(); // malformed pool matches already have a more useful finding
   const poolOfSig = new Map(); // side sig -> pool (one pool per pair per category)
   const pairByPlayer = new Map(); // playerId -> side sig
   const pairSizes = new Set();
@@ -266,7 +268,11 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, con
 
     if (m.slotMinutes !== undefined && (!Number.isInteger(m.slotMinutes) || m.slotMinutes < 1)) err(where, `slotMinutes must be a positive integer, got ${JSON.stringify(m.slotMinutes)}`);
 
-    if (!Array.isArray(m.sides) || m.sides.length !== 2) { err(where, 'exactly two sides required'); continue; }
+    if (!Array.isArray(m.sides) || m.sides.length !== 2) {
+      err(where, 'exactly two sides required');
+      if (m.pool !== undefined) invalidPoolPairings.add(m.pool);
+      continue;
+    }
     m.sides.forEach((side, si) => {
       if (!side || typeof side !== 'object') { err(where, `side ${si} must be an object`); return; }
       if (side.kind === 'players') {
@@ -307,14 +313,40 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, con
       }
     });
 
-    if (m.sides[0] && m.sides[1] && m.sides[0].kind === 'players' && m.sides[1].kind === 'players') {
+    if (m.sides[0]?.kind === 'players' && Array.isArray(m.sides[0].ids)
+      && m.sides[1]?.kind === 'players' && Array.isArray(m.sides[1].ids)) {
       if (pairSig(m.sides[0].ids) === pairSig(m.sides[1].ids)) conflict(where, 'the two sides are the same player set');
+    }
+    if (m.pool !== undefined) {
+      const validTeam = s => s && s.kind === 'players' && Array.isArray(s.ids) && s.ids.length > 0
+        && new Set(s.ids).size === s.ids.length && s.ids.every(id => typeof id === 'string' && roster.has(id));
+      if (typeof m.pool !== 'string' || !m.sides.every(validTeam)) invalidPoolPairings.add(m.pool);
+      else {
+        const teams = m.sides.map(s => pairSig(s.ids)).sort();
+        if (teams[0] === teams[1]) invalidPoolPairings.add(m.pool);
+        else {
+          const key = JSON.stringify(teams);
+          if (!poolPairings.has(m.pool)) poolPairings.set(m.pool, new Map());
+          const ids = poolPairings.get(m.pool);
+          if (!ids.has(key)) ids.set(key, []);
+          ids.get(key).push(m.id);
+        }
+      }
     }
   }
 
   if (pairSizes.size > 1) conflict(cFile, `category ${cat.id} mixes singles and doubles sides (sizes ${[...pairSizes].join(', ')})`);
   for (const [pool, sigs] of poolUses) {
     if (sigs.size < 2) conflict(cFile, `pool ${JSON.stringify(pool)} has fewer than two distinct sides`);
+    if (invalidPoolPairings.has(pool)) continue;
+    const pairs = poolPairings.get(pool) || new Map();
+    const teams = [...sigs];
+    for (let i = 0; i < teams.length; i++) for (let j = i + 1; j < teams.length; j++) {
+      const key = JSON.stringify([teams[i], teams[j]].sort());
+      const ids = pairs.get(key) || [];
+      if (!ids.length) conflict(cFile, `pool ${JSON.stringify(pool)} is missing the matchup ${teams[i]} vs ${teams[j]}`);
+      else for (const id of ids.slice(1)) conflict(`${cFile} match ${id}`, `pool ${JSON.stringify(pool)} repeats the matchup ${teams[i]} vs ${teams[j]}`);
+    }
   }
   if (hasPool && !stageBest('groups')) err(cFile, `category ${cat.id}: groups stage in use but bestOf.groups must be an odd number 1–${MAX_BEST_OF}`);
   if (hasKnockout && !stageBest('knockout')) err(cFile, `category ${cat.id}: knockout stage in use but bestOf.knockout must be an odd number 1–${MAX_BEST_OF}`);

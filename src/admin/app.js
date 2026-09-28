@@ -366,7 +366,7 @@ function openResult(cid, m) {
   const ctx = cat(cid);
   const hasOutcome = !!(m.games || m.result);
   let pre = '';
-  if (m.games) pre = m.games.map(g => `${g.a}-${g.b}`).join(' ');
+  if (Array.isArray(m.games)) pre = m.games.filter(g => g && typeof g === 'object').map(g => `${g.a}-${g.b}`).join(' ');
   else if (m.result && m.result.status === 'walkover') pre = `wo ${m.result.winner}`;
   else if (m.result && m.result.status === 'void') pre = 'void';
   // a realistic example for this match's best-of, winners alternating so the
@@ -465,7 +465,7 @@ function openSide(cid, m, si) {
     if (kind === 'players') {
       const names = new Map((Array.isArray(S.tjson.players) ? S.tjson.players : []).filter(p => p && typeof p === 'object' && typeof p.id === 'string').map(p => [p.id, p.name]));
       const roster = [...names.keys()];
-      const ids = cur && cur.kind === 'players' ? cur.ids : [];
+      const ids = cur && cur.kind === 'players' && Array.isArray(cur.ids) ? cur.ids : [];
       body.innerHTML = `<p class="hint" id="pickhint"></p><div class="players">` +
         roster.map(id => {
           const isOther = otherIds.includes(id);

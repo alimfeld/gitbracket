@@ -207,6 +207,7 @@ function renderTournament(route, data) {
 const statusLine = (status, ctx) => {
   if (!status) return '';
   if (status.kind === 'groups') return `<p>${u('group-status', { played: status.played, count: status.count })}</p>`;
+  if (status.kind === 'blocked') return `<p>${u('ko-blocked')}</p>`;
   if (status.kind === 'ko') {
     if (status.wave === null) return `<p>${u('ko-remain')}</p>`;
     return `<p>${u('ko-round', { round: esc(stageGroupName(roundName(status.wave), bandLabels(ctx, status.wave))) })}</p>`;
@@ -239,7 +240,7 @@ const fmtCourts = names => {
 
 // The "Next" line — data-only, never the clock.
 const anticipationLine = (ctx, status, href, day, wave) => {
-  if (!status || status.kind === 'finished' || status.kind === 'winners') return '';
+  if (!status || status.kind === 'finished' || status.kind === 'winners' || status.kind === 'blocked') return '';
   if (!wave.length) return ''; // no playable match (feeders undecided): the progress line carries the page
   const m0 = wave[0];
   const courts = [...new Set(wave.map(m => m.venue ? venueName(ctx, m.venue) : null).filter(Boolean))];

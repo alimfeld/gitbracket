@@ -816,24 +816,47 @@ function wdOf(ctx, id) {
   return map.get(id);
 }
 
-// "+02:00" offset for a date via a noon-UTC anchor.
-// ponytail: wall times before a same-day DST shift get the post-transition
-// offset, off by one hour — exact only if a tournament opens on a changeover day.
-function tzOffset(tz, date) {
-  // Intl throws on a bad timezone — a guarded null keeps a malformed file from
-  // crashing a render.
-  let parts;
+const zoneFormatters = new Map();
+const wallOffsets = new Map();
+
+function zonedParts(tz, instant) {
   try {
-    // Pinned to en, never LOCALE: this reads the machine offset off the
-    // rendering, and some dialects spell it "UTC+02:00" (or worse) — which
-    // Date.parse can't read, silently nulling every scheduled time.
-    parts = new Intl.DateTimeFormat('en', { timeZone: tz, timeZoneName: 'longOffset' })
-      .formatToParts(new Date(date + 'T12:00:00Z'));
-  } catch {
-    return null;
+    let fmt = zoneFormatters.get(tz);
+    if (!fmt) zoneFormatters.set(tz, fmt = new Intl.DateTimeFormat('en', {
+      timeZone: tz, calendar: 'gregory', numberingSystem: 'latn',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+    }));
+    const p = Object.fromEntries(fmt.formatToParts(new Date(instant)).map(x => [x.type, x.value]));
+    return ['year', 'month', 'day', 'hour', 'minute', 'second'].map(k => Number(p[k]));
+  } catch { return null; }
+}
+
+const wallMillis = ([y, mo, d, h, mi, s]) => {
+  const date = new Date(0);
+  date.setUTCFullYear(y, mo - 1, d);
+  date.setUTCHours(h, mi, s, 0);
+  return date.getTime();
+};
+
+function offsetAt(tz, instant) {
+  const parts = zonedParts(tz, instant);
+  return parts ? wallMillis(parts) - instant : null;
+}
+
+// Offsets on either side of a wall date expose both sides of a DST fold/gap.
+// The cache is per date because every scheduled match on that day shares it.
+function offsetsFor(tz, date, localMs) {
+  const key = `${tz}|${date}`;
+  if (!wallOffsets.has(key)) {
+    const offsets = new Set();
+    for (const hours of [-36, -24, -12, 0, 12, 24, 36]) {
+      const offset = offsetAt(tz, localMs + hours * 3600000);
+      if (offset !== null) offsets.add(offset);
+    }
+    wallOffsets.set(key, [...offsets]);
   }
-  const p = parts.find((x) => x.type === 'timeZoneName');
-  return p && p.value !== 'GMT' ? p.value.replace('GMT', '') : '+00:00';
+  return wallOffsets.get(key);
 }
 
 // Midnight is 00, never 24: hourCycle pins the day to 0-23 under any dialect.
@@ -857,10 +880,16 @@ function dayKey(t, tz) {
 function schedTime(m, tz) {
   const s = (m && m.scheduled) || '';
   if (!ISO_RE.test(s)) return null;
-  const off = tzOffset(tz, s.slice(0, 10));
-  if (off === null) return null;
-  const t = Date.parse(s + off);
-  return Number.isNaN(t) ? null : t;
+  const parts = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})$/.exec(s).slice(1).map(Number);
+  const localMs = wallMillis(parts);
+  const matches = [];
+  for (const offset of offsetsFor(tz, s.slice(0, 10), localMs)) {
+    const instant = localMs - offset;
+    const actual = zonedParts(tz, instant);
+    if (actual && actual.every((part, i) => part === parts[i])) matches.push(instant);
+  }
+  // A skipped clock time has no candidates; a repeated time chooses its first occurrence.
+  return matches.length ? Math.min(...matches) : null;
 }
 
 const dayShort = (t, tz) => {
@@ -1020,10 +1049,7 @@ function nextKoWave(ctx) {
   const undone = ctx.matches.filter(m => m.pool === undefined && !m.result && placementLabel(m, ctx) === null);
   if (!undone.length) return null;
   const playable = undone.filter(m => !Array.isArray(m.sides) || m.sides.every(s => resolveSide(s, ctx)));
-  // ponytail: an unsettled dead tie falls back to the lowest column ("Final"),
-  // which reads wrong — brief, since the organizer settles the flagged tie;
-  // gate the fallback on pool resolution if a format ever needs this accurate.
-  return Math.min(...(playable.length ? playable : undone).map(m => koColumn(m, ctx)));
+  return playable.length ? Math.min(...playable.map(m => koColumn(m, ctx))) : null;
 }
 
 // Podium from played results; null when nothing is decided. Final and bronze are
@@ -1067,6 +1093,8 @@ function catStatus(ctx) {
   if (grp.some(m => !isDone(m))) return { kind: 'groups', played: grp.filter(isDone).length, count: grp.length };
   const col = nextKoWave(ctx);
   const place = placeWave(ctx);
+  const mainPending = ms.some(m => m && m.pool === undefined && !m.result && placementLabel(m, ctx) === null);
+  if (col === null && mainPending) return { kind: 'blocked' };
   // place: the classification wave — the main wave may be spent while a bronze
   // still reads ready. wave: the deeper of the two.
   return { kind: 'ko', wave: col ?? place };
@@ -1075,7 +1103,7 @@ function catStatus(ctx) {
 // Unplayed matches with both sides resolved, at the earliest scheduled time —
 // starts included.
 function currentWave(ctx, status) {
-  if (!status || status.kind === 'finished' || status.kind === 'winners') return [];
+  if (!status || status.kind === 'finished' || status.kind === 'winners' || status.kind === 'blocked') return [];
   const ready = ctx.matches.filter(m => !isDone(m) &&
     Array.isArray(m.sides) && m.sides.length === 2 &&
     !!resolveSide(m.sides[0], ctx) && !!resolveSide(m.sides[1], ctx));
@@ -1171,5 +1199,5 @@ function playerStatus(ctx, pid) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { LOCALE, setLocale, DATE_RE, ID_RE, ISO_RE, MAX_BEST_OF, pairSig, esc, makeCat, matchesOf, toCats, matchSlotMs, bestOfOf, poolBo1, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, poolFacts, resolveSide, teamLabel, sideLabel, scoreCells, playerMatches, possibleStages, placementLabel, plRange, placementColumn, bandLabels, stageGroupName, parentsOf, fmtTime, dayKey, tzOffset, schedTime, schedDays, fmtRange, dayShort, dayLabel, fmtDiff, kioskStatus, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, currentWave, playerStatus };
+  module.exports = { LOCALE, setLocale, DATE_RE, ID_RE, ISO_RE, MAX_BEST_OF, pairSig, esc, makeCat, matchesOf, toCats, matchSlotMs, bestOfOf, poolBo1, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, poolFacts, resolveSide, teamLabel, sideLabel, scoreCells, playerMatches, possibleStages, placementLabel, plRange, placementColumn, bandLabels, stageGroupName, parentsOf, fmtTime, dayKey, schedTime, schedDays, fmtRange, dayShort, dayLabel, fmtDiff, kioskStatus, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, currentWave, playerStatus };
 }

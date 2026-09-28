@@ -10,12 +10,13 @@
 const fs = require('fs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, matchSlotMs, sideLabel, placementLabel, plRange, koColumn, koOrdinal, matchLabel, schedTime, dayKey, toCats, isDeadTie, winners, catStatus, roundName, playerStatus, possibleStages, setLocale } = require('../site/derive.js');
+const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, matchSlotMs, sideLabel, placementLabel, plRange, koColumn, koOrdinal, matchLabel, schedTime, fmtTime, dayKey, toCats, isDeadTie, winners, catStatus, roundName, playerStatus, possibleStages, currentWave, setLocale } = require('../site/derive.js');
 const { I18N } = require('../site/i18n.js');
 const { parseRoute, resolveLang, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset, paintBadRoute, pageTitle } = require('../site/app.js');
 const { generate } = require('../src/schedule.js');
 const { FIX, catOf, pageData, repoPage, withTjson, text, vals, card, cards, links } = require('./helpers.js');
 const { loadRepo } = require('../src/tools.js');
+const { validateRepo } = require('../src/validate.js');
 
 const sameRecord = (a, b) => a.wins === b.wins && a.gd === b.gd && a.pd === b.pd; // test-only — derive.js doesn't ship it
 
@@ -33,6 +34,24 @@ test('simAimOffset: the sim clock aims at a day\'s first match, else the event\'
 test('schedTime: an invalid timezone reads as unparseable — never throws', () => {
   assert.equal(schedTime({ scheduled: '2026-05-02T09:00:00' }, 'Mars/Olympus'), null, 'a bad tz is a parse failure, not a crash');
   assert(schedTime({ scheduled: '2026-05-02T09:00:00' }, 'UTC') > 0, 'a good tz still anchors the wall time');
+});
+
+test('schedTime resolves DST wall times, rejects the spring gap, and picks the first fall occurrence', () => {
+  const repo = loadRepo(FIX('dst-wall-time'));
+  const tj = repo.tournaments.get('dst-wall-time').tjson;
+  assert.equal(validateRepo(repo).errs.length, 0, 'the committed transition-date scenario validates');
+  const tz = tj.timezone;
+  const before = schedTime(tj.matches.t[0], tz);
+  assert.equal(new Date(before).toISOString(), '2026-03-29T00:30:00.000Z');
+  assert.equal(fmtTime(before, tz), '01:30', 'the pre-transition wall time stays exact');
+  assert.equal(schedTime({ scheduled: '2026-03-29T02:30:00' }, tz), null, 'a skipped local time has no instant');
+  const fold = schedTime({ scheduled: '2026-10-25T02:30:00' }, tz);
+  assert.equal(new Date(fold).toISOString(), '2026-10-25T00:30:00.000Z', 'an ambiguous time uses its first occurrence');
+
+  const gap = JSON.parse(JSON.stringify(tj));
+  gap.matches.t[0].scheduled = '2026-03-29T02:30:00';
+  const broken = validateRepo({ ...repo, tournaments: new Map([['dst-wall-time', { tjson: gap }]]) });
+  assert(broken.errs.some(e => /does not parse as an instant/.test(e)), 'the gate rejects a nonexistent wall time');
 });
 
 test('renderers: a tournament with no categories renders empty — never throws', () => {
@@ -284,6 +303,11 @@ test('catStatus: pre-start zero progress, groups live, the KO wave in play, and 
   assert(w.kind === 'winners' && w.first.join() === 'p1' && w.second.join() === 'p5' && w.third.join() === 'p6', 'full finish: the podium off the played final and bronze');
   const xd = catOf('sample', 'xd');
   assert(catStatus(xd).kind === 'finished', 'pool-only finish: no final to name, plain Finished');
+  const tied = catOf('tie', 't');
+  const blocked = catStatus(tied);
+  assert.deepEqual(blocked, { kind: 'blocked' }, 'a dead-tied pool rank blocks the bracket instead of claiming the final is in play');
+  assert.deepEqual(currentWave(tied, blocked), [], 'a blocked bracket cannot expose a phantom next match');
+  assert(text(renderTournament({ slug: 'tie', view: 'tournament' }, repoPage('tie'))).includes('blocked by unresolved slots'), 'the page explains why the knockout cannot advance');
 });
 
 // podium details: third exists only when a bronze match decided it; a void

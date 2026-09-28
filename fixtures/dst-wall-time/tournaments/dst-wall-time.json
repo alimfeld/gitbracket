@@ -1,0 +1,19 @@
+{
+  "name": "DST Wall Time",
+  "location": "Zurich",
+  "timezone": "Europe/Zurich",
+  "venues": [],
+  "categories": [{ "id": "t", "name": "T", "bestOf": { "groups": 1 } }],
+  "players": [
+    { "id": "p1", "name": "P1" },
+    { "id": "p2", "name": "P2" }
+  ],
+  "matches": {
+    "t": [{
+      "id": 1,
+      "pool": "A",
+      "scheduled": "2026-03-29T01:30:00",
+      "sides": [{ "kind": "players", "ids": ["p1"] }, { "kind": "players", "ids": ["p2"] }]
+    }]
+  }
+}

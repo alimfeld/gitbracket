@@ -75,7 +75,9 @@ matches keyed by category:
 - `bestOf` sets match length per stage, `slotMinutes` the court slot per
   stage; a match can override either with a plain number.
 - `scheduled` is local wall time in the tournament's `timezone` — never a UTC
-  instant or offset; the IANA zone at the top of the file interprets it.
+  instant or offset; the IANA zone at the top of the file interprets it. A
+  nonexistent time during a spring clock change is rejected; an ambiguous time
+  during a fall change means its first occurrence.
 
 A side is one of three kinds:
 

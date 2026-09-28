@@ -4,7 +4,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { matchSlotMs, pairSig, dayKey, tzOffset, schedTime, fmtTime, ID_RE, schedDays, LOCALE } = require('../site/derive.js');
+const { matchSlotMs, pairSig, dayKey, schedTime, fmtTime, ID_RE, schedDays, LOCALE } = require('../site/derive.js');
 const { writeTournament, writeTournamentIndex, slotsOverlap, plainObject, fixedPlayers, isRealDate } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 
@@ -258,8 +258,7 @@ function buildCategory(teams, cat, poolSize) {
 // a start/end window over the effective slot length (matchSlotMs), matching the
 // validator's overlap rule. Tuples are [cat, teamList, matches, rounds].
 function scheduleMatches(categories, tz, slotCfgOf, courtsOf, eventDate, blockStart) {
-  const offset = tzOffset(tz, eventDate);
-  const startOf = (cat) => Date.parse(`${eventDate}T${blockStart[cat]}:00${offset}`);
+  const startOf = (cat) => schedTime({ scheduled: `${eventDate}T${blockStart[cat]}:00` }, tz);
   const courtUse = new Map(); // venue -> [{ start, end }]
   const playerUse = []; // { start, end, players: Set } — global, players span categories
   const endOf = new Map(); // catIdx -> match id -> end ms (feeder floor)
@@ -472,8 +471,11 @@ function generate(spec) {
   for (const c of categories) {
     // A missing block start used to leak NaN through the greedy into an
     // unreadable TypeError — name it here instead.
-    if (typeof blockStart[c.id] !== 'string' || !/^\d\d:\d\d$/.test(blockStart[c.id])) {
-      throw new Error(`spec: no blocks entry for category ${c.id} — need a HH:MM start, got ${JSON.stringify(blockStart[c.id])}`);
+    if (typeof blockStart[c.id] !== 'string' || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(blockStart[c.id])) {
+      throw new Error(`spec: no blocks entry with a valid HH:MM start for category ${c.id}, got ${JSON.stringify(blockStart[c.id])}`);
+    }
+    if (schedTime({ scheduled: `${eventDate}T${blockStart[c.id]}:00` }, timezone) === null) {
+      throw new Error(`spec: blocks.${c.id} is not a real local time in ${timezone}: ${eventDate}T${blockStart[c.id]}`);
     }
     if (c.final !== undefined && (typeof c.final !== 'object' || Array.isArray(c.final))) {
       throw new Error(`spec: category ${c.id}: final must be an object { bestOf?, slotMinutes? }, got ${JSON.stringify(c.final)}`);
