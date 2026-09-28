@@ -177,18 +177,16 @@ const catNav = (slug, ctxs, route) => {
   }).join('');
 };
 
-// The polling views' shared stamp; a changed file flashes the line, a failing poll flips the dot.
+// The polling views' shared stamp; a changed file flashes the line, a failing poll names its state.
 let stampSnap = null; // { slug, hash } — the change detector behind the flash
 function updateStamp(data, tz) {
   const hash = JSON.stringify(data.tjson);
   const flash = !!stampSnap && stampSnap.slug === data.t.slug && stampSnap.hash !== hash;
   stampSnap = { slug: data.t.slug, hash };
   const stale = !lastPoll || Date.now() - lastPoll > POLL_MS * 2;
-  const state = stale ? u('reconnect') : u('live');
-  const dot = `<span class="dot" role="status" aria-label="${esc(state)}">${stale ? '◌' : '●'}</span>`;
   const when = lastPoll ? fmtTime(lastPoll, tz) : '—';
-  const stamp = `<time datetime="${lastPoll ? new Date(lastPoll).toISOString() : ''}">${u('updated', { time: when })}</time>${stale ? ` · ${esc(state)}` : ''}`;
-  return `<p class="meta"${flash ? ' data-flash' : ''}${stale ? ' data-status="stale"' : ''}>${dot} ${stamp}</p>`;
+  const stamp = `<time datetime="${lastPoll ? new Date(lastPoll).toISOString() : ''}">${u('updated', { time: when })}</time>${stale ? ` · <span role="status">${esc(u('reconnect'))}</span>` : ''}`;
+  return `<p class="meta"${flash ? ' data-flash' : ''}${stale ? ' data-status="stale"' : ''}>${stamp}</p>`;
 }
 
 function renderTournament(route, data) {
@@ -414,7 +412,7 @@ function renderVenue(route, data, now, simOn) {
   const cols = declared.map(v => v.id).filter(id => open.some(r => r.m.venue === id));
   // the clock is the board's only control: a bare time on a match day, the shown
   // day's date otherwise — click the date to sim that day, the running time to stop
-  // (the stamp carries the real last-fetch; only its state dot is a live region)
+  // (the stamp carries the real last-fetch; only its stale state is a live region)
   const dayText = fmtRange([shownDay]); // null when the day or tz is unreadable
   const time = esc(fmtTime(now, tz));
   const clock = isMatchDay && !simOn

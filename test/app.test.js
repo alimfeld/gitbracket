@@ -798,7 +798,7 @@ test('kiosk: the header stamp never pretends live without a successful fetch', (
   const rt = { slug: 'kiosk-live', view: 'venues' };
   const open = renderVenue(rt, pageData(tjson(), 'kiosk-live'), Date.parse('2026-05-02T09:30:00Z'));
   assert(open.includes('data-status="stale"'), 'no successful fetch yet — the stamp reads stale, never pretends live');
-  assert(open.includes('role="status"'), 'a11y: the state dot carries its own live region, not the counting time');
+  assert(open.includes('role="status"'), 'a11y: the stale state is its own live region, not the counting time');
 });
 
 test('tournament views: a poll that changed the file flashes the stamp, an unchanged one stays quiet', () => {

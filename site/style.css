@@ -304,10 +304,6 @@ article .meta {
   color: var(--muted);
 }
 
-.meta .dot {
-  color: var(--accent);
-}
-
 /* the category name in a card's meta wears its category's wash — identity on
    every board card, never a state (the status spine keeps red/green/blue) */
 .cat {
