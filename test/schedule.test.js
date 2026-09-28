@@ -269,45 +269,49 @@ test('knockout with byes: odd loser pools build no self-matches (R1 losers from 
 
 test('knockout cross-pairs pool winners: they can only meet deep in the bracket', () => {
   // The S-curve draw: with k pools, two pool winners can meet no earlier than
-  // round R - ceil(log2 k) + 1 (R = rounds to the final; 2 pools of 4: the
-  // final only; 3 pools: no earlier than the semis).
-  for (const [pools, size] of [[2, 4], [3, 4], [4, 4]]) {
+  // round R - ceil(log2 k) + 1 (R = rounds to the final; 2 pools: the final only;
+  // 3 pools: no earlier than the semis). Fields whose pools differ in size and
+  // whose bracket carries byes are included — a bye pair once pulled a winner
+  // across the draw (7 teams 4/3 -> B1 vs A1 in round 1).
+  for (const sizes of [[4, 4], [4, 4, 4], [4, 4, 4, 4], [4, 3], [4, 3, 3, 3], [8, 8, 8, 8, 8]]) {
     const players = {};
     const mdTeams = [];
-    for (let p = 0; p < pools; p++) {
+    sizes.forEach((size, p) => {
       for (let i = 1; i <= size; i++) {
         const id = `${String.fromCharCode(65 + p)}${i}`.toLowerCase();
         players[id] = id.toUpperCase();
         mdTeams.push([id]);
       }
-    }
-    const tourney = generate({ ...MINI, players, teams: { md: mdTeams } });
+    });
+    const total = sizes.reduce((a, b) => a + b, 0);
+    const tourney = generate({ ...MINI, poolSize: Math.ceil(total / sizes.length), players, teams: { md: mdTeams } });
     const { errs } = validateRepo(repoOf(tourney));
     assert.deepEqual(errs, []);
-    const earliest = Math.ceil(Math.log2(pools * size)) - Math.ceil(Math.log2(pools)) + 1;
-    // Walk the bracket from the leaves, tracking which pool winners (rank-1
-    // sides) can reach each match and the match's round (1 = first knockout
-    // round); assert none meet before `earliest`. Children precede parents in
-    // the matches array.
+    const ko = tourney.matches.md.filter((m) => m.pool === undefined);
+    // Which pool winners can reach each match (children precede parents by time).
     const reach = new Map();
-    const roundOf = new Map();
-    for (const m of tourney.matches.md) {
-      let round = 1;
+    for (const m of ko) {
       const winners = new Set();
       for (const s of m.sides) {
         if (s.kind === 'pool' && s.rank === 1) winners.add(s.pool);
-        else if (s.kind === 'match') {
-          for (const p of reach.get(s.match)) winners.add(p);
-          round = Math.max(round, roundOf.get(s.match) + 1);
-        }
+        else if (s.kind === 'match' && s.result === 'winner') for (const p of reach.get(s.match)) winners.add(p);
       }
       reach.set(m.id, winners);
-      roundOf.set(m.id, round);
-      const ws = [...winners].sort();
+    }
+    // Round = R - steps to the final: a byed seed advances without a match, so
+    // walking down from the leaves alone mislabels its round.
+    const parent = new Map();
+    for (const m of ko) for (const s of m.sides)
+      if (s.kind === 'match' && s.result === 'winner') parent.set(s.match, m.id);
+    const R = Math.ceil(Math.log2(total));
+    const roundOf = (id) => { let n = 0; for (let x = id; parent.has(x); x = parent.get(x)) n++; return R - n; };
+    const earliest = R - Math.ceil(Math.log2(sizes.length)) + 1;
+    for (const m of ko) {
+      const ws = [...reach.get(m.id)].sort();
       for (let i = 0; i < ws.length; i++) {
         for (let j = i + 1; j < ws.length; j++) {
-          assert.ok(round >= earliest,
-            `${pools}x${size}: pool winners ${ws[i]}1 and ${ws[j]}1 can meet in round ${round}, earliest allowed ${earliest}`);
+          assert.ok(roundOf(m.id) >= earliest,
+            `${sizes}: pool winners ${ws[i]}1 and ${ws[j]}1 can meet in round ${roundOf(m.id)}, earliest allowed ${earliest}`);
         }
       }
     }

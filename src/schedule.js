@@ -94,19 +94,24 @@ function buildKnockout(pools, names, mid, fin, placements, placeRounds) {
       if (pools[i].length >= r) seed.push({ kind: 'pool', pool: names[i], rank: r });
     }
   }
-  const order = sCurve(0, M - 1); // seed indices in bracket position order
+  const order = sCurve(0, M - 1); // seed index per bracket position; >= total is a bye
   // Round-1 pairs are mirror positions; the rank-major interleave can land two
-  // same-pool sides on one pair (4/3/3 -> A3 vs A4). Swap the second side with the
-  // last seed that keeps both pairs split; a pool over half the field stays as built.
-  for (let j = 0; j < order.length; j += 2) {
-    const a = order[j], b = order[j + 1];
-    if (b >= total || seed[a].pool !== seed[b].pool) continue;
-    for (let x = total - 1; x >= 0; x--) {
-      if (x === b) continue;
-      const y = M - 1 - x;
-      if (seed[x].pool === seed[a].pool) continue;
-      if (y < total && seed[b].pool === seed[y].pool) continue;
-      [seed[b], seed[x]] = [seed[x], seed[b]];
+  // same-pool sides on one pair (7 teams 4/3 -> B1 vs B4). Move the side carrying no
+  // pool winner to the last cross-pool slot — a winner never moves, so the draw holds.
+  const at = (pos) => (order[pos] < total ? seed[order[pos]] : null);
+  for (let p = 0; p < M; p += 2) {
+    const x = at(p), y = at(p + 1);
+    if (!x || !y || x.pool !== y.pool) continue;
+    const movedIdx = y.rank !== 1 ? p + 1 : (x.rank !== 1 ? p : -1);
+    if (movedIdx < 0) continue; // both sides carry a pool winner: leave as built
+    const kept = at(movedIdx === p + 1 ? p : p + 1), moved = at(movedIdx);
+    for (let q = M - 1; q >= 0; q--) {
+      if (q === p || q === p + 1) continue;
+      const c = at(q), d = at(q ^ 1);
+      if (c && c.rank === 1) continue;
+      if (c && c.pool === kept.pool) continue;
+      if (d && moved.pool === d.pool) continue;
+      [order[movedIdx], order[q]] = [order[q], order[movedIdx]];
       break;
     }
   }
@@ -115,44 +120,43 @@ function buildKnockout(pools, names, mid, fin, placements, placeRounds) {
   const rounds = []; // track every round for placement construction
   const ms1 = [];
   const reachOf = new Map(); // match id -> pools that could feed its winner
+  const winnerOf = new Map(); // match id -> pools whose rank-1 could feed its winner
   let round = [];
   // Pairs emit in position order, so top seeds stay in opposite halves; each pair is
   // a match or a bye.
   for (let j = 0; j < order.length; j += 2) {
     const a = order[j], b = order[j + 1];
-    if (b < total) {
+    if (a < total && b < total) {
       const m = { id: mid(), sides: [seed[a], seed[b]] };
       reachOf.set(m.id, new Set([seed[a].pool, seed[b].pool]));
+      winnerOf.set(m.id, new Set(m.sides.filter((s) => s.rank === 1).map((s) => s.pool)));
       ms1.push(m);
       matches.push(m);
       round.push({ kind: 'match', match: m.id, result: 'winner' });
     } else {
-      round.push(seed[a]); // bye
+      round.push(seed[a < total ? a : b]); // bye advances the real seed
     }
   }
   rounds.push(ms1);
-  // Same-pool separation beyond round 1: the swap above guards only the first round,
-  // so two byed seeds of one pool can still sit adjacent in a mid round. Split every
-  // round's array before pairing, moving a side to a slot that keeps its pairs
-  // cross-pool without early winner-vs-winner; a field with no such slot stays as built.
-  const poolsOf = e => e && e.kind === 'pool' ? [{ pool: e.pool, rank: e.rank }]
-    : [...(reachOf.get(e && e.match) || [])].map(p => ({ pool: p, rank: -1 }));
-  const sharesPool = (x, y) => x.some(a => y.some(b => a.pool === b.pool));
-  const isWinner = x => x.some(a => a.rank === 1);
-  // One swap is legal when nothing collides: the moved entry must be cross-pool with
-  // its new pair, and no two pool winners may meet early.
-  const canSwap = (a, b, c, partner) =>
-    !sharesPool(c, a) && !sharesPool(b, partner)
-    && !(isWinner(a) && isWinner(c)) && !(isWinner(b) && isWinner(partner));
+  // Round >1: the same repair, run on each round's winners before they are paired.
+  const poolsOf = (e) => e && e.kind === 'pool' ? [{ pool: e.pool, rank: e.rank }]
+    : [...(reachOf.get(e && e.match) || [])].map((p) => ({ pool: p, rank: -1 }));
+  const sharesPool = (x, y) => x.some((a) => y.some((b) => a.pool === b.pool));
+  const free = (e) => e && e.kind === 'pool' ? e.rank !== 1 : !winnerOf.get(e && e.match)?.size;
   const splitRound = (arr) => {
     for (let i = 0; i + 1 < arr.length; i += 2) {
-      const a = poolsOf(arr[i]), b = poolsOf(arr[i + 1]);
-      if (!sharesPool(a, b)) continue;
+      if (!sharesPool(poolsOf(arr[i]), poolsOf(arr[i + 1]))) continue;
+      // move whichever side carries no pool winner; the other stays put
+      const movedIdx = free(arr[i + 1]) ? i + 1 : (free(arr[i]) ? i : -1);
+      if (movedIdx < 0) continue;
+      const kept = arr[movedIdx === i + 1 ? i : i + 1], moved = arr[movedIdx];
       for (let j = arr.length - 1; j >= 0; j--) {
-        if (j === i || j === i + 1) continue; // a stays; b may move either way
-        const partner = poolsOf(arr[j % 2 ? j - 1 : j + 1]);
-        if (!canSwap(a, b, poolsOf(arr[j]), partner)) continue;
-        [arr[i + 1], arr[j]] = [arr[j], arr[i + 1]];
+        if (j === i || j === i + 1) continue;
+        const c = arr[j], d = arr[j ^ 1];
+        if (!free(c)) continue;
+        if (sharesPool(poolsOf(c), poolsOf(kept))) continue;
+        if (sharesPool(poolsOf(moved), poolsOf(d))) continue;
+        [arr[movedIdx], arr[j]] = [arr[j], arr[movedIdx]];
         break;
       }
     }
@@ -166,11 +170,18 @@ function buildKnockout(pools, names, mid, fin, placements, placeRounds) {
     for (let i = 0; i < round.length; i += 2) {
       const m = { id: mid(), sides: [round[i], round[i + 1]] };
       const set = new Set();
+      const win = new Set();
       for (const e of m.sides) {
-        if (e.kind === 'pool') set.add(e.pool);
-        else for (const p of reachOf.get(e.match) || []) set.add(p);
+        if (e.kind === 'pool') {
+          set.add(e.pool);
+          if (e.rank === 1) win.add(e.pool);
+        } else {
+          for (const p of reachOf.get(e.match) || []) set.add(p);
+          for (const p of winnerOf.get(e.match) || []) win.add(p);
+        }
       }
       reachOf.set(m.id, set);
+      winnerOf.set(m.id, win);
       ms.push(m);
       next.push({ kind: 'match', match: m.id, result: 'winner' });
     }
