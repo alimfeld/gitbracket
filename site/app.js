@@ -544,15 +544,12 @@ function playerSchedule(route, data, p) {
       next = `${link}${u('next', { body: `${esc(stage.label)}${when ? ' · ' + when : ''}${stage.chip ? ` (${esc(stage.chip)})` : ''}` })}<span aria-hidden="true"> ↓</span></a>`;
     }
   }
-  // the one next line rides under the category that hosts it
-  const blocks = [];
-  for (const ctx of ctxs) {
-    const s = playerStatus(ctx, pid);
-    if (!s) continue;
-    blocks.push(`<p>${esc(ctx.name || ctx.id)}: <strong>${esc(s)}</strong></p>`);
-    if (nextEv && nextEv.ctx === ctx) blocks.push(`<p data-status="next">${next}</p>`);
-  }
-  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}<a href="${esc(href(data.t.slug, 'schedule', { ...route, player: null }))}">${u('change-player')}</a></h1>${blocks.join('')}${updateStamp(data, data.tjson.timezone || 'UTC')}</header>`];
+  // one progress line across every category, then the next line below it
+  const progress = ctxs.map(ctx => [playerStatus(ctx, pid), ctx.name || ctx.id])
+    .filter(([s]) => s)
+    .map(([s, name]) => `${esc(name)}: <strong>${esc(s)}</strong>`)
+    .join(' · ');
+  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}<a href="${esc(href(data.t.slug, 'schedule', { ...route, player: null }))}">${u('change-player')}</a></h1>${updateStamp(data, data.tjson.timezone || 'UTC')}${progress ? `<p>${progress}</p>` : ''}${next ? `<p data-status="next">${next}</p>` : ''}</header>`];
   const out = [];
   let curDay = null;
   for (const e of events) {
