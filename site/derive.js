@@ -33,9 +33,9 @@ const roundKeyOf = d => ROUND_KEYS[d] ?? 'round-of';
 
 const pairSig = ids => [...ids].sort().join('|');
 
-// One escaper for both pages.
-const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
-  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// One escaper for both pages. The map is a constant, built once.
+const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ESC[c]);
 
 // One per-render lazy field: built at most once; toCats rebuilds contexts every
 // render, so a memo can't outlive it.

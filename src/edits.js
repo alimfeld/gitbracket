@@ -180,9 +180,9 @@ function applyFor(verb, matchId, value) {
     return `unknown result shape ${JSON.stringify(value.shape)}`;
   };
   if (verb === 'delete') return ms => applyDelete(ms, matchId);
-  return verb === 'move' ? c => applyMove(c, matchId, value)
-    : verb === 'side' ? c => applySide(c, matchId, value)
-    : () => `unknown edit verb ${JSON.stringify(verb)}`;
+  if (verb === 'move') return c => applyMove(c, matchId, value);
+  if (verb === 'side') return c => applySide(c, matchId, value);
+  return () => `unknown edit verb ${JSON.stringify(verb)}`;
 }
 
 // Conventional-commit messages per edit kind — grep-able match-day history:
@@ -224,9 +224,8 @@ function execEdit(state, verb, cat, matchId, value) {
   if (res.errs) return { errors: res.errs };
   if (res.unchanged) return { unchanged: true }; // same data — nothing written, nothing committed
   // a clear takes the kind of what it removed, so greps like ^score( still find it
-  const kind = verb === 'result'
-    ? (value.shape === 'clear' ? (preStatus === 'walkover' ? 'walkover' : preStatus === 'void' ? 'void' : 'score') : value.shape)
-    : verb;
+  const cleared = preStatus === 'walkover' || preStatus === 'void' ? preStatus : 'score';
+  const kind = verb !== 'result' ? verb : value.shape === 'clear' ? cleared : value.shape;
   const file = res.file; // writeEdit's own byte-identical write target
   const detail = editDetail(verb, m, value, ctx);
   const msg = commitMessage(kind, slug, cat, matchId, detail);
