@@ -239,11 +239,11 @@ function buildCategory(teams, cat, poolSize) {
 // Greedy court+time assignment across all categories. Each step places the candidate
 // whose earliest obtainable slot is soonest; same-slot ties go to the least-advanced
 // category. A champion-tree round is placed atomically on the first wave where every
-// member fits — a round with more members than courts spills individually. Occupancy is
+// member fits — a round with more members than its allowed courts spills individually.
+// Occupancy is
 // a start/end window over the effective slot length (matchSlotMs), matching the
 // validator's overlap rule. Tuples are [cat, teamList, matches, rounds].
-function scheduleMatches(categories, venues, tz, slotCfgOf, courtsOf, eventDate, blockStart) {
-  if (venues.length === 0) throw new Error('spec: venues must be a non-empty id -> name map');
+function scheduleMatches(categories, tz, slotCfgOf, courtsOf, eventDate, blockStart) {
   const offset = tzOffset(tz, eventDate);
   const startOf = (cat) => Date.parse(`${eventDate}T${blockStart[cat]}:00${offset}`);
   const courtUse = new Map(); // venue -> [{ start, end }]
@@ -294,18 +294,17 @@ function scheduleMatches(categories, venues, tz, slotCfgOf, courtsOf, eventDate,
   // The first free court at t outside `taken` — round members need distinct
   // courts. Placement matches aren't in roundOf (their feeders are aligned
   // rounds, not their own), so they never sync here; they land aligned
-  // through their floors, as before. A category's `courts` preference is soft:
-  // try it in order, then any free court — the greedy's pick sequence never
-  // changes (some court is free at the same t), only which court it lands on.
-  const courtAt = (t, slot, taken, pref) => {
+  // through their floors, as before. `courts` is the category's allowed venues
+  // (every venue when the spec omits `courts`), in priority order: a match
+  // takes the first free one and never another.
+  const courtAt = (t, slot, taken, courts) => {
     const free = (v) => (!taken || !taken.has(v)) && !(courtUse.get(v) ?? []).some((w) => slotsOverlap(t, t + slot, w.start, w.end));
-    for (const v of pref) if (free(v)) return v;
-    return venues.find(free);
+    return courts.find(free);
   };
-  const grpFit = (grp, t, catSlots, pref) => {
+  const grpFit = (grp, t, catSlots, courts) => {
     const taken = new Set();
     for (const gm of grp) {
-      const v = courtAt(t, matchSlotMs(gm, { slotMinutes: catSlots }), taken, pref);
+      const v = courtAt(t, matchSlotMs(gm, { slotMinutes: catSlots }), taken, courts);
       if (!v) return false;
       taken.add(v);
     }
@@ -314,21 +313,22 @@ function scheduleMatches(categories, venues, tz, slotCfgOf, courtsOf, eventDate,
   // The first wave at/after the floor where the whole round fits — a round
   // waits rather than splits, so its start is never a partial round, and the
   // wait is bounded by a chain to preserve. A round with more members than
-  // courts can never fit — Infinity, and its members place individually.
-  const syncWave = (grp, f, catSlots, pref) => {
-    if (grp.length > venues.length) return Infinity;
+  // its allowed courts can never fit — Infinity, and its members place
+  // individually, spilling over later waves instead of other courts.
+  const syncWave = (grp, f, catSlots, courts) => {
+    if (grp.length > courts.length) return Infinity;
     const step = matchSlotMs(grp[0], { slotMinutes: catSlots }); // all members share one slot length
     let maxEnd = 0;
     for (const ws of courtUse.values()) for (const w of ws) maxEnd = Math.max(maxEnd, w.end);
     for (let t = f; ; t += step) {
-      if (t >= maxEnd || grpFit(grp, t, catSlots, pref)) return t; // past every occupancy: all courts free
+      if (t >= maxEnd || grpFit(grp, t, catSlots, courts)) return t; // past every occupancy: all courts free
     }
   };
   // A single match's earliest obtainable slot: a free court and, for known
   // players, no same-window double-book. Always terminates — courts empty out.
-  const firstFree = (t, slotMs, players, pref) => {
+  const firstFree = (t, slotMs, players, courts) => {
     for (;;) {
-      const venue = courtAt(t, slotMs, undefined, pref);
+      const venue = courtAt(t, slotMs, undefined, courts);
       const blocked = players && playerUse.some(
         (w) => slotsOverlap(t, t + slotMs, w.start, w.end) && [...players].some((p) => w.players.has(p)));
       if (venue && !blocked) return t;
@@ -473,9 +473,9 @@ function generate(spec) {
       }
     }
     if (c.courts !== undefined) {
-      // A malformed preference would silently place nothing (unknown ids never
-      // match) — name it here.
-      if (!Array.isArray(c.courts) || c.courts.some((v) => typeof v !== 'string')) {
+      // A malformed court list would silently place nothing (unknown ids never
+      // match; an empty list has no id at all) — name it here.
+      if (!Array.isArray(c.courts) || c.courts.some((v) => typeof v !== 'string') || c.courts.length === 0) {
         throw new Error(`spec: category ${c.id}: courts must be an array of venue ids, got ${JSON.stringify(c.courts)}`);
       }
       for (const v of c.courts) {
@@ -494,6 +494,7 @@ function generate(spec) {
   // ---- skeleton ----
   const catById = new Map(categories.map((c) => [c.id, c]));
   const VENUES = Object.entries(venues).map(([id, vn]) => ({ id, name: vn })); // spec order = court-assignment priority
+  if (VENUES.length === 0) throw new Error('spec: venues must be a non-empty id -> name map');
   const PLAYERS = Object.entries(players).map(([id, pn]) => ({ id, name: pn })).sort((a, b) => a.id.localeCompare(b.id));
   const CATS = categories.map((c) => ({
     id: c.id,
@@ -522,8 +523,8 @@ function generate(spec) {
     results.push([cat, teamList, built.matches, built.rounds]);
   }
   const slotCfgOf = new Map(CATS.map((c) => [c.id, c.slotMinutes]));
-  const courtsOf = new Map(categories.map((c) => [c.id, c.courts ?? []]));
-  scheduleMatches(results, VENUES.map((v) => v.id), timezone, slotCfgOf, courtsOf, eventDate, blockStart);
+  const courtsOf = new Map(categories.map((c) => [c.id, c.courts ?? Object.keys(venues)]));
+  scheduleMatches(results, timezone, slotCfgOf, courtsOf, eventDate, blockStart);
   assertSchedule(results);
 
   const out = { name, location, timezone, venues: VENUES, categories: CATS, players: PLAYERS, matches: {} };

@@ -103,13 +103,14 @@ test('spec guards reject bad input fast', () => {
   assert.throws(() => generate({ ...MINI, timezone: undefined }), /timezone required/);
   assert.throws(() => generate({ ...MINI, timezone: 'Mars/Olympus' }), /not a valid IANA timezone/);
   assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], courts: 'court-1' }] }), /courts must be an array/);
+  assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], courts: [] }] }), /courts must be an array of venue ids, got \[\]/);
   assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], courts: ['court-9'] }] }), /not in spec.venues/);
 });
 
-test('court preference keeps a category on its chosen courts when it fits — soft, never a constraint', () => {
+test('courts confines a category to its listed venues', () => {
   // md: 4 teams, one pool, rounds of 2 matches (a 2-court wave) — its
-  // preference fits exactly; xd plays once, on its own pair. No overlap here:
-  // the assertion is that preference, not greedy order, picked the courts.
+  // court set fits exactly; xd plays once, on its own pair. No overlap here:
+  // the assertion is that the allowed set, not greedy order, picked the courts.
   const spec = {
     ...MINI,
     venues: { 'court-1': 'Court 1', 'court-2': 'Court 2', 'court-3': 'Court 3', 'court-4': 'Court 4' },
@@ -127,6 +128,27 @@ test('court preference keeps a category on its chosen courts when it fits — so
   assert.deepEqual(errs, []);
   assert.ok(tourney.matches.md.every((m) => m.venue === 'court-1' || m.venue === 'court-2'), 'md stays on courts 1-2');
   assert.ok(tourney.matches.xd.every((m) => m.venue === 'court-3' || m.venue === 'court-4'), 'xd stays on courts 3-4');
+});
+
+test('a category confined to fewer courts than its round needs spills over time, not over courts', () => {
+  // 8 teams on 3 of 5 venues: the QF needs 4 courts but may only use the 3 —
+  // the round starts 3 wide and spills the fourth into the next wave, never
+  // onto court-4/5.
+  const players = {};
+  const md = field(players, 8, 'a');
+  const tourney = generate({
+    ...MINI,
+    poolSize: 7,
+    venues: { 'court-1': 'C1', 'court-2': 'C2', 'court-3': 'C3', 'court-4': 'C4', 'court-5': 'C5' },
+    players,
+    categories: [{ id: 'md', name: 'Men', bestOf: 1, slotMinutes: 30, final: { bestOf: 3, slotMinutes: 60 }, courts: ['court-1', 'court-2', 'court-3'] }],
+    teams: { md },
+  });
+  const { errs } = validateRepo(repoOf(tourney));
+  assert.deepEqual(errs, []);
+  assert.ok(tourney.matches.md.every((m) => ['court-1', 'court-2', 'court-3'].includes(m.venue)), 'md never leaves its 3 courts');
+  const r1 = tourney.matches.md.filter((m) => m.sides.every((s) => s.kind === 'pool'));
+  assert.equal(new Set(r1.map((m) => m.scheduled)).size, 2, '4 QFs on 3 allowed courts must spill exactly one wave');
 });
 
 test('knockout: false skips the knockout phase for a multi-pool category — the placements flag is silently irrelevant', () => {
