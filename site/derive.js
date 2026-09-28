@@ -28,7 +28,6 @@ const refWord = (key, c, label) => {
   const s = (refs[key] || refs[''] || {})[c] || label;
   return s.replace('{label}', () => label); // function form: a label containing $& or $' is data, never a replacement pattern
 };
-const artWord = (key, c) => ((bundle(LOCALE).art || {})[key] || {})[c] || ''; // 'Im' / 'In der' per round key
 const ROUND_KEYS = ['round-final', 'round-semi', 'round-quart', 'round-16']; // keyed by depth from the final
 const roundKeyOf = d => ROUND_KEYS[d] ?? 'round-of';
 
@@ -1092,14 +1091,6 @@ function currentWave(ctx, status) {
   return ready.filter(m => schedTime(m, ctx.tz) === t);
 }
 
-// The apex reads its own word; every deeper round takes the locale's prepositional
-// article (bundle data, never parsed off the rendered name).
-const roundWord = (col, kind) => col === 0
-  ? t(LOCALE, `${kind}-final`)
-  : t(LOCALE, `${kind}-round`, { art: artWord(roundKeyOf(col), kind), round: roundName(col) });
-const inWord = col => roundWord(col, 'in');
-const elimWord = col => roundWord(col, 'elim');
-
 // KO entries: consumed pool ranks + direct players — byes are absent matches, never 2^depth.
 function koField(ctx) {
   let slots = 0;
@@ -1161,10 +1152,15 @@ function playerStatus(ctx, pid) {
         ? withRank(t(LOCALE, 'in-placement'), band())
         : withRank(t(LOCALE, 'in-groups'), pool());
     }
-    return inWord(Math.max(...koRows.map(r => koColumn(r.m, ctx))));
+    // The apex reads its own word; every deeper round takes the locale's
+    // prepositional article (bundle data, never parsed off the rendered name).
+    const col = Math.max(...koRows.map(r => koColumn(r.m, ctx)));
+    return col === 0
+      ? t(LOCALE, 'in-final')
+      : t(LOCALE, 'in-round', { art: (bundle(LOCALE).art || {})[roundKeyOf(col)] || '', round: roundName(col) });
   }
   // The podium is decided by its own matches — gating on the last category match
-  // would demote finalists to "Out in groups"/"Eliminated in the final".
+  // would demote finalists to a group label.
   const w = winners(ctx);
   if (w) {
     if (w.first.includes(pid)) return t(LOCALE, 'champion');
@@ -1172,9 +1168,10 @@ function playerStatus(ctx, pid) {
     if (w.third && w.third.includes(pid)) return t(LOCALE, 'rank3');
     if (w.fourth && w.fourth.includes(pid)) return t(LOCALE, 'rank4');
   }
-  const lost = rows.filter(r => { const w = winnerIdx(r.m); return w !== null && w !== r.i; }); // void settles, counts nothing
-  const koLost = lost.filter(r => r.m.pool === undefined && placementLabel(r.m, ctx) === null);
-  if (koLost.length) return withRank(elimWord(Math.max(...koLost.map(r => koColumn(r.m, ctx)))), band());
+  // Finished: the finish is the whole story — podium words above, else the band
+  // playerBand already derives (never a round name, so it can never name one wrong).
+  const b = band();
+  if (b) return b;
   const poolsDone = ctx.matches.filter(m => m.pool !== undefined).every(isDone);
   return poolsDone ? withRank(t(LOCALE, 'out-groups'), pool()) : withRank(t(LOCALE, 'in-groups'), pool());
 }

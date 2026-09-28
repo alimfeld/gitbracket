@@ -1,0 +1,657 @@
+{
+  "name": "Capped",
+  "location": "Test Hall",
+  "timezone": "UTC",
+  "venues": [
+    {
+      "id": "c1",
+      "name": "Court 1"
+    },
+    {
+      "id": "c2",
+      "name": "Court 2"
+    }
+  ],
+  "categories": [
+    {
+      "id": "t",
+      "name": "T",
+      "bestOf": {
+        "groups": 1,
+        "knockout": 1
+      },
+      "slotMinutes": {
+        "groups": 30,
+        "knockout": 30
+      }
+    }
+  ],
+  "players": [
+    {
+      "id": "p1",
+      "name": "P1"
+    },
+    {
+      "id": "p2",
+      "name": "P2"
+    },
+    {
+      "id": "p3",
+      "name": "P3"
+    },
+    {
+      "id": "p4",
+      "name": "P4"
+    },
+    {
+      "id": "p5",
+      "name": "P5"
+    },
+    {
+      "id": "p6",
+      "name": "P6"
+    },
+    {
+      "id": "p7",
+      "name": "P7"
+    },
+    {
+      "id": "p8",
+      "name": "P8"
+    }
+  ],
+  "matches": {
+    "t": [
+      {
+        "id": 1,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p1"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p8"
+            ]
+          }
+        ],
+        "venue": "c1",
+        "scheduled": "2026-06-01T09:00:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 5
+          }
+        ],
+        "result": {
+          "status": "played",
+          "winner": "a"
+        }
+      },
+      {
+        "id": 2,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p4"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p5"
+            ]
+          }
+        ],
+        "venue": "c2",
+        "scheduled": "2026-06-01T09:00:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 5
+          }
+        ],
+        "result": {
+          "status": "played",
+          "winner": "a"
+        }
+      },
+      {
+        "id": 3,
+        "pool": "B",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p2"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p7"
+            ]
+          }
+        ],
+        "venue": "c1",
+        "scheduled": "2026-06-01T09:30:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 5
+          }
+        ],
+        "result": {
+          "status": "played",
+          "winner": "a"
+        }
+      },
+      {
+        "id": 4,
+        "pool": "B",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p3"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p6"
+            ]
+          }
+        ],
+        "venue": "c2",
+        "scheduled": "2026-06-01T09:30:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 5
+          }
+        ],
+        "result": {
+          "status": "played",
+          "winner": "a"
+        }
+      },
+      {
+        "id": 5,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p1"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p5"
+            ]
+          }
+        ],
+        "venue": "c1",
+        "scheduled": "2026-06-01T10:00:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 5
+          }
+        ],
+        "result": {
+          "status": "played",
+          "winner": "a"
+        }
+      },
+      {
+        "id": 6,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p8"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p4"
+            ]
+          }
+        ],
+        "venue": "c2",
+        "scheduled": "2026-06-01T10:00:00",
+        "games": [
+          {
+            "a": 5,
+            "b": 11
+          }
+        ],
+        "result": {
+          "status": "played",
+          "winner": "b"
+        }
+      },
+      {
+        "id": 7,
+        "pool": "B",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p2"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p6"
+            ]
+          }
+        ],
+        "venue": "c1",
+        "scheduled": "2026-06-01T10:30:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 5
+          }
+        ],
+        "result": {
+          "status": "played",
+          "winner": "a"
+        }
+      },
+      {
+        "id": 8,
+        "pool": "B",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p7"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p3"
+            ]
+          }
+        ],
+        "venue": "c2",
+        "scheduled": "2026-06-01T10:30:00",
+        "games": [
+          {
+            "a": 5,
+            "b": 11
+          }
+        ],
+        "result": {
+          "status": "played",
+          "winner": "b"
+        }
+      },
+      {
+        "id": 9,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p1"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p4"
+            ]
+          }
+        ],
+        "venue": "c1",
+        "scheduled": "2026-06-01T11:00:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 5
+          }
+        ],
+        "result": {
+          "status": "played",
+          "winner": "a"
+        }
+      },
+      {
+        "id": 10,
+        "pool": "A",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p5"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p8"
+            ]
+          }
+        ],
+        "venue": "c2",
+        "scheduled": "2026-06-01T11:00:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 5
+          }
+        ],
+        "result": {
+          "status": "played",
+          "winner": "a"
+        }
+      },
+      {
+        "id": 11,
+        "pool": "B",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p2"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p3"
+            ]
+          }
+        ],
+        "venue": "c1",
+        "scheduled": "2026-06-01T11:30:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 5
+          }
+        ],
+        "result": {
+          "status": "played",
+          "winner": "a"
+        }
+      },
+      {
+        "id": 12,
+        "pool": "B",
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p6"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p7"
+            ]
+          }
+        ],
+        "venue": "c2",
+        "scheduled": "2026-06-01T11:30:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 5
+          }
+        ],
+        "result": {
+          "status": "played",
+          "winner": "a"
+        }
+      },
+      {
+        "id": 13,
+        "sides": [
+          {
+            "kind": "pool",
+            "pool": "A",
+            "rank": 1
+          },
+          {
+            "kind": "pool",
+            "pool": "B",
+            "rank": 4
+          }
+        ],
+        "venue": "c1",
+        "scheduled": "2026-06-01T12:00:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 5
+          }
+        ],
+        "result": {
+          "status": "played",
+          "winner": "a"
+        }
+      },
+      {
+        "id": 14,
+        "sides": [
+          {
+            "kind": "pool",
+            "pool": "B",
+            "rank": 2
+          },
+          {
+            "kind": "pool",
+            "pool": "A",
+            "rank": 3
+          }
+        ],
+        "venue": "c2",
+        "scheduled": "2026-06-01T12:00:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 5
+          }
+        ],
+        "result": {
+          "status": "played",
+          "winner": "a"
+        }
+      },
+      {
+        "id": 15,
+        "sides": [
+          {
+            "kind": "pool",
+            "pool": "B",
+            "rank": 1
+          },
+          {
+            "kind": "pool",
+            "pool": "A",
+            "rank": 4
+          }
+        ],
+        "venue": "c1",
+        "scheduled": "2026-06-01T12:30:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 5
+          }
+        ],
+        "result": {
+          "status": "played",
+          "winner": "a"
+        }
+      },
+      {
+        "id": 16,
+        "sides": [
+          {
+            "kind": "pool",
+            "pool": "A",
+            "rank": 2
+          },
+          {
+            "kind": "pool",
+            "pool": "B",
+            "rank": 3
+          }
+        ],
+        "venue": "c2",
+        "scheduled": "2026-06-01T12:30:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 5
+          }
+        ],
+        "result": {
+          "status": "played",
+          "winner": "a"
+        }
+      },
+      {
+        "id": 17,
+        "sides": [
+          {
+            "kind": "match",
+            "match": 13,
+            "result": "winner"
+          },
+          {
+            "kind": "match",
+            "match": 14,
+            "result": "winner"
+          }
+        ],
+        "venue": "c1",
+        "scheduled": "2026-06-01T13:00:00"
+      },
+      {
+        "id": 18,
+        "sides": [
+          {
+            "kind": "match",
+            "match": 15,
+            "result": "winner"
+          },
+          {
+            "kind": "match",
+            "match": 16,
+            "result": "winner"
+          }
+        ],
+        "venue": "c2",
+        "scheduled": "2026-06-01T13:00:00"
+      },
+      {
+        "id": 19,
+        "sides": [
+          {
+            "kind": "match",
+            "match": 17,
+            "result": "winner"
+          },
+          {
+            "kind": "match",
+            "match": 18,
+            "result": "winner"
+          }
+        ],
+        "venue": "c1",
+        "scheduled": "2026-06-01T13:30:00"
+      },
+      {
+        "id": 20,
+        "sides": [
+          {
+            "kind": "match",
+            "match": 17,
+            "result": "loser"
+          },
+          {
+            "kind": "match",
+            "match": 18,
+            "result": "loser"
+          }
+        ],
+        "venue": "c2",
+        "scheduled": "2026-06-01T13:30:00"
+      },
+      {
+        "id": 21,
+        "sides": [
+          {
+            "kind": "match",
+            "match": 13,
+            "result": "loser"
+          },
+          {
+            "kind": "match",
+            "match": 16,
+            "result": "loser"
+          }
+        ],
+        "venue": "c1",
+        "scheduled": "2026-06-01T14:00:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 5
+          }
+        ],
+        "result": {
+          "status": "played",
+          "winner": "a"
+        }
+      },
+      {
+        "id": 22,
+        "sides": [
+          {
+            "kind": "match",
+            "match": 14,
+            "result": "loser"
+          },
+          {
+            "kind": "match",
+            "match": 15,
+            "result": "loser"
+          }
+        ],
+        "venue": "c2",
+        "scheduled": "2026-06-01T14:00:00",
+        "games": [
+          {
+            "a": 5,
+            "b": 11
+          }
+        ],
+        "result": {
+          "status": "played",
+          "winner": "b"
+        }
+      }
+    ]
+  }
+}

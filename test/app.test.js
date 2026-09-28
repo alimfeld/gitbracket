@@ -313,7 +313,7 @@ test('playerStatus: the podium lands the moment the final is played, not when th
   assert(playerStatus(ctx, 'p5') === 'In placement — 3rd–4th', 'a bronze-pending player stays in placement, with the band at stake');
 });
 
-test('playerStatus: the word carries the rank behind it — pool standing, finish band', () => {
+test('playerStatus: the finish is what the player got — pool standing, place or band', () => {
   // out in groups: the final pool standing, pool-scoped (pools are never ranked against each other)
   const full = catOf('full', 't');
   assert(playerStatus(full, 'p3') === 'Out in groups — 3rd in Pool A', 'a group-stage exit reports its final pool place');
@@ -322,10 +322,10 @@ test('playerStatus: the word carries the rank behind it — pool standing, finis
   live.matches.t.forEach(m => { if (m.id !== 1 && m.id !== 2) m.result = undefined; });
   const mid = makeCat({ meta: live.categories[0], matches: live.matches.t }, live);
   assert(playerStatus(mid, 'p1') === 'In groups — 1st in Pool A', 'a live pool ranks a player after the first decided match');
-  // placement band, tightest off the deepest placement match
+  // placement decider: the match settles an exact place, so the place is the finish
   const p8 = catOf('place8', 't');
-  assert(playerStatus(p8, 'p3') === 'Eliminated in the Quarterfinals — 7th', 'a decided 7-8 decider names the exact place');
-  assert(playerStatus(p8, 'p4') === 'Eliminated in the Quarterfinals — 6th', 'the loser of a decided 5th-place decider is exactly 6th');
+  assert(playerStatus(p8, 'p3') === '7th', 'the winner of a 7-8 decider is exactly 7th');
+  assert(playerStatus(p8, 'p4') === '6th', 'the loser of a 5th-place decider is exactly 6th');
   // no placement tree: the elimination round fixes the band; a bye'd round clamps its top
   const P = (...ids) => ({ kind: 'players', ids });
   const win = m => ({ kind: 'match', match: m, result: 'winner' });
@@ -340,7 +340,7 @@ test('playerStatus: the word carries the rank behind it — pool standing, finis
     { id: 6, sides: [win(3), win(4)], result: r },
     { id: 7, sides: [win(5), win(6)], result: r },
   ] }, { timezone: 'UTC', players });
-  assert(playerStatus(pure, 'p2') === 'Eliminated in the Quarterfinals — 5th–8th', 'a pure bracket bands QF losers 5th–8th');
+  assert(playerStatus(pure, 'p2') === '5th–8th', 'a pure bracket bands QF losers 5th–8th');
   const six = makeCat({ meta: {}, matches: [
     { id: 1, sides: [P('p3'), P('p4')], result: r },
     { id: 2, sides: [P('p5'), P('p6')], result: r },
@@ -348,7 +348,15 @@ test('playerStatus: the word carries the rank behind it — pool standing, finis
     { id: 4, sides: [P('p2'), win(2)], result: r },
     { id: 5, sides: [win(3), win(4)], result: r },
   ] }, { timezone: 'UTC', players: players.slice(0, 6) });
-  assert(playerStatus(six, 'p4') === 'Eliminated in the Quarterfinals — 5th–6th', 'byes clamp the band top — a 6-player bracket has no 7th');
+  assert(playerStatus(six, 'p4') === '5th–6th', 'byes clamp the band top — a 6-player bracket has no 7th');
+});
+
+test('playerStatus: a capped classification band is the finish for both semi results', () => {
+  // placementRounds: 1 — the band plays its semis only, so a won semi earns no
+  // finer place: every team in the band finishes 5th–8th, the round never named.
+  const capped = catOf('capped', 't');
+  assert(playerStatus(capped, 'p7') === '5th–8th', 'a won 5-8 semi finishes 5th–8th, not eliminated earlier');
+  assert(playerStatus(capped, 'p6') === '5th–8th', 'a lost 5-8 semi finishes the same band — no decider separates it');
 });
 
 test('playerMatches: only matches the player is actually in, not potential slots', () => {
@@ -912,7 +920,7 @@ test('i18n: a third locale with deviant word order and declined refs derives cle
       'round-final': { acc: 'la finale', dat: 'de la finale' },
       '': { acc: 'le {label}', dat: 'du {label}' },
     },
-    art: { 'round-of': { in: 'dans la', elim: 'hors de la' } },
+    art: { 'round-of': 'dans la' },
   };
   setLocale('fr');
   try {

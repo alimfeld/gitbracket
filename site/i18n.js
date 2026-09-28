@@ -51,8 +51,6 @@ const I18N = {
     // structural labels (derive.js)
     'in-final': 'In the final',
     'in-round': 'In the {round}',
-    'elim-final': 'Eliminated in the final',
-    'elim-round': 'Eliminated in the {round}',
     'in-placement': 'In placement',
     'in-groups': 'In groups',
     'out-groups': 'Out in groups',
@@ -137,8 +135,6 @@ const I18N = {
     // structural labels (derive.js) — {art} carries the German article ("Im" vs "In der")
     'in-final': 'Im Finale',
     'in-round': '{art} {round}',
-    'elim-final': 'Ausgeschieden im Finale',
-    'elim-round': 'Ausgeschieden {art} {round}',
     'in-placement': 'In der Platzierungsrunde',
     'in-groups': 'In der Gruppenphase',
     'out-groups': 'Ausgeschieden in der Gruppenphase',
@@ -176,13 +172,13 @@ const I18N = {
       'pl-place': { acc: 'den {label}', dat: 'vom {label}' },     // "den 3. Platz" — masculine
       '': { acc: 'das {label}', dat: 'vom {label}' },             // the default: neuter "das/vom"
     },
-    // prepositional article per round kind, in/eliminated phrasing.
+    // prepositional article per round key.
     art: {
-      'round-final': { in: 'Im', elim: 'im' },
-      'round-semi': { in: 'Im', elim: 'im' },
-      'round-quart': { in: 'Im', elim: 'im' },
-      'round-16': { in: 'Im', elim: 'im' },
-      'round-of': { in: 'In der', elim: 'in der' },
+      'round-final': 'Im',
+      'round-semi': 'Im',
+      'round-quart': 'Im',
+      'round-16': 'Im',
+      'round-of': 'In der',
     },
   },
 };

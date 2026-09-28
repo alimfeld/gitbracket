@@ -15,6 +15,7 @@ const V = [
   ['clean fixture validates', 'sample', 'clean', null],
   ['placement bracket validates', 'place', 'clean', null],
   ['fully played bracket validates', 'full', 'clean', null],
+  ['capped classification band validates', 'capped', 'clean', null],
   ['non-numeric match id', 'bad-uppercase-id', 'err', /must be a positive integer/],
   ['same player set on both sides', 'bad-same-pair', 'conflict', /same player set/],
   ['slot source consumed twice', 'bad-consumed-twice', 'conflict', /consumed twice/],
