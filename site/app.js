@@ -351,6 +351,9 @@ function bracketHtml(ctx, ko, multi, next) {
 // prefix the date
 const timeEl = (t, tz, day) => `<time datetime="${new Date(t).toISOString()}">${esc((day ? `${dayShort(t, tz)}, ` : '') + fmtTime(t, tz))}</time>`;
 
+// Join a stage slot list with '/'; empty → null (callers render TBD).
+const stageBit = (list, fmt) => list?.length ? list.map(fmt).join('/') : null;
+
 const catChip = ctx => `<span class="cat" data-cat="${ctx.order + 1}">${esc(ctx.name)}</span>`;
 
 // opts.meta picks the meta items; opts.head is an optional [left, right] row —
@@ -476,8 +479,8 @@ let lastPoll = 0;
 // The round a player could reach once the pools decide; the chip carries the rank
 // or outcome that gets in.
 function possibleCard(stage, ctx, opts) {
-  const when = stage.time !== null ? timeEl(stage.time, ctx.tz, opts.day) : '<span class="tbd">TBD</span>';
-  const where = stage.court !== null ? esc(venueName(ctx, stage.court)) : '<span class="tbd">TBD</span>';
+  const when = stageBit(stage.times, t => timeEl(t, ctx.tz, opts.day)) ?? '<span class="tbd">TBD</span>';
+  const where = stageBit(stage.courts, c => esc(venueName(ctx, c))) ?? '<span class="tbd">TBD</span>';
   const label = esc(stage.label);
   return `<article${opts.id ? ` id="${opts.id}"` : ''} data-status="possible"><div class="head"><span>${when}</span><span>${where}</span></div><div class="meta">${catChip(ctx)} · ${label}</div>${stage.chip ? `<div class="meta">(${esc(stage.chip)})</div>` : ''}</article>`;
 }
@@ -514,7 +517,7 @@ function playerSchedule(route, data, p) {
   // The day owns the context; possible stages merge in at their own time.
   const events = [];
   for (const ctx of ctxs) {
-    for (const stage of possibleStages(ctx, pid)) events.push({ t: stage.time ?? Infinity, stage, ctx });
+    for (const stage of possibleStages(ctx, pid)) events.push({ t: stage.times?.[0] ?? Infinity, stage, ctx });
   }
   for (const r of rows) events.push({ t: schedTime(r.m, r.ctx.tz) ?? Infinity, r, ctx: r.ctx });
   // times ascending; a confirmed row wins an exact tie against a possible stage
@@ -531,7 +534,8 @@ function playerSchedule(route, data, p) {
       next = `${link}${u('next', { body: `${t !== null ? timeEl(t, nctx.tz, multi) : 'TBD'}${m.venue ? ` · ${esc(venueName(nctx, m.venue))}` : ' · TBD'}` })}<span aria-hidden="true"> ↓</span></a>`;
     } else {
       const stage = nextEv.stage, nctx = nextEv.ctx;
-      next = `${link}${u('next', { body: `${esc(stage.label)}${stage.time !== null ? ' · ' + timeEl(stage.time, nctx.tz, multi) : ''}${stage.chip ? ` (${esc(stage.chip)})` : ''}` })}<span aria-hidden="true"> ↓</span></a>`;
+      const when = stageBit(stage.times, t => timeEl(t, nctx.tz, multi));
+      next = `${link}${u('next', { body: `${esc(stage.label)}${when ? ' · ' + when : ''}${stage.chip ? ` (${esc(stage.chip)})` : ''}` })}<span aria-hidden="true"> ↓</span></a>`;
     }
   }
   // the one next line rides under the category that hosts it

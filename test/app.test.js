@@ -10,7 +10,7 @@
 const fs = require('fs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, matchSlotMs, sideLabel, placementLabel, plRange, koColumn, koOrdinal, matchLabel, schedTime, dayKey, toCats, isDeadTie, winners, catStatus, roundName, playerStatus, setLocale } = require('../site/derive.js');
+const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, matchSlotMs, sideLabel, placementLabel, plRange, koColumn, koOrdinal, matchLabel, schedTime, dayKey, toCats, isDeadTie, winners, catStatus, roundName, playerStatus, possibleStages, setLocale } = require('../site/derive.js');
 const { I18N } = require('../site/i18n.js');
 const { parseRoute, resolveLang, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset, paintBadRoute, pageTitle } = require('../site/app.js');
 const { generate } = require('../src/schedule.js');
@@ -691,6 +691,22 @@ test('possible stages render as cards: a status flag per stage, and the next hea
   assert(vals(page2, 'datetime').includes('2026-07-12T10:30:00.000Z'), 'the next line carries the instant in a semantic time element');
   assert(card(page2, 'id', 'next').includes('Quarterfinals'), 'the earliest possible card is the jump target, never carrying the confirmed accent');
   assert.equal(vals(page2, 'data-status').filter(s => s === 'next').length, 1, 'only the header line carries the green accent — possible cards never do');
+});
+
+test('staggered rounds: a stage lists every possible time and takes its earliest slot', () => {
+  const stages = possibleStages(catOf('stagger', 't'), 'p4');
+  const qf = stages.find(s => s.label === 'Quarterfinals');
+  assert.deepEqual(qf.times, [Date.parse('2026-07-12T10:20:00Z'), Date.parse('2026-07-12T10:30:00Z')], 'the round carries every distinct start, ascending');
+  assert.deepEqual(qf.courts, [], 'a mixed court renders TBD, not a list');
+  const pair = stages.find(s => s.label.includes('/'));
+  assert.deepEqual(pair.times, [Date.parse('2026-07-12T11:30:00Z'), Date.parse('2026-07-12T11:40:00Z')], 'a merged twin stage keeps its times — the merge sees raw arrays, deduped once at output');
+  const page = renderPlayer({ slug: 'stagger', view: 'schedule', player: 'p4' }, repoPage('stagger'));
+  assert(!text(page).includes('Time TBD'), 'every possible stage has a start — nothing falls under Time TBD');
+  assert(vals(page, 'datetime').includes('2026-07-12T10:20:00.000Z') && vals(page, 'datetime').includes('2026-07-12T10:30:00.000Z'), 'both possible QF instants render as semantic times');
+  const qfCard = cards(page, 'data-status', 'possible').find(c => c.includes('Quarterfinals'));
+  assert(qfCard.indexOf('10:20') < qfCard.indexOf('10:30') && qfCard.includes('TBD'), 'the QF card lists its times ascending; the mixed court reads TBD');
+  const flat = text(page);
+  assert(flat.indexOf('P4 · P5') < flat.indexOf('Quarterfinals') && flat.indexOf('Quarterfinals') < flat.indexOf('Semifinals'), 'the card sorts by its earliest start — after the last group match, before the SF');
 });
 
 test('multi-day kiosk: one day at a time, previewing day one early, falling back to the last day', () => {

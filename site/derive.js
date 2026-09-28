@@ -466,10 +466,8 @@ function possibleStages(ctx, pid) {
     if (typeof m.venue === 'string') stage.courts.push(m.venue);
   }
 
-  // ---- finalize: uniform bits, chips ---------------------------------------
-  const present = [...stages.values()].map(stage => ({
-    ...stage, ...uniformBits(stage.ids.length, stage.times, stage.courts),
-  }));
+  // ---- finalize: slot sets, chips ------------------------------------------
+  const present = [...stages.values()];
   const merged = mergeTwinStages(present);
   // The chip names the entry gates: direct slot ranks, then result edges ("via
   // the Semifinals" once merged); a stage with no gates reads "any rank".
@@ -497,18 +495,22 @@ function possibleStages(ctx, pid) {
   const out = [];
   for (const stage of present) {
     if (merged.has(stage)) continue; // the pair's originals — the merged entry carries them
-    out.push({ label: stage.label, col: stage.col, time: stage.time, court: stage.court, chip: chipOf(stage) });
+    out.push({ label: stage.label, col: stage.col, ...slotSet(stage.ids.length, stage.times, stage.courts), chip: chipOf(stage) });
   }
   // Deepest-first (QF -> SF -> Final); a merged pair keeps its deeper column.
   out.sort((a, b) => (b.col ?? -1) - (a.col ?? -1));
   return out;
 }
 
-// Uniform only when every card agrees — a mixed time or court renders TBD.
-const uniformBits = (n, times, courts) => ({
-  time: n > 0 && times.length === n && times.every(t => t === times[0]) ? times[0] : null,
-  court: n > 0 && courts.length === n && courts.every(c => c === courts[0]) ? courts[0] : null,
-});
+// Times list every distinct start (a staggered round), ascending; a court stays
+// a single value only when the whole stage agrees, else empty (TBD). An
+// incomplete stage keeps both empty.
+const slotSet = (n, times, courts) => {
+  const whole = arr => n > 0 && arr.length === n;
+  const tset = whole(times) ? [...new Set(times)].sort((a, b) => a - b) : [];
+  const cset = whole(courts) && courts.every(c => c === courts[0]) ? [courts[0]] : [];
+  return { times: tset, courts: cset };
+};
 
 // Sibling classification semis name their full band ("5th–12th semi"); " place"
 // would mangle a semi label.
@@ -553,7 +555,6 @@ function mergeTwinStages(present) {
       label, col: Math.max(x.col ?? -1, y.col ?? -1), merged: true,
       ranks: new Set([...x.ranks, ...y.ranks]), edges: [...x.edges, ...y.edges],
       times, courts, ids: [...x.ids, ...y.ids],
-      ...uniformBits(x.ids.length + y.ids.length, times, courts),
     });
   }
   return merged;
