@@ -9,8 +9,8 @@
 // through one so its next step can repair it.
 
 const path = require('path');
-const { loadRepo, plainObject, isRealDate, schedEntries, pairBusy, consumedSlots, winTarget, reachedWinner, feederBounds, sameSet } = require('./tools.js');
-const { LOCALE, DATE_RE, ID_RE, ISO_RE, MAX_BEST_OF, pairSig, matchSlotMs, makeCat, matchesOf, resolveSide, bestOfOf, schedTime, schedDays, placementLabel, parentsOf } = require('../site/derive.js');
+const { loadRepo, plainObject, isRealDate, schedEntries, pairBusy, consumedSlots, winTarget, reachedWinner, feederBounds, sameSet, daysOf } = require('./tools.js');
+const { LOCALE, DATE_RE, ID_RE, ISO_RE, MAX_BEST_OF, pairSig, matchSlotMs, makeCat, matchesOf, resolveSide, bestOfOf, schedTime, placementLabel, parentsOf } = require('../site/derive.js');
 
 const RESULTS = ['winner', 'loser'];
 const RESULT_STATUSES = ['played', 'walkover', 'void'];
@@ -119,7 +119,7 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
     catch { err(tFile, `timezone ${JSON.stringify(tjson.timezone)} is not a valid IANA timezone`); }
   }
   if (tzOk) {
-    const derived = schedDays(Object.values(tjson.matches || {}).flat(), tjson.timezone);
+    const derived = daysOf(tjson);
     if (indexDates === undefined) {
       if (derived.length) err(tFile, `dates missing — the schedule spans ${JSON.stringify(derived)}`);
     } else {

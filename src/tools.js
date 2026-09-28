@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { ID_RE, makeCat, matchesOf, schedTime, isDone, matchSlotMs, resolveSide } = require('../site/derive.js');
+const { ID_RE, makeCat, matchesOf, schedTime, isDone, matchSlotMs, resolveSide, schedDays } = require('../site/derive.js');
 
 // Window collision, shared by the validator and the generator.
 const slotsOverlap = (a0, a1, b0, b1) => a0 < b1 && b0 < a1;
@@ -188,6 +188,9 @@ function loadRepo(siteRoot) {
   return { index, tournaments, readErrs };
 }
 
+// Every scheduled day of a tournament file, as sorted ISO keys.
+const daysOf = tjson => schedDays(Object.values((tjson && tjson.matches) || {}).flat(), (tjson && tjson.timezone) || 'UTC');
+
 // The one tournament-file byte format; writes and no-op comparisons must agree.
 function tournamentText(tjson) {
   return JSON.stringify(tjson, null, 2) + '\n';
@@ -263,4 +266,4 @@ function pairBusy(a, b) {
   return kinds;
 }
 
-module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, plainObject, fixedPlayers, schedEntries, pairBusy, consumedSlots, winTarget, reachedWinner, feederBounds, isRealDate, findRoot, catCtx, tournamentText, cnameOf, branchOf, isSimBranch, cleanTree, git, gitEnv, defaultSlug, sameSet };
+module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, plainObject, fixedPlayers, schedEntries, pairBusy, consumedSlots, winTarget, reachedWinner, feederBounds, isRealDate, findRoot, catCtx, tournamentText, cnameOf, branchOf, isSimBranch, cleanTree, git, gitEnv, defaultSlug, sameSet, daysOf };

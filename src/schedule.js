@@ -4,8 +4,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const { matchSlotMs, pairSig, dayKey, schedTime, fmtTime, ID_RE, schedDays, LOCALE } = require('../site/derive.js');
-const { writeTournament, writeTournamentIndex, slotsOverlap, plainObject, fixedPlayers, isRealDate } = require('./tools.js');
+const { matchSlotMs, pairSig, dayKey, schedTime, fmtTime, ID_RE, LOCALE } = require('../site/derive.js');
+const { writeTournament, writeTournamentIndex, slotsOverlap, plainObject, fixedPlayers, isRealDate, daysOf } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 
 // Round-robin pairings, circle method: array of rounds, each a list of pairs.
@@ -558,7 +558,7 @@ function generate(spec) {
   // spec guards above stay: slotMinutes, a zero-length window never terminates the greedy.
   const g = validateRepo({
     readErrs: [],
-    index: [{ slug, name, location, dates: schedDays(Object.values(out.matches).flat(), timezone) }],
+    index: [{ slug, name, location, dates: daysOf(out) }],
     tournaments: new Map([[slug, { tjson: out }]]),
   });
   if (g.errs.length || g.conflicts.length) throw new Error('spec: output fails validation:\n' + [...g.errs, ...g.conflicts].join('\n'));
@@ -592,7 +592,7 @@ function main(root, specPath) {
     console.error(`schedule: can't read site/tournaments.json as JSON (${e.message}) — ${spec.slug}.json is written but the index is untouched; fix the index by hand and commit both`);
     process.exit(1);
   }
-  const entry = { slug: spec.slug, name: spec.name, location: spec.location, dates: schedDays(Object.values(tourney.matches).flat(), tourney.timezone) };
+  const entry = { slug: spec.slug, name: spec.name, location: spec.location, dates: daysOf(tourney) };
   const i = Array.isArray(idx) ? idx.findIndex((t) => t && t.slug === spec.slug) : -1;
   if (i >= 0) idx[i] = entry; else idx.push(entry);
   writeTournamentIndex(siteRoot, idx); // the one-per-line shape — index diffs stay per-tournament

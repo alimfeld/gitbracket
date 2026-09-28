@@ -6,8 +6,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const { isDone, sideLabel, schedDays, bestOfOf, matchesOf } = require('../site/derive.js');
-const { writeTournament, tournamentText, catCtx, winTarget, reachedWinner, plainObject, git } = require('./tools.js');
+const { isDone, sideLabel, bestOfOf, matchesOf } = require('../site/derive.js');
+const { writeTournament, tournamentText, catCtx, winTarget, reachedWinner, plainObject, git, daysOf } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 
 // ---------- pure logic (tests drive these on fixture repos) ----------
@@ -113,7 +113,6 @@ function writeEdit(siteRoot, repo, slug, catId, apply) {
   if (aerr) return { err: aerr };
   // Published days are fixed: an edit that moves a match off a day (or clears a day's
   // last match) would desync the index, which no edit path follows. Refused here.
-  const daysOf = tj => schedDays(Object.values(tj.matches || {}).flat(), tj.timezone || 'UTC');
   const beforeDays = daysOf(beforeJson);
   const afterDays = daysOf(tjson);
   const fmtDays = ds => ds.length ? ds.join(', ') : 'no scheduled days';

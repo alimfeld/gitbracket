@@ -3,10 +3,15 @@
 const POLL_MS = 30000;
 const FOLLOW_MS = 60000; // the kiosk re-follows the play on this cadence, data change or not
 // 135px = the card's measured height at base zoom; under-tune it and cards overlap
-// their next slot. 116px = the kiosk-top header (h1 + stamp) at base zoom; a taller
-// header clips the day's last card. ponytail: re-tune on the wall screen beside the
-// 1.6px/min viewport floor.
+// their next slot. ponytail: re-tune on the wall screen beside the viewport floor.
 const CARD_PX = 135;
+
+// The kiosk-top header (h1 + stamp) at base zoom; a taller header clips the day's
+// last card.
+const HEADER_PX = 116;
+
+// The viewport floor — never scale the board below this many px per minute.
+const MIN_PX_PER_MIN = 1.6;
 
 // Cards end this many px short of their slot so tops stay pinned and bottoms read as
 // separate blocks; rendered inline because a content-driven flex wrapper won't shrink.
@@ -448,7 +453,7 @@ function renderVenue(route, data, now, simOn) {
   const avail = typeof document !== 'undefined' ? document.documentElement.clientHeight : 0;
   // + CARD_GAP: the card subtracts it below, else the shortest card clips its last line
   // the fixed bottom clock chip owns its own band, same as the sticky header above
-  const ppm = Math.max(1.6, avail ? (avail - 116 - CHIP_PX) / total : 0, (CARD_PX + CARD_GAP) / sShort);
+  const ppm = Math.max(MIN_PX_PER_MIN, avail ? (avail - HEADER_PX - CHIP_PX) / total : 0, (CARD_PX + CARD_GAP) / sShort);
   const y = min => (min - dayStart) * ppm;
   const card = (r, h) => {
     const status = kioskStatus(r, now);

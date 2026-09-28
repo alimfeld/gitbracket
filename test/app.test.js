@@ -20,6 +20,11 @@ const { validateRepo } = require('../src/validate.js');
 
 const sameRecord = (a, b) => a.wins === b.wins && a.gd === b.gd && a.pd === b.pd; // test-only — derive.js doesn't ship it
 
+// The bare tournament body every renderer case shares; pass only what the case varies.
+const bareCat = { id: 't', name: 'T', bestOf: { groups: 1, knockout: 1 }, slotMinutes: { groups: 30, knockout: 30 } };
+const bare = ({ venues = [], players = [], matches = {}, categories = [bareCat], ...rest } = {}) =>
+  ({ name: 'Bad', location: 'Hall', timezone: 'UTC', venues, players, categories, matches, ...rest });
+
 test('simAimOffset: the sim clock aims at a day\'s first match, else the event\'s', () => {
   const tjson = { timezone: 'UTC', matches: { md: [
     { id: 1, scheduled: '2026-05-02T09:00:00' },
@@ -55,7 +60,7 @@ test('schedTime resolves DST wall times, rejects the spring gap, and picks the f
 });
 
 test('renderers: a tournament with no categories renders empty — never throws', () => {
-  const tjson = { name: 'Empty', location: 'Hall', timezone: 'UTC', venues: [], players: [], categories: [], matches: {} };
+  const tjson = bare({ name: 'Empty', categories: [] });
   const data = pageData(tjson, 'empty');
   assert.doesNotThrow(() => renderTournament({ slug: 'empty', view: 'tournament' }, data), 'tournament page');
   assert.doesNotThrow(() => renderVenue({ slug: 'empty', view: 'venues' }, data, Date.now()), 'venue view too');
@@ -63,7 +68,7 @@ test('renderers: a tournament with no categories renders empty — never throws'
 });
 
 test('renderers: a null category entry is skipped, never throws', () => {
-  const tjson = { name: 'Bad', location: 'Hall', timezone: 'UTC', venues: [], players: [], categories: [null, { id: 't', name: 'T', bestOf: { groups: 1, knockout: 1 }, slotMinutes: { groups: 30, knockout: 30 } }], matches: {} };
+  const tjson = bare({ categories: [null, bareCat] });
   const cats = toCats(tjson);
   assert.equal(cats.length, 1, 'the non-object entry renders as absent');
   const data = { index: [], t: { slug: 'bad', name: 'Bad' }, tjson, cats };
@@ -71,19 +76,18 @@ test('renderers: a null category entry is skipped, never throws', () => {
 });
 
 test('renderers: a null venue entry is skipped on the board, never throws', () => {
-  const tjson = { name: 'Bad', location: 'Hall', timezone: 'UTC', venues: [null, { id: 'c1', name: 'Court 1' }], players: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }], categories: [{ id: 't', name: 'T', bestOf: { groups: 1, knockout: 1 }, slotMinutes: { groups: 30, knockout: 30 } }], matches: { t: [{ id: 1, pool: 'A', scheduled: '2026-05-02T09:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p1'] }, { kind: 'players', ids: ['p2'] }] }] } };
+  const tjson = bare({ venues: [null, { id: 'c1', name: 'Court 1' }], players: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }], matches: { t: [{ id: 1, pool: 'A', scheduled: '2026-05-02T09:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p1'] }, { kind: 'players', ids: ['p2'] }] }] } });
   const data = pageData(tjson, 'bad');
   assert.doesNotThrow(() => renderVenue({ slug: 'bad', view: 'venues' }, data, Date.parse('2026-05-02T10:00:00Z')), 'the board renders around the absent entry');
 });
 
 test('renderers: a match on an undeclared venue renders absent on the board — never throws', () => {
-  const tjson = { name: 'Bad', location: 'Hall', timezone: 'UTC', venues: [{ id: 'c1', name: 'Court 1' }],
+  const tjson = bare({ venues: [{ id: 'c1', name: 'Court 1' }],
     players: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }, { id: 'p3', name: 'P3' }, { id: 'p4', name: 'P4' }],
-    categories: [{ id: 't', name: 'T', bestOf: { groups: 1, knockout: 1 }, slotMinutes: { groups: 30, knockout: 30 } }],
     matches: { t: [
       { id: 1, pool: 'A', scheduled: '2026-05-02T09:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p1'] }, { kind: 'players', ids: ['p2'] }] },
       { id: 2, pool: 'A', scheduled: '2026-05-02T10:00:00', venue: 'ghost', sides: [{ kind: 'players', ids: ['p3'] }, { kind: 'players', ids: ['p4'] }] },
-    ] } };
+    ] } });
   const data = pageData(tjson, 'bad');
   const html = renderVenue({ slug: 'bad', view: 'venues' }, data, Date.parse('2026-05-02T10:00:00Z'));
   assert(text(html).includes('Court 1'), 'the declared court still renders');
@@ -91,20 +95,19 @@ test('renderers: a match on an undeclared venue renders absent on the board — 
 });
 
 test('renderers: a sideless match renders TBD rows, never throws', () => {
-  const tjson = { name: 'Bad', location: 'Hall', timezone: 'UTC', venues: [{ id: 'c1', name: 'Court 1' }],
+  const tjson = bare({ venues: [{ id: 'c1', name: 'Court 1' }],
     players: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }, { id: 'p3', name: 'P3' }, { id: 'p4', name: 'P4' }],
-    categories: [{ id: 't', name: 'T', bestOf: { groups: 1, knockout: 1 }, slotMinutes: { groups: 30, knockout: 30 } }],
     matches: { t: [
       { id: 1, pool: 'A', scheduled: '2026-05-02T09:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p1'] }, { kind: 'players', ids: ['p2'] }] },
       { id: 2, pool: 'A', scheduled: '2026-05-02T10:00:00', venue: 'c1' },
-    ] } };
+    ] } });
   const data = pageData(tjson, 'bad');
   assert.doesNotThrow(() => renderTournament({ slug: 'bad', view: 'tournament' }, data), 'tournament page');
   assert.doesNotThrow(() => renderVenue({ slug: 'bad', view: 'venues' }, data, Date.parse('2026-05-02T10:30:00Z')), 'the board renders around the sideless match');
 });
 
 test('renderers: an invalid timezone renders TBD, never throws', () => {
-  const bad = { name: 'Bad', location: 'Hall', timezone: 'Mars/Olympus', venues: [{ id: 'c1', name: 'Court 1' }], players: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }], categories: [{ id: 't', name: 'T', bestOf: { groups: 1, knockout: 1 }, slotMinutes: { groups: 30, knockout: 30 } }], matches: { t: [{ id: 1, pool: 'A', scheduled: '2026-05-02T09:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p1'] }, { kind: 'players', ids: ['p2'] }] }] } };
+  const bad = bare({ timezone: 'Mars/Olympus', venues: [{ id: 'c1', name: 'Court 1' }], players: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }], matches: { t: [{ id: 1, pool: 'A', scheduled: '2026-05-02T09:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p1'] }, { kind: 'players', ids: ['p2'] }] }] } });
   const data = pageData(bad, 'bad');
   assert.doesNotThrow(() => renderTournament({ slug: 'bad', view: 'tournament' }, data), 'tournament page');
   assert.doesNotThrow(() => renderVenue({ slug: 'bad', view: 'venues' }, data, Date.now()), 'venue board');
@@ -441,17 +444,16 @@ test('kiosk calendar: cards sit by wall-clock top — a slot only on a late venu
   // the second court only landed after the whole afternoon. The calendar has
   // no row order to misalign: position is wall-clock, so 12:00 must fall
   // between 11:30 and 14:00 no matter which venue carries it.
-  const tjson = {
-    name: 'Cal', location: 'Hall', timezone: 'UTC',
+  const tjson = bare({
+    name: 'Cal',
     venues: [{ id: 'c1', name: 'Court 1' }, { id: 'c2', name: 'Court 2' }],
     players: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }, { id: 'p3', name: 'P3' }, { id: 'p4', name: 'P4' }, { id: 'p5', name: 'P5' }, { id: 'p6', name: 'P6' }],
-    categories: [{ id: 't', name: 'T', bestOf: { groups: 1, knockout: 1 }, slotMinutes: { groups: 30, knockout: 30 } }],
     matches: { t: [
       { id: 1, pool: 'A', scheduled: '2026-05-02T11:30:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p1'] }, { kind: 'players', ids: ['p2'] }] },
       { id: 2, pool: 'A', scheduled: '2026-05-02T12:00:00', venue: 'c2', sides: [{ kind: 'players', ids: ['p3'] }, { kind: 'players', ids: ['p4'] }] },
       { id: 3, pool: 'A', scheduled: '2026-05-02T14:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p5'] }, { kind: 'players', ids: ['p6'] }] },
     ] },
-  };
+  });
   const html = renderVenue({ slug: 'cal', view: 'venues' }, pageData(tjson, 'cal'), Date.parse('2026-05-02T12:05:00Z'));
   const topOf = {};
   for (const m of html.matchAll(/<([a-z][a-z0-9]*)[^>]*style="top:([\d.]+)px[^"]*"[^>]*>([\s\S]*?)<\/\1>/g)) {
