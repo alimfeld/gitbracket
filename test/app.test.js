@@ -310,7 +310,45 @@ test('playerStatus: the podium lands the moment the final is played, not when th
   const ctx = place8Ctx(tjson);
   assert(playerStatus(ctx, 'p1') === 'Champion', 'the final winner is already champion with a bronze pending');
   assert(playerStatus(ctx, 'p2') === 'Runner-up', 'the final loser is runner-up, not eliminated');
-  assert(playerStatus(ctx, 'p5') === 'In placement', 'a bronze-pending player stays in placement');
+  assert(playerStatus(ctx, 'p5') === 'In placement — 3rd–4th', 'a bronze-pending player stays in placement, with the band at stake');
+});
+
+test('playerStatus: the word carries the rank behind it — pool standing, finish band', () => {
+  // out in groups: the final pool standing, pool-scoped (pools are never ranked against each other)
+  const full = catOf('full', 't');
+  assert(playerStatus(full, 'p3') === 'Out in groups — 3rd in Pool A', 'a group-stage exit reports its final pool place');
+  // live pool rank once one pool match is decided, while only group matches remain
+  const live = JSON.parse(JSON.stringify(require(FIX('full', 'tournaments', 'full.json'))));
+  live.matches.t.forEach(m => { if (m.id !== 1 && m.id !== 2) m.result = undefined; });
+  const mid = makeCat({ meta: live.categories[0], matches: live.matches.t }, live);
+  assert(playerStatus(mid, 'p1') === 'In groups — 1st in Pool A', 'a live pool ranks a player after the first decided match');
+  // placement band, tightest off the deepest placement match
+  const p8 = catOf('place8', 't');
+  assert(playerStatus(p8, 'p3') === 'Eliminated in the Quarterfinals — 7th', 'a decided 7-8 decider names the exact place');
+  assert(playerStatus(p8, 'p4') === 'Eliminated in the Quarterfinals — 6th', 'the loser of a decided 5th-place decider is exactly 6th');
+  // no placement tree: the elimination round fixes the band; a bye'd round clamps its top
+  const P = (...ids) => ({ kind: 'players', ids });
+  const win = m => ({ kind: 'match', match: m, result: 'winner' });
+  const r = { status: 'played', winner: 'a' };
+  const players = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8'].map(id => ({ id, name: id }));
+  const pure = makeCat({ meta: {}, matches: [
+    { id: 1, sides: [P('p1'), P('p2')], result: r },
+    { id: 2, sides: [P('p3'), P('p4')], result: r },
+    { id: 3, sides: [P('p5'), P('p6')], result: r },
+    { id: 4, sides: [P('p7'), P('p8')], result: r },
+    { id: 5, sides: [win(1), win(2)], result: r },
+    { id: 6, sides: [win(3), win(4)], result: r },
+    { id: 7, sides: [win(5), win(6)], result: r },
+  ] }, { timezone: 'UTC', players });
+  assert(playerStatus(pure, 'p2') === 'Eliminated in the Quarterfinals — 5th–8th', 'a pure bracket bands QF losers 5th–8th');
+  const six = makeCat({ meta: {}, matches: [
+    { id: 1, sides: [P('p3'), P('p4')], result: r },
+    { id: 2, sides: [P('p5'), P('p6')], result: r },
+    { id: 3, sides: [P('p1'), win(1)], result: r },
+    { id: 4, sides: [P('p2'), win(2)], result: r },
+    { id: 5, sides: [win(3), win(4)], result: r },
+  ] }, { timezone: 'UTC', players: players.slice(0, 6) });
+  assert(playerStatus(six, 'p4') === 'Eliminated in the Quarterfinals — 5th–6th', 'byes clamp the band top — a 6-player bracket has no 7th');
 });
 
 test('playerMatches: only matches the player is actually in, not potential slots', () => {

@@ -380,6 +380,9 @@ function rankRange(ranks) {
   return runs.map(([a, b]) => a === b ? ordNum(a) : `${ordNum(a)}–${ordNum(b)}`).join(', ');
 }
 
+// rankRange collapses runs, so a band must arrive as every rank it spans — [5, 8] would render "5th, 8th".
+const rangeRanks = (lo, hi) => Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
+
 const matchEdge = s => s && s.kind === 'match';
 
 
@@ -1096,16 +1099,66 @@ const roundWord = (col, kind) => col === 0
 const inWord = col => roundWord(col, 'in');
 const elimWord = col => roundWord(col, 'elim');
 
-// A player's standing in one category, as a plain word.
+// KO entries: consumed pool ranks + direct players — byes are absent matches, never 2^depth.
+function koField(ctx) {
+  let slots = 0;
+  const players = new Set();
+  for (const m of ctx.matches) {
+    if (!m || m.pool !== undefined || !Array.isArray(m.sides)) continue;
+    for (const s of m.sides) {
+      if (!s) continue;
+      if (s.kind === 'pool' && typeof s.rank === 'number') slots++;
+      else if (s.kind === 'players' && Array.isArray(s.ids)) for (const id of s.ids) players.add(id);
+    }
+  }
+  return slots + players.size;
+}
+
+// A finish band: the tightest placement range, a decided two-rank decider's exact
+// place (winner lo, loser hi), else the deepest KO loss (a bye'd round clamps the top).
+function playerBand(ctx, rows) {
+  let best = null, bestR = null;
+  for (const r of rows) {
+    if (r.m.pool !== undefined) continue;
+    const pr = plRange(r.m, ctx);
+    if (pr && (!best || pr.hi - pr.lo < best.hi - best.lo)) { best = pr; bestR = r; }
+  }
+  if (best) {
+    const w = best.win && best.hi === best.lo + 1 ? winnerIdx(bestR.m) : null;
+    return w !== null ? [bestR.i === w ? best.lo : best.hi] : rangeRanks(best.lo, best.hi);
+  }
+  const koLost = rows.filter(r => {
+    const w = winnerIdx(r.m);
+    return w !== null && w !== r.i && r.m.pool === undefined && placementLabel(r.m, ctx) === null;
+  });
+  if (!koLost.length) return null;
+  const d = Math.max(...koLost.map(r => koColumn(r.m, ctx)));
+  const lo = 2 ** d + 1, hi = Math.min(2 ** (d + 1), koField(ctx));
+  return lo <= hi ? rangeRanks(lo, hi) : null;
+}
+
+// A player's standing in one category: a plain word, plus the pool rank or finish
+// band behind it where the data supports one.
 function playerStatus(ctx, pid) {
   const rows = playerMatches(ctx, pid);
   if (!rows.length) return null;
+  const withRank = (word, text) => text ? t(LOCALE, 'rank-append', { status: word, rank: text }) : word;
+  const pool = () => {
+    const row = rows.find(r => r.m.pool !== undefined);
+    const std = row && poolStandings(ctx, row.m.pool, true);
+    const i = std ? std.findIndex(x => x.ids.has(pid)) : -1;
+    if (i < 0 || !poolDecided(std) || isDeadTie(std, i + 1)) return '';
+    return t(LOCALE, 'slot-pool', { rank: ordNum(poolRanks(std)[i]), pool: row.m.pool });
+  };
+  const band = () => { const b = playerBand(ctx, rows); return b ? rankRange(b) : ''; };
   const undone = rows.filter(r => !isDone(r.m));
   if (undone.length) {
     const koRows = undone.filter(r => r.m.pool === undefined && placementLabel(r.m, ctx) === null);
     if (!koRows.length) {
       // only placement matches left to play (e.g. a bronze not yet scored) — not a championship round
-      return undone.some(r => r.m.pool === undefined) ? t(LOCALE, 'in-placement') : t(LOCALE, 'in-groups');
+      return undone.some(r => r.m.pool === undefined)
+        ? withRank(t(LOCALE, 'in-placement'), band())
+        : withRank(t(LOCALE, 'in-groups'), pool());
     }
     return inWord(Math.max(...koRows.map(r => koColumn(r.m, ctx))));
   }
@@ -1120,9 +1173,9 @@ function playerStatus(ctx, pid) {
   }
   const lost = rows.filter(r => { const w = winnerIdx(r.m); return w !== null && w !== r.i; }); // void settles, counts nothing
   const koLost = lost.filter(r => r.m.pool === undefined && placementLabel(r.m, ctx) === null);
-  if (koLost.length) return elimWord(Math.max(...koLost.map(r => koColumn(r.m, ctx))));
+  if (koLost.length) return withRank(elimWord(Math.max(...koLost.map(r => koColumn(r.m, ctx)))), band());
   const poolsDone = ctx.matches.filter(m => m.pool !== undefined).every(isDone);
-  return poolsDone ? t(LOCALE, 'out-groups') : t(LOCALE, 'in-groups');
+  return poolsDone ? withRank(t(LOCALE, 'out-groups'), pool()) : withRank(t(LOCALE, 'in-groups'), pool());
 }
 
 if (typeof module !== 'undefined') {
