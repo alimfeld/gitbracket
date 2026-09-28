@@ -10,7 +10,7 @@
 const fs = require('fs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, matchSlotMs, sideLabel, placementLabel, koColumn, koOrdinal, matchLabel, schedTime, dayKey, toCats, isDeadTie, winners, catStatus, roundName, playerStatus, setLocale } = require('../site/derive.js');
+const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, matchSlotMs, sideLabel, placementLabel, plRange, koColumn, koOrdinal, matchLabel, schedTime, dayKey, toCats, isDeadTie, winners, catStatus, roundName, playerStatus, setLocale } = require('../site/derive.js');
 const { I18N } = require('../site/i18n.js');
 const { parseRoute, resolveLang, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset, paintBadRoute, pageTitle } = require('../site/app.js');
 const { generate } = require('../src/schedule.js');
@@ -497,6 +497,62 @@ test('place8: 8-team classification bracket labels resolve from a committed fixt
   // Classification finals
   assert(L(23) === '5th place', 'winners of classification semis -> 5th place');
   assert(L(24) === '7th place', 'losers of classification semis -> 7th place');
+  // the semis are cards you can name (the deciders' slots point at them), not two
+  // identical "5th–8th semi" labels
+  assert(matchLabel(p8.byId.get(21), p8) === '5-8 SF-1' && matchLabel(p8.byId.get(22), p8) === '5-8 SF-2', 'classification semis read as numbered band cards');
+});
+
+test('an entered-but-unresolved band keeps its semis terminal and distinct', () => {
+  // place8 with its deciders (23 5th, 24 7th) dropped: the band is entered, not resolved.
+  const tjson = JSON.parse(JSON.stringify(require(FIX('place8', 'tournaments', 'place8.json'))));
+  tjson.matches.t = tjson.matches.t.filter(m => m.id !== 23 && m.id !== 24);
+  const pp = makeCat({ meta: tjson.categories[0], matches: tjson.matches.t }, tjson);
+  const semis = pp.matches.filter(m => placementLabel(m, pp) === '5th–8th semi');
+  assert.equal(semis.length, 2, 'two classification semis, no 5th/7th deciders');
+  assert.deepEqual(semis.map(m => matchLabel(m, pp)).sort(), ['5-8 SF-1', '5-8 SF-2'], 'each semi names a distinct card');
+  assert.ok(semis.every(m => !plRange(m, pp).win), 'a terminal band entry still reads as a semi, not a place');
+  const ids = new Set(semis.map(m => m.id));
+  for (const m of pp.matches) for (const s of m.sides) {
+    assert.ok(!(s.kind === 'match' && ids.has(s.match)), 'nothing consumes a classification semi — the band is entered, not resolved');
+  }
+});
+
+test('classification deciders name their feeder semis as cards', () => {
+  const players = {};
+  const teams = [];
+  for (let i = 1; i <= 8; i++) { players['p' + i] = 'P' + i; teams.push(['p' + i]); }
+  const spec = {
+    slug: 'lab', name: 'Label Open', location: 'Z', timezone: 'Europe/Zurich', date: '2026-05-02', poolSize: 4,
+    blocks: { t: '09:00' },
+    venues: { c1: 'C1', c2: 'C2', c3: 'C3', c4: 'C4' },
+    players,
+    categories: [{ id: 't', name: 'T', bestOf: 1, slotMinutes: 30, placements: 8 }],
+    teams: { t: teams },
+  };
+  const tourney = generate(spec);
+  const ctx = makeCat({ meta: tourney.categories[0], matches: tourney.matches.t }, tourney);
+  const decider = tourney.matches.t.find(m => placementLabel(m, ctx) === '5th place');
+  assert.deepEqual(decider.sides.map(s => sideLabel(s, ctx)), ['Winner of 5-8 SF-1', 'Winner of 5-8 SF-2'], 'an open decider slot names a visible card');
+});
+
+test('plOrdinal: nested bands number their cards independently', () => {
+  // A band of 8 (9-16) and its sub-band (9-12) share lo — keying the ordinal by
+  // lo alone numbered the 9-16 entries 3-6 instead of 1-4.
+  const players = {};
+  const teams = [];
+  for (let i = 1; i <= 16; i++) { players['p' + i] = 'P' + i; teams.push(['p' + i]); }
+  const spec = {
+    slug: 'lab', name: 'Label Open', location: 'Z', timezone: 'Europe/Zurich', date: '2026-05-02', poolSize: 8,
+    blocks: { t: '09:00' },
+    venues: { c1: 'C1', c2: 'C2' },
+    players,
+    categories: [{ id: 't', name: 'T', bestOf: 1, slotMinutes: 30, placements: 16 }],
+    teams: { t: teams },
+  };
+  const tourney = generate(spec);
+  const ctx = makeCat({ meta: tourney.categories[0], matches: tourney.matches.t }, tourney);
+  const codes = tourney.matches.t.map(m => matchLabel(m, ctx)).filter(l => l.startsWith('9-16 QF-')).sort();
+  assert.deepEqual(codes, ['9-16 QF-1', '9-16 QF-2', '9-16 QF-3', '9-16 QF-4'], 'the 9-16 band numbers 1-4, never 3-6');
 });
 
 test('the next card is one card: a second category sharing the match id must not double-flag', () => {

@@ -181,8 +181,10 @@ spec — the single source of the schedule:
   winners still feed the knockout as top seeds.
 - `bestOf`/`slotMinutes` are plain numbers applied to both stages;
   `knockout: false` skips the knockout stage; `placements` (a power of 2)
-  sizes the classification bracket; `final` overrides the final and bronze
-  matches.
+  sizes the classification bracket; `placementRounds` caps how many rounds
+  each classification band plays (1 = every eliminated team gets exactly one
+  placement match — the band is entered, not resolved); `final` overrides the
+  final and bronze matches.
 - `courts` (optional) lists the venue ids a category may use, in priority
   order: a match takes the first free one and never another. Omitting it
   allows every venue. A round too wide for the category's courts spills into

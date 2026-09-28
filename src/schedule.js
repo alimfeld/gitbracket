@@ -39,8 +39,10 @@ function splitPools(teams, poolSize) {
 }
 
 // Placement bracket for n losers: pair best vs worst recursively, determining every
-// rank in range. fin is the spec's "final" override for the bronze only.
-function buildPlacement(losers, mid, fin) {
+// rank in range. fin is the spec's "final" override for the bronze only. rounds caps
+// how deep the band plays: 1 enters the band without resolving it (its winners and
+// losers tie), so every eliminated team gets at most one placement match.
+function buildPlacement(losers, mid, fin, rounds = Infinity) {
   const n = losers.length;
   if (n < 2) return []; // single loser: rank is implied by bracket position, no match possible
   if (n === 2) {
@@ -62,7 +64,8 @@ function buildPlacement(losers, mid, fin) {
   // odd count: the middle loser waits for the top half's winner — its rank
   // decided on court, not implied
   if (n % 2 === 1) winners.push(losers[half]);
-  return [...r1, ...buildPlacement(winners, mid, fin), ...buildPlacement(losers2, mid, fin)];
+  if (rounds <= 1) return r1; // one round per band: entered, not resolved
+  return [...r1, ...buildPlacement(winners, mid, fin, rounds - 1), ...buildPlacement(losers2, mid, fin, rounds - 1)];
 }
 
 // S-curve order for seed indices lo..hi: pair each top-half seed with its mirror,
@@ -78,7 +81,7 @@ function sCurve(lo, hi) {
 // Single elimination. Strength order: pool winners first, then interleaved by rank;
 // the S-curve pairs best vs worst. Byes (next power of two minus field size) skip
 // round 1. fin overrides the final; placements sets placement depth.
-function buildKnockout(pools, names, mid, fin, placements) {
+function buildKnockout(pools, names, mid, fin, placements, placeRounds) {
   placements = placements || 4;
   const total = pools.reduce((s, p) => s + p.length, 0);
   let M = 1;
@@ -187,7 +190,7 @@ function buildKnockout(pools, names, mid, fin, placements) {
       const losers = rounds[ri].map(m => ({ kind: 'match', match: m.id, result: 'loser' }));
       // Only the bronze bracket (from the round before the final) gets the final override
       const override = (ri === rounds.length - 2 && n === 2) ? fin : {};
-      matches.push(...buildPlacement(losers, mid, override));
+      matches.push(...buildPlacement(losers, mid, override, placeRounds));
     }
   }
 
@@ -227,7 +230,7 @@ function buildCategory(teams, cat, poolSize) {
   }
 
   if (cat.knockout !== false && (pools.length > 1 || cat.knockout === true)) {
-    const ko = buildKnockout(pools, names, mid, cat.final || {}, cat.placements);
+    const ko = buildKnockout(pools, names, mid, cat.final || {}, cat.placements, cat.placementRounds);
     matches.push(...ko.matches);
     return { matches, rounds: ko.rounds }; // rounds: champion-tree rounds, leaves to the final — scheduling aligns each round
   }
@@ -471,6 +474,9 @@ function generate(spec) {
       if (typeof c.placements !== 'number' || c.placements < 2 || (c.placements & (c.placements - 1)) !== 0) {
         throw new Error(`spec: category ${c.id}: placements must be a power of 2 >= 2, got ${JSON.stringify(c.placements)}`);
       }
+    }
+    if (c.placementRounds !== undefined && (!Number.isInteger(c.placementRounds) || c.placementRounds < 1)) {
+      throw new Error(`spec: category ${c.id}: placementRounds must be a positive integer, got ${JSON.stringify(c.placementRounds)}`);
     }
     if (c.courts !== undefined) {
       // A malformed court list would silently place nothing (unknown ids never

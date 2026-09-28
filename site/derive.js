@@ -276,7 +276,8 @@ function slotLabel(side, ctx) {
   const ref = ctx.byId.get(side.match);
   if (!ref) return t(LOCALE, 'slot-dangling', { who, id: side.match }); // dangling ref — the id is all there is
   const { pr, col, key } = refInfo(ref, ctx);
-  const code = pr === null && col !== 0; // a numbered main round, never the apex
+  // a numbered card: any main round but the apex, or a classification semi (5-8 SF-1)
+  const code = pr === null ? col !== 0 : !pr.win;
   const label = code ? matchLabel(ref, ctx) : stageLabel(ref, ctx);
   return t(LOCALE, 'slot-of', { who, ref: code ? label : refWord(key, 'dat', label) });
 }
@@ -564,6 +565,22 @@ function placementLabel(m, ctx) {
   return r.win ? t(LOCALE, 'pl-place', { n: cardNum(r.lo) }) : t(LOCALE, 'pl-semi', { a: ordNum(r.lo), b: ordNum(r.hi) });
 }
 
+// Knockout round name by field size: 4 -> SF, 8 -> QF, n -> R{n}. Shared by the
+// main-tree card label and the classification band code.
+const roundAbbr = n => n === 4 ? 'SF' : n === 8 ? 'QF' : `R${n}`;
+
+// Compact code for a classification semi: "5-8 SF-1" — band span + entry-round
+// name + ordinal, so a slot can name a visible card. Deciders keep their place
+// label (they are unique per band).
+function plCode(m, ctx) {
+  const r = plRange(m, ctx);
+  if (!r || r.win) return null;
+  const size = r.hi - r.lo + 1;
+  const abbr = roundAbbr(size);
+  const ord = plOrdinal(m, ctx);
+  return `${r.lo}-${r.hi} ${abbr}${ord ? `-${ord}` : ''}`;
+}
+
 // Possible-rank range of every classification match: a slot reaches the range of
 // whichever match consumes that edge (winner edges climb, loser edges drop); an
 // edge nothing consumes holds a fixed rank stepped out from the pool champion.
@@ -626,8 +643,14 @@ function plBuild(ctx) {
     const d = champAnchor(m, new Set());
     if (d !== null) pools.push([m, d]);
   }
+  // A band whose deciders were never played holds several terminal matches at the
+  // same anchor depth — that shared lo is the signal the band is entered, not
+  // resolved.
+  const termCount = new Map();
+  for (const [, d] of pools) { const a = 2 ** d + 1; termCount.set(a, (termCount.get(a) ?? 0) + 1); }
   for (const [champ, d] of pools) {
     const A = 2 ** d + 1; // the pool's best rank
+    const k = termCount.get(A); // >1: the band played its entry round only
     let next = A + 2;
     // Reachability from the champion over classification matches only — main-
     // bracket neighbors fail member() and stay out; winner-edge links before
@@ -655,9 +678,12 @@ function plBuild(ctx) {
       const [w, l] = spec.get(id) || [];
       const val = (x) => x && (x[0] === 'n' ? { lo: x[1], hi: x[1] } : resolve(x[1])) || null;
       const wv = val(w), lv = val(l);
-      const out = wv && lv
+      let out = wv && lv
         ? { lo: Math.min(wv.lo, lv.lo), hi: Math.max(wv.hi, lv.hi), win: !winnerParent.has(id) }
         : null;
+      // an entered-but-unresolved band spans its full range and ties (5 5 7 7),
+      // never stepping through 5 6 7 8
+      if (out && k > 1 && id === champ.id) out = { lo: A, hi: A + 2 * k - 1, win: false };
       pl.set(id, out);
       return out;
     };
@@ -716,6 +742,33 @@ function plBands(ctx) {
 // Band column of a classification match; null elsewhere.
 function placementColumn(m, ctx) {
   return plBands(ctx).col.get(m && m.id) ?? null;
+}
+
+// Band-local ordinal of a classification semi: the pairing's first side is the
+// better seed, so the semi holding the best loser reads 1. Structural — a
+// reschedule never renumbers a card.
+function plOrdinal(m, ctx) {
+  const memo = ctxMemo(ctx);
+  if (!memo.plOrd) {
+    // Keyed by full span: a band of 8 (9-16) and its sub-band (9-12) share lo,
+    // so keying by lo alone would number the 9-16 entries 3-6.
+    const bands = new Map(); // band span -> [{ id, key }]
+    for (const X of ctx.matches) {
+      const r = X && X.pool === undefined ? plRange(X, ctx) : null;
+      if (!r || r.win) continue; // band semis only; deciders are already unique
+      const first = Array.isArray(X.sides) ? X.sides[0] : null;
+      const anchor = first && first.kind === 'match' ? ctx.byId.get(first.match) : null;
+      const span = `${r.lo}-${r.hi}`;
+      if (!bands.has(span)) bands.set(span, []);
+      bands.get(span).push({ id: X.id, key: anchor ? koOrdinal(anchor, ctx) : Infinity });
+    }
+    const ord = memo.plOrd = new Map();
+    for (const list of bands.values()) {
+      list.sort((a, b) => a.key - b.key); // stable: ties keep build order
+      list.forEach((e, i) => ord.set(e.id, i + 1));
+    }
+  }
+  return memo.plOrd.get(m && m.id) || 0;
 }
 
 // Distinct placement labels of one band (order free — stageGroupName dedupes).
@@ -951,12 +1004,12 @@ function koOrdinal(m, ctx) {
 function matchLabel(m, ctx) {
   if (m.pool !== undefined) return `Pool ${m.pool}`;
   const pl = placementLabel(m, ctx);
-  if (pl) return pl;
+  if (pl) return plCode(m, ctx) || pl;
   const col = koColumn(m, ctx);
   const n = 2 << col;
   if (n === 2) return roundName(col); // the apex reads its localized name
   // Every round carries its bracket ordinal so a slot reference names a visible card.
-  const abbr = n === 4 ? 'SF' : n === 8 ? 'QF' : `R${n}`;
+  const abbr = roundAbbr(n);
   const ord = koOrdinal(m, ctx);
   return ord ? `${abbr}-${ord}` : abbr;
 }

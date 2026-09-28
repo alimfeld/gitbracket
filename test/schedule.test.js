@@ -214,6 +214,33 @@ test('placements: 8 builds 5th-8th classification', () => {
   assert.ok(loserEdges.length > 1, 'multiple placement matches with loser edges');
 });
 
+test('placementRounds: 1 enters each classification band without playing its deciders', () => {
+  // 8 teams, 2 pools of 4: the 5-8 band plays its two semis only — no 5th/7th
+  // deciders — so every eliminated team gets exactly one placement match.
+  const players = {};
+  const mdTeams = [];
+  for (let i = 1; i <= 8; i++) { players['p' + i] = 'P' + i; mdTeams.push(['p' + i]); }
+  const spec = {
+    ...MINI,
+    players,
+    categories: [{ ...MINI.categories[0], placements: 8, placementRounds: 1 }],
+    teams: { md: mdTeams },
+  };
+  const tourney = generate(spec);
+  const { errs } = validateRepo(repoOf(tourney));
+  assert.deepEqual(errs, []);
+  // md: 12 pool + 7 main bracket + 1 bronze + 2 classification semis = 22
+  assert.equal(tourney.matches.md.length, 22);
+  const ko = tourney.matches.md.filter((m) => m.pool === undefined);
+  assert.equal(ko.length, 10);
+  const loserFed = ko.filter((m) => m.sides.some((s) => s.kind === 'match' && s.result === 'loser'));
+  assert.equal(loserFed.length, 3, 'bronze + the two classification semis, no deciders');
+  const placeIds = new Set(loserFed.map((m) => m.id));
+  for (const m of loserFed) {
+    for (const s of m.sides) assert.ok(!(s.kind === 'match' && placeIds.has(s.match)), 'classification matches are terminal, never fed by one another');
+  }
+});
+
 test('knockout with byes: odd loser pools build no self-matches (R1 losers from a partial round)', () => {
   // Single-pool knockout where total < next power of two: round 1 has byes, so
   // its loser pool is not a power of two (3 teams: 1 loser; 7 teams: 3 losers).

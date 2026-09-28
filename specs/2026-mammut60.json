@@ -89,6 +89,7 @@
       },
       "knockout": true,
       "placements": 16,
+      "placementRounds": 1,
       "courts": [
         "court-5",
         "court-4",
