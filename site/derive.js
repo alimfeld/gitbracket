@@ -40,6 +40,13 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
 // Per-render cache; toCats rebuilds contexts every render, so a memo can't outlive it.
 const ctxMemo = ctx => ctx._memo || (ctx._memo = {});
 
+// One per-render lazy field (see ctxMemo): built at most once, rebuilt next render.
+const memoField = (ctx, key, build) => {
+  const memo = ctxMemo(ctx);
+  if (memo[key] === undefined) memo[key] = build();
+  return memo[key];
+};
+
 // id -> display name; a malformed entry renders absent, never throws.
 const nameMap = x => new Map((Array.isArray(x) ? x : []).filter(e => e && typeof e === 'object').map(e => [e.id, e.name]));
 
@@ -697,16 +704,13 @@ function plBuild(ctx) {
 
 // Range of a classification match; null for main-bracket matches. winners reads lo.
 function plRange(m, ctx) {
-  const memo = ctxMemo(ctx);
-  if (!memo.pl) memo.pl = plBuild(ctx);
-  return memo.pl.get(m.id) ?? null;
+  return memoField(ctx, 'pl', () => plBuild(ctx)).get(m.id) ?? null;
 }
 
 // Depth band of every classification match, one below its anchor's column minus
 // further loser-chain edges; records each band's distinct placement labels.
 function plBands(ctx) {
-  const memo = ctxMemo(ctx);
-  if (!memo.plBand) {
+  return memoField(ctx, 'plBand', () => {
     const col = new Map();    // placement match id -> band column
     const labels = new Map(); // band column -> placement labels
     const bandOf = (m) => {
@@ -737,9 +741,8 @@ function plBands(ctx) {
       if (!m || m.pool !== undefined || placementLabel(m, ctx) === null) continue;
       bandOf(m);
     }
-    memo.plBand = { col, labels };
-  }
-  return memo.plBand;
+    return { col, labels };
+  });
 }
 
 // Band column of a classification match; null elsewhere.
@@ -751,8 +754,7 @@ function placementColumn(m, ctx) {
 // better seed, so the semi holding the best loser reads 1. Structural — a
 // reschedule never renumbers a card.
 function plOrdinal(m, ctx) {
-  const memo = ctxMemo(ctx);
-  if (!memo.plOrd) {
+  return memoField(ctx, 'plOrd', () => {
     // Keyed by full span: a band of 8 (9-16) and its sub-band (9-12) share lo,
     // so keying by lo alone would number the 9-16 entries 3-6.
     const bands = new Map(); // band span -> [{ id, key }]
@@ -765,13 +767,13 @@ function plOrdinal(m, ctx) {
       if (!bands.has(span)) bands.set(span, []);
       bands.get(span).push({ id: X.id, key: anchor ? koOrdinal(anchor, ctx) : Infinity });
     }
-    const ord = memo.plOrd = new Map();
+    const ord = new Map();
     for (const list of bands.values()) {
       list.sort((a, b) => a.key - b.key); // stable: ties keep build order
       list.forEach((e, i) => ord.set(e.id, i + 1));
     }
-  }
-  return memo.plOrd.get(m && m.id) || 0;
+    return ord;
+  }).get(m && m.id) || 0;
 }
 
 // Distinct placement labels of one band (order free — stageGroupName dedupes).
@@ -802,10 +804,9 @@ function placeWave(ctx) {
 // Winner-edge distance to the final (0 = the final). Its own memo, not koColumn's
 // — this can be read while koColumn's build is mid-flight.
 function wdOf(ctx, id) {
-  const memo = ctxMemo(ctx);
-  if (!memo.wd) {
+  const map = memoField(ctx, 'wd', () => {
     const { winnerParent } = parentsOf(ctx);
-    const wdMap = memo.wd = new Map();
+    const wdMap = new Map();
     const d = (X) => {
       if (wdMap.has(X.id)) return wdMap.get(X.id);
       wdMap.set(X.id, 0); // in-progress: a malformed cycle reads 0, never recurses
@@ -815,8 +816,9 @@ function wdOf(ctx, id) {
       return r;
     };
     for (const m of ctx.matches) d(m);
-  }
-  return memo.wd.get(id);
+    return wdMap;
+  });
+  return map.get(id);
 }
 
 // "+02:00" offset for a date via a noon-UTC anchor.
@@ -929,8 +931,7 @@ const mainFinal = (ctx, parented) =>
 // (parent -> feeder ids, side order), loserFed, loserParent. Every bracket
 // consumer reads this one map.
 function parentsOf(ctx) {
-  const memo = ctxMemo(ctx);
-  if (!memo.parents) {
+  return memoField(ctx, 'parents', () => {
     const winnerParent = new Map();
     const kids = new Map();
     const loserFed = new Set();
@@ -949,17 +950,15 @@ function parentsOf(ctx) {
         }
       }
     }
-    memo.parents = { winnerParent, kids, loserFed, loserParent };
-  }
-  return memo.parents;
+    return { winnerParent, kids, loserFed, loserParent };
+  });
 }
 
 // Column: 0 is the final, one back per winner edge; depth-from-leaves can't place
 // a bye'd semi. Main-tree columns read wd (built before this).
 function koColumn(m, ctx) {
-  const memo = ctxMemo(ctx);
-  if (!memo.koCol) {
-    const koColMap = memo.koCol = new Map();
+  const map = memoField(ctx, 'koCol', () => {
+    const koColMap = new Map();
     const { winnerParent } = parentsOf(ctx);
     const final = mainFinal(ctx, winnerParent);
     const col = (X) => {
@@ -978,17 +977,17 @@ function koColumn(m, ctx) {
       return r;
     };
     for (const X of ctx.matches) col(X);
-  }
-  return memo.koCol.get(m.id);
+    return koColMap;
+  });
+  return map.get(m.id);
 }
 
 // Ordinal within a round, from who each winner feeds. Reads bracket structure,
 // never `scheduled`, so editing times can't renumber anything. 0 = off the tree.
 function koOrdinal(m, ctx) {
-  const memo = ctxMemo(ctx);
-  if (!memo.koOrd) {
+  return memoField(ctx, 'koOrd', () => {
     const { kids, winnerParent } = parentsOf(ctx);
-    const ord = memo.koOrd = new Map();
+    const ord = new Map();
     const final = mainFinal(ctx, winnerParent);
     if (final) {
       ord.set(final.id, 1);
@@ -1000,8 +999,8 @@ function koOrdinal(m, ctx) {
         }
       }
     }
-  }
-  return memo.koOrd.get(m.id) || 0;
+    return ord;
+  }).get(m.id) || 0;
 }
 
 function matchLabel(m, ctx) {
