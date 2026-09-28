@@ -137,8 +137,7 @@ function openBrowser(url) {
 // Serve the admin page (src/admin/) plus site/derive.js.
 function serve(state) {
   const pageRoot = path.join(__dirname, 'admin');
-  let server;
-  server = http.createServer(async (req, res) => {
+  const server = http.createServer(async (req, res) => {
     const url = (req.url || '/').split('?')[0];
     if (req.method === 'POST') {
       // Any webpage the operator has open can POST to this loopback daemon — a
