@@ -204,18 +204,13 @@ a.chip:focus-visible {
   background: var(--hover);
 }
 
-/* the venue board rides the index card's corner, so it needs its own plate */
+/* the board chip is a sibling of the card link (a link can't nest), so it's
+   placed over the title row and needs its own plate to mask the text behind */
 a.board-link {
   position: absolute;
-  top: var(--space);
-  right: var(--space);
+  top: calc(var(--space)*2);
+  right: calc(var(--space)*2);
   background: var(--page);
-}
-
-a.board-link:hover,
-a.board-link:focus-visible {
-  background: var(--accent);
-  color: var(--on-accent);
 }
 
 .card-wrap {
@@ -228,7 +223,7 @@ a.card h2 {
 
 /* the corner chip overlaps the title row — long names must not run under it */
 .card-wrap h2 {
-  padding-right: calc(var(--space)*6);
+  padding-right: calc(var(--space)*4);
 }
 
 .card p {

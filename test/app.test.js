@@ -707,7 +707,8 @@ test('renderers: escapes, a11y state, and behavioral hooks — the shipped surfa
   ] });
   assert(text(idx).indexOf('Wide') < text(idx).indexOf('Sample') && text(idx).indexOf('Sample') < text(idx).indexOf('Later'), 'sorted by start date descending, undated last');
   assert(!idx.includes('undefined') && !idx.includes('null'), 'no date renders clean, no null payload');
-  assert(links(idx).filter(l => l.href === '#sample/venues').length === 1, 'venue board appears once per tournament');
+  const boards = links(idx).filter(l => l.href === '#sample/venues');
+  assert(boards.length === 1 && boards[0].label, 'venue board appears once per tournament, named for screen readers');
 });
 
 test('possible stages render as cards: a status flag per stage, and the next header goes conditional', () => {
