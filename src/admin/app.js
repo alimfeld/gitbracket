@@ -100,11 +100,12 @@ function teamSize(ctx) {
 function pools(ctx) { return [...new Set(ctx.matches.filter(m => m && m.pool).map(m => m.pool))]; }
 
 async function setSlug(slug, keepDay = false) {
+  const tjson = await get('/api/data?slug=' + slug);
+  // a failed fetch must not name a slug the grid isn't showing — put the picker back
+  if (!tjson) { $('slug').value = S.slug ?? ''; return; }
   S.slug = slug;
   S.conflicts = []; // a fresh tournament's cards must not inherit the old slug's highlights
-
-  S.tjson = await get('/api/data?slug=' + slug);
-  if (!S.tjson) return;
+  S.tjson = tjson;
   S.tz = S.tjson.timezone || 'UTC';
   S.cats = toCats(S.tjson);
   S.venues = (Array.isArray(S.tjson.venues) ? S.tjson.venues : []).filter(v => v && typeof v === 'object');
