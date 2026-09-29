@@ -98,5 +98,7 @@ const links = html => [...html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/g)].map(m =
   label: decode(/aria-label="([^"]*)"/.exec(m[1])?.[1] ?? '') || null,
   text: text(m[2]),
 }));
+// a link by its visible text or its aria-label — either carries the accessible name
+const lk = (html, label) => links(html).find(x => x.text === label || x.label === label);
 
-module.exports = { FIX, MINI, hasErr, hasConflict, validateFixture, catOf, scratchSite, pageData, repoPage, withTjson, text, vals, card, cards, links };
+module.exports = { FIX, MINI, hasErr, hasConflict, validateFixture, catOf, scratchSite, pageData, repoPage, withTjson, text, vals, card, cards, links, lk };

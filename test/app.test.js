@@ -14,7 +14,7 @@ const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playe
 const { I18N } = require('../site/i18n.js');
 const { parseRoute, resolveLang, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset, paintBadRoute, pageTitle } = require('../site/app.js');
 const { generate } = require('../src/schedule.js');
-const { FIX, catOf, pageData, repoPage, withTjson, text, vals, card, cards, links } = require('./helpers.js');
+const { FIX, catOf, pageData, repoPage, withTjson, text, vals, card, cards, links, lk } = require('./helpers.js');
 const { loadRepo } = require('../src/tools.js');
 const { validateRepo } = require('../src/validate.js');
 
@@ -675,8 +675,8 @@ test('renderers: escapes, a11y state, and behavioral hooks — the shipped surfa
   for (const ms of Object.values(preJson.matches)) for (const m of ms) { delete m.result; delete m.games; }
   const pre = renderTournament({ slug: 'sample', view: 'tournament' }, withTjson(data, preJson));
   assert(!text(pre).includes('1 Ada Lovelace'), 'roster renders before any result, no phantom rank 1s');
-  const sLink = links(pre).find(l => l.text.startsWith('Next'));
-  assert(sLink && sLink.jump === 'group-matches' && sLink.href === '#sample', 'the pre-start line says Next, like every other stage — a link to the opening block');
+  const sLink = links(pre).find(l => l.jump === 'group-matches');
+  assert(sLink && sLink.href === '#sample', 'the pre-start line says Next, like every other stage — a link to the opening block');
   assert(vals(pre, 'data-status').includes('next'), 'pre-start: the opening block is lit — playable before the first result');
   const seg = links(standings).filter(l => l.text === 'Tournament' || l.text === 'Schedule');
   assert(seg.length === 2 && seg[0].href === '#sample' && seg[0].current && seg[1].href === '#sample/schedule' && !seg[1].current, 'tournament page: segment switch, Tournament current');
@@ -686,9 +686,9 @@ test('renderers: escapes, a11y state, and behavioral hooks — the shipped surfa
   const ppage = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p1' }, data);
   const pseg = links(ppage).filter(l => l.text === 'Tournament' || l.text === 'Schedule');
   assert(pseg[0].href === '#sample?player=p1' && !pseg[0].current && pseg[1].href === '#sample/schedule?player=p1' && pseg[1].current, 'player page: Schedule current, pick preserved in links');
-  const nextLink = links(ppage).find(l => l.text.startsWith('Next'));
-  assert(nextLink && nextLink.jump === 'next' && nextLink.href === '#sample/schedule?player=p1', 'the whole next line is the link to the next card');
-  assert(ppage.includes('aria-hidden="true"> ↓</span></a>'), 'the next line ends with a decorative down arrow, hidden from screen readers');
+  const nextLink = links(ppage).find(l => l.jump === 'next');
+  assert(nextLink && nextLink.href === '#sample/schedule?player=p1', 'the body after "Next:" links to the next card');
+  assert(ppage.includes('Next:') && !ppage.includes('↓'), 'the label is plain text and the line carries no arrow');
   assert(text(ppage).includes('Ada Lovelace') && text(ppage).includes('Court 1'), 'player card finds the player, names the court');
   const picker = renderPlayer({ slug: 'sample', view: 'schedule' }, data);
   const picks = links(picker).filter(l => /\/schedule\?player=/.test(l.href));
@@ -819,7 +819,6 @@ test('tournament views: a poll that changed the file flashes the stamp, an uncha
 test('routing: cat and player ride along between tournament and schedule — applied on their home view only', () => {
   const data = repoPage('sample');
   const t = renderTournament({ slug: 'sample', view: 'tournament', cat: 'md40' }, data);
-  const lk = (html, label) => links(html).find(x => x.text === label);
   assert(lk(t, 'Schedule').href === '#sample/schedule?cat=md40', 'tournament page carries cat onto the schedule link');
   assert(lk(t, 'Mixed Doubles').href === '#sample?cat=xd', 'the switcher selects another category, no extra params');
   const s = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p1', cat: 'md40' }, data);
@@ -834,7 +833,6 @@ test('routing: cat and player ride along between tournament and schedule — app
 
 test('routing: schedule links carry the chosen language — a shared URL keeps it', () => {
   const data = repoPage('sample');
-  const lk = (html, label) => links(html).find(x => x.text === label);
   const s = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p1', cat: 'md40', lang: 'de' }, data);
   assert(lk(s, 'Change player').href.endsWith('&lang=de'), 'Change player keeps the language');
   const picker = renderPlayer({ slug: 'sample', view: 'schedule', cat: 'md40', lang: 'de' }, data);

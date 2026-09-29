@@ -189,7 +189,7 @@ function updateStamp(data, tz) {
   return `<p class="meta"${flash ? ' data-flash' : ''}${stale ? ' data-status="stale"' : ''}>${stamp}</p>`;
 }
 
-const HOME_LINK = () => `<a class="chip" href="#" aria-label="${u('tournaments')}"><span aria-hidden="true">⎋</span></a>`;
+const HOME_LINK = () => `<a class="chip" href="#" aria-label="${u('tournaments')}">⎋</a>`;
 
 function renderTournament(route, data) {
   if (!data.tjson) return MISSING();
@@ -253,9 +253,9 @@ const anticipationLine = (ctx, status, href, day, wave) => {
   const where = courts.length ? ` · ${esc(fmtCourts(courts))}` : '';
   // the jump target is the section the wave lives in
   const section = status.kind === 'groups' ? 'group-matches' : status.wave !== null ? `ko-${status.wave}` : '';
-  const body = u('next', { body: `${timeEl(schedTime(m0, ctx.tz), ctx.tz, day)}${where}` });
-  // the whole line is the link — a full-size tap target, same as the schedule page
-  return section ? `<p data-status="next"><a data-jump="${section}" href="${esc(href)}">${body}<span aria-hidden="true"> ↓</span></a></p>` : `<p>${body}</p>`;
+  const inner = `${timeEl(schedTime(m0, ctx.tz), ctx.tz, day)}${where}`;
+  const body = section ? `<a data-jump="${section}" href="${esc(href)}">${inner}</a>` : inner;
+  return `<p${section ? ' data-status="next"' : ''}>${u('next', { body })}</p>`;
 };
 
 function catSection(ctx, opts) {
@@ -533,16 +533,16 @@ function playerSchedule(route, data, p) {
   const nextEv = events.find(e => e.r ? !isDone(e.r.m) : true);
   let next = null;
   if (nextEv) {
-    // the whole "Next:" line is the link — a full-size tap target
-    const link = `<a data-jump="next" href="${esc(href(data.t.slug, 'schedule', route))}">`;
+    // only the body after "Next:" is the link; the label stays plain text
+    const link = body => `<a data-jump="next" href="${esc(href(data.t.slug, 'schedule', route))}">${body}</a>`;
     if (nextEv.r) {
       const m = nextEv.r.m, nctx = nextEv.r.ctx;
       const t = schedTime(m, nctx.tz);
-      next = `${link}${u('next', { body: `${t !== null ? timeEl(t, nctx.tz, multi) : 'TBD'}${m.venue ? ` · ${esc(venueName(nctx, m.venue))}` : ' · TBD'}` })}<span aria-hidden="true"> ↓</span></a>`;
+      next = u('next', { body: link(`${t !== null ? timeEl(t, nctx.tz, multi) : 'TBD'}${m.venue ? ` · ${esc(venueName(nctx, m.venue))}` : ' · TBD'}`) });
     } else {
       const stage = nextEv.stage, nctx = nextEv.ctx;
       const when = stageBit(stage.times, t => timeEl(t, nctx.tz, multi));
-      next = `${link}${u('next', { body: `${esc(stage.label)}${when ? ' · ' + when : ''}${stage.chip ? ` (${esc(stage.chip)})` : ''}` })}<span aria-hidden="true"> ↓</span></a>`;
+      next = u('next', { body: link(`${esc(stage.label)}${when ? ' · ' + when : ''}${stage.chip ? ` (${esc(stage.chip)})` : ''}`) });
     }
   }
   // one progress line across every category, then the next line below it
@@ -550,7 +550,7 @@ function playerSchedule(route, data, p) {
     .filter(([s]) => s)
     .map(([s, name]) => `<span>${esc(name)}: ${esc(s)}</span>`)
     .join('\u00a0· '); // nbsp glues the dot to the line so the only wrap point is after it
-  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}<a class="chip" href="${esc(href(data.t.slug, 'schedule', { ...route, player: null }))}">${u('change-player')}</a></h1>${updateStamp(data, data.tjson.timezone || 'UTC')}${progress ? `<p class="progress">${progress}</p>` : ''}${next ? `<p data-status="next">${next}</p>` : ''}</header>`];
+  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}<a class="chip" href="${esc(href(data.t.slug, 'schedule', { ...route, player: null }))}" aria-label="${u('change-player')}">⇄</a></h1>${updateStamp(data, data.tjson.timezone || 'UTC')}${progress ? `<p class="progress">${progress}</p>` : ''}${next ? `<p data-status="next">${next}</p>` : ''}</header>`];
   const out = [];
   let curDay = null;
   for (const e of events) {
