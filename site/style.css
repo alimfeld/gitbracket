@@ -177,7 +177,11 @@ p {
   color: var(--on-accent);
 }
 
-/* only the current tab wears its wash, softened so the bar reads as a tint, not a rainbow */
+/* only the current tab wears its wash, softened so the bar reads as a tint, not a rainbow;
+   a 4th+ category (legal, unguarded) has no palette entry — it falls back to the neutral
+   tint so its current state never vanishes */
+.cats [data-cat] { --wash: var(--hover); }
+
 .cats [data-cat="1"] { --wash: color-mix(in srgb, var(--cat-1) 70%, var(--page)); }
 
 .cats [data-cat="2"] { --wash: color-mix(in srgb, var(--cat-2) 70%, var(--page)); }
@@ -361,6 +365,8 @@ article .meta {
   padding: 0 calc(var(--space)/2);
   border-radius: var(--radius);
   color: var(--ink);
+  /* a 4th+ category has no palette entry — a neutral identity plate beats a bare name */
+  background: var(--hover);
 }
 
 .cat[data-cat="1"] { background: var(--cat-1); }

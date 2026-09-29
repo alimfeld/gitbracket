@@ -297,7 +297,7 @@ function catSection(ctx, opts) {
         parts.push(`<div><h4>Pool ${esc(String(pool))}</h4>`);
         const bo1 = poolBo1(ctx, pool); // GD restates W−L in a best-of-1 pool — drop the column, keep PD
         const gdHead = bo1 ? '' : '<th scope="col" class="num">GD</th>';
-        parts.push(`<table><thead><tr><th scope="col" class="num">#</th><th scope="col">Team</th><th scope="col" class="num">W</th><th scope="col" class="num">L</th>${gdHead}<th scope="col" class="num">PD</th></tr></thead><tbody>`);
+        parts.push(`<table><thead><tr><th scope="col" class="num">#</th><th scope="col">${u('team')}</th><th scope="col" class="num">W</th><th scope="col" class="num">L</th>${gdHead}<th scope="col" class="num">PD</th></tr></thead><tbody>`);
         const std = poolStandings(ctx, pool, true); // pools come from matches, so partial standings always resolve
         const ranks = poolDecided(std) ? poolRanks(std) : null;
         std.forEach((r, i) => {

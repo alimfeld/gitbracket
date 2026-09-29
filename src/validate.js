@@ -10,7 +10,7 @@
 
 const path = require('path');
 const { loadRepo, plainObject, isRealDate, schedEntries, pairBusy, consumedSlots, winTarget, reachedWinner, feederBounds, sameSet, daysOf } = require('./tools.js');
-const { LOCALE, DATE_RE, ID_RE, ISO_RE, MAX_BEST_OF, pairSig, matchSlotMs, makeCat, matchesOf, resolveSide, bestOfOf, schedTime, placementLabel, parentsOf } = require('../site/derive.js');
+const { LOCALE, DATE_RE, ID_RE, ISO_RE, MAX_BEST_OF, pairSig, matchSlotMs, makeCat, matchesOf, resolveSide, bestOfOf, schedTime, plRange, parentsOf } = require('../site/derive.js');
 
 const RESULTS = ['winner', 'loser'];
 const RESULT_STATUSES = ['played', 'walkover', 'void'];
@@ -489,7 +489,7 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, con
   const { winnerParent } = parentsOf(ctx);
   const roots = matches.filter(m => m && typeof m === 'object' && m.pool === undefined
     && Array.isArray(m.sides) && m.sides.length === 2
-    && placementLabel(m, ctx) === null && !winnerParent.has(m.id));
+    && plRange(m, ctx) === null && !winnerParent.has(m.id));
   if (roots.length > 1) {
     conflict(cFile, `${roots.length} unfed knockout matches — exactly one championship final is allowed`,
       roots.map(m => ({ cat: cat.id, matchId: m.id })));
