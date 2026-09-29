@@ -73,7 +73,8 @@ const HTTP_ERR = { httpError: true };
 // revalidation (Safari over HTTP/2, WebKit #114738) retries with 'no-store'.
 async function fetchJson(url) {
   const get = async cache => {
-    const res = await fetch(url, { cache });
+    // one poll interval per attempt; without AbortSignal.timeout it fetches unbounded (old Safari)
+    const res = await fetch(url, { cache, signal: AbortSignal.timeout?.(POLL_MS) });
     if (res.ok) return await res.json();
     // only a gone-for-good link stops the poll — a 5xx returns null like any
     // network failure and the poll retries next tick
@@ -132,6 +133,10 @@ async function loadAll(route) {
   return { t, tjson, cats: toCats(tjson) };
 }
 
+// The index has no snapshot; a snapshot renders in place only for its own slug,
+// so a view/cat/player hop is a cache hit and anything else refetches.
+const needsFetch = (r, d) => r.view === 'index' || !(d && d.t && d.t.slug === r.slug);
+
 const segmentBar = r => {
   const t = r.view === 'tournament', m = r.view === 'schedule';
   const item = (v, on) => on ? `<span aria-current="page">${u(v)}</span>` : `<a href="${esc(href(r.slug, v, r))}">${u(v)}</a>`;
@@ -186,6 +191,7 @@ const catNav = (slug, ctxs, route) => {
 };
 
 // The polling views' shared stamp; a changed file flashes the line, a failing poll names its state.
+// Module-scope so the renderers stay directly testable — not boot's closure.
 let stampSnap = null; // { slug, hash } — the change detector behind the flash
 function updateStamp(data, tz) {
   const hash = JSON.stringify(data.tjson);
@@ -660,8 +666,10 @@ function boot() {
     stopPoll();
     pollTimer = setInterval(tick, POLL_MS);
     if (pollOn === 'venues') {
-      // The clock's label lives in an element the change-guard never re-renders;
-      // look it up fresh each tick — a date stays static, only a time ticks.
+      lastFollow = now(); // the first re-follow is +FOLLOW_MS out, never 1s in
+      // The clock ticks between renders; the timer updates it in place, looking
+      // the element up fresh since a poll or follow may have rebuilt it. A date
+      // stays static — only a time moves.
       clockTimer = setInterval(() => {
         const t = now();
         const el = document.getElementById('clock');
@@ -679,6 +687,9 @@ function boot() {
     }
   };
 
+  // Any paint outside render's guard voids the memo — else a later identical render is suppressed.
+  const paint = html => { app.innerHTML = html; lastHtml = ''; };
+
   const load = r => {
     loadAll(r).then(d => {
       if (route !== r) return; // superseded by a newer navigation
@@ -686,11 +697,11 @@ function boot() {
       if (d.httpError) {
         // a dead deep link — the file is gone for good; stop the futile poll
         stopPoll();
-        if (!data) app.innerHTML = BAD_LINK();
+        if (!data) paint(BAD_LINK());
         return;
       }
       if (!d.tjson) { // transient fetch failure — the poll retries next tick
-        if (!data) app.innerHTML = MISSING() + `<p>${u('reload')}</p>`;
+        if (!data) paint(MISSING() + `<p>${u('reload')}</p>`);
         return;
       }
       lastPoll = Date.now(); // the freshness stamp reads the last success, never the sim clock
@@ -698,7 +709,7 @@ function boot() {
     }, e => {
       // loadAll rejects only on repo data its model can't digest — degrade, never blank
       console.error(e);
-      if (!data) app.innerHTML = FAILED();
+      if (!data) paint(FAILED());
     });
   };
   const tick = () => load(route);
@@ -714,18 +725,17 @@ function boot() {
     data = d;
     // full-width board layout keys off body.venue — present only on the venue view
     document.body.classList.toggle('venue', r.view === 'venues');
-    document.title = pageTitle(r, d);
     // a view, category, or player change starts at the top; a venue hop keeps position
     const key = `${r.view}|${r.cat || ''}|${r.player || ''}`;
     const contentChanged = key !== lastKey;
     lastKey = key;
     try {
+      document.title = pageTitle(r, d); // inside the guard: the never-throw invariant covers the title too
       const html = renderers[r.view](r, d);
       if (html !== lastHtml) { app.innerHTML = html; lastHtml = html; }
       if (contentChanged) window.scrollTo(0, 0);
     } catch (e) {
-      app.innerHTML = FAILED();
-      lastHtml = ''; // the memo is void once the DOM is painted outside the guard — a later identical render must repaint
+      paint(FAILED());
       console.error(e);
     }
     aim();
@@ -745,7 +755,7 @@ function boot() {
     route = r;
     pollOn = r.view === 'index' ? false : r.view;
     if (pollOn && !document.hidden) startPoll(); else stopPoll();
-    if (r.view === 'index' || !(data && data.t && data.t.slug === r.slug)) { // index has no t — always reloads; a snapshot's t carries its slug
+    if (needsFetch(r, data)) {
       data = null;
       lastHtml = '';
       load(r);
@@ -792,5 +802,5 @@ if (typeof document !== 'undefined') boot();
 
 // CommonJS exports for node tests; the browser ignores these.
 if (typeof module !== 'undefined') {
-  module.exports = { parseRoute, resolveLang, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset, paintBadRoute, pageTitle };
+  module.exports = { parseRoute, resolveLang, loadAll, needsFetch, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset, paintBadRoute, pageTitle };
 }

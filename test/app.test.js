@@ -12,7 +12,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, matchSlotMs, sideLabel, placementLabel, plRange, placementColumn, koColumn, koOrdinal, matchLabel, schedTime, fmtTime, dayKey, toCats, isDeadTie, winners, catStatus, roundName, playerStatus, possibleStages, currentWave, setLocale } = require('../site/derive.js');
 const { I18N } = require('../site/i18n.js');
-const { parseRoute, resolveLang, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset, paintBadRoute, pageTitle } = require('../site/app.js');
+const { parseRoute, resolveLang, loadAll, needsFetch, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset, paintBadRoute, pageTitle } = require('../site/app.js');
 const { generate } = require('../src/schedule.js');
 const { FIX, catOf, pageData, repoPage, withTjson, text, vals, card, cards, links, lk } = require('./helpers.js');
 const { loadRepo } = require('../src/tools.js');
@@ -219,6 +219,14 @@ test('loadAll recovers from a rejected cache revalidation (Safari 304)', async (
   } finally {
     global.fetch = origFetch;
   }
+});
+
+test('needsFetch: index refetches, a same-slug view hop renders cached, a new slug refetches', () => {
+  const d = { t: { slug: 'sample', name: 'Sample' } };
+  assert.equal(needsFetch({ view: 'index' }, d), true, 'the index always refetches');
+  assert.equal(needsFetch({ slug: 'sample', view: 'schedule' }, d), false, 'same slug — a view hop renders the cached snapshot');
+  assert.equal(needsFetch({ slug: 'other', view: 'tournament' }, d), true, 'a different slug refetches');
+  assert.equal(needsFetch({ slug: 'sample', view: 'tournament' }, null), true, 'no snapshot yet — refetch');
 });
 
 test('pool A standings: 4 sides, order, leader record', () => {
