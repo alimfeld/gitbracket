@@ -161,7 +161,7 @@ function renderIndex(route, data) {
       const name = esc(e.name || e.slug);
       // the card opens the tournament; the venue board is a sibling chip — a
       // link can't nest a link
-      return `<div class="tcard-wrap"><a class="tcard" aria-label="${name}" href="#${esc(e.slug)}"><h2>${name}</h2>${meta ? `<p>${meta}</p>` : ''}</a><a class="board-link" target="_blank" rel="noopener" href="#${esc(e.slug)}/venues">${u('venue-board')}</a></div>`;
+      return `<div class="card-wrap"><a class="card" aria-label="${name}" href="#${esc(e.slug)}"><h2>${name}</h2>${meta ? `<p>${meta}</p>` : ''}</a><a class="chip board-link" target="_blank" rel="noopener" href="#${esc(e.slug)}/venues">${u('venue-board')}</a></div>`;
     });
   if (!items.length) return `<header><h1>${u('tournaments')}</h1><p>${u('no-tournaments')}</p></header>`;
   return `<header><h1>${u('tournaments')}</h1></header><section class="stack">${items.join('')}</section>`;
@@ -189,6 +189,8 @@ function updateStamp(data, tz) {
   return `<p class="meta"${flash ? ' data-flash' : ''}${stale ? ' data-status="stale"' : ''}>${stamp}</p>`;
 }
 
+const HOME_LINK = () => `<a class="chip" href="#" aria-label="${u('tournaments')}"><span aria-hidden="true">⎋</span></a>`;
+
 function renderTournament(route, data) {
   if (!data.tjson) return MISSING();
   const tz = data.tjson.timezone || 'UTC';
@@ -196,7 +198,7 @@ function renderTournament(route, data) {
   const show = ctxs.find(c => c.id === route.cat) || ctxs[0]; // an unknown cat falls back to the first
   const days = schedDays(ctxs.flatMap(c => c.matches), tz); // one scan: the span and the multi-day cue read the same set
   const multi = days.length > 1;
-  const parts = [segmentBar(route), `<header><h1>${esc(data.t.name)}<a href="#">${u('tournaments')}</a></h1>`];
+  const parts = [segmentBar(route), `<header><h1>${esc(data.t.name)}${HOME_LINK()}</h1>`];
   // the heading states the span and the location once — single-day cards never repeat the date
   const range = fmtRange(days);
   parts.push(`<p>${[range, esc(data.tjson.location)].filter(Boolean).join(' · ')}</p>${updateStamp(data, tz)}</header>`);
@@ -423,7 +425,7 @@ function renderVenue(route, data, now, simOn) {
   const simHint = simOn ? `<span class="sim-hint">${u('sim-hint')}</span>` : '';
   // the title carries the same trail link as the tournament page; the clock is a
   // fixed bottom chip so it never competes with the title for width
-  const header = `<header><h1>${esc(data.t.name)}<a href="#">${u('tournaments')}</a></h1>${updateStamp(data, tz)}</header>`;
+  const header = `<header><h1>${esc(data.t.name)}${HOME_LINK()}</h1>${updateStamp(data, tz)}</header>`;
   const chip = clock ? `<div class="kiosk-clock">${clock}${simHint}</div>` : '';
   // header and venue titles stick as one block, aligned by the shared --cols track
   const top = `<div class="kiosk-top" style="--cols: ${cols.length}">${header}${cols.map(id => `<h2>${esc(venueNames.get(id) || id)}</h2>`).join('')}</div>`;
@@ -496,19 +498,20 @@ function renderPlayer(route, data) {
   return p ? playerSchedule(route, data, p) : playerPicker(route, data, players);
 }
 
-// Only participants are pickable, so a pick always renders a schedule; one section
-// per category makes the picker double as "who is in which category".
+// Only participants are pickable, so a pick always renders a schedule; one
+// alphabetical card per player — its meta names every category they play in, so
+// a player in three categories is still one card.
 function playerPicker(route, data, players) {
-  const secs = data.cats.map(c => {
-    const items = players
-      .filter(pl => playerMatches(c, pl.id).length)
-      .sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)))
-      .map(pl => `<li><a href="${esc(href(data.t.slug, 'schedule', { ...route, player: pl.id }))}">${esc(pl.name || pl.id)}</a></li>`)
-      .join('');
-    return items ? `<section><h2>${esc(c.name || c.id)}</h2><ul>${items}</ul></section>` : '';
-  }).join('');
+  const cards = players
+    .map(pl => ({ pl, cats: data.cats.filter(c => playerMatches(c, pl.id).length) }))
+    .filter(x => x.cats.length)
+    .sort((a, b) => String(a.pl.name || a.pl.id).localeCompare(String(b.pl.name || b.pl.id)))
+    .map(({ pl, cats }) => {
+      const name = esc(pl.name || pl.id);
+      return `<a class="card" aria-label="${name}" href="${esc(href(data.t.slug, 'schedule', { ...route, player: pl.id }))}"><h2>${name}</h2><p>${cats.map(catChip).join(' · ')}</p></a>`;
+    });
   const head = `${segmentBar(route)}<header><h1>${u('pick-player')}</h1></header>`;
-  return secs ? head + secs : head + `<p>${u('no-players')}</p>`;
+  return cards.length ? `${head}<section class="grid">${cards.join('')}</section>` : head + `<p>${u('no-players')}</p>`;
 }
 
 // One flat timeline for the picked player: confirmed matches and possible stages.
@@ -547,7 +550,7 @@ function playerSchedule(route, data, p) {
     .filter(([s]) => s)
     .map(([s, name]) => `${esc(name)}: <strong>${esc(s)}</strong>`)
     .join(' · ');
-  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}<a href="${esc(href(data.t.slug, 'schedule', { ...route, player: null }))}">${u('change-player')}</a></h1>${updateStamp(data, data.tjson.timezone || 'UTC')}${progress ? `<p>${progress}</p>` : ''}${next ? `<p data-status="next">${next}</p>` : ''}</header>`];
+  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}<a class="chip" href="${esc(href(data.t.slug, 'schedule', { ...route, player: null }))}">${u('change-player')}</a></h1>${updateStamp(data, data.tjson.timezone || 'UTC')}${progress ? `<p>${progress}</p>` : ''}${next ? `<p data-status="next">${next}</p>` : ''}</header>`];
   const out = [];
   let curDay = null;
   for (const e of events) {

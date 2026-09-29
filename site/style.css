@@ -47,12 +47,6 @@ h1:has(a) {
   gap: calc(var(--space)*2);
 }
 
-h1 a {
-  font-size: .625em;
-  font-weight: normal;
-  text-decoration: underline;
-}
-
 h2,
 h3 {
   margin: calc(var(--space)*3) 0 calc(var(--space)*2);
@@ -96,6 +90,12 @@ header {
 
 a {
   color: var(--accent);
+}
+
+/* colour marks a link at rest; the underline is the interaction cue */
+a:hover,
+a:focus-visible {
+  text-decoration: underline;
 }
 
 /* paragraphs live on the same grid as headings — the browser default 1em
@@ -169,57 +169,64 @@ p {
   gap: calc(var(--space)*2);
 }
 
-/* the index: one card per tournament — the venue board is a sibling chip in the
-   corner, since a link can't nest a link */
-.tcard-wrap {
-  position: relative;
-}
-
-a.tcard,
-.board-link {
+/* one pressable box for cards and chips — the index cards, the player picker,
+   the venue-board chip, and the h1 trail links share it; only layout differs */
+a.card,
+a.chip {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   color: var(--ink);
   text-decoration: none;
 }
 
-a.tcard {
+a.card {
   display: block;
   padding: calc(var(--space)*2);
 }
 
-a.tcard:hover,
-a.tcard:focus-visible,
-.board-link:hover {
-  border-color: var(--accent);
+a.chip {
+  display: inline-block;
+  padding: calc(var(--space)/2) var(--space);
+  font-size: .875rem;
+  font-weight: normal;
 }
 
-a.tcard:hover,
-a.tcard:focus-visible {
+a.card:hover,
+a.card:focus-visible,
+a.chip:hover,
+a.chip:focus-visible {
+  border-color: var(--accent);
   background: var(--hover);
 }
 
-.board-link {
+/* the venue board rides the index card's corner, so it needs its own plate */
+a.board-link {
   position: absolute;
   top: var(--space);
   right: var(--space);
-  padding: calc(var(--space)/2) var(--space);
   background: var(--page);
-  font-size: .875em;
 }
 
-.board-link:hover {
+a.board-link:hover,
+a.board-link:focus-visible {
   background: var(--accent);
   color: var(--on-accent);
 }
 
-a.tcard h2 {
+.card-wrap {
+  position: relative;
+}
+
+a.card h2 {
   margin: 0;
-  /* the corner chip overlaps the title row — long names must not run under it */
+}
+
+/* the corner chip overlaps the title row — long names must not run under it */
+.card-wrap h2 {
   padding-right: calc(var(--space)*6);
 }
 
-.tcard p {
+.card p {
   margin: var(--space) 0 0;
 }
 
@@ -317,26 +324,6 @@ article .meta {
 .cat[data-cat="2"] { background: var(--cat-2); }
 
 .cat[data-cat="3"] { background: var(--cat-3); }
-
-ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-ul li {
-  padding: 0;
-}
-
-ul li a {
-  display: block;
-  padding: calc(var(--space)/2) var(--space);
-  border-radius: var(--radius);
-}
-
-ul li a:hover {
-  background: var(--hover);
-}
 
 table {
   border-collapse: collapse;

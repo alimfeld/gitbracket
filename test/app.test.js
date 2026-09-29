@@ -691,11 +691,11 @@ test('renderers: escapes, a11y state, and behavioral hooks — the shipped surfa
   assert(ppage.includes('aria-hidden="true"> ↓</span></a>'), 'the next line ends with a decorative down arrow, hidden from screen readers');
   assert(text(ppage).includes('Ada Lovelace') && text(ppage).includes('Court 1'), 'player card finds the player, names the court');
   const picker = renderPlayer({ slug: 'sample', view: 'schedule' }, data);
-  const secs = picker.split('<section>').slice(1);
-  for (const sec of secs) {
-    const names = links(sec).filter(l => /\/schedule\?player=/.test(l.href)).map(l => l.text);
-    assert.deepEqual(names, [...names].sort((a, b) => a.localeCompare(b)), 'each category section lists players alphabetically');
-  }
+  const picks = links(picker).filter(l => /\/schedule\?player=/.test(l.href));
+  const names = picks.map(l => l.label);
+  assert.deepEqual(names, [...names].sort((a, b) => a.localeCompare(b)), 'the picker lists players alphabetically');
+  assert.equal(new Set(names).size, 8, 'the fixture\'s eight players each appear once — a two-category player is not duplicated');
+  assert(picks.every(l => /Men's Doubles 40\+/.test(l.text) && /Mixed Doubles/.test(l.text)), 'each card names every category the player plays in');
   const sparse = clone();
   sparse.players.push({ id: 'bench', name: 'Ben Ched' });
   const spr = renderPlayer({ slug: 'sample', view: 'schedule' }, { ...data, tjson: sparse });

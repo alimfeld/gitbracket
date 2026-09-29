@@ -95,6 +95,7 @@ const links = html => [...html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/g)].map(m =
   href: decode(/(?:^|\s)href="([^"]*)"/.exec(m[1])?.[1] ?? null),
   jump: /data-jump="([^"]*)"/.exec(m[1])?.[1] ?? null,
   current: /\baria-current/.test(m[1]),
+  label: decode(/aria-label="([^"]*)"/.exec(m[1])?.[1] ?? '') || null,
   text: text(m[2]),
 }));
 
