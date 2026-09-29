@@ -321,6 +321,7 @@ article {
 
 /* a wrapped name/meta/title breaks the card height and the sticky row */
 .side > span:first-child,
+.kiosk-top h1 .name,
 .kiosk-top h2,
 article .meta {
   min-width: 0;
@@ -407,8 +408,9 @@ td+td {
 
 body.venue {
   max-width: none;
-  /* the fixed clock chip's band — end-of-scroll room so the last card clears it; rescales with CHIP_PX, ponytail: re-tune together */
-  padding-bottom: calc(var(--space)*10);
+  /* the last card's clearance — the board's foot gap, matching the gap above the
+     first card; rescales with GAP_PX, ponytail: re-tune together */
+  padding-bottom: calc(var(--space)*2);
 }
 
 /* the titles and the board share one --cols track and width, so the document pans them together.
@@ -491,24 +493,31 @@ body.venue header {
   right: 0;
 }
 
-/* the clock is the board's control: a bare time on a match day, the offline date
-   otherwise — fixed low and centred so it never competes with the title for width */
-.kiosk-clock {
-  position: fixed;
-  left: 50%;
-  bottom: calc(var(--space)*2);
-  transform: translateX(-50%);
-  z-index: 2; /* over the sticky kiosk-top (1) and the board (0) */
+/* the clock and the trail link ride the title line pinned to the board's right
+   gutter: an opaque plate, so the title passes under it as the board pans sideways,
+   and it never leaves the screen on a board wider than it. Pinning at --gutter (not
+   0) keeps the gap the same whether or not the board overflows */
+.head-right {
+  position: sticky;
+  right: var(--gutter);
+  flex: none;
   display: flex;
   align-items: center;
-  gap: var(--space);
-  padding: var(--space) calc(var(--space)*3);
+  gap: calc(var(--space)*2);
+  padding-left: var(--space);
   background: var(--page);
-  border: 1px solid var(--line);
-  border-radius: 999px;
 }
 
-.kiosk-clock button {
+/* the clock is the board's control: a bare time on a match day, the offline date
+   otherwise — plain on the title line, so the row never grows for it */
+#clock {
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+button#clock {
   font-family: inherit;
   color: inherit;
   background: none;
@@ -517,23 +526,20 @@ body.venue header {
   cursor: pointer;
 }
 
-#clock {
-  font-size: 1.5rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-/* the running sim marks itself: accent border + its step/stop controls, each
-   button's label carrying its key so the shortcut stays documented on touch */
-.kiosk-clock:has(.sim-controls) {
-  border-color: var(--accent);
-}
-
+/* the running sim's step/stop controls hang under the clock on the stamp band, out
+   of flow so the header keeps its height, pinned with it so a wide board can't hide
+   them. Each button's label prints its key, so the shortcut stays documented on touch */
 .sim-controls {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  width: max-content; /* absolute + right alone clamps to the head-right box and wraps the keys */
+  font-size: 1rem; /* h1's 1.5rem would inflate the 2.75em tap target */
   display: flex;
   align-items: center;
   gap: var(--space);
+  padding: var(--space) 0 var(--space) var(--space);
+  background: var(--page);
 }
 
 .sim-controls button {

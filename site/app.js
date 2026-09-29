@@ -17,9 +17,9 @@ const MIN_PX_PER_MIN = 1.6;
 // separate blocks; rendered inline because a content-driven flex wrapper won't shrink.
 const CARD_GAP = 4;
 
-// The fixed bottom clock chip's reserved band, so no card scrolls under it.
-// ponytail: re-tune beside the header constant on the wall screen.
-const CHIP_PX = 60;
+// The board's foot clearance — the gap the last card leaves, matching the gap above
+// the first card (.board margin-top). ponytail: re-tune beside the header constant.
+const GAP_PX = 16;
 
 // Under node the classic-script globals must be reproduced on globalThis.
 if (typeof module !== 'undefined') {
@@ -446,13 +446,14 @@ function renderVenue(route, data, now, simOn) {
       + `<button type="button" data-sim-toggle aria-label="${u('sim-exit')}">✕ Esc</button>`
       + `</span>`
     : '';
-  // the title carries the same trail link as the tournament page; the clock is a
-  // fixed bottom chip so it never competes with the title for width
-  const header = `<header><h1>${esc(data.t.name)}${HOME_LINK()}</h1>${updateStamp(data, tz)}</header>`;
-  const chip = clock ? `<div class="kiosk-clock">${clock}${controls}</div>` : '';
+  // the title carries the same trail link as the tournament page. The clock and that
+  // link ride the title line pinned to the viewport's right edge, so both stay put
+  // while a wider-than-screen board pans sideways; the sim controls hang under the
+  // clock on the stamp band, out of flow so the header keeps its height
+  const header = `<header><h1><span class="name">${esc(data.t.name)}</span><span class="head-right">${HOME_LINK()}${clock}${controls}</span></h1>${updateStamp(data, tz)}</header>`;
   // header and venue titles stick as one block, aligned by the shared --cols track
   const top = `<div class="kiosk-top" style="--cols: ${cols.length}">${header}${cols.map(id => `<h2>${esc(venueNames.get(id) || id)}</h2>`).join('')}</div>`;
-  if (!cols.length) return top + `<p>${u('nothing')}</p>` + chip;
+  if (!cols.length) return top + `<p>${u('nothing')}</p>`;
   // Wall-clock minutes drive the layout, never offsets. One window per row feeds the
   // frame, scale, and placement; a missing slot length leaves e null.
   const win = open.map(r => {
@@ -475,8 +476,8 @@ function renderVenue(route, data, now, simOn) {
   const total = (Number.isFinite(endMax) ? endMax : dayStart + 60) - dayStart; // never 0 — a length-less day still spans an hour
   const avail = typeof document !== 'undefined' ? document.documentElement.clientHeight : 0;
   // + CARD_GAP: the card subtracts it below, else the shortest card clips its last line
-  // the fixed bottom clock chip owns its own band, same as the sticky header above
-  const ppm = Math.max(MIN_PX_PER_MIN, avail ? (avail - HEADER_PX - CHIP_PX) / total : 0, (CARD_PX + CARD_GAP) / sShort);
+  // the board's foot gap owns its band, same as the sticky header above
+  const ppm = Math.max(MIN_PX_PER_MIN, avail ? (avail - HEADER_PX - GAP_PX) / total : 0, (CARD_PX + CARD_GAP) / sShort);
   const y = min => (min - dayStart) * ppm;
   const card = (r, h) => {
     const status = kioskStatus(r, now);
@@ -495,7 +496,7 @@ function renderVenue(route, data, now, simOn) {
   // The line is the day's "now" — it exists only while the board's day is today;
   // on any other day there is nothing for aim() to follow.
   const nowY = nowMin !== null && dayKey(now, tz) === shownDay ? Math.min(Math.max(y(nowMin), 0), dayH) : null;
-  return top + `<div class="board" style="--cols: ${cols.length}; --day-h: ${dayH}">${nowY !== null ? `<div class="now" id="now-line" style="top:${nowY}px"></div>` : ''}${cols.map((id, i) => `<div class="col" style="grid-column: ${i + 1}">${byVenue.get(id).map(placed).join('')}</div>`).join('')}</div>` + chip;
+  return top + `<div class="board" style="--cols: ${cols.length}; --day-h: ${dayH}">${nowY !== null ? `<div class="now" id="now-line" style="top:${nowY}px"></div>` : ''}${cols.map((id, i) => `<div class="col" style="grid-column: ${i + 1}">${byVenue.get(id).map(placed).join('')}</div>`).join('')}</div>`;
 }
 
 // Do scheduled matches span more than one wall-clock day? Gates the date on cards.
