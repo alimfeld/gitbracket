@@ -131,7 +131,8 @@ function staticFile(root, rel) {
 // Open the admin page in the platform browser; CI skips the launch.
 function openBrowser(url) {
   const cmd = process.platform === 'darwin' ? 'open' : process.platform === 'linux' ? 'xdg-open' : null;
-  if (cmd && !process.env.CI) spawn(cmd, [url], { detached: true, stdio: 'ignore' }).unref();
+  // a missing opener is a convenience lost, never a daemon crash (spawn's 'error' would otherwise throw)
+  if (cmd && !process.env.CI) spawn(cmd, [url], { detached: true, stdio: 'ignore' }).on('error', () => {}).unref();
 }
 
 // Serve the admin page (src/admin/) plus site/derive.js.

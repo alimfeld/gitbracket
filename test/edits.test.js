@@ -175,6 +175,27 @@ test('editor execEdit: non-object values are refused by name, never dereferenced
   }
 });
 
+test('editor execEdit: a malformed category or matches shape is reported, never thrown out of the handler', () => {
+  // The validator reports these shapes; the edit funnel reaches them first, so it
+  // must coerce them like toCats does — a throw here is an unhandled rejection that
+  // kills the daemon mid-match-day.
+  for (const fixture of ['bad-categories-object', 'bad-matches-object']) {
+    const { tmp, dataRoot } = scratchSite(fixture);
+    try {
+      const repo = loadRepo(dataRoot);
+      const file = path.join(dataRoot, 'tournaments', `${fixture}.json`);
+      const before = fs.readFileSync(file, 'utf8');
+      const state = { root: tmp, siteRoot: dataRoot, repo, slug: fixture };
+      let r;
+      assert.doesNotThrow(() => { r = editor.execEdit(state, 'result', 't', '1', { shape: 'void' }); }, `${fixture}: the malformed shape is refused, not thrown`);
+      assert(r.error, `${fixture}: the refusal names a reason, got ${JSON.stringify(r)}`);
+      assert(fs.readFileSync(file, 'utf8') === before, `${fixture}: nothing written`);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  }
+});
+
 test('editor commitMessage: conventional types with tournament scope', () => {
   assert.equal(editor.commitMessage('score', '2026-mammut60', 'md40', '1', '11:9 · 11:7'), 'score(2026-mammut60): md40/1 11:9 · 11:7');
   assert.equal(editor.commitMessage('walkover', '2026-mammut60', 'xd', '7', 'side a wins by walkover'), 'walkover(2026-mammut60): xd/7 side a wins by walkover');

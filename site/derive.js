@@ -59,7 +59,7 @@ function sharedFacts(tjson) {
 
 function makeCat(c, tjson, shared, order = 0) {
   // Never throws on broken shape — the validator calls this while reporting it.
-  const matches = (c.matches || []).filter(m => m && typeof m === 'object');
+  const matches = (Array.isArray(c.matches) ? c.matches : []).filter(m => m && typeof m === 'object');
   const s = shared || sharedFacts(tjson);
   return {
     matches,

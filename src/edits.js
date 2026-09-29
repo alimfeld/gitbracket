@@ -87,10 +87,10 @@ function writeEdit(siteRoot, repo, slug, catId, apply) {
   const info = repo.tournaments.get(slug);
   if (!info || !info.tjson) return { err: `unknown tournament ${slug}` };
   const tjson = info.tjson;
-  const cats = (tjson.categories || []).filter(plainObject).map(c => c.id);
+  const cats = (Array.isArray(tjson.categories) ? tjson.categories : []).filter(plainObject).map(c => c.id);
   if (!cats.includes(catId)) return { err: `unknown category ${catId} — have: ${cats.join(', ')}` };
   const ms = matchesOf(tjson)?.[catId];
-  if (!ms) return { err: `no matches for category ${catId}` };
+  if (!Array.isArray(ms)) return { err: `no matches for category ${catId}` };
   const ctx = catCtx(tjson, catId);
   const file = path.join(siteRoot, 'tournaments', `${slug}.json`);
   // A hand-edited disk can be malformed between load and write: refuse, never throw.

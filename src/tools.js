@@ -37,8 +37,10 @@ function resolvedPlayers(m, ctx) {
 
 // The category context a tool pass iterates (find + makeCat).
 function catCtx(tjson, cid) {
-  // A non-object entry renders as absent (toCats' guard) — never throws.
-  return makeCat({ meta: (tjson.categories || []).find(c => plainObject(c) && c.id === cid), matches: (tjson.matches || {})[cid] || [] }, tjson);
+  // A non-array categories/matches entry renders as absent (toCats' guard) — never throws.
+  const cats = Array.isArray(tjson.categories) ? tjson.categories : [];
+  const ms = matchesOf(tjson)?.[cid];
+  return makeCat({ meta: cats.find(c => plainObject(c) && c.id === cid), matches: Array.isArray(ms) ? ms : [] }, tjson);
 }
 
 // Evidence to winner; shared by validator and editor (the site reads the stored winner).

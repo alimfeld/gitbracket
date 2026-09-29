@@ -1,0 +1,18 @@
+{
+  "name": "Bad Matches Object",
+  "location": "Test Hall",
+  "timezone": "UTC",
+  "venues": [
+    { "id": "court-1", "name": "Court 1" }
+  ],
+  "categories": [
+    { "id": "t", "name": "T", "bestOf": { "groups": 1, "knockout": 3 }, "slotMinutes": { "groups": 30, "knockout": 30 } }
+  ],
+  "players": [
+    { "id": "p1", "name": "P1" },
+    { "id": "p2", "name": "P2" }
+  ],
+  "matches": {
+    "t": { "not": "an array" }
+  }
+}
