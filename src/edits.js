@@ -190,18 +190,18 @@ function commitMessage(kind, slug, cat, matchId, detail) {
   return `${kind}(${slug}): ${cat}/${matchId} ${detail}`;
 }
 
-// One-line summary of what changed, keyed off the edit kind — never the match state,
+// One-line summary of what changed, keyed off the edit verb — never the match state,
 // so a move on a decided match reports the move. A side op on a decided match keeps
 // its result, flagged so history can't read as a silent rewrite.
-function editDetail(kind, m, value, ctx) {
-  if (kind === 'delete') return 'deleted';
-  if (kind === 'result') {
+function editDetail(verb, m, value, ctx) {
+  if (verb === 'delete') return 'deleted';
+  if (verb === 'result') {
     if (value.shape === 'score') return (m.games || []).map(gg => `${gg.a}-${gg.b}`).join(' · '); // dashes — the detail reads like the board column
     if (value.shape === 'walkover') return `side ${value.winner} wins by walkover`;
     if (value.shape === 'void') return 'void';
     return '→ TBD'; // a clear returns the match to the board
   }
-  if (kind === 'move') return `→ ${value.time ?? 'TBD'} @ ${value.venue ?? 'TBD'}`;
+  if (verb === 'move') return `→ ${value.time ?? 'TBD'} @ ${value.venue ?? 'TBD'}`;
   // side — the a/b verbs carry value+ctx
   return `side ${value.si === 0 ? 'a' : 'b'} → ${sideLabel(value.side, ctx)}${isDone(m) ? ' (result kept)' : ''}`;
 }

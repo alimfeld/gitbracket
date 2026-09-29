@@ -134,7 +134,7 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
 
   const venues = new Set();
   const categories = new Map();
-  const players = new Map();
+  const players = new Set();
 
   // A non-array here used to crash mid-run (forEach on a string) instead of
   // reporting — the gate must never throw.
@@ -179,10 +179,10 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
   playersArr.forEach((p, i) => {
     const where = `${tFile} players[${i}]`;
     if (!checkEntry('player', p, players, where)) return;
-    players.set(p.id, p);
+    players.add(p.id);
   });
 
-  if (tjson.matches !== undefined && !plainObject(tjson.matches)) {
+  if (tjson.matches !== undefined && mjson === null) {
     err(tFile, 'matches must be an object map of category id → match array');
   }
 
@@ -244,7 +244,7 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, con
     byId.set(m.id, m);
   }
 
-  const roster = new Set(players.keys());
+  const roster = players;
   let hasPool = false;
   let hasKnockout = false;
   const poolUses = new Map(); // pool -> Set<side sig>
