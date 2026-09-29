@@ -104,6 +104,11 @@ p {
   margin: calc(var(--space)*2) 0;
 }
 
+/* each category stays whole, so the progress line wraps only at the separators */
+.progress > span {
+  white-space: nowrap;
+}
+
 
 
 :is(.segments, .cats, .kiosk-top) {

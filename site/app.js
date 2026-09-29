@@ -222,7 +222,7 @@ const statusLine = (status, ctx) => {
   // omitted, only the top 3 get awards
   return [[u('champion'), status.first], [u('runner-up'), status.second], [u('rank3'), status.third]]
     .filter(([, ids]) => ids)
-    .map(([rank, ids]) => `<p>${rank}: <strong>${esc(teamLabel(ids, ctx))}</strong></p>`)
+    .map(([rank, ids]) => `<p>${rank}: ${esc(teamLabel(ids, ctx))}</p>`)
     .join('');
 };
 
@@ -548,9 +548,9 @@ function playerSchedule(route, data, p) {
   // one progress line across every category, then the next line below it
   const progress = ctxs.map(ctx => [playerStatus(ctx, pid), ctx.name || ctx.id])
     .filter(([s]) => s)
-    .map(([s, name]) => `${esc(name)}: <strong>${esc(s)}</strong>`)
-    .join(' · ');
-  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}<a class="chip" href="${esc(href(data.t.slug, 'schedule', { ...route, player: null }))}">${u('change-player')}</a></h1>${updateStamp(data, data.tjson.timezone || 'UTC')}${progress ? `<p>${progress}</p>` : ''}${next ? `<p data-status="next">${next}</p>` : ''}</header>`];
+    .map(([s, name]) => `<span>${esc(name)}: ${esc(s)}</span>`)
+    .join('\u00a0· '); // nbsp glues the dot to the line so the only wrap point is after it
+  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}<a class="chip" href="${esc(href(data.t.slug, 'schedule', { ...route, player: null }))}">${u('change-player')}</a></h1>${updateStamp(data, data.tjson.timezone || 'UTC')}${progress ? `<p class="progress">${progress}</p>` : ''}${next ? `<p data-status="next">${next}</p>` : ''}</header>`];
   const out = [];
   let curDay = null;
   for (const e of events) {
