@@ -130,7 +130,8 @@ async function loadAll(route) {
 
 const segmentBar = r => {
   const t = r.view === 'tournament', m = r.view === 'schedule';
-  return `<nav class="segments" aria-label="${u('views')}"><a href="${esc(href(r.slug, 'tournament', r))}"${t ? ' aria-current="true"' : ''}>${u('tournament')}</a><a href="${esc(href(r.slug, 'schedule', r))}"${m ? ' aria-current="true"' : ''}>${u('schedule')}</a></nav>`;
+  const item = (v, on) => on ? `<span aria-current="page">${u(v)}</span>` : `<a href="${esc(href(r.slug, v, r))}">${u(v)}</a>`;
+  return `<nav class="segments" aria-label="${u('views')}">${item('tournament', t)}${item('schedule', m)}</nav>`;
 };
 
 const MISSING = () => `<p>${u('missing')}</p>`;
@@ -173,7 +174,10 @@ const catNav = (slug, ctxs, route) => {
   const activeId = route.cat && ctxs.some(x => x.id === route.cat) ? route.cat : ctxs[0]?.id;
   return ctxs.map((c, i) => {
     const p = { ...route, cat: i === 0 ? undefined : c.id };
-    return `<a href="${esc(href(slug, 'tournament', p))}"${activeId === c.id ? ' aria-current="true"' : ''}>${esc(c.name || c.id)}</a>`;
+    const label = esc(c.name || c.id);
+    const cat = `data-cat="${c.order + 1}"`;
+    if (activeId === c.id) return `<span ${cat} aria-current="page">${label}</span>`;
+    return `<a href="${esc(href(slug, 'tournament', p))}" ${cat}>${label}</a>`;
   }).join('');
 };
 

@@ -150,7 +150,7 @@ p {
   scrollbar-width: none;
 }
 
-:is(.segments, .cats) a {
+:is(.segments, .cats) :is(a, span) {
   flex: 1;
   display: flex;
   align-items: center;
@@ -162,7 +162,7 @@ p {
   text-decoration: none;
 }
 
-.cats a {
+.cats :is(a, span) {
   flex: 1 1 auto;
 }
 
@@ -172,9 +172,26 @@ p {
   }
 }
 
-:is(.segments, .cats) a[aria-current] {
+.segments [aria-current] {
   background: var(--accent);
   color: var(--on-accent);
+}
+
+/* only the current tab wears its wash, softened so the bar reads as a tint, not a rainbow */
+.cats [data-cat="1"] { --wash: color-mix(in srgb, var(--cat-1) 70%, var(--page)); }
+
+.cats [data-cat="2"] { --wash: color-mix(in srgb, var(--cat-2) 70%, var(--page)); }
+
+.cats [data-cat="3"] { --wash: color-mix(in srgb, var(--cat-3) 70%, var(--page)); }
+
+.cats [aria-current] {
+  background: var(--wash);
+}
+
+@media (hover: hover) {
+  .cats a[data-cat]:hover {
+    background: var(--wash);
+  }
 }
 .grid {
   display: grid;
