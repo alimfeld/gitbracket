@@ -15,10 +15,10 @@
   --pending-wash: #fbf6e9;
   --danger: #b3261e;
   --conflict-wash: #fdf0ef;
-  /* category washes — identity, not state; keep in step with site/style.css */
-  --cat-1: #fde68a;
-  --cat-2: #e9d5ff;
-  --cat-3: #99f6e4;
+  /* category tints — identity, not state; keep in step with site/style.css */
+  --cat-1: #fdeda9;
+  --cat-2: #eedeff;
+  --cat-3: #b3f9eb;
 }
 * { box-sizing: border-box; }
 body {

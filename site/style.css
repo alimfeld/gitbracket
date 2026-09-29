@@ -12,10 +12,10 @@
   /* role, not status — a match state and a board state share each hue */
   --alert: #b3261e;
   --live: #15803d;
-  /* category washes — off the status hues, so a chip reads as identity, not state */
-  --cat-1: #fde68a;
-  --cat-2: #e9d5ff;
-  --cat-3: #99f6e4;
+  /* category tints — off the status hues, so a chip reads as identity, not state */
+  --cat-1: #fdeda9;
+  --cat-2: #eedeff;
+  --cat-3: #b3f9eb;
   /* one sticky nav bar's height — segments at 0, cats below, jump targets clear
   one bar (player) or two (tournament).
   ponytail: padding + 1.5rem line + link padding + border — revisit on font change */
@@ -177,24 +177,23 @@ p {
   color: var(--on-accent);
 }
 
-/* only the current tab wears its wash, softened so the bar reads as a tint, not a rainbow;
-   a 4th+ category (legal, unguarded) has no palette entry — it falls back to the neutral
-   tint so its current state never vanishes */
-.cats [data-cat] { --wash: var(--hover); }
+/* current and hovered tabs wear the category's full color; a 4th+ category has no
+   palette entry and falls back to the neutral tint so its state never vanishes */
+.cats [data-cat] { --solid: var(--hover); }
 
-.cats [data-cat="1"] { --wash: color-mix(in srgb, var(--cat-1) 70%, var(--page)); }
+.cats [data-cat="1"] { --solid: var(--cat-1); }
 
-.cats [data-cat="2"] { --wash: color-mix(in srgb, var(--cat-2) 70%, var(--page)); }
+.cats [data-cat="2"] { --solid: var(--cat-2); }
 
-.cats [data-cat="3"] { --wash: color-mix(in srgb, var(--cat-3) 70%, var(--page)); }
+.cats [data-cat="3"] { --solid: var(--cat-3); }
 
 .cats [aria-current] {
-  background: var(--wash);
+  background: var(--solid);
 }
 
 @media (hover: hover) {
   .cats a[data-cat]:hover {
-    background: var(--wash);
+    background: var(--solid);
   }
 }
 .grid {
