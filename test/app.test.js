@@ -202,6 +202,25 @@ test('loadAll: a slug route fetches only the tournament file; the index view onl
   }
 });
 
+test('loadAll recovers from a rejected cache revalidation (Safari 304)', async () => {
+  const modes = [];
+  const origFetch = global.fetch;
+  global.fetch = (url, opts) => {
+    modes.push(opts.cache);
+    // Safari over HTTP/2 rejects the fetch when the CDN answers the revalidation with 304
+    if (opts.cache === 'no-cache') return Promise.reject(new TypeError('Load failed'));
+    const body = require(FIX('sample', 'tournaments', 'sample.json'));
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
+  };
+  try {
+    const d = await loadAll({ slug: 'sample', view: 'tournament' });
+    assert(d.tjson, 'data arrives despite the rejected revalidation — the bypassing fetch recovers');
+    assert.deepEqual(modes, ['no-cache', 'no-store'], 'the rejected mode is retried once, within the same load');
+  } finally {
+    global.fetch = origFetch;
+  }
+});
+
 test('pool A standings: 4 sides, order, leader record', () => {
   const md = catOf('sample', 'md40');
   const st = poolStandings(md, 'A');

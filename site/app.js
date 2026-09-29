@@ -69,18 +69,22 @@ function simAimOffset(tjson, now, day) {
 // network failure (null — the poll retries next tick).
 const HTTP_ERR = { httpError: true };
 
+// 'no-cache' keeps the CDN's 304 byte-saving; a browser that rejects that
+// revalidation (Safari over HTTP/2, WebKit #114738) retries with 'no-store'.
 async function fetchJson(url) {
-  try {
-    // cache: 'no-cache' revalidates — 304s return 0 bytes, changes arrive fresh
-    const res = await fetch(url, { cache: 'no-cache' });
+  const get = async cache => {
+    const res = await fetch(url, { cache });
     if (res.ok) return await res.json();
     // only a gone-for-good link stops the poll — a 5xx returns null like any
     // network failure and the poll retries next tick
     if (res.status === 404 || res.status === 410) return HTTP_ERR;
     return null;
-  } catch {
-    return null; // network failure — the poll retries next tick
+  };
+  for (const cache of ['no-cache', 'no-store']) {
+    try { return await get(cache); }
+    catch { /* a rejected revalidation or an outage — the next mode decides */ }
   }
+  return null; // network failure — the poll retries next tick
 }
 
 // One page, fragment routing. Segments and params are id-regex-checked; cat is a
