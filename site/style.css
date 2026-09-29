@@ -185,8 +185,18 @@ a.chip {
 }
 
 a.card {
+  position: relative;
   display: block;
   padding: calc(var(--space)*2);
+}
+
+/* the one mark that says "this opens" — touch signals after the tap, never before */
+a.card::after {
+  content: "›";
+  position: absolute;
+  right: calc(var(--space)*2);
+  bottom: calc(var(--space)*2);
+  color: var(--muted);
 }
 
 a.chip {
@@ -198,8 +208,10 @@ a.chip {
 
 a.card:hover,
 a.card:focus-visible,
+a.card:active,
 a.chip:hover,
-a.chip:focus-visible {
+a.chip:focus-visible,
+a.chip:active {
   border-color: var(--accent);
   background: var(--hover);
 }
@@ -228,6 +240,7 @@ a.card h2 {
 
 .card p {
   margin: var(--space) 0 0;
+  padding-right: 1.25em; /* the corner chevron overlays the last line's tail */
 }
 
 /* grid-item margins never collapse — a cell heading's top margin would stack on the gap */
