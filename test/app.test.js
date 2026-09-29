@@ -796,11 +796,12 @@ test('kiosk clock: a match day shows a bare time; off day the shown date, the si
   const data = pageData(repo.tournaments.get('multiday').tjson, 'multiday', repo.index);
   const rt = { slug: 'multiday', view: 'venues' };
   const mon = renderVenue(rt, data, Date.parse('2026-07-13T12:00:00-04:00')); // after the last day: the board falls back to Sunday
-  assert(mon.includes('id="clock" data-sim-toggle data-mode="date"') && mon.includes('data-day="2026-07-12"') && !mon.includes('sim-hint'), 'off match day the clock is the shown day, clickable, with no sim hint');
+  assert(mon.includes('id="clock" data-sim-toggle data-mode="date"') && mon.includes('data-day="2026-07-12"') && !mon.includes('sim-controls'), 'off match day the clock is the shown day, clickable, with no sim controls');
   const sat = renderVenue(rt, data, Date.parse('2026-07-11T12:00:00-04:00'));
-  assert(sat.includes('<time id="clock" data-mode="time"'), 'a match day shows a plain time, never a control');
+  assert(sat.includes('<time id="clock" data-mode="time"') && !sat.includes('sim-controls'), 'a match day shows a plain time and no sim controls');
   const simmed = renderVenue(rt, data, Date.parse('2026-07-13T12:00:00-04:00'), true);
-  assert(simmed.includes('id="clock" data-sim-toggle data-mode="time"') && simmed.includes('sim-hint'), 'while sim runs: the clock is the live time with the hint');
+  assert(simmed.includes('<time id="clock" data-mode="time"') && !simmed.includes('id="clock" data-sim-toggle'), 'while sim runs the time is a plain readout, never the stop control');
+  assert(simmed.includes('data-sim-step="1"') && simmed.includes('data-sim-step="-1"') && simmed.includes('data-sim-toggle'), 'the running sim carries step-later, step-earlier, and exit controls');
 });
 
 test('kiosk: the board title links back to the tournaments index', () => {

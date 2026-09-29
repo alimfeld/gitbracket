@@ -416,21 +416,30 @@ function renderVenue(route, data, now, simOn) {
   // sharedFacts' map, never rebuilt
   const venueNames = ctxs.length ? ctxs[0].venues : new Map();
   const cols = declared.map(v => v.id).filter(id => open.some(r => r.m.venue === id));
-  // the clock is the board's only control: a bare time on a match day, the shown
-  // day's date otherwise — click the date to sim that day, the running time to stop
-  // (the stamp carries the real last-fetch; only its stale state is a live region)
+  // the clock is the board's control: a bare time while it plays the schedule (a
+  // match day or the running sim), the shown day's date otherwise — tap the date to
+  // sim that day; the sim's own controls step and stop it (the stamp carries the
+  // real last-fetch; only its stale state is a live region)
   const dayText = fmtRange([shownDay]); // null when the day or tz is unreadable
   const time = esc(fmtTime(now, tz));
-  const clock = isMatchDay && !simOn
+  const clock = simOn || isMatchDay
     ? `<time id="clock" data-mode="time">${time}</time>`
-    : simOn || dayText
-      ? `<button type="button" id="clock" data-sim-toggle data-mode="${simOn ? 'time' : 'date'}"${simOn ? '' : ` data-day="${esc(shownDay)}"`}>${simOn ? time : esc(dayText)}</button>`
+    : dayText
+      ? `<button type="button" id="clock" data-sim-toggle data-mode="date" data-day="${esc(shownDay)}">${esc(dayText)}</button>`
       : '';
-  const simHint = simOn ? `<span class="sim-hint">${u('sim-hint')}</span>` : '';
+  // ▼ later (j), ▲ earlier (k), ✕ exit (Esc) — each button prints its key, so the
+  // shortcut stays documented where a hover never fires
+  const controls = simOn
+    ? `<span class="sim-controls">`
+      + `<button type="button" data-sim-step="1" aria-label="${u('sim-later')}">▼ j</button>`
+      + `<button type="button" data-sim-step="-1" aria-label="${u('sim-earlier')}">▲ k</button>`
+      + `<button type="button" data-sim-toggle aria-label="${u('sim-exit')}">✕ Esc</button>`
+      + `</span>`
+    : '';
   // the title carries the same trail link as the tournament page; the clock is a
   // fixed bottom chip so it never competes with the title for width
   const header = `<header><h1>${esc(data.t.name)}${HOME_LINK()}</h1>${updateStamp(data, tz)}</header>`;
-  const chip = clock ? `<div class="kiosk-clock">${clock}${simHint}</div>` : '';
+  const chip = clock ? `<div class="kiosk-clock">${clock}${controls}</div>` : '';
   // header and venue titles stick as one block, aligned by the shared --cols track
   const top = `<div class="kiosk-top" style="--cols: ${cols.length}">${header}${cols.map(id => `<h2>${esc(venueNames.get(id) || id)}</h2>`).join('')}</div>`;
   if (!cols.length) return top + `<p>${u('nothing')}</p>` + chip;
@@ -582,8 +591,9 @@ function mountSimClock({ tjsonOf, onChange }) {
   const simOffset = () => Number(localStorage.getItem(SIM_KEY)) || 0;
   const simOn = () => localStorage.getItem(SIM_KEY) !== null;
   const now = () => Date.now() + simOffset();
+  const STEP_MS = 5 * 60000; // one j/k press, one control tap
   // a clock change re-renders the board — statuses and the now-line recompute
-  const step = ms => { localStorage.setItem(SIM_KEY, String(simOffset() + ms)); onChange(); };
+  const step = dir => { localStorage.setItem(SIM_KEY, String(simOffset() + dir * STEP_MS)); onChange(); };
   const toggle = day => {
     if (simOn()) localStorage.removeItem(SIM_KEY);
     else localStorage.setItem(SIM_KEY, String(simAimOffset(tjsonOf() || {}, Date.now(), day) || 0));
@@ -591,8 +601,8 @@ function mountSimClock({ tjsonOf, onChange }) {
   };
   window.addEventListener('keydown', e => {
     if (!simOn() || !document.body.classList.contains('venue')) return; // the keys move the board's clock, and only where it is
-    if (e.key === 'j') { e.preventDefault(); step(5 * 60000); } // j drops the now line later, k rewinds it
-    else if (e.key === 'k') { e.preventDefault(); step(-5 * 60000); }
+    if (e.key === 'j') { e.preventDefault(); step(1); } // j drops the now line later, k rewinds it
+    else if (e.key === 'k') { e.preventDefault(); step(-1); }
     else if (e.key === 'Escape') { e.preventDefault(); toggle(); }
   });
   return { simOn, now, step, toggle };
@@ -755,6 +765,8 @@ function boot() {
     });
   };
   document.addEventListener('click', e => {
+    const stepBtn = e.target.closest('button[data-sim-step]');
+    if (stepBtn) return sim.step(Number(stepBtn.dataset.simStep));
     const toggle = e.target.closest('button[data-sim-toggle]');
     if (toggle) return sim.toggle(toggle.dataset.day);
     const a = e.target.closest('a[data-jump]');

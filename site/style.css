@@ -408,6 +408,8 @@ td+td {
 
 body.venue {
   max-width: none;
+  /* the fixed clock chip's band — end-of-scroll room so the last card clears it; rescales with CHIP_PX, ponytail: re-tune together */
+  padding-bottom: calc(var(--space)*10);
 }
 
 /* the titles and the board share one --cols track and width, so the document pans them together.
@@ -523,14 +525,29 @@ body.venue header {
   white-space: nowrap;
 }
 
-/* the running sim marks itself: accent border + the key hint, inline with the clock */
-.kiosk-clock:has(.sim-hint) {
+/* the running sim marks itself: accent border + its step/stop controls, each
+   button's label carrying its key so the shortcut stays documented on touch */
+.kiosk-clock:has(.sim-controls) {
   border-color: var(--accent);
 }
 
-.sim-hint {
-  font-size: .875rem;
-  color: var(--muted);
+.sim-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space);
+}
+
+.sim-controls button {
+  min-width: 2.75em; /* 44px at the root size — a real tap target */
+  padding: var(--space) calc(var(--space)*1.5);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  touch-action: manipulation; /* one tap steps once, never a double-tap zoom */
+}
+
+.sim-controls button:active {
+  border-color: var(--accent);
+  background: var(--hover);
 }
 
 /* status rides the spine — a 3px left edge, the admin board's vocabulary */
