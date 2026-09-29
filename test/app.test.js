@@ -10,7 +10,7 @@
 const fs = require('fs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, matchSlotMs, sideLabel, placementLabel, plRange, koColumn, koOrdinal, matchLabel, schedTime, fmtTime, dayKey, toCats, isDeadTie, winners, catStatus, roundName, playerStatus, possibleStages, currentWave, setLocale } = require('../site/derive.js');
+const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, matchSlotMs, sideLabel, placementLabel, plRange, placementColumn, koColumn, koOrdinal, matchLabel, schedTime, fmtTime, dayKey, toCats, isDeadTie, winners, catStatus, roundName, playerStatus, possibleStages, currentWave, setLocale } = require('../site/derive.js');
 const { I18N } = require('../site/i18n.js');
 const { parseRoute, resolveLang, loadAll, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset, paintBadRoute, pageTitle } = require('../site/app.js');
 const { generate } = require('../src/schedule.js');
@@ -273,6 +273,14 @@ test('resolveSide: string ids on a players side is TBD, never a char-split team'
   assert(ok && ok.has('p2'), 'an array ids beside it still resolves');
 });
 
+test('pool standings: a side with non-array ids is skipped, never crashes the ladder', () => {
+  // rec() skips it, but the ladder re-reads every pool match — the guard must hold there too
+  const ctx = catOf('bad-pool-ids-shape', 't');
+  assert.doesNotThrow(() => poolStandings(ctx, 'A', true), 'the pool table survives a malformed sibling side');
+  assert.doesNotThrow(() => playerStatus(ctx, 'p1'), 'the player line survives it too');
+  assert.doesNotThrow(() => catStatus(ctx), 'category status survives it');
+});
+
 test('slot resolution: loser path (bronze/placement)', () => {
   const md = catOf('sample', 'md40');
   const m10 = md.byId.get(10);
@@ -316,6 +324,15 @@ test('catStatus: pre-start zero progress, groups live, the KO wave in play, and 
 // podium details: third exists only when a bronze match decided it; a void
 // anywhere leaves no winner to name — the line falls back to Finished
 const place8Ctx = tjson => makeCat({ meta: tjson.categories[0], matches: tjson.matches.t }, tjson);
+
+test('placement bands: a non-array-sided match in the walk is skipped, never throws', () => {
+  // A duplicate id lets the walk reach the malformed match; it must be skipped, not passed to .find
+  const tjson = require(FIX('place8', 'tournaments', 'place8.json'));
+  const t = JSON.parse(JSON.stringify(tjson));
+  t.matches.t.unshift({ id: 21, sides: 'oops' }); // non-array first — byId still maps 21 to the real placement match
+  const ctx = makeCat({ meta: t.categories[0], matches: t.matches.t }, t);
+  assert.doesNotThrow(() => placementColumn(ctx.byId.get(20), ctx), 'the band walk survives a non-array-sided sibling');
+});
 
 test('winners: first/second off the final, third/fourth off the bronze; voids kill the line', () => {
   const p8 = catOf('place8', 't');

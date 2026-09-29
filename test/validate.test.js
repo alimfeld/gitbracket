@@ -59,6 +59,8 @@ const V = [
   ['impossible calendar date rejected', 'bad-scheduled-date', 'err', /not a real calendar date/],
   ['offset in scheduled rejected — wall time only', 'bad-scheduled-offset', 'err', /no offset or Z/],
   ['even groups bestOf rejected', 'bad-even-groups-bestof', 'err', /groups stage in use/],
+  ['scored match with no category bestOf reports, never crashes', 'bad-no-bestof-games', 'err', /bestOf\.groups/],
+  ['pool side ids of the wrong shape reports, never crashes the standings', 'bad-pool-ids-shape', 'err', /ids must be a non-empty array of strings/],
   ['duplicate venue id', 'bad-duplicate-venue', 'err', /duplicate venue/],
   ['unknown side kind', 'bad-unknown-kind', 'err', /unknown side kind/],
   ['mixed singles and doubles', 'bad-mixed-sizes', 'conflict', /mixes singles and doubles/],

@@ -107,7 +107,7 @@ function gameDiff(games) {
 }
 
 function bestOfOf(m, ctx) {
-  return m.bestOf ?? ctx.bestOf[stageOf(m)];
+  return m.bestOf ?? (ctx?.bestOf || {})[stageOf(m)]; // a raw validate ctx may carry no bestOf
 }
 
 // A best-of-1 pool's GD just restates W−L; one match overridden to best-of-3 brings it back.
@@ -183,6 +183,7 @@ function mutualKeys(list, ms) {
     if (!Array.isArray(m.sides)) continue;
     const [s0, s1] = m.sides;
     if (!s0 || !s1 || s0.kind !== 'players' || s1.kind !== 'players') continue;
+    if (!Array.isArray(s0.ids) || !Array.isArray(s1.ids)) continue; // rec() guarded these; the ladder re-reads every pool match
     const a = pairSig(s0.ids), b = pairSig(s1.ids);
     if (!h.has(a) || !h.has(b)) continue;
     const w = winnerIdx(m);
@@ -717,7 +718,7 @@ function plBands(ctx) {
       const seen = new Set();
       for (;;) {
         seen.add(cur.id);
-        const feed = (cur.sides || []).find(s => s && s.kind === 'match' && ctx.byId.has(s.match));
+        const feed = (Array.isArray(cur.sides) ? cur.sides : []).find(s => s && s.kind === 'match' && ctx.byId.has(s.match));
         if (!feed) { cur = null; break; }
         cur = ctx.byId.get(feed.match);
         if (seen.has(cur.id)) { cur = null; break; }

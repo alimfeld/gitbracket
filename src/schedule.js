@@ -368,6 +368,7 @@ function scheduleMatches(categories, tz, slotCfgOf, courtsOf, eventDate, blockSt
       const adv = s.placed / s.total;
       if (t < pt || (t === pt && adv < padv)) { pick = s.i; pt = t; padv = adv; unit = u; }
     }
+    if (pick < 0) throw new Error('schedule: stalled — no pickable match, the feeder-order invariant broke');
     const cat = categories[pick][0];
     const start = startOf(cat);
     const catSlots = slotCfgOf.get(cat);
