@@ -93,9 +93,15 @@ a {
 }
 
 /* colour marks a link at rest; the underline is the interaction cue */
-a:hover,
 a:focus-visible {
   text-decoration: underline;
+}
+
+/* only a real pointer hovers — a tap must not leave a sticky highlight */
+@media (hover: hover) {
+  a:hover {
+    text-decoration: underline;
+  }
 }
 
 /* paragraphs live on the same grid as headings — the browser default 1em
@@ -160,8 +166,10 @@ p {
   flex: 1 1 auto;
 }
 
-:is(.segments, .cats) a:hover {
-  background: var(--hover);
+@media (hover: hover) {
+  :is(.segments, .cats) a:hover {
+    background: var(--hover);
+  }
 }
 
 :is(.segments, .cats) a[aria-current] {
@@ -206,14 +214,20 @@ a.chip {
   font-weight: normal;
 }
 
-a.card:hover,
 a.card:focus-visible,
 a.card:active,
-a.chip:hover,
 a.chip:focus-visible,
 a.chip:active {
   border-color: var(--accent);
   background: var(--hover);
+}
+
+@media (hover: hover) {
+  a.card:hover,
+  a.chip:hover {
+    border-color: var(--accent);
+    background: var(--hover);
+  }
 }
 
 /* the board chip is a sibling of the card link (a link can't nest), so it's
