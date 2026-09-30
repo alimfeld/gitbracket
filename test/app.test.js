@@ -10,7 +10,8 @@
 const fs = require('fs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, matchSlotMs, sideLabel, placementLabel, plRange, placementColumn, koColumn, koOrdinal, matchLabel, schedTime, fmtTime, dayKey, toCats, isDeadTie, winners, catStatus, roundName, playerStatus, possibleStages, currentWave, setLocale } = require('../site/derive.js');
+const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, matchSlotMs, plRange, koColumn, koOrdinal, schedTime, dayKey, toCats, isDeadTie, winners } = require('../site/derive.js');
+const { sideLabel, placementLabel, placementColumn, matchLabel, fmtTime, catStatus, roundName, playerStatus, possibleStages, currentWave, setLocale } = require('../site/views.js');
 const { I18N } = require('../site/i18n.js');
 const { parseRoute, resolveLang, loadAll, needsFetch, superseded, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset, paintBadRoute, pageTitle, isStale } = require('../site/app.js');
 const { generate } = require('../src/schedule.js');

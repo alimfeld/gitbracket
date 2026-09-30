@@ -21,10 +21,10 @@ const CARD_GAP = 4;
 // the first card (.board margin-top). ponytail: re-tune beside the header constant.
 const GAP_PX = 16;
 
-// Under node the classic-script globals must be reproduced on globalThis.
+// Under node the classic-script globals must be reproduced on globalThis; in
+// the browser each script publishes its names in page order.
 if (typeof module !== 'undefined') {
-  Object.assign(globalThis, require('./derive.js'));
-  Object.assign(globalThis, require('./i18n.js'));
+  Object.assign(globalThis, require('./i18n.js'), require('./derive.js'), require('./views.js'));
 }
 
 // Missing venue id falls back to the id.

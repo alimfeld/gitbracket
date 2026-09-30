@@ -6,7 +6,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { isDone, sideLabel, bestOfOf, matchesOf } = require('../site/derive.js');
+const { isDone, resolveSide, bestOfOf, matchesOf } = require('../site/derive.js');
 const { writeTournament, tournamentText, catCtx, winTarget, reachedWinner, plainObject, git, daysOf } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 
@@ -202,8 +202,15 @@ function editDetail(verb, m, value, ctx) {
     return '→ TBD'; // a clear returns the match to the board
   }
   if (verb === 'move') return `→ ${value.time ?? 'TBD'} @ ${value.venue ?? 'TBD'}`;
-  // side — the a/b verbs carry value+ctx
-  return `side ${value.si === 0 ? 'a' : 'b'} → ${sideLabel(value.side, ctx)}${isDone(m) ? ' (result kept)' : ''}`;
+  // side — the a/b verbs carry value+ctx. Locale-free naming (node never loads views):
+  // team names where the side resolves, a structural ref otherwise.
+  const ids = resolveSide(value.side, ctx);
+  const ref = value.side || {};
+  const who = ids ? [...ids].map(id => ctx.names.get(id) || id).join(' & ')
+    : ref.kind === 'match' ? `${ref.result} of match ${ref.match}`
+    : ref.kind === 'pool' ? `pool ${ref.pool} rank ${ref.rank}`
+    : 'TBD';
+  return `side ${value.si === 0 ? 'a' : 'b'} → ${who}${isDone(m) ? ' (result kept)' : ''}`;
 }
 
 // ---------- the edit funnel (edits commit per AGENTS.md) ----------

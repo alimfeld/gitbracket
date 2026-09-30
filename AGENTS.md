@@ -1,7 +1,12 @@
 # AGENTS.md
 
-README describes the model and the tools; tests pin behavior. When docs and
-code disagree, code wins.
+Rules for changing GitBracket. Each fact has one home:
+
+- **README.md** — the model and the tools: data format, outcomes, views, specs, CLI.
+- **ARCHITECTURE.md** — module boundaries and where new code goes.
+- **TESTING.md** — running a match day (sim and real).
+- **fixtures/** and **test/** — behavior is pinned by tests; when docs and code
+  disagree, code wins.
 
 ## Principles
 
@@ -11,44 +16,40 @@ implement them; treat them as rules, not style.
 
 ### Data
 
-- **Never store what can be derived.** Store only the raw facts a scorer
-  records — games, scores, winner — never the aggregates built from them
-  (standings, ranks, done flags). An aggregate goes silently stale the moment
-  a fact is corrected, so everything downstream is recomputed at render.
-  Exception: schedules can't be derived, so they're stored — generated from a
-  spec, tweakable via the editor. Regeneration rewrites the whole file, so
-  never run it after results are in.
-- **Times are wall-clock, never offsets.** `scheduled` holds local wall time
-  in the tournament's IANA `timezone` — never a UTC instant or an offset. The
-  instant is derived at render, so data stays readable and stays right if
-  clock rules change.
-- **Slots are category-local, consumed at most once, acyclic.**
+- **Never store what can be derived.** Keep only the raw facts a scorer
+  records — games, scores, winner; standings, ranks, and done flags are
+  recomputed at render, so a corrected fact can never leave a stale aggregate.
+  Schedules are the one stored exception: they can't be derived.
+- **Times are wall-clock, never offsets.** `scheduled` is local wall time in
+  the tournament's `timezone`; the instant is derived at render, so data stays
+  readable and stays right if clock rules change.
 - **A result is side-relative.** `winner` names a side (`a`/`b`), never a team;
   the team is derived from the side, so correcting a side reinterprets the
   result — including an already-decided match fed by that side, which keeps its
-  stored side-letter result and follows the new team; re-score it if the new
-  meaning is wrong. Nothing stores the attribution — no state to go stale.
+  side-letter result and follows the new team. Re-score it if the new meaning
+  is wrong; nothing stores the attribution.
+- **Slots are category-local, consumed at most once, acyclic.**
 - **One file per tournament, minimal diffs.** Data edits stay byte-identical
   apart from the change, so a commit diff shows only the edit.
 
 ### Code
 
 - **derive.js is the single source of the domain model.** Validator, editor,
-  generator, and renderers all consume it — extend it, never reimplement it
-  elsewhere. The site is its only tenant: every export must be reachable from
-  a shipped render path (directly, or through another derive.js function a
-  render path reaches). Node-tool-only helpers, even shared ones, belong in
-  src/tools.js or the tool that owns it — derive.js is not the shared utility
-  belt. The integrity gate never depends on renderer code, and derive.js must
-  run in the browser and under node, so node-only modules stay out. Its
-  internal laws: side identity derives from the player set, never from list
-  order; memoized state resets every render, so a corrected score surfaces on
-  the next poll; resolution is cycle-proof — a cycle is a reported conflict,
-  not a barrier, so the guard is what keeps a render from hanging.
+  generator, and renderers all consume it — extend it, never reimplement it.
+  Every export must be reachable from a shipped render path; node-tool-only
+  helpers belong in `src/tools.js` or the tool that owns them. Internal laws:
+  side identity derives from the player set, never from list order; memoized
+  state resets every render, so a corrected score surfaces on the next poll;
+  resolution is cycle-proof — a cycle is a reported conflict, not a barrier, so
+  the guard keeps a render from hanging.
+- **Facts and words do not mix.** `derive.js` depends on nothing and runs in
+  the browser and under node — no node-only module, no markup, no `t`/`esc`, no
+  `LOCALE`. Words and markup live in `views.js`, browser-only. Boundaries and
+  the tests that pin them: ARCHITECTURE.md.
 - **Renderers never throw, and neither does the gate.** Missing data renders
   empty, unresolvable slots a descriptive label, malformed data an error
-  report — never a crash. Cycles and reference errors are the validator's
-  job. Data from the repo renders as text, never HTML.
+  report — never a crash. Cycles and reference errors are the validator's job.
+  Data from the repo renders as text, never HTML.
 - **Markup is semantic, styling is minimal.** Shipped HTML uses real elements
   — headings, sections, articles, tables, `details`, navs, links — with one
   small stylesheet, no framework, no presentational classes from JS. State
@@ -61,18 +62,14 @@ implement them; treat them as rules, not style.
 ### Process & Deploy
 
 - **Git is the record, not the transport.** No server, no accounts — the repo
-  is data, history, and frontend. Only publish ships `site/` (the `gb.js` verb
-  or the admin button), and the deploy follows the branch, never the operator's
-  intent: `main` ships the production domain, proved equal to `origin/main`'s
-  CNAME; a branch ships only a CNAME proved different from it — a missing
-  anchor (no `origin/main`) refuses every deploy. Sim branches (`gb.js sim`)
-  practice the whole pipeline on a branch that is never merged: their scores
-  are fabricated and their scratch CNAME must not ride into production history
-  (`gb.js sim --teardown` is the only exit). The venue board is public — off
-  match day its clock shows the date, and that date is a deliberate control,
-  practice mode's entry point; don't gate or remove it. Publishing sits outside
-  git: last write wins on the CDN, safe because one director ships, everyone
-  else pulls and reviews.
+  is data, history, and frontend. Only publish ships `site/`; the deploy follows
+  the branch, never the operator's intent, and refuses without an anchor (the
+  gate: TESTING.md). Publishing sits outside git: last write wins on the CDN,
+  safe because one director ships, everyone else pulls and reviews. Sim branches
+  (`gb.js sim`) practice the whole pipeline and are never merged; `--teardown` is
+  the only exit. The venue board is public — off match day its clock shows the
+  date, and that date is a deliberate control, practice mode's entry point;
+  don't gate or remove it.
 - **Every editor edit commits itself; only the ship is gated.** An edit
   passes the syntactic check — unparseable or unreferenceable data blocks it
   — then writes and commits. Semantic conflicts (data that parses but
@@ -80,31 +77,10 @@ implement them; treat them as rules, not style.
   second final) ride along, surface in the admin, and block `publish` until
   resolved. A conflicting state is a repairable step, never a dead end, and
   the process can die at any instant with nothing lost.
-- **Never weaken a check to make data pass — fix the data.** Pre-commit runs
-  validate + tests (the dev gate); `gb.js validate` fails only on syntactic
-  errors and reports conflicts. A commit staging only tournament data skips
-  the suite — it reads fixtures, never live data, so it can't change with an
-  edit — but validate always runs, and `gb.js publish` re-runs the gate and
-  refuses on syntactic errors and conflicts alike (the data gate): a bypassed
-  hook can't ship.
-
-## Where Code Lives
-
-One question decides placement for any new function: does the browser run it?
-
-- **Yes, on the shipped site → `site/`** (the shipping surface).
-  Fetch/render/boot in `app.js`; markup and styling in `index.html` /
-  `style.css`; site computations in `derive.js`, so the gate and the
-  renderer can't drift.
-- **Yes, but never shipped → `src/<tool>/`**, beside the server that serves
-  it — the admin page lives in `src/admin/`, served loopback-only by the
-  daemon. Browser code, not site code.
-- **No → `src/`** (the tool layer, never ships). Keep it in the tool that
-  uses it (`validate.js`, `schedule.js`, `edits.js`); share via
-  `src/tools.js` — repo I/O and tool-only predicates already live there. Root
-  files (`gb.js`, `.githooks/`) dispatch and gate only; logic lives in `src/`.
-- **Specs → `specs/`**, one file per tournament, consumed only by
-  `schedule.js`.
+- **Never weaken a check to make data pass — fix the data.** The pre-commit
+  gate is local and fast; `gb.js publish` re-runs the validator and refuses on
+  syntactic errors and conflicts alike, so a bypassed hook can't ship bad data
+  (setup: README → Development).
 
 ## Conventions
 

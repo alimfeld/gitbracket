@@ -24,9 +24,8 @@ node gb.js sim
   kiosk progresses like a real day.
 - **Sim the kiosk clock** — off match day a venue board's clock shows the
   date; clicking it starts the sim clock, aimed at that day's first scheduled
-  match. While it runs, `j`/`k` step it ±5 minutes and Esc (or a click on the
-  running time) stops it. The clock is a view only — it never changes what's
-  scoreable.
+  match. While it runs, `j`/`k` step it ±5 minutes and Esc (or the ✕ control)
+  stops it. The clock is a view only — it never changes what's scoreable.
 - **Iterate** — edit in admin, hit Publish (validate + push + deploy to the
   scratch domain), watch the kiosk. Every edit validates and commits itself,
   so nothing is lost mid-process.
@@ -55,8 +54,8 @@ The deploy gate (shared by the admin Publish button and `node gb.js publish`):
   `origin/main` nothing can prove what production is, so every deploy refuses
   until main is pushed once.
 - **off `main`** — ships only a CNAME that differs from production, and only
-  when `origin/main` exists to prove the difference. Sim branches ship their
-  scratch domain; nothing else can.
+  when `origin/main` exists to prove the difference. A sim branch ships its
+  scratch domain; a branch still carrying production's CNAME refuses.
 - **`site/` must be clean** — the daemon commits every edit, so uncommitted
   changes mean an out-of-band hand edit.
 

@@ -1,7 +1,7 @@
 'use strict';
 
 // Admin page — the browser UI for the local daemon. Every write goes through
-// /api/edit, which validates + commits server-side; derive.js's names are page globals.
+// /api/edit, which validates + commits server-side; derive.js and views.js names are page globals.
 
 const $ = id => document.getElementById(id);
 
@@ -20,7 +20,7 @@ const S = {
   cats: [], venues: [], days: [], dragSource: null, ghost: null, conflicts: [],
 };
 
-// ---- derive wrappers (derive.js globals) ----
+// ---- derive/views wrappers (page globals) ----
 const cat = cid => S.cats.find(c => c.id === cid);
 const matchOf = (cid, id) => cat(cid)?.byId.get(Number(id));
 // The gate's own UI rule: a match needs both sides resolved to hold a score;

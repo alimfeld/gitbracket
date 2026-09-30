@@ -7,7 +7,7 @@ const enOrd = n => n + ({ one: 'st', two: 'nd', few: 'rd' }[enOrdRules.select(n)
 // Every user-facing string ships through these maps (completeness pinned by a
 // test). Repo data (names, courts, pools, players) and scoring shorthand (TBD,
 // void, W/O, W/L/GD/PD) stay as authored. fmt/refs/art carry the word rules as
-// data; derive.js only dispatches them.
+// data; views.js only dispatches them.
 const I18N = {
   en: {
     // chrome (app.js)
@@ -52,7 +52,7 @@ const I18N = {
     'change-player': 'Change player',
     'time-tbd': 'Time TBD',
     'no-matches': 'No matches.',
-    // structural labels (derive.js)
+    // structural labels (views.js)
     'in-final': 'In the final',
     'in-round': 'In the {round}',
     'in-placement': 'In placement',
@@ -75,14 +75,14 @@ const I18N = {
     'kind-winner': 'winner',
     'kind-loser': 'loser',
     'chip-or': ' or ',
-    // unresolved-slot phrasing (derive.js slotLabel)
+    // unresolved-slot phrasing (views.js slotLabel)
     'slot-winner': 'Winner',
     'slot-loser': 'Loser',
     'slot-of': '{who} of {ref}',
     'slot-pool': '{rank} in Pool {pool}',
     'slot-pool-tie': '{rank} in Pool {pool} — tie not broken',
     'slot-dangling': '{who} of match {id}',
-    // per-locale word rules (derive.js dispatches by name): bandShort strips the
+    // per-locale word rules (views.js dispatches by name): bandShort strips the
     // classification word, place is the pre-word number, ord the range form.
     fmt: {
       ord: enOrd,
@@ -140,7 +140,7 @@ const I18N = {
     'change-player': 'Spieler wechseln',
     'time-tbd': 'Zeit offen',
     'no-matches': 'Keine Spiele.',
-    // structural labels (derive.js) — {art} carries the German article ("Im" vs "In der")
+    // structural labels (views.js) — {art} carries the German article ("Im" vs "In der")
     'in-final': 'Im Finale',
     'in-round': '{art} {round}',
     'in-placement': 'In der Platzierungsrunde',
@@ -163,7 +163,7 @@ const I18N = {
     'kind-winner': 'Sieger',
     'kind-loser': 'Verlierer',
     'chip-or': ' oder ',
-    // unresolved-slot phrasing (derive.js slotLabel)
+    // unresolved-slot phrasing (views.js slotLabel)
     'slot-winner': 'Sieger',
     'slot-loser': 'Verlierer',
     'slot-of': '{who} {ref}',

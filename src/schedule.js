@@ -4,7 +4,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { matchSlotMs, pairSig, dayKey, schedTime, fmtTime, ID_RE, MAX_BEST_OF } = require('../site/derive.js');
+const { matchSlotMs, pairSig, dayKey, schedTime, wallHM, ID_RE, MAX_BEST_OF } = require('../site/derive.js');
 const { writeTournament, writeTournamentIndex, slotsOverlap, plainObject, fixedPlayers, isRealDate, daysOf } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 
@@ -381,7 +381,7 @@ function scheduleMatches(categories, tz, slotCfgOf, courtsOf, eventDate, blockSt
       const slotMs = matchSlotMs(m, { slotMinutes: catSlots });
       const venue = courtAt(t, slotMs, taken, st[pick].courts);
       m.venue = venue;
-      m.scheduled = `${dayKey(t, tz)}T${fmtTime(t, tz)}:00`;
+      m.scheduled = `${dayKey(t, tz)}T${wallHM(t, tz)}:00`;
       courtUse.set(venue, [...(courtUse.get(venue) ?? []), { start: t, end: t + slotMs }]);
       endOf.get(pick).set(m.id, t + slotMs);
       if (m.pool !== undefined) poolDone.get(pick).set(m.pool, Math.max(poolDone.get(pick).get(m.pool) ?? start, t + slotMs));

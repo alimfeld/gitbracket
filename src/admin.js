@@ -124,7 +124,7 @@ function openBrowser(url) {
   if (cmd && !process.env.CI) spawn(cmd, [url], { detached: true, stdio: 'ignore' }).on('error', () => {}).unref();
 }
 
-// Serve the admin page (src/admin/) plus site/derive.js.
+// Serve the admin page (src/admin/) plus the site bundles it imports (i18n.js, derive.js, views.js).
 function serve(state) {
   const pageRoot = path.join(__dirname, 'admin');
   const server = http.createServer(async (req, res) => {
@@ -210,7 +210,7 @@ function serve(state) {
       return res.end(f.body);
     }
     const rel = url.replace(/^\/+/, '') || 'index.html';
-    const f = staticFile(rel === 'derive.js' || rel === 'i18n.js' ? state.siteRoot : pageRoot, rel);
+    const f = staticFile(rel === 'derive.js' || rel === 'i18n.js' || rel === 'views.js' ? state.siteRoot : pageRoot, rel);
     if (!f) { res.statusCode = 404; return res.end('not found'); }
     res.setHeader('Content-Type', f.type);
     res.end(f.body);

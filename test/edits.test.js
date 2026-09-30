@@ -314,15 +314,18 @@ test('editor feeder timing: a time move can\'t schedule a bracket before its fee
   assert(applyAt(8, '11:15').conflicts.length === 0, 'exactly at the pool end is fine: ' + applyAt(8, '11:15').conflicts.join('; '));
 });
 
-test('editor editDetail: the side op reports the applied slot label; a move reports the court', () => {
+test('editor editDetail: a reference side reports a structural ref; a players side the team', () => {
   const repo = loadRepo(FIX('sample'));
   const { ctx } = md40Ctx(repo);
   const m9 = repo.tournaments.get('sample').tjson.matches.md40.find(m => m.id === 9);
   const d = editor.editDetail('side', m9, { si: 0, side: { kind: 'match', match: 8, result: 'winner' } }, ctx);
-  assert(/^side a → Winner of /.test(d), `expected the applied slot label, got ${d}`);
+  assert.equal(d, 'side a → winner of match 8', `expected a print-free structural ref, got ${d}`);
   const m = repo.tournaments.get('sample').tjson.matches.xd.find(x => x.id === 1);
   assert.equal(editor.editDetail('move', m, { time: m.scheduled, venue: m.venue }), `→ ${m.scheduled} @ ${m.venue}`, 'a move reports the court on an undecided match');
   assert.equal(editor.editDetail('side', m9, { si: 1, side: { kind: 'players', ids: ['p1', 'p2'] } }, ctx), 'side b → Ada Lovelace & Grace Hopper', 'a players side labels the team');
+  // an out-of-range rank can't resolve — the pool ref stays structural
+  assert.equal(editor.editDetail('side', m9, { si: 0, side: { kind: 'pool', pool: 'A', rank: 9 } }, ctx), 'side a → pool A rank 9', 'an unresolved pool side reports its structural ref');
+  assert.equal(editor.editDetail('side', m9, { si: 0, side: null }, ctx), 'side a → TBD', 'a missing side falls back to TBD');
   const done = repo.tournaments.get('sample').tjson.matches.md40.find(m => m.id === 1);
   const d2 = editor.editDetail('side', done, { si: 0, side: { kind: 'players', ids: ['p3', 'p4'] } }, ctx);
   assert(/result kept/.test(d2), 'a side op on a decided match flags the kept result — history never reads as a silent rewrite');
