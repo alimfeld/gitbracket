@@ -231,7 +231,7 @@ function sideRow(c, m, i) {
   const side = m.sides && m.sides[i];
   const sideName = esc(sideLabel(side, c));
   const win = winnerIdx(m) === i;
-  return `<div class="side"${win ? ' data-win' : ''}><span class="who"><span class="name">${sideName}</span><button type="button" class="edit-side" data-side="${i}" title="edit side ${i === 0 ? 'a' : 'b'}" aria-label="edit side ${i === 0 ? 'a' : 'b'} — ${sideName}">✎</button>${win ? '<span class="winmark" aria-label="won">✓</span>' : ''}</span><span class="score">${scoreCells(m, i, c)}</span></div>`;
+  return `<div class="side"${win ? ' data-win' : ''}><span class="who"><span class="name">${sideName}</span><button type="button" class="edit-side" data-side="${i}" tabindex="-1" title="edit side ${i === 0 ? 'a' : 'b'}" aria-label="edit side ${i === 0 ? 'a' : 'b'} — ${sideName}">✎</button>${win ? '<span class="winmark" aria-label="won">✓</span>' : ''}</span><span class="score">${scoreCells(m, i, c)}</span></div>`;
 }
 
 const keyOf = (c, m) => `${c.id}:${m.id}`;
@@ -247,12 +247,19 @@ function wireGrid() {
     grid.addEventListener('drop', e => { e.preventDefault(); dropAt(e); });
     // macOS Safari keeps buttons out of the Tab order unless the operator turns on
     // "Press Tab to highlight each item", so Tab would skip every card there. Walk the
-    // cards' focus stops ourselves — score target, then the two side pencils. The order
-    // is the browser's own, so Chrome is unaffected; the ends fall through, keeping Tab
-    // able to leave the board.
+    // score targets ourselves, in day order: one wave (wall time) at a time, left to
+    // right across the courts. The DOM is column-major, so its order would tab down a
+    // single court; the ends fall through, keeping Tab able to leave the board. The
+    // side pencils are deliberately out of the tab order — a seldom-used edit.
     grid.addEventListener('keydown', e => {
       if (e.key !== 'Tab' || e.altKey || e.ctrlKey || e.metaKey) return;
-      const stops = [...grid.querySelectorAll('.score-target, .edit-side')];
+      const stops = [...grid.querySelectorAll('.match')]
+        .map(el => {
+          const [cid, mid] = keyParts(el.dataset.key);
+          return { el: el.querySelector('.score-target'), wm: isoWallMin(matchOf(cid, mid)?.scheduled) ?? Infinity };
+        })
+        .sort((a, b) => a.wm - b.wm) // stable: equal waves keep the DOM's left-to-right column order
+        .map(s => s.el);
       const at = stops.indexOf(document.activeElement);
       const next = at < 0 ? (e.shiftKey ? stops.length - 1 : 0) : at + (e.shiftKey ? -1 : 1);
       if (next < 0 || next >= stops.length) return;
