@@ -787,19 +787,6 @@ function placementColumn(m, ctx) {
   return plBands(ctx).get(m && m.id) ?? null;
 }
 
-// The deepest band with a playable card — nextKoWave's counterpart for placement.
-function placeWave(ctx) {
-  let best = null;
-  for (const X of ctx.matches) {
-    if (!X || X.pool !== undefined || isDone(X) || plRange(X, ctx) === null) continue;
-    if (!Array.isArray(X.sides) || X.sides.length !== 2) continue;
-    if (!resolveSide(X.sides[0], ctx) || !resolveSide(X.sides[1], ctx)) continue;
-    const c = placementColumn(X, ctx);
-    if (c !== null) best = best === null ? c : Math.min(best, c);
-  }
-  return best;
-}
-
 // Board status token: done | overdue | now | upcoming.
 function kioskStatus(r, now) {
   const t = r.t;
@@ -809,14 +796,20 @@ function kioskStatus(r, now) {
   return 'upcoming';
 }
 
-// The wave in play: the highest column — the earliest unfinished round — whose
-// undone matches are playable, so an open play-in round outranks a directly
-// seeded quarterfinal beside it. Placement matches are never the wave in play.
-function nextKoWave(ctx) {
-  const undone = ctx.matches.filter(m => m.pool === undefined && !m.result && plRange(m, ctx) === null);
+// Both sides of a card resolve; a malformed side counts (the gate reports it,
+// the status must never throw on it).
+const isPlayable = (m, ctx) => !Array.isArray(m.sides) || m.sides.every(s => resolveSide(s, ctx));
+
+// The wave in play: the highest column — the earliest unfinished round, main
+// bracket or classification band — whose undone matches are playable, so the
+// front round owns the status (both trees share a column numbering).
+function waveColumn(ctx) {
+  const undone = ctx.matches.filter(m => m.pool === undefined && !m.result);
   if (!undone.length) return null;
-  const playable = undone.filter(m => !Array.isArray(m.sides) || m.sides.every(s => resolveSide(s, ctx)));
-  return playable.length ? Math.max(...playable.map(m => koColumn(m, ctx))) : null;
+  const cols = undone.filter(m => isPlayable(m, ctx))
+    .map(m => plRange(m, ctx) === null ? koColumn(m, ctx) : placementColumn(m, ctx))
+    .filter(Number.isInteger);
+  return cols.length ? Math.max(...cols) : null;
 }
 
 // Category status facts: kind groups | ko | finished | winners.
@@ -831,13 +824,11 @@ function catStatus(ctx) {
   // progress — groups at 0/N, or the front KO wave.
   const grp = ms.filter(m => m.pool !== undefined);
   if (grp.some(m => !isDone(m))) return { kind: 'groups', played: grp.filter(isDone).length, count: grp.length };
-  const col = nextKoWave(ctx);
-  const place = placeWave(ctx);
-  const mainPending = ms.some(m => m && m.pool === undefined && !m.result && plRange(m, ctx) === null);
-  if (col === null && mainPending) return { kind: 'blocked' };
-  // place: the classification wave — the main wave may be spent while a bronze
-  // still reads ready. wave: the deeper of the two.
-  return { kind: 'ko', wave: col ?? place };
+  const wave = waveColumn(ctx);
+  const main = ms.filter(m => m && m.pool === undefined && !m.result && plRange(m, ctx) === null);
+  // A pending main card no playable one can fill is a dead tie, not a round.
+  if (main.length && !main.some(m => isPlayable(m, ctx))) return { kind: 'blocked' };
+  return { kind: 'ko', wave };
 }
 
 // Unplayed matches with both sides resolved, at the earliest scheduled time —

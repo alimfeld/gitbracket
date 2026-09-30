@@ -388,6 +388,14 @@ test('catStatus: the wave is the earliest playable round, never a directly seede
   assert(st.kind === 'ko' && st.wave === 3 && roundName(st.wave) === 'Round of 16', 'the open play-in round is the wave, not the directly seeded quarterfinal beside it');
 });
 
+test('catStatus: an open classification band outranks the deeper main round beside it', () => {
+  // Main semis done, final live (col 0), one 5th–8th semi open (col 1): the
+  // earliest unfinished band owns the status, so it reads Semifinals, not Final.
+  const ctx = catOf('placewave', 't');
+  const st = catStatus(ctx);
+  assert(st.kind === 'ko' && st.wave === 1 && roundName(st.wave) === 'Semifinals', 'the open 5th–8th semi is the wave, not the final it runs beside');
+});
+
 test('roundName: a cycle-corrupted column names no round, never "Round of 0"', () => {
   assert.equal(roundName(-1), 'TBD', 'a negative depth is not a round to name');
   assert.equal(roundName(1), 'Semifinals', 'a valid depth still names its round');

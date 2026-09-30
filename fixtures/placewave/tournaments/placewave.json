@@ -1,0 +1,96 @@
+{
+  "name": "Placement Wave Open",
+  "location": "Test Hall",
+  "timezone": "UTC",
+  "categories": [
+    {
+      "id": "t",
+      "name": "Singles",
+      "bestOf": {
+        "knockout": 1
+      }
+    }
+  ],
+  "players": [
+    { "id": "p1", "name": "P1" },
+    { "id": "p2", "name": "P2" },
+    { "id": "p3", "name": "P3" },
+    { "id": "p4", "name": "P4" },
+    { "id": "p5", "name": "P5" },
+    { "id": "p6", "name": "P6" },
+    { "id": "p7", "name": "P7" },
+    { "id": "p8", "name": "P8" }
+  ],
+  "matches": {
+    "t": [
+      {
+        "id": 1,
+        "sides": [
+          { "kind": "players", "ids": ["p1"] },
+          { "kind": "players", "ids": ["p2"] }
+        ],
+        "games": [{ "a": 11, "b": 5 }],
+        "result": { "status": "played", "winner": "a" }
+      },
+      {
+        "id": 2,
+        "sides": [
+          { "kind": "players", "ids": ["p3"] },
+          { "kind": "players", "ids": ["p4"] }
+        ],
+        "games": [{ "a": 11, "b": 5 }],
+        "result": { "status": "played", "winner": "a" }
+      },
+      {
+        "id": 3,
+        "sides": [
+          { "kind": "players", "ids": ["p5"] },
+          { "kind": "players", "ids": ["p6"] }
+        ],
+        "games": [{ "a": 11, "b": 5 }],
+        "result": { "status": "played", "winner": "a" }
+      },
+      {
+        "id": 4,
+        "sides": [
+          { "kind": "players", "ids": ["p7"] },
+          { "kind": "players", "ids": ["p8"] }
+        ],
+        "games": [{ "a": 11, "b": 5 }],
+        "result": { "status": "played", "winner": "a" }
+      },
+      {
+        "id": 5,
+        "sides": [
+          { "kind": "match", "match": 1, "result": "winner" },
+          { "kind": "match", "match": 2, "result": "winner" }
+        ],
+        "games": [{ "a": 11, "b": 6 }],
+        "result": { "status": "played", "winner": "a" }
+      },
+      {
+        "id": 6,
+        "sides": [
+          { "kind": "match", "match": 3, "result": "winner" },
+          { "kind": "match", "match": 4, "result": "winner" }
+        ],
+        "games": [{ "a": 6, "b": 11 }],
+        "result": { "status": "played", "winner": "b" }
+      },
+      {
+        "id": 7,
+        "sides": [
+          { "kind": "match", "match": 5, "result": "winner" },
+          { "kind": "match", "match": 6, "result": "winner" }
+        ]
+      },
+      {
+        "id": 8,
+        "sides": [
+          { "kind": "match", "match": 2, "result": "loser" },
+          { "kind": "match", "match": 3, "result": "loser" }
+        ]
+      }
+    ]
+  }
+}
