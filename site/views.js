@@ -353,6 +353,6 @@ function playerStatus(ctx, pid) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { setLocale, esc, teamLabel, slotLabel, sideLabel, scoreCells, rankRange, stageLabel, possibleStages, placementLabel, bandLabels, stageGroupName, fmtTime, dayShort, dayLabel, fmtRange, fmtDiff, roundName, matchLabel, playerStatus };
+  module.exports = { setLocale, esc, teamLabel, sideLabel, scoreCells, possibleStages, placementLabel, bandLabels, stageGroupName, fmtTime, dayShort, dayLabel, fmtRange, fmtDiff, roundName, matchLabel, playerStatus };
 }
 

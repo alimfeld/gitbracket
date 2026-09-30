@@ -49,6 +49,22 @@ test('every derive.js export is read by the shipped site, or is a node-shared pr
   assert.deepEqual(orphans, [], `derive.js exports no shipped file reads (drop it or make it node-shared): ${orphans.join(', ')}`);
 });
 
+// views.js is the other shipped module with a public surface. Its exports must be
+// read by a page bundle (the shipped site or the loopback admin) or by a test — a
+// helper only views.js itself reads is dead surface. Tests count because views is
+// browser-only: a pure helper's only other reader is a unit test. This is the same
+// drift the derive check guards, which slotLabel/rankRange/stageLabel had already
+// slipped through.
+test('every views.js export is read by a page bundle or a test', () => {
+  const strip = s => s.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  const consumers = ['site/app.js', 'src/admin/app.js']
+    .concat(fs.readdirSync(path.join(root, 'test')).filter(f => f.endsWith('.test.js')).map(f => path.join('test', f)))
+    .map(f => strip(read(f))).join('\n');
+  const orphans = Object.keys(require('../site/views.js'))
+    .filter(n => !new RegExp(`\\b${n}\\b`).test(consumers));
+  assert.deepEqual(orphans, [], `views.js exports no page or test reads (drop it): ${orphans.join(', ')}`);
+});
+
 // A browser loads a page's scripts as separate classic scripts sharing one global
 // lexical environment: a name declared twice across two of them is an early error
 // that kills the page from that script on (the admin's duplicate wallMin did this).
