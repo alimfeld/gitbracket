@@ -137,6 +137,10 @@ async function loadAll(route) {
 // so a view/cat/player hop is a cache hit and anything else refetches.
 const needsFetch = (r, d) => r.view === 'index' || !(d && d.t && d.t.slug === r.slug);
 
+// A same-slug response is the same file: a category/view hop supersedes nothing and
+// still feeds the route on screen; only a different tournament drops it.
+const superseded = (route, r) => !route || route.slug !== r.slug;
+
 const segmentBar = r => {
   const t = r.view === 'tournament', m = r.view === 'schedule';
   const item = (v, on) => on ? `<span aria-current="page">${u(v)}</span>` : `<a href="${esc(href(r.slug, v, r))}">${u(v)}</a>`;
@@ -190,6 +194,10 @@ const catNav = (slug, ctxs, route) => {
   }).join('');
 };
 
+// Stale names a connection that has failed twice running. Before the first success
+// there is no fetch to call live, so the stamp reads stale.
+const isStale = (lastFetchMs, fails) => !lastFetchMs || fails >= 2;
+
 // The polling views' shared stamp; a changed file flashes the line, a failing poll names its state.
 // Module-scope so the renderers stay directly testable — not boot's closure.
 let stampSnap = null; // { slug, hash } — the change detector behind the flash
@@ -197,7 +205,7 @@ function updateStamp(data, tz) {
   const hash = JSON.stringify(data.tjson);
   const flash = !!stampSnap && stampSnap.slug === data.t.slug && stampSnap.hash !== hash;
   stampSnap = { slug: data.t.slug, hash };
-  const stale = !lastPoll || Date.now() - lastPoll > POLL_MS * 2;
+  const stale = isStale(lastPoll, pollFails);
   const when = lastPoll ? fmtTime(lastPoll, tz) : '—';
   const stamp = `<time datetime="${lastPoll ? new Date(lastPoll).toISOString() : ''}">${u('updated', { time: when })}</time>${stale ? ` · <span role="status">${esc(u('reconnect'))}</span>` : ''}`;
   return `<p class="meta"${flash ? ' data-flash' : ''}${stale ? ' data-status="stale"' : ''}>${stamp}</p>`;
@@ -505,6 +513,8 @@ const multiDay = ctxs => schedDays(ctxs.flatMap(c => c.matches), (ctxs[0] && ctx
 
 // The last successful fetch, in real time — never the sim clock.
 let lastPoll = 0;
+// Consecutive failed polls since the last success; two running name the reconnect.
+let pollFails = 0;
 
 // The round a player could reach once the pools decide; the chip carries the rank
 // or outcome that gets in.
@@ -664,9 +674,11 @@ function boot() {
     if (clockTimer) { clearInterval(clockTimer); clockTimer = null; }
   };
   const startPoll = () => {
-    stopPoll();
-    pollTimer = setInterval(tick, POLL_MS);
+    // The poll cadence belongs to the open page, not to a navigation — restarting it
+    // here would let tab clicks postpone the next poll past the stale threshold.
+    if (!pollTimer) pollTimer = setInterval(tick, POLL_MS);
     if (pollOn === 'venues') {
+      if (clockTimer) return; // already ticking — a nav must not re-seed the follow
       lastFollow = now(); // the first re-follow is +FOLLOW_MS out, never 1s in
       // The clock ticks between renders; the timer updates it in place, looking
       // the element up fresh since a poll or follow may have rebuilt it. A date
@@ -685,6 +697,9 @@ function boot() {
           render(route, data);
         }
       }, 1000);
+    } else if (clockTimer) {
+      clearInterval(clockTimer);
+      clockTimer = null;
     }
   };
 
@@ -692,21 +707,26 @@ function boot() {
   const paint = html => { app.innerHTML = html; lastHtml = ''; };
 
   const load = r => {
+    const started = lastPoll; // the success this fetch began against — a newer success makes its failure stale
     loadAll(r).then(d => {
-      if (route !== r) return; // superseded by a newer navigation
-      if (r.view === 'index') return render(r, d); // the index never 404s the tournament file
+      if (superseded(route, r)) return; // a different tournament won the race
+      if (r.view === 'index') return render(route, d); // the index never 404s the tournament file
       if (d.httpError) {
         // a dead deep link — the file is gone for good; stop the futile poll
+        pollOn = false;
         stopPoll();
         if (!data) paint(BAD_LINK());
         return;
       }
       if (!d.tjson) { // transient fetch failure — the poll retries next tick
-        if (!data) paint(MISSING() + `<p>${u('reload')}</p>`);
+        if (lastPoll === started) pollFails++; // a success landed meanwhile — this failure is already stale
+        if (data) render(route, data); // repaint so the stamp can name the failure
+        else paint(MISSING() + `<p>${u('reload')}</p>`);
         return;
       }
+      pollFails = 0;
       lastPoll = Date.now(); // the freshness stamp reads the last success, never the sim clock
-      render(r, d);
+      render(route, d);
     }, e => {
       // loadAll rejects only on repo data its model can't digest — degrade, never blank
       console.error(e);
@@ -715,8 +735,8 @@ function boot() {
   };
   const tick = () => load(route);
 
-  // Centre the now-line on every render; the clock handler re-aims on its
-  // own minute.
+  // Centre the now-line on every render; the clock handler re-aims on its own
+  // minute.
   const aim = () => {
     const ln = document.getElementById('now-line');
     if (ln) ln.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -739,7 +759,7 @@ function boot() {
       paint(FAILED());
       console.error(e);
     }
-    aim();
+    aim(); // outside the guard — a scroll throw is not a render failure
   };
 
   // Fragment navigation: same-slug hops re-render from the cached snapshot.
@@ -803,5 +823,5 @@ if (typeof document !== 'undefined') boot();
 
 // CommonJS exports for node tests; the browser ignores these.
 if (typeof module !== 'undefined') {
-  module.exports = { parseRoute, resolveLang, loadAll, needsFetch, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset, paintBadRoute, pageTitle };
+  module.exports = { parseRoute, resolveLang, loadAll, needsFetch, superseded, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset, paintBadRoute, pageTitle, isStale };
 }

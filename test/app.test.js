@@ -12,7 +12,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, matchSlotMs, sideLabel, placementLabel, plRange, placementColumn, koColumn, koOrdinal, matchLabel, schedTime, fmtTime, dayKey, toCats, isDeadTie, winners, catStatus, roundName, playerStatus, possibleStages, currentWave, setLocale } = require('../site/derive.js');
 const { I18N } = require('../site/i18n.js');
-const { parseRoute, resolveLang, loadAll, needsFetch, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset, paintBadRoute, pageTitle } = require('../site/app.js');
+const { parseRoute, resolveLang, loadAll, needsFetch, superseded, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset, paintBadRoute, pageTitle, isStale } = require('../site/app.js');
 const { generate } = require('../src/schedule.js');
 const { FIX, catOf, pageData, repoPage, withTjson, text, vals, card, cards, links, lk } = require('./helpers.js');
 const { loadRepo } = require('../src/tools.js');
@@ -219,6 +219,22 @@ test('loadAll recovers from a rejected cache revalidation (Safari 304)', async (
   } finally {
     global.fetch = origFetch;
   }
+});
+
+test('stale: one missed poll is tolerated, two running name the reconnect', () => {
+  assert.equal(isStale(0, 0), true, 'no successful fetch yet — stale, never pretend live');
+  assert.equal(isStale(123, 0), false, 'the last fetch succeeded');
+  assert.equal(isStale(123, 1), false, 'a single missed poll does not name a reconnect');
+  assert.equal(isStale(123, 2), true, 'two missed polls running — reconnecting');
+});
+
+test('superseded: a same-slug hop still feeds the current route, a different slug drops it', () => {
+  assert.equal(superseded(null, { slug: 'a' }), true, 'no route to land the response on');
+  assert.equal(superseded({ slug: 'a' }, { slug: 'a' }), false, 'a category/view hop must not discard the poll');
+  assert.equal(superseded({ view: 'index' }, { view: 'index' }), false, 'the index is never superseded by itself');
+  assert.equal(superseded({ view: 'index' }, { slug: 'a' }), true, 'an index route never consumes a tournament response');
+  assert.equal(superseded({ slug: 'a' }, { view: 'index' }), true, 'a tournament route never consumes an index response');
+  assert.equal(superseded({ slug: 'b' }, { slug: 'a' }), true, 'a different tournament drops the in-flight response');
 });
 
 test('needsFetch: index refetches, a same-slug view hop renders cached, a new slug refetches', () => {
