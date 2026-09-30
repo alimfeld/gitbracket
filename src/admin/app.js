@@ -569,7 +569,7 @@ function paintConflicts(conflicts) {
 }
 
 // ---- pending + publish + undo/redo ----
-// set while /api/publish is in flight, so the pending poll can't re-enable the button
+// set while /api/publish is in flight, so a concurrent pending refresh can't re-enable the button
 let publishing = false;
 async function refreshPending() {
   const p = await get('/api/pending');
@@ -640,7 +640,7 @@ $('publish').onclick = async () => {
     publishing = false;
     btn.removeAttribute('aria-busy');
     btn.textContent = 'Publish';
-    await refreshPending(); // the poll was blocked for the whole deploy
+    await refreshPending(); // the button was disabled for the whole deploy
   }
 };
 
@@ -652,6 +652,5 @@ async function boot() {
   $('slug').innerHTML = slugs.map(t => `<option value="${esc(t.slug)}">${esc(t.name)}</option>`).join('');
   if (slugs.length) await setSlug(slugs[0].slug);
   window.addEventListener('resize', () => { if (S.tjson) renderGrid(); });
-  setInterval(refreshPending, 4000);
 }
 boot();

@@ -12,7 +12,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { loadRepo, plainObject, cleanTree, git, cnameOf, defaultSlug, unpushed } = require('./tools.js');
 const { execEdit, parseResult } = require('./edits.js');
-const { findings } = require('./validate.js');
+const { findings, filterSlug } = require('./validate.js');
 const { ship, pushWhenReady } = require('./publish.js');
 
 // One path for every verb the page can send; 'move' sets time+venue atomically
@@ -30,6 +30,8 @@ function doEdit(state, verb, cat, matchId, value) {
   if (r.error) { reload(state); return { ok: false, error: r.error }; }
   if (r.unchanged) return { ok: true, unchanged: true };
   state.redo = []; // a committed edit builds on the post-undo history — redo would replay onto it
+  // The edit's own validation pass is the conflict source — pending never re-runs it.
+  state.conflicts = r.conflicts || [];
   return { ok: true, sha: r.sha, conflicts: r.conflicts || [] };
 }
 
@@ -75,6 +77,7 @@ function redo(state) {
 // Reload from disk — undo (git reset) rewrites files.
 function reload(state) {
   state.repo = loadRepo(state.siteRoot);
+  state.conflicts = null; // stale now — the next pending poll recomputes off the fresh repo
 }
 
 function json(res, code, obj) {
@@ -159,7 +162,10 @@ function serve(state) {
         const p = unpushed(state.root);
         const dirty = git(state.root, ['status', '--porcelain', '--', 'site/']);
         const top = state.redo && state.redo.length ? state.redo[state.redo.length - 1] : null;
-        const { conflicts } = findings(state.repo, state.slug);
+        // Validate once per data change (the edit's own pass fills state.conflicts), never on
+        // every poll. The cache is nulled by reload, so undo/redo/slug changes recompute here.
+        if (!state.conflicts) state.conflicts = findings(state.repo).conflicts;
+        const conflicts = state.slug ? filterSlug(state.conflicts, state.slug) : state.conflicts;
         return json(res, 200, { ...p, dirty: dirty.code === 0 && dirty.out.trim().length > 0, slug: state.slug, domain: cnameOf(state.root), deployFailed: !!state.deployFailed, redo: top ? { sha: top.sha.slice(0, 7), msg: top.msg } : null, conflicts });
       }
       if (url === '/api/edit' && req.method === 'POST') {
@@ -223,7 +229,7 @@ function main(root, args) {
   const siteRoot = path.join(root, 'site');
   const repo = loadRepo(siteRoot);
   if (repo.readErrs.length) { console.error(repo.readErrs.join('\n')); process.exit(1); }
-  const state = { root, siteRoot, repo, slug: slug || defaultSlug(repo), redo: [], deployFailed: false };
+  const state = { root, siteRoot, repo, slug: slug || defaultSlug(repo), redo: [], deployFailed: false, conflicts: null };
   const server = serve(state);
   server.listen(0, '127.0.0.1', () => {
     const url = `http://127.0.0.1:${server.address().port}/`;

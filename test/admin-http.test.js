@@ -163,3 +163,17 @@ test('admin HTTP: a semantic conflict rides the edit, shows in pending, and bloc
   assert.equal(pub.status, 400, 'publish refuses while a conflict stands');
   assert((await pub.json()).conflicts.length > 0, 'the refusal carries the conflicts');
 });
+
+// Pending conflicts are cached off the edit's own validation and nulled by reload —
+// an undo must drop the conflict its edit introduced, not serve it stale.
+test('admin HTTP: undoing a conflicting edit clears it from pending — the cache follows the data', async t => {
+  const { tmp, siteRoot, state } = scratchWithRemote();
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  const base = await withServer(t, state);
+  const m10 = loadRepo(siteRoot).tournaments.get('sample').tjson.matches.md40.find(m => m.id === 10);
+  await postJson(base, '/api/edit', JSON.stringify({ slug: 'sample', verb: 'move', cat: 'md40', matchId: '9', value: { time: m10.scheduled, venue: m10.venue } }));
+  const conflicts = async () => (await (await fetch(base + '/api/pending')).json()).conflicts;
+  assert((await conflicts()).some(c => /overlap/.test(c.message)), 'the conflict is pending');
+  assert(admin.undo(state).error === undefined, 'the conflicting edit undoes — the tree was clean');
+  assert(!(await conflicts()).some(c => /overlap/.test(c.message)), 'pending drops the conflict the undo removed');
+});
