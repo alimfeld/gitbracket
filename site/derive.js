@@ -643,20 +643,22 @@ function plBuild(ctx) {
     }
     return null;
   };
-  const pools = []; // [champion, anchor depth]
+  // One pass: each pool champion and its own rank A, plus how many pools share
+  // that A. A band whose deciders were never played holds several terminal
+  // matches at the same A — that shared lo is the signal the band is entered,
+  // not resolved.
+  const pools = []; // [champion, A]
+  const termCount = new Map(); // A -> terminal count
   for (const m of ctx.matches) {
     if (!Array.isArray(m.sides) || winnerParent.has(m.id)) continue;
     if (!m.sides.some(s => s && s.kind === 'match')) continue;
     const d = champAnchor(m, new Set());
-    if (d !== null) pools.push([m, d]);
+    if (d === null) continue;
+    const A = 2 ** d + 1;
+    pools.push([m, A]);
+    termCount.set(A, (termCount.get(A) ?? 0) + 1);
   }
-  // A band whose deciders were never played holds several terminal matches at the
-  // same anchor depth — that shared lo is the signal the band is entered, not
-  // resolved.
-  const termCount = new Map();
-  for (const [, d] of pools) { const a = 2 ** d + 1; termCount.set(a, (termCount.get(a) ?? 0) + 1); }
-  for (const [champ, d] of pools) {
-    const A = 2 ** d + 1; // the pool's best rank
+  for (const [champ, A] of pools) {
     const k = termCount.get(A); // >1: the band played its entry round only
     let next = A + 2;
     // Reachability from the champion over classification matches only — main-
