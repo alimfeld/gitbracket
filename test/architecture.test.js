@@ -31,3 +31,17 @@ test('every node tool stays off views.js (browser-only)', () => {
     assert.doesNotMatch(read(f), /require\([^)]*views\.js/, `${f} must not import views.js`);
   }
 });
+
+// derive.js is the shipped model. A helper the gate/tools share is exported on
+// purpose and named here; anything else must be read by a shipped file, so a
+// helper can't quietly drift into node-only or die unused.
+const NODE_SHARED_EXPORTS = new Set(['ISO_RE', 'pairSig', 'makeCat', 'matchesOf', 'parentsOf']);
+
+test('every derive.js export is read by the shipped site, or is a node-shared primitive', () => {
+  const shipped = ['site/app.js', 'site/views.js', 'site/i18n.js']
+    .map(f => read(f).replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, ''))
+    .join('\n');
+  const orphans = Object.keys(require('../site/derive.js'))
+    .filter(n => !NODE_SHARED_EXPORTS.has(n) && !new RegExp(`\\b${n}\\b`).test(shipped));
+  assert.deepEqual(orphans, [], `derive.js exports no shipped file reads (drop it or move it to src/): ${orphans.join(', ')}`);
+});

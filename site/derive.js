@@ -525,10 +525,11 @@ function schedTime(m, tz) {
   return matches.length ? Math.min(...matches) : null;
 }
 
-// Wall-clock HH:MM in the tournament zone — data formatting, never localized.
-const wallHM = (t, tz) => {
+// Wall-clock minutes since midnight in the tournament zone — layout math reads a
+// number, never a localized format string.
+const wallMin = (t, tz) => {
   const p = zonedParts(tz, t);
-  return p ? `${String(p[3]).padStart(2, '0')}:${String(p[4]).padStart(2, '0')}` : '';
+  return p ? p[3] * 60 + p[4] : null;
 };
 
 // Distinct scheduled days as sorted ISO date keys — the index's stored form.
@@ -663,6 +664,135 @@ function koField(ctx) {
   return slots + players.size;
 }
 
+// ---- Status and placement facts: what a category, a wave, or a finish is ----
+
+// Depth band of every classification match, one below its anchor's column minus
+// further loser-chain edges. A main match (plRange null) is the anchor.
+function plBands(ctx) {
+  return memoField(ctx, 'plBand', () => {
+    const col = new Map(); // placement match id -> band column
+    const bandOf = (m) => {
+      const got = col.get(m.id);
+      if (got !== undefined) return got;
+      col.set(m.id, null);
+      let cur = m;
+      let hops = 0; // placement-tree edges between the anchor's loser slot and m
+      const seen = new Set();
+      for (;;) {
+        seen.add(cur.id);
+        const feed = (Array.isArray(cur.sides) ? cur.sides : []).find(s => s && s.kind === 'match' && ctx.byId.has(s.match));
+        if (!feed) { cur = null; break; }
+        cur = ctx.byId.get(feed.match);
+        if (seen.has(cur.id)) { cur = null; break; }
+        if (plRange(cur, ctx) === null) break; // the anchor: a main match
+        hops++;
+      }
+      const c = cur === null ? null : Math.max(0, koColumn(cur, ctx) - 1 - hops);
+      col.set(m.id, c);
+      return c;
+    };
+    for (const m of ctx.matches) {
+      if (!m || m.pool !== undefined || plRange(m, ctx) === null) continue;
+      bandOf(m);
+    }
+    return col;
+  });
+}
+
+// Band column of a classification match; null elsewhere.
+function placementColumn(m, ctx) {
+  return plBands(ctx).get(m && m.id) ?? null;
+}
+
+// The deepest band with a playable card — nextKoWave's counterpart for placement.
+function placeWave(ctx) {
+  let best = null;
+  for (const X of ctx.matches) {
+    if (!X || X.pool !== undefined || isDone(X) || plRange(X, ctx) === null) continue;
+    if (!Array.isArray(X.sides) || X.sides.length !== 2) continue;
+    if (!resolveSide(X.sides[0], ctx) || !resolveSide(X.sides[1], ctx)) continue;
+    const c = placementColumn(X, ctx);
+    if (c !== null) best = best === null ? c : Math.min(best, c);
+  }
+  return best;
+}
+
+// Board status token: done | overdue | now | upcoming.
+function kioskStatus(r, now) {
+  const t = r.t;
+  if (isDone(r.m)) return 'done';
+  if (now >= t + matchSlotMs(r.m, r.ctx)) return 'overdue';
+  if (now >= t) return 'now';
+  return 'upcoming';
+}
+
+// The lowest column whose undone matches are playable — a scheduled final
+// doesn't claim the status while its semifinals still decide it. Placement
+// matches resolve as a consequence of the bracket and are never the wave in play.
+function nextKoWave(ctx) {
+  const undone = ctx.matches.filter(m => m.pool === undefined && !m.result && plRange(m, ctx) === null);
+  if (!undone.length) return null;
+  const playable = undone.filter(m => !Array.isArray(m.sides) || m.sides.every(s => resolveSide(s, ctx)));
+  return playable.length ? Math.min(...playable.map(m => koColumn(m, ctx))) : null;
+}
+
+// Category status facts: kind groups | ko | finished | winners.
+function catStatus(ctx) {
+  const ms = ctx.matches;
+  if (!ms.length) return null;
+  if (ms.every(isDone)) {
+    const w = winners(ctx);
+    return w ? { kind: 'winners', ...w } : { kind: 'finished' };
+  }
+  // Nothing played is not a state of its own: it is the first stage at zero
+  // progress — groups at 0/N, or the front KO wave.
+  const grp = ms.filter(m => m.pool !== undefined);
+  if (grp.some(m => !isDone(m))) return { kind: 'groups', played: grp.filter(isDone).length, count: grp.length };
+  const col = nextKoWave(ctx);
+  const place = placeWave(ctx);
+  const mainPending = ms.some(m => m && m.pool === undefined && !m.result && plRange(m, ctx) === null);
+  if (col === null && mainPending) return { kind: 'blocked' };
+  // place: the classification wave — the main wave may be spent while a bronze
+  // still reads ready. wave: the deeper of the two.
+  return { kind: 'ko', wave: col ?? place };
+}
+
+// Unplayed matches with both sides resolved, at the earliest scheduled time —
+// starts included.
+function currentWave(ctx, status) {
+  if (!status || status.kind === 'finished' || status.kind === 'winners' || status.kind === 'blocked') return [];
+  const ready = ctx.matches.filter(m => !isDone(m) &&
+    Array.isArray(m.sides) && m.sides.length === 2 &&
+    !!resolveSide(m.sides[0], ctx) && !!resolveSide(m.sides[1], ctx));
+  const ts = ready.map(m => schedTime(m, ctx.tz)).filter(Number.isFinite);
+  if (!ts.length) return [];
+  const t = Math.min(...ts);
+  return ready.filter(m => schedTime(m, ctx.tz) === t);
+}
+
+// A finish band: the tightest placement range, a decided two-rank decider's exact
+// place (winner lo, loser hi), else the deepest KO loss (a bye'd round clamps the top).
+function playerBand(ctx, rows) {
+  let best = null, bestR = null;
+  for (const r of rows) {
+    if (r.m.pool !== undefined) continue;
+    const pr = plRange(r.m, ctx);
+    if (pr && (!best || pr.hi - pr.lo < best.hi - best.lo)) { best = pr; bestR = r; }
+  }
+  if (best) {
+    const w = best.win && best.hi === best.lo + 1 ? winnerIdx(bestR.m) : null;
+    return w !== null ? [bestR.i === w ? best.lo : best.hi] : rangeRanks(best.lo, best.hi);
+  }
+  const koLost = rows.filter(r => {
+    const w = winnerIdx(r.m);
+    return w !== null && w !== r.i && r.m.pool === undefined && plRange(r.m, ctx) === null;
+  });
+  if (!koLost.length) return null;
+  const d = Math.max(...koLost.map(r => koColumn(r.m, ctx)));
+  const lo = 2 ** d + 1, hi = Math.min(2 ** (d + 1), koField(ctx));
+  return lo <= hi ? rangeRanks(lo, hi) : null;
+}
+
 if (typeof module !== 'undefined') {
-  module.exports = { DATE_RE, ID_RE, ISO_RE, MAX_BEST_OF, pairSig, memoField, sharedFacts, makeCat, matchesOf, toCats, matchSlotMs, sideIdx, bestOfOf, poolBo1, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, poolFacts, resolveSide, playerMatches, playerRanks, koConsumers, koField, rangeRanks, plRange, plOrdinal, parentsOf, koColumn, koOrdinal, winners, dayKey, wallHM, schedTime, schedDays };
+  module.exports = { DATE_RE, ID_RE, ISO_RE, MAX_BEST_OF, pairSig, makeCat, matchesOf, toCats, matchSlotMs, sideIdx, bestOfOf, poolBo1, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, poolFacts, resolveSide, playerMatches, playerRanks, koConsumers, plRange, plOrdinal, placementColumn, kioskStatus, catStatus, currentWave, playerBand, parentsOf, koColumn, koOrdinal, winners, dayKey, wallMin, schedTime, schedDays };
 }

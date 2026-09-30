@@ -49,12 +49,6 @@ const resolveLang = (hash, search) => {
   return 'en';
 };
 
-// Wall-clock minutes of an instant; the grid and now-line never use offsets.
-const wallClockMin = (t, tz) => {
-  const f = fmtTime(t, tz).split(':');
-  return f.length === 2 ? +f[0] * 60 + +f[1] : null;
-};
-
 // The sim clock's aim: a day's first match, or the event's first when no day is
 // given (or that day has none). Pure.
 function simAimOffset(tjson, now, day) {
@@ -349,8 +343,8 @@ const placeOrder = ctx => (a, b) =>
 
 // Each column holds the round's matches plus classification matches at the same edge count.
 function bracketHtml(ctx, ko, multi, next) {
-  const main = ko.filter(m => placementLabel(m, ctx) === null);
-  const placement = ko.filter(m => placementLabel(m, ctx) !== null);
+  const main = ko.filter(m => plRange(m, ctx) === null);
+  const placement = ko.filter(m => plRange(m, ctx) !== null);
   const maxR = main.reduce((mx, m) => Math.max(mx, koColumn(m, ctx)), 0);
   const cols = [];
   for (const m of main) {
@@ -432,8 +426,7 @@ function renderVenue(route, data, now, simOn) {
   const open = shown.filter(r => dayKey(r.t, r.ctx.tz) === shownDay); // the full day stays on the board; the scroll follows the current slot
   // a match on an undeclared venue (the gate reports it) renders absent
   const declared = (Array.isArray(data.tjson.venues) ? data.tjson.venues : []).filter(venue => venue && typeof venue === 'object');
-  // sharedFacts' map, never rebuilt
-  const venueNames = ctxs.length ? ctxs[0].venues : new Map();
+  const venueNames = new Map(declared.map(v => [v.id, v.name])); // the board's own map — no reach into a category ctx
   const cols = declared.map(v => v.id).filter(id => open.some(r => r.m.venue === id));
   // the clock is the board's control: a bare time while it plays the schedule (a
   // match day or the running sim), the shown day's date otherwise — tap the date to
@@ -466,7 +459,7 @@ function renderVenue(route, data, now, simOn) {
   // Wall-clock minutes drive the layout, never offsets. One window per row feeds the
   // frame, scale, and placement; a missing slot length leaves e null.
   const win = open.map(r => {
-    const s = wallClockMin(r.t, r.ctx.tz);
+    const s = wallMin(r.t, r.ctx.tz);
     const sl = matchSlotMs(r.m, r.ctx) / 60000;
     return { r, s, e: Number.isFinite(sl) ? s + sl : null };
   }).filter(w => Number.isFinite(w.s)); // a null/NaN wall minute would NaN the day's frame — keep it off the layout
@@ -503,7 +496,7 @@ function renderVenue(route, data, now, simOn) {
     return `<div class="bcard" style="top:${y(s)}px">${card(r, e !== null ? (e - s) * ppm - CARD_GAP : CARD_PX)}</div>`;
   };
   const dayH = Math.ceil(total * ppm);
-  const nowMin = wallClockMin(now, tz);
+  const nowMin = wallMin(now, tz);
   // The line is the day's "now" — it exists only while the board's day is today;
   // on any other day there is nothing for aim() to follow.
   const nowY = nowMin !== null && dayKey(now, tz) === shownDay ? Math.min(Math.max(y(nowMin), 0), dayH) : null;

@@ -4,9 +4,23 @@
 
 const fs = require('fs');
 const path = require('path');
-const { matchSlotMs, pairSig, dayKey, schedTime, wallHM, ID_RE, MAX_BEST_OF } = require('../site/derive.js');
+const { matchSlotMs, pairSig, dayKey, schedTime, ID_RE, MAX_BEST_OF } = require('../site/derive.js');
 const { writeTournament, writeTournamentIndex, slotsOverlap, plainObject, fixedPlayers, isRealDate, daysOf } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
+
+// Wall-clock HH:MM in the tournament zone, from pinned gregory/latn parts — the
+// generator's own formatting (the shipped path formats in views.js). generate()
+// rejects a bad timezone up front, so the formatter never throws here.
+const wallFmts = new Map();
+function wallHM(t, tz) {
+  let f = wallFmts.get(tz);
+  if (!f) wallFmts.set(tz, f = new Intl.DateTimeFormat('en', {
+    timeZone: tz, calendar: 'gregory', numberingSystem: 'latn',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+  }));
+  const p = Object.fromEntries(f.formatToParts(new Date(t)).map(x => [x.type, x.value]));
+  return `${p.hour}:${p.minute}`;
+}
 
 // Round-robin pairings, circle method: array of rounds, each a list of pairs.
 function roundRobin(teams) {
@@ -592,20 +606,28 @@ function main(root, specPath) {
   }
   const tourney = generate(spec);
   const siteRoot = path.join(root, 'site');
-  writeTournament(siteRoot, spec.slug, tourney);
 
-  // keep the list page in sync — a tournament the index doesn't know is invisible
+  // Read the index before the first write: an unreadable index fails with nothing
+  // written, so the tournament file and the list can't drift apart.
   const idxFile = path.join(siteRoot, 'tournaments.json');
   let idx;
   try {
     idx = JSON.parse(fs.readFileSync(idxFile, 'utf8'));
   } catch (e) {
-    console.error(`schedule: can't read site/tournaments.json as JSON (${e.message}) — ${spec.slug}.json is written but the index is untouched; fix the index by hand and commit both`);
+    console.error(`schedule: can't read site/tournaments.json as JSON (${e.message}) — nothing written`);
+    process.exit(1);
+  }
+  if (!Array.isArray(idx)) {
+    console.error('schedule: site/tournaments.json must be an array — nothing written');
     process.exit(1);
   }
   const entry = { slug: spec.slug, name: spec.name, location: spec.location, dates: daysOf(tourney) };
-  const i = Array.isArray(idx) ? idx.findIndex((t) => t && t.slug === spec.slug) : -1;
+  const i = idx.findIndex((t) => t && t.slug === spec.slug);
   if (i >= 0) idx[i] = entry; else idx.push(entry);
+
+  // Tournament first, then the index — a failed index write leaves the file on disk
+  // but unlisted (recoverable); the reverse would list a file that isn't there.
+  writeTournament(siteRoot, spec.slug, tourney);
   writeTournamentIndex(siteRoot, idx); // the one-per-line shape — index diffs stay per-tournament
 
   console.log(`Wrote site/tournaments/${spec.slug}.json — run \`node gb.js validate\` before committing.`);

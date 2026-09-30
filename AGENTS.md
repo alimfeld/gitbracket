@@ -19,7 +19,9 @@ implement them; treat them as rules, not style.
 - **Never store what can be derived.** Keep only the raw facts a scorer
   records — games, scores, winner; standings, ranks, and done flags are
   recomputed at render, so a corrected fact can never leave a stale aggregate.
-  Schedules are the one stored exception: they can't be derived.
+  Two exceptions: schedules, which can't be derived, and the index's
+  `name`/`location`/`dates`, a deliberate copy so the list page is one fetch —
+  the validator keeps it equal to the tournament file.
 - **Times are wall-clock, never offsets.** `scheduled` is local wall time in
   the tournament's `timezone`; the instant is derived at render, so data stays
   readable and stays right if clock rules change.
