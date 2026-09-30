@@ -18,11 +18,9 @@ function main(root) {
   for (const c of conflicts) console.error(`conflict: ${c}`);
   if (errs.length) { console.error(`publish: ${errs.length} error(s) — fix before publishing`); return 1; }
   if (conflicts.length) { console.error(`publish: ${conflicts.length} conflict(s) — resolve before publishing`); return 1; }
-  // Mirror the admin's publish: push the branch when it has a remote, so the
-  // deployed content is always the recorded one.
-  const p = unpushed(root);
-  const push = p.hasRemote ? git(root, ['push']) : { code: 0 };
-  if (push.code !== 0) { console.error(`publish: push failed:\n${push.err}`); return 1; }
+  // The anchor gate, then the push — the same order the daemon publishes in.
+  const pre = pushWhenReady(root);
+  if (pre !== null) { console.error(pre); return 1; }
   return ship(root);
 }
 
@@ -70,6 +68,21 @@ function deployPreflight(root) {
   return null;
 }
 
+// Gate the anchor before the push, so a branch with no domain to prove itself never
+// pushes. The dirty-tree check stays in ship's preflight: committed work is still
+// recorded on the branch even when the ship is refused. The one owner of the
+// pre-push sequence — the daemon routes here too.
+function pushWhenReady(root) {
+  const role = deployRole(root);
+  if (!role.ok) return `publish: ${role.why}`;
+  const p = unpushed(root);
+  if (p.hasRemote) {
+    const push = git(root, ['push']);
+    if (push.code !== 0) return `publish: push failed:\n${push.err}`;
+  }
+  return null;
+}
+
 // Snapshot site/ on the event loop before the async deploy, so a mid-deploy edit
 // can't half-reach the CDN and live is exactly what was pushed.
 function snapshotSite(siteRoot) {
@@ -99,4 +112,4 @@ function ship(root) {
   });
 }
 
-module.exports = { main, ship, snapshotSite, deployRole, productionCNAME };
+module.exports = { main, ship, snapshotSite, deployRole, productionCNAME, pushWhenReady };

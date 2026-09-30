@@ -13,7 +13,7 @@ const { spawn } = require('child_process');
 const { loadRepo, plainObject, cleanTree, git, cnameOf, defaultSlug, unpushed } = require('./tools.js');
 const { execEdit, parseResult } = require('./edits.js');
 const { findings } = require('./validate.js');
-const { ship, deployRole } = require('./publish.js');
+const { ship, pushWhenReady } = require('./publish.js');
 
 // One path for every verb the page can send; 'move' sets time+venue atomically
 // (one validate, one commit). The editor owns the funnel.
@@ -189,11 +189,10 @@ function serve(state) {
         // be clean and every semantic conflict resolved.
         const { errs, conflicts } = findings(loadRepo(state.siteRoot));
         if (errs.length || conflicts.length) return json(res, 400, { errors: errs, conflicts });
-        const role = deployRole(state.root); // the daemon's console names the failure either way — the page answers with the role's reason
-        if (!role.ok) return json(res, 400, { error: role.why });
-        const p = unpushed(state.root);
-        const push = p.hasRemote ? git(state.root, ['push']) : { code: 0 };
-        if (push.code !== 0) return json(res, 400, { error: `push failed:\n${push.err}` });
+        // The anchor gate, then the push — one owner, shared with the CLI, so the
+        // daemon can never push a branch it cannot prove it may deploy.
+        const pre = pushWhenReady(state.root);
+        if (pre !== null) return json(res, 400, { error: pre });
         state.redo = []; // published — the undone edge is no longer the last act; undo/redo stay local to the unpushed window
         const s = await ship(state.root);
         state.deployFailed = s !== 0; // the badge reads "not live" until a ship actually lands

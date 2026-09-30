@@ -127,6 +127,25 @@ test('publish main: the CLI pushes the branch before shipping, mirroring the adm
   }
 });
 
+test('publish main: a bad anchor refuses before the push — the commit stays local', async () => {
+  const { tmp, siteRoot } = scratchWithRemote();
+  try {
+    anchorCNAME(tmp, siteRoot);
+    // A branch still carrying production's CNAME can never ship. Give it an upstream
+    // so a push would otherwise succeed — that is what makes the ordering observable.
+    git(tmp, ['checkout', '-qb', 'sim/prod-cname']);
+    git(tmp, ['push', '-qu', 'origin', 'sim/prod-cname']);
+    fs.writeFileSync(path.join(siteRoot, 'note.txt'), 'pending\n');
+    git(tmp, ['add', 'site/note.txt']);
+    git(tmp, ['commit', '-qm', 'feat: pending note']);
+    assert.equal(unpushed(tmp).commits.length, 1, 'a commit is pending before publish');
+    assert.equal(await publish.main(tmp), 1, 'the deploy anchor is refused');
+    assert.equal(unpushed(tmp).commits.length, 1, 'the refusal came before the push — nothing left the branch');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 test('publish main: a semantic conflict stops the ship at the gate', () => {
   const { tmp, siteRoot } = scratchWithRemote();
   try {
