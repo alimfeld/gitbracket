@@ -96,6 +96,20 @@ test('publish deployRole: no origin/main anchor — a branch cannot prove itself
 });
 
 
+test('publish deployRole: a blank CNAME reads as missing, not as a scratch domain', () => {
+  const { tmp, siteRoot } = scratchWithRemote();
+  try {
+    anchorCNAME(tmp, siteRoot);
+    git(tmp, ['checkout', '-qb', 'sim/blank']);
+    fs.writeFileSync(path.join(siteRoot, 'CNAME'), '\n'); // blank and uncommitted
+    const r = publish.deployRole(tmp);
+    assert.equal(r.ok, false, 'a blank CNAME is not a domain to ship to');
+    assert(/no site\/CNAME/.test(r.why), 'the refusal is the missing-CNAME one, never a downstream surge failure');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 test('publish main: a semantic conflict stops the ship at the gate', () => {
   const { tmp, siteRoot } = scratchWithRemote();
   try {

@@ -121,7 +121,7 @@ function findRoot(from) {
 
 // site/CNAME trimmed, null when missing.
 function cnameOf(root) {
-  try { return fs.readFileSync(path.join(root, 'site', 'CNAME'), 'utf8').trim(); }
+  try { return fs.readFileSync(path.join(root, 'site', 'CNAME'), 'utf8').trim() || null; } // blank reads as missing, not as a domain
   catch { return null; }
 }
 
