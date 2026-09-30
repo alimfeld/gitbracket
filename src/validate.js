@@ -10,7 +10,7 @@
 
 const path = require('path');
 const { loadRepo, plainObject, isRealDate, schedEntries, pairBusy, consumedSlots, winTarget, reachedWinner, feederBounds, sameSet, daysOf } = require('./tools.js');
-const { LOCALE, DATE_RE, ID_RE, ISO_RE, MAX_BEST_OF, pairSig, matchSlotMs, makeCat, matchesOf, resolveSide, bestOfOf, schedTime, plRange, parentsOf } = require('../site/derive.js');
+const { DATE_RE, ID_RE, ISO_RE, MAX_BEST_OF, pairSig, matchSlotMs, makeCat, matchesOf, resolveSide, bestOfOf, schedTime, plRange, parentsOf } = require('../site/derive.js');
 
 const RESULTS = ['winner', 'loser'];
 const RESULT_STATUSES = ['played', 'walkover', 'void'];
@@ -113,7 +113,7 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
     err(tFile, 'timezone required');
   } else {
     try {
-      new Intl.DateTimeFormat(LOCALE, { timeZone: tjson.timezone });
+      new Intl.DateTimeFormat('en', { timeZone: tjson.timezone });
       tzOk = true;
     }
     catch { err(tFile, `timezone ${JSON.stringify(tjson.timezone)} is not a valid IANA timezone`); }

@@ -1200,5 +1200,5 @@ function playerStatus(ctx, pid) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { LOCALE, setLocale, DATE_RE, ID_RE, ISO_RE, MAX_BEST_OF, pairSig, esc, makeCat, matchesOf, toCats, matchSlotMs, bestOfOf, poolBo1, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, poolFacts, resolveSide, teamLabel, sideLabel, scoreCells, playerMatches, possibleStages, placementLabel, plRange, placementColumn, bandLabels, stageGroupName, parentsOf, fmtTime, dayKey, schedTime, schedDays, fmtRange, dayShort, dayLabel, fmtDiff, kioskStatus, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, currentWave, playerStatus };
+  module.exports = { setLocale, DATE_RE, ID_RE, ISO_RE, MAX_BEST_OF, pairSig, esc, makeCat, matchesOf, toCats, matchSlotMs, bestOfOf, poolBo1, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, poolFacts, resolveSide, teamLabel, sideLabel, scoreCells, playerMatches, possibleStages, placementLabel, plRange, placementColumn, bandLabels, stageGroupName, parentsOf, fmtTime, dayKey, schedTime, schedDays, fmtRange, dayShort, dayLabel, fmtDiff, kioskStatus, roundName, koColumn, koOrdinal, matchLabel, winners, catStatus, currentWave, playerStatus };
 }

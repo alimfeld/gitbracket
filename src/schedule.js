@@ -4,7 +4,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { matchSlotMs, pairSig, dayKey, schedTime, fmtTime, ID_RE, LOCALE } = require('../site/derive.js');
+const { matchSlotMs, pairSig, dayKey, schedTime, fmtTime, ID_RE } = require('../site/derive.js');
 const { writeTournament, writeTournamentIndex, slotsOverlap, plainObject, fixedPlayers, isRealDate, daysOf } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 
@@ -465,7 +465,7 @@ function generate(spec) {
   }
   // A bad timezone would surface as a "no blocks entry" error — name the real
   // cause here.
-  try { new Intl.DateTimeFormat(LOCALE, { timeZone: timezone }); }
+  try { new Intl.DateTimeFormat('en', { timeZone: timezone }); }
   catch { throw new Error(`spec: timezone ${JSON.stringify(timezone)} is not a valid IANA timezone`); }
   // A non-object final would drop the override silently and still validate — the one
   // spec failure the gate can't see.
