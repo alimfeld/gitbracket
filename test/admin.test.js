@@ -8,7 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { loadRepo } = require('../src/tools.js');
+const { loadRepo, unpushed } = require('../src/tools.js');
 const { validateRepo } = require('../src/validate.js');
 const admin = require('../src/admin.js');
 const { git, scratchWithRemote } = require('./admin-helpers.js');
@@ -18,13 +18,13 @@ test('admin doEdit: a raw result string is parsed with the shared grammar — pa
   try {
     const good = admin.doEdit(state, 'result', 'md40', '8', '21-19 21-18'); // the display form, typed raw
     assert.equal(good.ok, true, 'a raw score string lands');
-    assert(/^score\(sample\): md40\/8 /.test(admin.unpushed(tmp).commits[0].msg), 'the raw string parses into the score kind');
+    assert(/^score\(sample\): md40\/8 /.test(unpushed(tmp).commits[0].msg), 'the raw string parses into the score kind');
     const m8 = loadRepo(siteRoot).tournaments.get('sample').tjson.matches.md40.find(m => m.id === 8);
     assert(m8.result.status === 'played' && m8.result.winner === 'a', 'raw games apply as a played result');
     const bad = admin.doEdit(state, 'result', 'md40', '8', 'wo a x'); // the grammar's own refusal, daemon-side
     assert.equal(bad.ok, false, 'a bad grammar is refused');
     assert(/wo takes nothing else/.test(bad.error), 'the refusal speaks the grammar\'s words');
-    assert.equal(admin.unpushed(tmp).commits.length, 1, 'a refused grammar never commits');
+    assert.equal(unpushed(tmp).commits.length, 1, 'a refused grammar never commits');
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
@@ -54,7 +54,7 @@ test('admin doEdit: a score commits with a conventional message and shows as pen
     const r = admin.doEdit(state, 'result', 'md40', '8', { shape: 'score', games: [{ a: 11, b: 5 }, { a: 11, b: 3 }] });
     assert.equal(r.ok, true, 'the edit lands');
     assert(r.sha, 'the receipt carries the short sha');
-    const pend = admin.unpushed(tmp);
+    const pend = unpushed(tmp);
     assert.equal(pend.commits.length, 1, 'one pending commit');
     assert(/^score\(sample\): md40\/8 /.test(pend.commits[0].msg), 'pending list shows the commit message');
     // file on disk tells the same story as the commit
@@ -97,7 +97,7 @@ test('admin doEdit move: clearing time+venue is one atomic commit, a real move i
     const r = admin.doEdit(state, 'move', 'md40', '8', { time: null, venue: null });
     assert.equal(r.ok, true, 'unscheduling lands');
     assert(m8().scheduled === undefined && m8().venue === undefined, 'both keys drop — atomic');
-    assert.equal(admin.unpushed(tmp).commits.length, 1, 'exactly one commit for the pair');
+    assert.equal(unpushed(tmp).commits.length, 1, 'exactly one commit for the pair');
     assert(validateRepo(loadRepo(siteRoot)).errs.length === 0, 'cleared snapshot validates');
     // and a real move — md40/9 is the final: feeders 7/8 end at 12:00 (45-min
     // group slots), nothing consumes it, court-1 is free at 12:00 exactly; the
@@ -122,7 +122,7 @@ test('admin doEdit clear: its commit kind mirrors what was removed (score/walkov
     admin.doEdit(state, 'result', 'xd', '1', { shape: 'walkover', winner: 'a' });
     admin.doEdit(state, 'result', 'xd', '1', { shape: 'clear' });
     // git log is newest-first: [walkover-clear, walkover, score-clear, score]
-    const msgs = admin.unpushed(tmp).commits.map(c => c.msg);
+    const msgs = unpushed(tmp).commits.map(c => c.msg);
     assert(/^score\(sample\)/.test(msgs[2]), 'a clear of a score commits as score');
     assert(/^walkover\(sample\)/.test(msgs[0]), 'a clear of a walkover commits as walkover');
   } finally {

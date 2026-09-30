@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { loadRepo } = require('../src/tools.js');
+const { loadRepo, unpushed } = require('../src/tools.js');
 const { validateRepo } = require('../src/validate.js');
 const admin = require('../src/admin.js');
 const { git, scratchWithRemote } = require('./admin-helpers.js');
@@ -16,7 +16,7 @@ test('admin unpushed: no remote reports hasRemote false — undo/publish stay of
   const { tmp } = scratchWithRemote();
   try {
     git(tmp, ['remote', 'remove', 'origin']); // a repo with no remote — nothing is provably pending
-    const p = admin.unpushed(tmp);
+    const p = unpushed(tmp);
     assert.equal(p.hasRemote, false, 'no origin/main → nothing is provably pending');
     assert.deepEqual(p.commits, [], 'and the list is empty — undo would reset a possibly-shared commit');
   } finally {
@@ -32,7 +32,7 @@ test('admin undo/redo: redo restores exactly the undone commits, LIFO — tree c
     const score = id => admin.doEdit(state, 'result', 'md40', String(id), { shape: 'score', games: [{ a: 11, b: 5 }, { a: 11, b: 3 }] });
     assert.equal(score(8).ok, true, 'the semifinal scores');
     assert.equal(score(9).ok, true, 'the final scores on top (feeder 8 is now done)');
-    assert.equal(admin.unpushed(tmp).commits.length, 2, 'two pending edits');
+    assert.equal(unpushed(tmp).commits.length, 2, 'two pending edits');
     assert.equal(admin.undo(state).error, undefined, 'undo drops the newest (md40/9)');
     assert(m(9).result === undefined && m(8).result !== undefined, 'only the newest edit is gone');
     assert.equal(admin.undo(state).error, undefined, 'second undo drops md40/8 too');
@@ -41,7 +41,7 @@ test('admin undo/redo: redo restores exactly the undone commits, LIFO — tree c
     assert(m(8).result !== undefined && m(9).result === undefined, 'LIFO: md40/8 back, md40/9 still gone');
     assert.equal(admin.redo(state).error, undefined, 'and the second redo restores md40/9');
     assert(m(9).result !== undefined, 'both edits back');
-    assert.equal(admin.unpushed(tmp).commits.length, 2, 'the two commits are pending again');
+    assert.equal(unpushed(tmp).commits.length, 2, 'the two commits are pending again');
     assert.equal(git(tmp, ['status', '--porcelain']).out.trim(), '', 'working tree clean through the round trip');
     assert(validateRepo(loadRepo(siteRoot)).errs.length === 0, 'snapshot validates after redo');
   } finally {
@@ -57,7 +57,7 @@ test('admin undo: once the tip is on a remote ref, undo refuses — the fallback
     const score = admin.doEdit(state, 'result', 'md40', '8', { shape: 'score', games: [{ a: 11, b: 5 }, { a: 11, b: 3 }] });
     assert.equal(score.ok, true, 'the edit commits on the branch');
     const before = git(tmp, ['rev-parse', 'HEAD']).out.trim();
-    assert.equal(admin.unpushed(tmp).commits.length, 1, 'one pending commit — undo is offered');
+    assert.equal(unpushed(tmp).commits.length, 1, 'one pending commit — undo is offered');
     const ok = admin.undo(state);
     assert(ok.sha, 'an unpushed commit undoes cleanly');
     git(tmp, ['reset', '--hard', before]).status; // put the commit back
@@ -79,7 +79,7 @@ test('admin undo: an untracked file does not block undo — reset leaves it alon
     const r = admin.undo(state);
     assert(r.sha, `undo runs with an untracked file present, got: ${r.error}`);
     assert(fs.existsSync(path.join(tmp, 'results.csv')), 'the untracked file survives the reset');
-    assert.equal(admin.unpushed(tmp).commits.length, 0, 'the edit was rewound');
+    assert.equal(unpushed(tmp).commits.length, 0, 'the edit was rewound');
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
@@ -125,7 +125,7 @@ test('admin undo: a root commit (orphan branch) reports the ceiling, never git\'
     git(tmp, ['checkout', '-q', '--orphan', 'single']);
     git(tmp, ['add', '-A']);
     git(tmp, ['commit', '-qm', 'sole']);
-    assert.equal(admin.unpushed(tmp).commits.length, 1, 'the root commit is pending against origin/main');
+    assert.equal(unpushed(tmp).commits.length, 1, 'the root commit is pending against origin/main');
     const r = admin.undo(state);
     assert.equal(r.error, 'nothing to undo — the branch is at its first commit', `got: ${r.error}`);
     assert.equal(git(tmp, ['rev-parse', 'HEAD']).out.trim().length, 40, 'HEAD untouched');
@@ -141,10 +141,10 @@ test('admin unpushed: the undo window is the branch\'s own upstream — a pushed
     git(tmp, ['checkout', '-qb', 'sim/sample-x']);
     git(tmp, ['commit', '--allow-empty', '-qm', 'chore(sim): scratch domain']);
     git(tmp, ['push', '-qu', 'origin', 'sim/sample-x']); // sim's own push -u — the sim gets its upstream
-    assert.equal(admin.unpushed(tmp).commits.length, 0, 'a pushed sim commit is not pending — an origin/main..HEAD window would still count it');
+    assert.equal(unpushed(tmp).commits.length, 0, 'a pushed sim commit is not pending — an origin/main..HEAD window would still count it');
     assert.equal(admin.undo(state).error, 'nothing to undo', 'undo refuses after the push — append-only holds on the sim branch too');
     admin.doEdit(state, 'result', 'md40', '8', { shape: 'score', games: [{ a: 11, b: 5 }, { a: 11, b: 3 }] });
-    assert.equal(admin.unpushed(tmp).commits.length, 1, 'a fresh score is pending against the branch\'s own upstream');
+    assert.equal(unpushed(tmp).commits.length, 1, 'a fresh score is pending against the branch\'s own upstream');
     assert.equal(git(tmp, ['push']).status, 0, 'the bare push the daemon runs after an edit is clean — undo can never strand the branch behind its remote');
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });

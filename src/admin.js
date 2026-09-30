@@ -239,4 +239,4 @@ function main(root, args) {
   return 0;
 }
 
-module.exports = { doEdit, unpushed, undo, redo, serve, main };
+module.exports = { doEdit, undo, redo, serve, main };

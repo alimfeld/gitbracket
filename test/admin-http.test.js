@@ -10,7 +10,7 @@ const os = require('os');
 const path = require('path');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { loadRepo } = require('../src/tools.js');
+const { loadRepo, unpushed } = require('../src/tools.js');
 const admin = require('../src/admin.js');
 const { scratchWithRemote, anchorCNAME } = require('./admin-helpers.js');
 
@@ -79,7 +79,7 @@ test('admin HTTP: a publish retry after a failed deploy needs no pending commits
   const pend = () => fetch(base + '/api/pending').then(r => r.json());
   const failed = await postJson(base, '/api/publish', '{}');
   assert.equal(failed.status, 400, 'the failed deploy is reported, not swallowed');
-  assert.equal(admin.unpushed(tmp).commits.length, 0, 'the push already landed — nothing pending to gate the retry on');
+  assert.equal(unpushed(tmp).commits.length, 0, 'the push already landed — nothing pending to gate the retry on');
   assert.equal((await pend()).deployFailed, true, 'the badge can tell "not live" from "clean"');
   const retry = await postJson(base, '/api/publish', '{}');
   assert.equal(retry.status, 200, 'the retry deploys with nothing pending');
