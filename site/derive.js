@@ -615,13 +615,10 @@ function plBuild(ctx) {
     if (!m || !Array.isArray(m.sides)) return false; // dangling ref or malformed sides — the gate reports it, the walk skips it
     if (memMemo.has(m.id)) return memMemo.get(m.id);
     memMemo.set(m.id, false);
-    let yes = false;
-    for (const s of m.sides) {
-      if (!s || s.kind !== 'match') continue;
-      if (s.result === 'loser') { yes = true; break; }
-      const X = byId.get(s.match);
-      if (X && member(X)) { yes = true; break; }
-    }
+    // A loser side makes it a classification match; a non-loser side inherits
+    // from the match it consumes. A dangling target is not a member.
+    const yes = m.sides.some(s => s && s.kind === 'match' &&
+      (s.result === 'loser' || member(byId.get(s.match))));
     memMemo.set(m.id, yes);
     return yes;
   };
@@ -630,11 +627,12 @@ function plBuild(ctx) {
   const champAnchor = (m, seen) => {
     if (!m || !Array.isArray(m.sides) || seen.has(m.id)) return null; // a dangling feeder is the gate's finding, never a throw
     seen.add(m.id);
-    for (const s of m.sides) {
-      if (!s || s.kind !== 'match' || s.result !== 'loser') continue;
-      const X = byId.get(s.match);
-      if (X && !member(X)) return wdOf(ctx, X.id); // the anchor: a main-round loser edge
-      return null; // a sub-bracket final's chain passes through the classification — not the champion
+    const lost = m.sides.find(s => s && s.kind === 'match' && s.result === 'loser');
+    if (lost) {
+      const X = byId.get(lost.match);
+      // A main-round loser edge anchors the band; a chain through the
+      // classification is a sub-bracket final — not the champion.
+      return X && !member(X) ? wdOf(ctx, X.id) : null;
     }
     for (const s of m.sides) {
       if (!s || s.kind !== 'match' || s.result !== 'winner') continue;
