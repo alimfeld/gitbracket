@@ -84,7 +84,8 @@ function closeModal() {
   $('modal').onkeydown = null; // a side modal's Enter handler must not outlive it — openResult never sets one
   if (modalTrigger) {
     const el = $('grid').querySelector(`[data-key="${modalTrigger.key}"]`);
-    (el || $('grid')).focus();
+    // the card's score button is its focus stop — return the keyboard there, not the article
+    ((el && el.querySelector('.score-target')) || el || $('grid')).focus();
     modalTrigger = null;
   }
 }
@@ -209,7 +210,10 @@ function cardHtml(c, m, venue) {
   const k = keyOf(c, m);
   // one side row per side, meta last; a drag grip leads — only the grip drags
   const tip = pend ? `waiting on ${pend} — scoring now records a conflict` : '';
+  // a real button so the card is keyboard/SR reachable; the grip and pencils z-index above it
+  const label = `score: ${sideLabel(m.sides && m.sides[0], c)} vs ${sideLabel(m.sides && m.sides[1], c)} — ${cardMeta(c, m)}`;
   return `<article class="match${stCls}" data-key="${esc(k)}" data-venue="${esc(venue || '')}"${tip ? ` title="${esc(tip)}"` : ''}${pos}>
+    <button type="button" class="score-target" aria-label="${esc(label)}"></button>
     <span class="grip" draggable="true" title="Drag to move"></span>
     ${sideRow(c, m, 0)}${sideRow(c, m, 1)}
     <div class="meta">${cardMetaHtml(c, m)}</div>
