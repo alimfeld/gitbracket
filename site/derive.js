@@ -919,8 +919,7 @@ function schedDays(ms, tz) {
   return [...ks].sort();
 }
 
-// Human span from ISO day keys; the locale's own ordering rules ("Jul 11–12" vs
-// "11.–12. Juli") come from Intl.
+// Human span from ISO day keys; the locale's ordering comes from Intl.
 function fmtRange(keys) {
   const ks = (Array.isArray(keys) ? keys : []).filter(k => DATE_RE.test(k));
   if (!ks.length) return null;
