@@ -89,6 +89,9 @@ function closeModal() {
     modalTrigger = null;
   }
 }
+// Escape closes a native <dialog> without calling closeModal — clear the
+// keyboard handler and trigger on the one event every dismissal fires.
+$('modal').addEventListener('close', closeModal);
 
 // ---- data loading ----
 function teamSize(ctx) {
@@ -345,6 +348,7 @@ async function dropAt(e) {
   } else {
     const slot = slotMinOf(matchOf(cid, mid), cat(cid));
     if (!Number.isFinite(slot)) { flash('this match has no slot length — set its slotMinutes first'); return; }
+    if (!S.day) { flash('no scheduled day yet — schedule the tournament before placing matches'); return; }
     time = isoOf(S.day, dropMin(ht.wm, slot)); venue = ht.venue;
   }
   await sendEdit('move', cid, mid, { time, venue });
@@ -531,8 +535,8 @@ function openSide(cid, m, si) {
     } else {
       side = { kind: 'match', match: +modal.querySelector('#matchsel').value, result: modal.querySelector('#resel').value };
     }
-    closeModal();
-    await sendEdit('side', cid, m.id, { si, side });
+    const msg = await sendEdit('side', cid, m.id, { si, side });
+    if (msg === true) closeModal();
   };
   modal.querySelector('[data-x="cancel"]').onclick = closeModal;
   modal.querySelector('[data-x="apply"]').onclick = apply;
