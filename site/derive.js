@@ -402,6 +402,7 @@ function possibleStages(ctx, pid) {
   const poolRow = rows.find(r => r.m.pool !== undefined);
   const pool = poolRow === undefined ? null : poolRow.m.pool;
   const facts = (koRows.length || pool === null) ? null : poolFacts(ctx).get(pool);
+  const seats = facts ? playerRanks(ctx, pool, pid, facts.sigs.size) : [];
 
   // Seats recorded separately from the reach BFS — one match can seat the
   // player via several ranks or edges, and the seen-guard must not drop the
@@ -425,7 +426,7 @@ function possibleStages(ctx, pid) {
       add(r.m); // confirmed seats render as cards — no stage entry
     }
   } else if (facts) {
-    for (const r of playerRanks(ctx, pool, pid, facts.sigs.size)) {
+    for (const r of seats) {
       const m = facts.slots.get(r);
       if (!m) continue;
       if (!poolSeatsOf.has(m.id)) poolSeatsOf.set(m.id, []);
@@ -459,8 +460,8 @@ function possibleStages(ctx, pid) {
     // classifies by shape, never by word position in a localized string.
     const label = stageLabel(m, ctx);
     let stage = stages.get(label);
-    if (!stage) { stage = { label, col, pl: pr, ranks: new Set(), edges: [], times: [], courts: [], ids: [] }; stages.set(label, stage); }
-    stage.ids.push(m);
+    if (!stage) { stage = { label, col, pl: pr, ranks: new Set(), edges: [], times: [], courts: [], n: 0 }; stages.set(label, stage); }
+    stage.n++; // only the count is read (slotSet); the match objects aren't kept
     for (const rank of poolSeatsOf.get(id) || []) stage.ranks.add(rank);
     for (const e of edgeSeatsOf.get(id) || []) stage.edges.push(e);
     const ts = schedTime(m, ctx.tz);
@@ -471,37 +472,37 @@ function possibleStages(ctx, pid) {
   // ---- finalize: slot sets, chips ------------------------------------------
   const present = [...stages.values()];
   const merged = mergeTwinStages(present);
-  // The chip names the entry gates: direct slot ranks, then result edges ("via
-  // the Semifinals" once merged); a stage with no gates reads "any rank".
-  const chipOf = stage => {
-    const chips = [];
-    if (facts && stage.ranks.size) {
-      const universe = playerRanks(ctx, pool, pid, facts.sigs.size);
-      const direct = [...stage.ranks];
-      if (direct.length === universe.length && !stage.edges.length) chips.push(t(LOCALE, 'chip-any', { pool }));
-      else chips.push(t(LOCALE, 'chip-rank', { range: rankRange(direct), pool }));
-    }
-    if (stage.edges.length) {
-      const parts = new Set();
-      for (const e of stage.edges) {
-        const parent = ctx.byId.get(e.parent);
-        if (!parent || !Array.isArray(parent.sides)) continue;
-        const { key } = refInfo(parent, ctx);
-        const label = stageLabel(parent, ctx);
-        parts.add(stage.merged ? t(LOCALE, 'chip-via', { ref: refWord(key, 'acc', label) }) : t(LOCALE, 'chip-as', { kind: t(LOCALE, e.kind === 'winner' ? 'kind-winner' : 'kind-loser'), ref: refWord(key, 'dat', label) }));
-      }
-      for (const p of [...parts].sort()) chips.push(p);
-    }
-    return chips.join(t(LOCALE, 'chip-or'));
-  };
   const out = [];
   for (const stage of present) {
     if (merged.has(stage)) continue; // the pair's originals — the merged entry carries them
-    out.push({ label: stage.label, col: stage.col, ...slotSet(stage.ids.length, stage.times, stage.courts), chip: chipOf(stage) });
+    out.push({ label: stage.label, col: stage.col, ...slotSet(stage.n, stage.times, stage.courts), chip: stageChip(stage, ctx, pool, facts, seats) });
   }
   // Deepest-first (QF -> SF -> Final); a merged pair keeps its deeper column.
   out.sort((a, b) => (b.col ?? -1) - (a.col ?? -1));
   return out;
+}
+
+// The chip names a stage's entry gates: direct slot ranks, then result edges
+// ("via the Semifinals" once merged); a stage with no gates reads "any rank".
+function stageChip(stage, ctx, pool, facts, seats) {
+  const chips = [];
+  if (facts && stage.ranks.size) {
+    const direct = [...stage.ranks];
+    if (direct.length === seats.length && !stage.edges.length) chips.push(t(LOCALE, 'chip-any', { pool }));
+    else chips.push(t(LOCALE, 'chip-rank', { range: rankRange(direct), pool }));
+  }
+  if (stage.edges.length) {
+    const parts = new Set();
+    for (const e of stage.edges) {
+      const parent = ctx.byId.get(e.parent);
+      if (!parent || !Array.isArray(parent.sides)) continue;
+      const { key } = refInfo(parent, ctx);
+      const label = stageLabel(parent, ctx);
+      parts.add(stage.merged ? t(LOCALE, 'chip-via', { ref: refWord(key, 'acc', label) }) : t(LOCALE, 'chip-as', { kind: t(LOCALE, e.kind === 'winner' ? 'kind-winner' : 'kind-loser'), ref: refWord(key, 'dat', label) }));
+    }
+    for (const p of [...parts].sort()) chips.push(p);
+  }
+  return chips.join(t(LOCALE, 'chip-or'));
 }
 
 // Times list every distinct start (a staggered round), ascending; a court stays
@@ -556,7 +557,7 @@ function mergeTwinStages(present) {
     present.push({
       label, col: Math.max(x.col ?? -1, y.col ?? -1), merged: true,
       ranks: new Set([...x.ranks, ...y.ranks]), edges: [...x.edges, ...y.edges],
-      times, courts, ids: [...x.ids, ...y.ids],
+      times, courts, n: x.n + y.n,
     });
   }
   return merged;
