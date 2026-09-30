@@ -123,8 +123,9 @@ const href = (slug, view, p = {}) => {
 async function loadAll(route) {
   if (route.view === 'index') {
     const raw = await fetchJson('tournaments.json');
-    const index = Array.isArray(raw) ? raw : [];
-    return { index };
+    // a failure must not read as the legitimate empty list — the poll can't retry the index
+    if (!Array.isArray(raw)) return { index: null, failed: true };
+    return { index: raw };
   }
   // one file per tournament — a poll is a single atomic fetch
   const tjson = await fetchJson(`tournaments/${route.slug}.json`);
@@ -710,7 +711,7 @@ function boot() {
     const started = lastPoll; // the success this fetch began against — a newer success makes its failure stale
     loadAll(r).then(d => {
       if (superseded(route, r)) return; // a different tournament won the race
-      if (r.view === 'index') return render(route, d); // the index never 404s the tournament file
+      if (r.view === 'index') return d.failed ? paint(FAILED() + `<p>${u('reload')}</p>`) : render(route, d); // the index never 404s the tournament file
       if (d.httpError) {
         // a dead deep link — the file is gone for good; stop the futile poll
         pollOn = false;

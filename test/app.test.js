@@ -202,6 +202,18 @@ test('loadAll: a slug route fetches only the tournament file; the index view onl
   }
 });
 
+test('loadAll: a failed index fetch reports failure, never an empty list', async () => {
+  const origFetch = global.fetch;
+  global.fetch = () => Promise.resolve({ ok: false, status: 503 });
+  try {
+    const d = await loadAll({ view: 'index' });
+    assert.equal(d.failed, true, 'a 5xx index is a reported failure, not "no tournaments yet"');
+    assert.equal(d.index, null, 'no index data rides a failure');
+  } finally {
+    global.fetch = origFetch;
+  }
+});
+
 test('loadAll recovers from a rejected cache revalidation (Safari 304)', async () => {
   const modes = [];
   const origFetch = global.fetch;
