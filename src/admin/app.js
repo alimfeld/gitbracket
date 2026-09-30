@@ -629,13 +629,13 @@ document.addEventListener('click', e => {
 });
 $('undo').onclick = async () => {
   const r = await post('/api/undo', {});
-  if (!r.ok) { flash(r.error); return; }
+  if (!r.ok) { flash(r.error || 'undo failed — see the daemon output'); return; }
   await reload(); // setSlug refreshes pending
   flash('undone');
 };
 $('redo').onclick = async () => {
   const r = await post('/api/redo', {});
-  if (!r.ok) { flash(r.error); return; }
+  if (!r.ok) { flash(r.error || 'redo failed — see the daemon output'); return; }
   await reload(); // setSlug refreshes pending
   flash('redone');
 };
@@ -651,7 +651,7 @@ $('publish').onclick = async () => {
     if (!r.ok) {
       const msg = r.errors && r.errors.length ? r.errors.join('\n')
         : r.conflicts && r.conflicts.length ? 'resolve before publishing:\n' + r.conflicts.map(c => conflictParts(c).line).join('\n')
-        : r.error;
+        : (r.error || 'publish failed — see the daemon output');
       flash(msg);
       return;
     }

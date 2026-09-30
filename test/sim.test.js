@@ -66,6 +66,38 @@ function envWithFakeSurge(tmp) {
 }
 
 const runTeardown = (tmp, env) => spawnSync(process.execPath, [GB, 'sim', '--teardown'], { cwd: tmp, encoding: 'utf8', env });
+const runSim = (tmp, env) => spawnSync(process.execPath, [GB, 'sim'], { cwd: tmp, encoding: 'utf8', env });
+
+test('sim setup: a scratch branch off main with a scratch CNAME, pushed and never production', () => {
+  const { tmp, git } = scratch();
+  try {
+    const r = runSim(tmp, process.env);
+    assert.equal(r.status, 0, r.stderr);
+    const branch = git(['branch', '--show-current']).out.trim();
+    assert.match(branch, /^sim\/[a-z0-9]+$/, 'a sim branch is checked out');
+    const cname = fs.readFileSync(path.join(tmp, 'site', 'CNAME'), 'utf8').trim();
+    assert.match(cname, /^bracket-sim-[a-z0-9]+\.surge\.sh$/, 'the CNAME is a scratch domain, never production');
+    assert.equal(cname, `bracket-sim-${branch.slice(4)}.surge.sh`, 'branch and domain share the nonce');
+    assert(git(['branch', '-r']).out.includes(`origin/${branch}`), 'the branch is pushed, so admin publish has an upstream');
+    assert(/node gb\.js sim --teardown/.test(r.stdout), 'the next step names teardown');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('sim setup: refused off main — no branch, no CNAME rewrite', () => {
+  const { tmp, git } = scratch();
+  try {
+    git(['checkout', '-qb', 'feature']);
+    const before = fs.readFileSync(path.join(tmp, 'site', 'CNAME'), 'utf8');
+    const r = runSim(tmp, process.env);
+    assert.equal(r.status, 1, 'a non-main start refuses');
+    assert(/start from main/.test(r.stderr), r.stderr);
+    assert.equal(fs.readFileSync(path.join(tmp, 'site', 'CNAME'), 'utf8'), before, 'the CNAME is untouched');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
 
 test('sim teardown: happy path — domain down first, branch deleted locally and on origin', () => {
   const { tmp, git } = scratch();

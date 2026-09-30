@@ -511,6 +511,9 @@ const multiDay = ctxs => schedDays(ctxs.flatMap(c => c.matches), (ctxs[0] && ctx
 let lastPoll = 0;
 // Consecutive failed polls since the last success; two running name the reconnect.
 let pollFails = 0;
+// Monotonic fetch id: only the newest load may count a failure, so two loads
+// started against the same success can't double-count one outage.
+let loadSeq = 0;
 
 // The round a player could reach once the pools decide; the chip carries the rank
 // or outcome that gets in.
@@ -712,6 +715,7 @@ function boot() {
 
   const load = r => {
     const started = lastPoll; // the success this fetch began against — a newer success makes its failure stale
+    const seq = ++loadSeq;
     loadAll(r).then(d => {
       if (superseded(route, r)) return; // a different tournament won the race
       if (r.view === 'index') return d.failed ? paint(FAILED() + `<p>${u('reload')}</p>`) : render(route, d); // the index never 404s the tournament file
@@ -723,7 +727,7 @@ function boot() {
         return;
       }
       if (!d.tjson) { // transient fetch failure — the poll retries next tick
-        if (lastPoll === started) pollFails++; // a success landed meanwhile — this failure is already stale
+        if (seq === loadSeq && lastPoll === started) pollFails++; // only the newest load, and no success landed meanwhile
         if (data) render(route, data); // repaint so the stamp can name the failure
         else paint(MISSING() + `<p>${u('reload')}</p>`);
         return;
