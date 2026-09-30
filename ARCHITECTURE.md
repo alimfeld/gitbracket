@@ -13,7 +13,8 @@ being depended on.
 ## Module graph
 
 ```
-NODE    → site/derive.js            (facts, no deps)
+NODE    → site/derive.js                 (facts, no deps)
+NODE    → src/tools.js → site/derive.js  (repo I/O + tool-only predicates)
 BROWSER → site/app.js, src/admin/app.js → site/views.js → site/derive.js, site/i18n.js
 both browser consumers also read derive.js directly
 ```
@@ -31,6 +32,7 @@ locale-free team names and structural refs instead.
 | `site/app.js` | public + kiosk rendering, routing, polling | `derive`, `views`, `i18n` | |
 | `src/admin/app.js` | admin edit UI (browser, served loopback-only) | `derive`, `views`, `i18n` | be published |
 | `src/admin.js` | daemon: serve the admin page + site modules, edit/publish API | `derive`, `edits`, `publish` | import `views` |
+| `src/tools.js` | node-only shared substrate: repo I/O (`loadRepo`), git, and the tool-only domain predicates the site never ships (`schedEntries`, `pairBusy`, `consumedSlots`, `winTarget`, `reachedWinner`, `feederBounds`) | `derive` | import `views`, hold shipped markup |
 | `src/*.js` | node tools: gate, generator, editor, publish, sim | `derive` | import `views` |
 
 ## Invariants
@@ -40,6 +42,13 @@ Pinned by `test/architecture.test.js`:
 - `site/derive.js` contains no `require(`, no `t(`, no `esc(`, no `LOCALE`.
 - No node tool under `src/` (outside `src/admin/`, which is browser code) imports
   `views.js`.
+- Every `derive.js` export is read by a shipped file, or is a named node-shared
+  primitive (`ISO_RE`, `pairSig`, `makeCat`, `matchesOf`, `parentsOf`) — no dead
+  or node-only drift.
+- Each page's scripts compile together with no top-level name declared twice —
+  classic scripts share one global lexical scope.
+- Every id a page looks up (`$('…')` / `getElementById('…')`) is produced by that
+  page's HTML or its own markup.
 
 ## Where new code goes
 

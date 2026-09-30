@@ -6,6 +6,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 
@@ -44,4 +45,39 @@ test('every derive.js export is read by the shipped site, or is a node-shared pr
   const orphans = Object.keys(require('../site/derive.js'))
     .filter(n => !NODE_SHARED_EXPORTS.has(n) && !new RegExp(`\\b${n}\\b`).test(shipped));
   assert.deepEqual(orphans, [], `derive.js exports no shipped file reads (drop it or move it to src/): ${orphans.join(', ')}`);
+});
+
+// A browser loads a page's scripts as separate classic scripts sharing one global
+// lexical environment: a name declared twice across two of them is an early error
+// that kills the page from that script on (the admin's duplicate wallMin did this).
+// Compiling the bundle as one script reproduces the engine's own check, no DOM needed.
+const PAGES = [['site/index.html', 'site'], ['src/admin/index.html', 'site']];
+const bundleOf = (htmlPath, sharedDir) => {
+  const html = read(htmlPath);
+  return [...html.matchAll(/<script src="([^"]+\.js)"/g)].map(m => m[1])
+    // app.js is the page's own file; the domain modules are served from site/
+    .map(src => src === 'app.js' ? path.join(path.dirname(htmlPath), src) : path.join(sharedDir, src));
+};
+
+test('each page\'s scripts compile together — no top-level declaration is claimed twice', () => {
+  for (const [htmlPath, sharedDir] of PAGES) {
+    const files = bundleOf(htmlPath, sharedDir);
+    assert(files.length >= 2, `${htmlPath} names the scripts it loads`);
+    const src = files.map(read).join('\n;\n'); // one script: a duplicate lexical name is an early error here
+    assert.doesNotThrow(() => new vm.Script(src, { filename: files.join('+') }),
+      `${htmlPath}: ${files.join(', ')} collide on a top-level declaration`);
+  }
+});
+
+// A lookup of an id no element carries returns null, and a null-guarded read then
+// silently no-ops (the admin's $('board') sized nothing for as long as it existed).
+// Ids produced dynamically live in the bundle's own markup, so both are searched.
+test('every id a page looks up is one that page produces', () => {
+  for (const [htmlPath, sharedDir] of PAGES) {
+    const files = bundleOf(htmlPath, sharedDir);
+    const js = files.map(read).join('\n');
+    const produced = new Set([...(read(htmlPath) + js).matchAll(/id="([a-zA-Z0-9_-]+)"/g)].map(m => m[1]));
+    const looked = [...js.matchAll(/(?:\$|getElementById)\(['"]([a-zA-Z0-9_-]+)['"]\)/g)].map(m => m[1]);
+    for (const id of looked) assert(produced.has(id), `${htmlPath} — ${files.join(', ')} looks up #${id}, which nothing produces`);
+  }
 });

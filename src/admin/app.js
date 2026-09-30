@@ -32,7 +32,7 @@ const pendingReason = (m, ctx) => {
 };
 
 // wall "HH:MM" from an ISO scheduled string; the grid works in wall minutes.
-const wallMin = iso => { const m = /T(\d{2}):(\d{2})/.exec(String(iso || '')); return m ? +m[1] * 60 + +m[2] : null; };
+const isoWallMin = iso => { const m = /T(\d{2}):(\d{2})/.exec(String(iso || '')); return m ? +m[1] * 60 + +m[2] : null; };
 const pad = n => String(n).padStart(2, '0');
 const isoOf = (day, wm) => `${day}T${pad(Math.floor(wm / 60))}:${pad(wm % 60)}:00`;
 // ms from derive.js; the grid works in wall-clock minutes
@@ -41,7 +41,7 @@ const slotMinOf = (m, ctx) => matchSlotMs(m, ctx) / 60000;
 // A match's wall-time window on a day, as [startMin, endMin] or null.
 function dayWindow(m, ctx) {
   if (m.scheduled == null) return null;
-  const wm = wallMin(m.scheduled);
+  const wm = isoWallMin(m.scheduled);
   if (wm == null) return null;
   const slot = slotMinOf(m, ctx);
   return Number.isFinite(slot) ? [wm, wm + slot] : null;
@@ -206,7 +206,7 @@ function cardHtml(c, m, venue) {
   const stCls = isDone(m) ? ' done' : pend ? ' pending' : '';
   // wall-time placement in the day's scale; unscheduled cards are
   // flow-positioned
-  const wm = (m.scheduled != null && venue) ? wallMin(m.scheduled) : null;
+  const wm = (m.scheduled != null && venue) ? isoWallMin(m.scheduled) : null;
   const slot = slotMinOf(m, c);
   const pos = wm != null && Number.isFinite(slot)
     ? ` style="top:${(wm - S.dayStart) * S.pxPerMin}px;min-height:${slot * S.pxPerMin}px;"` : '';
@@ -271,7 +271,7 @@ function wireGrid() {
   });
 }
 
-// The candidate (venue, wallMin) under the pointer; the placement is free.
+// The candidate (venue, wall minute) under the pointer; the placement is free.
 function hitTest(e) {
   const grid = $('grid');
   const gr = grid.getBoundingClientRect();
