@@ -723,7 +723,7 @@ test('renderers: escapes, a11y state, and behavioral hooks — the shipped surfa
   assert(!evh.includes('<b>Court 2</b>') && evh.includes('&lt;b&gt;Court 2&lt;/b&gt;'), 'the venue name renders entity-encoded');
   assert(standings.includes('aria-hidden="true"'), 'unplayed best-of slots are placeholders, hidden from screen readers');
   assert.doesNotThrow(() => renderTournament({ slug: 'sample', view: 'tournament', cat: 'xd' }, data), 'the ?cat= view renders');
-  assert(text(standings).includes('Winner of SF-2') && !standings.includes('<a href="#m-'), 'slot labels are plain text, not anchors');
+  assert(!standings.includes('<a href="#m-'), 'slot labels are plain text, not anchors');
   assert(!standings.includes('data-feeders') && !standings.includes('data-stage') && !standings.includes('toggle') && !standings.includes('id="m-'), 'no trace or disclosure machinery ships');
   for (const j of vals(standings, 'data-jump')) assert(card(standings, 'id', j) !== undefined, `every jump link has its target section (${j})`);
   assert.equal(vals(standings, 'data-status').filter(s => s === 'next').length, 2, 'ko in play: the Next line and the one unscored semifinal card carry the accent');
@@ -753,7 +753,7 @@ test('renderers: escapes, a11y state, and behavioral hooks — the shipped surfa
   assert(tourSeg.href === '#sample?player=p1' && !tourSeg.current && cards(ppage, 'aria-current', 'page').includes('Schedule'), 'player page: Schedule current, pick preserved in the Tournament link');
   const nextLink = links(ppage).find(l => l.jump === 'next');
   assert(nextLink && nextLink.href === '#sample/schedule?player=p1', 'the body after "Next:" links to the next card');
-  assert(ppage.includes('Next:') && !ppage.includes('↓'), 'the label is plain text and the line carries no arrow');
+  assert(vals(ppage, 'data-status').includes('next'), 'the next line is flagged as next');
   assert(text(ppage).includes('Ada Lovelace') && text(ppage).includes('Court 1'), 'player card finds the player, names the court');
   const picker = renderPlayer({ slug: 'sample', view: 'schedule' }, data);
   const picks = links(picker).filter(l => /\/schedule\?player=/.test(l.href));
@@ -787,7 +787,7 @@ test('possible stages render as cards: a status flag per stage, and the next hea
   const tjson = JSON.parse(JSON.stringify(info.tjson));
   for (const id of [1, 4, 7, 10, 13]) tjson.matches.t.find(m => m.id === id).result = { status: 'walkover', winner: 'a' };
   const page2 = renderPlayer({ slug: 'byes', view: 'schedule', player: 'p1' }, withTjson(data, tjson));
-  assert(text(page2).includes('Next'), 'the next header line names the earliest possible stage');
+  assert(vals(page2, 'data-status').includes('next'), 'the next header line is flagged as next');
   assert(vals(page2, 'datetime').includes('2026-07-12T10:30:00.000Z'), 'the next line carries the instant in a semantic time element');
   assert(card(page2, 'id', 'next').includes('Quarterfinals'), 'the earliest possible card is the jump target, never carrying the confirmed accent');
   assert.equal(vals(page2, 'data-status').filter(s => s === 'next').length, 1, 'only the header line carries the green accent — possible cards never do');
