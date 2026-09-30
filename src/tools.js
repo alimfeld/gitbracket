@@ -158,6 +158,20 @@ function git(root, args) {
   return { code: r.status === 0 ? 0 : 1, out: r.stdout || '', err: r.stderr || '' };
 }
 
+// Unpushed commits [{sha, msg}] over the branch's own upstream, not origin/main —
+// that would count pushed sim commits forever. No upstream: fall back to origin/main.
+function unpushed(root) {
+  const up = git(root, ['rev-parse', '--verify', '--quiet', '@{upstream}']);
+  const ref = up.code === 0 ? '@{upstream}' : 'origin/main';
+  const b = git(root, ['rev-parse', '--verify', '--quiet', ref]);
+  if (b.code !== 0) return { commits: [], hasRemote: false };
+  const l = git(root, ['log', '--oneline', `${ref}..HEAD`]);
+  const commits = l.code === 0 && l.out.trim()
+    ? l.out.trim().split('\n').map(line => ({ sha: line.slice(0, 7), msg: line.slice(8) }))
+    : [];
+  return { commits, hasRemote: true };
+}
+
 // The daemon's default: the last index entry with a readable file.
 function defaultSlug(repo) {
   if (!repo.index.length) return null;
@@ -270,4 +284,4 @@ function pairBusy(a, b) {
   return kinds;
 }
 
-module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, plainObject, fixedPlayers, schedEntries, pairBusy, consumedSlots, winTarget, reachedWinner, feederBounds, isRealDate, findRoot, catCtx, tournamentText, cnameOf, branchOf, isSimBranch, cleanTree, git, gitEnv, defaultSlug, sameSet, daysOf };
+module.exports = { loadRepo, writeTournament, writeTournamentIndex, slotsOverlap, plainObject, fixedPlayers, schedEntries, pairBusy, consumedSlots, winTarget, reachedWinner, feederBounds, isRealDate, findRoot, catCtx, tournamentText, cnameOf, branchOf, isSimBranch, cleanTree, git, gitEnv, defaultSlug, sameSet, daysOf, unpushed };

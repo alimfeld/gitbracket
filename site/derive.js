@@ -944,6 +944,8 @@ function kioskStatus(r, now) {
 // Round name by distance from the final (0 -> Final, 1 -> Semifinals, ...). Which
 // round size takes a dedicated word is a per-locale bundle key, no branch here.
 function roundName(depthFromEnd) {
+  // a negative/non-integer depth is a cycle-corrupted column — no round to name
+  if (!Number.isInteger(depthFromEnd) || depthFromEnd < 0) return 'TBD';
   const key = roundKeyOf(depthFromEnd);
   return t(LOCALE, key, key === 'round-of' ? { n: 2 << depthFromEnd } : undefined);
 }

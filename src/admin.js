@@ -10,24 +10,10 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
-const { loadRepo, plainObject, cleanTree, git, cnameOf, defaultSlug } = require('./tools.js');
+const { loadRepo, plainObject, cleanTree, git, cnameOf, defaultSlug, unpushed } = require('./tools.js');
 const { execEdit, parseResult } = require('./edits.js');
 const { findings } = require('./validate.js');
 const { ship, deployRole } = require('./publish.js');
-
-// Unpushed commits [{sha, msg}] over the branch's own upstream, not origin/main —
-// that would count pushed sim commits forever. No upstream: fall back to origin/main.
-function unpushed(root) {
-  const up = git(root, ['rev-parse', '--verify', '--quiet', '@{upstream}']);
-  const ref = up.code === 0 ? '@{upstream}' : 'origin/main';
-  const b = git(root, ['rev-parse', '--verify', '--quiet', ref]);
-  if (b.code !== 0) return { commits: [], hasRemote: false };
-  const l = git(root, ['log', '--oneline', `${ref}..HEAD`]);
-  const commits = l.code === 0 && l.out.trim()
-    ? l.out.trim().split('\n').map(line => ({ sha: line.slice(0, 7), msg: line.slice(8) }))
-    : [];
-  return { commits, hasRemote: true };
-}
 
 // One path for every verb the page can send; 'move' sets time+venue atomically
 // (one validate, one commit). The editor owns the funnel.
@@ -124,8 +110,11 @@ const MIME = {
 // One static GET under a serving root — MIME by extension, traversal-guarded.
 function staticFile(root, rel) {
   const file = path.join(root, rel === '' ? 'index.html' : rel);
-  if (path.relative(root, file).startsWith('..') || !fs.existsSync(file) || fs.statSync(file).isDirectory()) return null;
-  return { body: fs.readFileSync(file), type: MIME[path.extname(file)] || 'application/octet-stream' };
+  if (path.relative(root, file).startsWith('..')) return null;
+  try {
+    if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) return null;
+    return { body: fs.readFileSync(file), type: MIME[path.extname(file)] || 'application/octet-stream' };
+  } catch { return null; } // a race or permission error is a 404, never a dead daemon
 }
 
 // Open the admin page in the platform browser; CI skips the launch.

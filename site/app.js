@@ -609,18 +609,26 @@ function playerSchedule(route, data, p) {
   return parts.join('');
 }
 
+// localStorage can throw (private mode, a sandboxed frame); the sim clock is a
+// view, so a denied store ends the sim rather than the page.
+const store = {
+  get: k => { try { return localStorage.getItem(k); } catch { return null; } },
+  set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* store unavailable — the sim just won't persist */ } },
+  clear: k => { try { localStorage.removeItem(k); } catch { /* nothing to clear */ } },
+};
+
 // The sim clock's state — the board's clock button toggles it, j/k step it, Esc ends it.
 function mountSimClock({ tjsonOf, onChange }) {
   const SIM_KEY = 'gitbracket.sim.offset';
-  const simOffset = () => Number(localStorage.getItem(SIM_KEY)) || 0;
-  const simOn = () => localStorage.getItem(SIM_KEY) !== null;
+  const simOffset = () => Number(store.get(SIM_KEY)) || 0;
+  const simOn = () => store.get(SIM_KEY) !== null;
   const now = () => Date.now() + simOffset();
   const STEP_MS = 5 * 60000; // one j/k press, one control tap
   // a clock change re-renders the board — statuses and the now-line recompute
-  const step = dir => { localStorage.setItem(SIM_KEY, String(simOffset() + dir * STEP_MS)); onChange(); };
+  const step = dir => { store.set(SIM_KEY, String(simOffset() + dir * STEP_MS)); onChange(); };
   const toggle = day => {
-    if (simOn()) localStorage.removeItem(SIM_KEY);
-    else localStorage.setItem(SIM_KEY, String(simAimOffset(tjsonOf() || {}, Date.now(), day) || 0));
+    if (simOn()) store.clear(SIM_KEY);
+    else store.set(SIM_KEY, String(simAimOffset(tjsonOf() || {}, Date.now(), day) || 0));
     onChange();
   };
   window.addEventListener('keydown', e => {

@@ -4,7 +4,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { matchSlotMs, pairSig, dayKey, schedTime, fmtTime, ID_RE } = require('../site/derive.js');
+const { matchSlotMs, pairSig, dayKey, schedTime, fmtTime, ID_RE, MAX_BEST_OF } = require('../site/derive.js');
 const { writeTournament, writeTournamentIndex, slotsOverlap, plainObject, fixedPlayers, isRealDate, daysOf } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 
@@ -478,8 +478,18 @@ function generate(spec) {
     if (schedTime({ scheduled: `${eventDate}T${blockStart[c.id]}:00` }, timezone) === null) {
       throw new Error(`spec: blocks.${c.id} is not a real local time in ${timezone}: ${eventDate}T${blockStart[c.id]}`);
     }
-    if (c.final !== undefined && (typeof c.final !== 'object' || Array.isArray(c.final))) {
+    if (c.final !== undefined && !plainObject(c.final)) {
       throw new Error(`spec: category ${c.id}: final must be an object { bestOf?, slotMinutes? }, got ${JSON.stringify(c.final)}`);
+    }
+    if (c.final !== undefined) {
+      // the override is the one spec failure the output gate can't name usefully — fail fast here
+      const { bestOf, slotMinutes } = c.final;
+      if (bestOf !== undefined && (!Number.isInteger(bestOf) || bestOf % 2 !== 1 || bestOf < 1 || bestOf > MAX_BEST_OF)) {
+        throw new Error(`spec: category ${c.id}: final.bestOf must be an odd number 1–${MAX_BEST_OF}, got ${JSON.stringify(bestOf)}`);
+      }
+      if (slotMinutes !== undefined && (!Number.isInteger(slotMinutes) || slotMinutes < 1)) {
+        throw new Error(`spec: category ${c.id}: final.slotMinutes must be a positive integer, got ${JSON.stringify(slotMinutes)}`);
+      }
     }
     if (c.knockout !== undefined && typeof c.knockout !== 'boolean') {
       throw new Error(`spec: category ${c.id}: knockout must be a boolean (true/false), got ${JSON.stringify(c.knockout)}`);

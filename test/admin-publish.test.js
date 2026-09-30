@@ -11,6 +11,7 @@ const assert = require('node:assert/strict');
 const publish = require('../src/publish.js');
 const { FIX } = require('./helpers.js');
 const { git, scratchWithRemote, PROD, anchorCNAME } = require('./admin-helpers.js');
+const { unpushed } = require('../src/tools.js');
 
 test('publish ship: the one deploy path shares the preflight gate — a role refusal resolves fast without spawning anything', async () => {
   const { tmp } = scratchWithRemote();
@@ -105,6 +106,22 @@ test('publish deployRole: a blank CNAME reads as missing, not as a scratch domai
     const r = publish.deployRole(tmp);
     assert.equal(r.ok, false, 'a blank CNAME is not a domain to ship to');
     assert(/no site\/CNAME/.test(r.why), 'the refusal is the missing-CNAME one, never a downstream surge failure');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('publish main: the CLI pushes the branch before shipping, mirroring the admin button', async () => {
+  const { tmp, siteRoot } = scratchWithRemote();
+  try {
+    anchorCNAME(tmp, siteRoot);
+    fs.writeFileSync(path.join(siteRoot, 'note.txt'), 'pending\n');
+    git(tmp, ['add', 'site/note.txt']);
+    git(tmp, ['commit', '-qm', 'feat: pending note']);
+    assert.equal(unpushed(tmp).commits.length, 1, 'a commit is pending before publish');
+    fs.writeFileSync(path.join(siteRoot, 'dirty.txt'), 'x\n'); // dirty site/ — the preflight must refuse before spawning surge
+    assert.equal(await publish.main(tmp), 1, 'the push lands, then the dirty-tree preflight refuses the ship');
+    assert.equal(unpushed(tmp).commits.length, 0, 'the CLI publish pushed the pending commit');
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

@@ -9,7 +9,7 @@ const os = require('os');
 const { spawn } = require('child_process');
 const path = require('path');
 const validate = require('./validate.js');
-const { branchOf, git, cnameOf, loadRepo } = require('./tools.js');
+const { branchOf, git, cnameOf, loadRepo, unpushed } = require('./tools.js');
 
 // CLI entry: syntactically broken data and unresolved semantic conflicts both stop the ship.
 function main(root) {
@@ -18,6 +18,11 @@ function main(root) {
   for (const c of conflicts) console.error(`conflict: ${c}`);
   if (errs.length) { console.error(`publish: ${errs.length} error(s) — fix before publishing`); return 1; }
   if (conflicts.length) { console.error(`publish: ${conflicts.length} conflict(s) — resolve before publishing`); return 1; }
+  // Mirror the admin's publish: push the branch when it has a remote, so the
+  // deployed content is always the recorded one.
+  const p = unpushed(root);
+  const push = p.hasRemote ? git(root, ['push']) : { code: 0 };
+  if (push.code !== 0) { console.error(`publish: push failed:\n${push.err}`); return 1; }
   return ship(root);
 }
 

@@ -378,6 +378,11 @@ test('catStatus: pre-start zero progress, groups live, the KO wave in play, and 
   assert(text(renderTournament({ slug: 'tie', view: 'tournament' }, repoPage('tie'))).includes('blocked by unresolved slots'), 'the page explains why the knockout cannot advance');
 });
 
+test('roundName: a cycle-corrupted column names no round, never "Round of 0"', () => {
+  assert.equal(roundName(-1), 'TBD', 'a negative depth is not a round to name');
+  assert.equal(roundName(1), 'Semifinals', 'a valid depth still names its round');
+});
+
 // podium details: third exists only when a bronze match decided it; a void
 // anywhere leaves no winner to name — the line falls back to Finished
 const place8Ctx = tjson => makeCat({ meta: tjson.categories[0], matches: tjson.matches.t }, tjson);
