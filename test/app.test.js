@@ -1,9 +1,10 @@
 'use strict';
 
-// Domain semantics (site/derive.js): ladder order, slot resolution, result
-// statuses, ties — the gate's shared model. Renderer smoke (site/app.js):
-// shipped state only — status/data-jump hooks, escapes, a11y, routing; never
-// the words, columns, or layout that carry it (per AGENTS.md).
+// Site behavior: derive.js facts (ladder order, slot resolution, result
+// statuses, ties — the gate's shared model) and views.js/i18n.js words (labels,
+// status, formatting), plus app.js renderer smoke — shipped state only
+// (status/data-jump hooks, escapes, a11y, routing); the words and layout the
+// renderer emits are review surface, not test surface (per AGENTS.md).
 // Run from the repo root: `node --test`, or one suite:
 // `node --test --test-name-pattern 'slot' test/app.test.js`
 
