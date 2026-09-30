@@ -243,6 +243,20 @@ function wireGrid() {
     grid.addEventListener('dragover', e => { e.preventDefault(); ghost(e); });
     grid.addEventListener('dragleave', e => { if (e.relatedTarget == null) clearGhost(); });
     grid.addEventListener('drop', e => { e.preventDefault(); dropAt(e); });
+    // macOS Safari keeps buttons out of the Tab order unless the operator turns on
+    // "Press Tab to highlight each item", so Tab would skip every card there. Walk the
+    // cards' focus stops ourselves — score target, then the two side pencils. The order
+    // is the browser's own, so Chrome is unaffected; the ends fall through, keeping Tab
+    // able to leave the board.
+    grid.addEventListener('keydown', e => {
+      if (e.key !== 'Tab' || e.altKey || e.ctrlKey || e.metaKey) return;
+      const stops = [...grid.querySelectorAll('.score-target, .edit-side')];
+      const at = stops.indexOf(document.activeElement);
+      const next = at < 0 ? (e.shiftKey ? stops.length - 1 : 0) : at + (e.shiftKey ? -1 : 1);
+      if (next < 0 || next >= stops.length) return;
+      e.preventDefault();
+      stops[next].focus();
+    });
   }
   grid.querySelectorAll('.match').forEach(el => {
     el.querySelectorAll('.edit-side').forEach(btn => btn.addEventListener('click', () => {
