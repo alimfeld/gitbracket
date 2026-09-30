@@ -110,6 +110,8 @@ test('renderers: an invalid timezone renders TBD, never throws', () => {
   const bad = bare({ timezone: 'Mars/Olympus', venues: [{ id: 'c1', name: 'Court 1' }], players: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }], matches: { t: [{ id: 1, pool: 'A', scheduled: '2026-05-02T09:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p1'] }, { kind: 'players', ids: ['p2'] }] }] } });
   const data = pageData(bad, 'bad');
   assert.doesNotThrow(() => renderTournament({ slug: 'bad', view: 'tournament' }, data), 'tournament page');
+  const board = renderVenue({ slug: 'bad', view: 'venues' }, data, Date.now());
+  assert(!board.includes('NaN'), 'venue board: an empty time axis renders plain TBD, never a NaN frame');
   assert.doesNotThrow(() => renderVenue({ slug: 'bad', view: 'venues' }, data, Date.now()), 'venue board');
   assert.doesNotThrow(() => renderPlayer({ slug: 'bad', view: 'schedule', player: 'p1' }, data), 'player page');
 });

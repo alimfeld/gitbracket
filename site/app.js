@@ -470,6 +470,8 @@ function renderVenue(route, data, now, simOn) {
     const sl = matchSlotMs(r.m, r.ctx) / 60000;
     return { r, s, e: Number.isFinite(sl) ? s + sl : null };
   }).filter(w => Number.isFinite(w.s)); // a null/NaN wall minute would NaN the day's frame — keep it off the layout
+  // every readable row dropped: no time axis to draw, else the day math NaNs the board
+  if (!win.length) return top + `<p>${u('nothing')}</p>`;
   const byVenue = new Map(cols.map(id => [id, []]));
   for (const w of win) {
     const list = byVenue.get(w.r.m.venue);
