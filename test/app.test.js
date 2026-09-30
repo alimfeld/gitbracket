@@ -380,6 +380,14 @@ test('catStatus: pre-start zero progress, groups live, the KO wave in play, and 
   assert(text(renderTournament({ slug: 'tie', view: 'tournament' }, repoPage('tie'))).includes('blocked by unresolved slots'), 'the page explains why the knockout cannot advance');
 });
 
+test('catStatus: the wave is the earliest playable round, never a directly seeded later one', () => {
+  // An open play-in round (col 3) beside a quarterfinal (col 2) already playable
+  // from both sides being direct seeds — the front round owns the status.
+  const ctx = catOf('playin', 't');
+  const st = catStatus(ctx);
+  assert(st.kind === 'ko' && st.wave === 3 && roundName(st.wave) === 'Round of 16', 'the open play-in round is the wave, not the directly seeded quarterfinal beside it');
+});
+
 test('roundName: a cycle-corrupted column names no round, never "Round of 0"', () => {
   assert.equal(roundName(-1), 'TBD', 'a negative depth is not a round to name');
   assert.equal(roundName(1), 'Semifinals', 'a valid depth still names its round');

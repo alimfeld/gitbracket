@@ -14,6 +14,7 @@ const { loadRepo } = require('../src/tools.js');
 const V = [
   ['clean fixture validates', 'sample', 'clean', null],
   ['placement bracket validates', 'place', 'clean', null],
+  ['play-in draw validates', 'playin', 'clean', null],
   ['fully played bracket validates', 'full', 'clean', null],
   ['capped classification band validates', 'capped', 'clean', null],
   ['non-numeric match id', 'bad-uppercase-id', 'err', /must be a positive integer/],

@@ -809,14 +809,14 @@ function kioskStatus(r, now) {
   return 'upcoming';
 }
 
-// The lowest column whose undone matches are playable — a scheduled final
-// doesn't claim the status while its semifinals still decide it. Placement
-// matches resolve as a consequence of the bracket and are never the wave in play.
+// The wave in play: the highest column — the earliest unfinished round — whose
+// undone matches are playable, so an open play-in round outranks a directly
+// seeded quarterfinal beside it. Placement matches are never the wave in play.
 function nextKoWave(ctx) {
   const undone = ctx.matches.filter(m => m.pool === undefined && !m.result && plRange(m, ctx) === null);
   if (!undone.length) return null;
   const playable = undone.filter(m => !Array.isArray(m.sides) || m.sides.every(s => resolveSide(s, ctx)));
-  return playable.length ? Math.min(...playable.map(m => koColumn(m, ctx))) : null;
+  return playable.length ? Math.max(...playable.map(m => koColumn(m, ctx))) : null;
 }
 
 // Category status facts: kind groups | ko | finished | winners.
