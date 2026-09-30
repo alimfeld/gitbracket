@@ -23,10 +23,12 @@ const S = {
 // ---- derive/views wrappers (page globals) ----
 const cat = cid => S.cats.find(c => c.id === cid);
 const matchOf = (cid, id) => cat(cid)?.byId.get(Number(id));
+// A scorable match has exactly two sides; a malformed one renders TBD rows.
+const twoSides = m => !!m && Array.isArray(m.sides) && m.sides.length === 2;
 // The gate's own UI rule: a match needs both sides resolved to hold a score;
 // done holds one, so never pending.
 const pendingReason = (m, ctx) => {
-  if (!m || !Array.isArray(m.sides) || m.sides.length !== 2 || isDone(m)) return null;
+  if (!twoSides(m) || isDone(m)) return null;
   const bad = m.sides.find(s => !resolveSide(s, ctx));
   return bad ? sideLabel(bad, ctx) : null;
 };
@@ -320,13 +322,19 @@ function addGhost(col, { time = '', align = '', top, height }) {
   S.ghost = g;
 }
 
+// The dragged match, or null when no drag is in flight.
+function dragSource() {
+  if (!S.dragSource) return null;
+  const [cid, mid] = keyParts(S.dragSource);
+  return { cid, mid, ctx: cat(cid), m: matchOf(cid, mid) };
+}
+
 // Live ghost preview: the pointer's wall mark, snapped and clamped — the position
 // the drop writes, whatever conflicts it creates.
 function ghost(e) {
-  const src = S.dragSource;
-  if (!src) return;
-  const [cid, mid] = keyParts(src);
-  const ctx = cat(cid), m = matchOf(cid, mid);
+  const d = dragSource();
+  if (!d) return;
+  const { ctx, m } = d;
   const ht = hitTest(e);
   clearGhost();
   if (!ht) return;
@@ -348,19 +356,18 @@ function ghost(e) {
 function clearGhost() { if (S.ghost) { S.ghost.remove(); S.ghost = null; } }
 
 async function dropAt(e) {
-  const src = S.dragSource;
-  if (!src) return;
-  const [cid, mid] = keyParts(src);
+  const d = dragSource();
+  if (!d) return;
+  const { cid, mid, m } = d;
   const ht = hitTest(e);
   if (!ht) return;
   let time, venue;
   if (ht.venue === '__none') {
     // a stray drop here unschedules the match — confirm when there is something to lose
-    const m = matchOf(cid, mid);
     if ((m.scheduled || m.venue) && !confirm("Clear this match's time and court?")) return;
     time = null; venue = null;
   } else {
-    const slot = slotMinOf(matchOf(cid, mid), cat(cid));
+    const slot = slotMinOf(m, d.ctx);
     if (!Number.isFinite(slot)) { flash('this match has no slot length — set its slotMinutes first'); return; }
     if (!S.day) { flash('no scheduled day yet — schedule the tournament before placing matches'); return; }
     time = isoOf(S.day, dropMin(ht.wm, slot)); venue = ht.venue;
@@ -385,7 +392,7 @@ async function sendEdit(verb, cid, mid, value) {
 function openResult(cid, m) {
   if (!reachable) return; // the offline banner says why
   // a sideless match renders as TBD rows (cardHtml guards it) but has nothing to score
-  if (!m || !Array.isArray(m.sides) || m.sides.length !== 2) { flash('this match has no two sides — fix it in the file first'); return; }
+  if (!twoSides(m)) { flash('this match has no two sides — fix it in the file first'); return; }
   const ctx = cat(cid);
   const hasOutcome = !!(m.games || m.result);
   let pre = '';
@@ -461,7 +468,7 @@ function openResult(cid, m) {
 // edit that contradicts the model rides through as a conflict (publish blocks).
 function openSide(cid, m, si) {
   if (!reachable) return; // the offline banner says why
-  if (!m || !Array.isArray(m.sides) || m.sides.length !== 2) { flash('this match has no two sides — fix it in the file first'); return; }
+  if (!twoSides(m)) { flash('this match has no two sides — fix it in the file first'); return; }
   const ctx = cat(cid);
   const size = teamSize(ctx);
   const other = m.sides[1 - si];

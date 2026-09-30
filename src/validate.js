@@ -26,7 +26,8 @@ function makeConflict(where, message, refs) {
 
 // One rule per status: played counts win + gd/pd from games; walkover a win only;
 // void nothing.
-function validateResultShape(r, hasGames, target, m, where, err, conflict) {
+function validateResultShape(r, games, target, where, err, conflict) {
+  const hasGames = Array.isArray(games);
   if (!RESULT_STATUSES.includes(r.status)) {
     err(where, `result.status must be one of ${RESULT_STATUSES.join(', ')}, got ${JSON.stringify(r.status)}`);
   } else if (r.status === 'void') {
@@ -38,7 +39,7 @@ function validateResultShape(r, hasGames, target, m, where, err, conflict) {
       if (!hasGames) conflict(where, 'a played result records the games it was decided by');
       else if (typeof target === 'number') {
         // derived from the games — the stored winner must agree (and the games reach the target)
-        const derived = reachedWinner(m.games, target);
+        const derived = reachedWinner(games, target);
         if (derived === null) conflict(where, 'a played result needs games that reach the best-of target');
         else if (derived !== r.winner) conflict(where, `result.winner '${r.winner}' does not match the games — side ${derived} won`);
       }
@@ -448,7 +449,7 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, con
       validateGames(m.games, target, where, err, conflict);
     }
     if (r !== undefined) {
-      validateResultShape(r, hasGames, target, m, where, err, conflict);
+      validateResultShape(r, m.games, target, where, err, conflict);
     } else if (hasGames && reachedWinner(m.games, target) !== null) {
       conflict(where, 'games reach the best-of target — record a result (status + winner)');
     }
