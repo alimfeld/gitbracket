@@ -51,6 +51,7 @@ const V = [
   ['tiebreak fixture validates', 'tiebreak', 'clean', null],
   ['cross-category venue overlap', 'bad-cross-overlap', 'conflict', /also schedules/],
   ['cross-category player double-book', 'bad-player-doublebook', 'conflict', /double-booked/],
+  ['venue-less match still double-books a player', 'bad-doublebook-no-venue', 'conflict', /double-booked/],
   ['a slot-fed side double-books like an explicit one', 'bad-resolved-doublebook', 'conflict', /double-booked/],
   ['undeclared category matches file', 'bad-undeclared-cat', 'err', /undeclared category/],
   ['unknown venue reference', 'bad-unknown-venue', 'err', /unknown venue/],
@@ -93,6 +94,7 @@ const V = [
   ['malformed match sides reported, not a crash', 'bad-sides', 'err', /exactly two sides required/],
   ['malformed knockout sides reported while placement/scoring run, not a crash', 'bad-sides-knockout', 'err', /exactly two sides required/],
   ['scheduled match with no slot length', 'bad-noslot', 'err', /no slot length/],
+  ['scheduled match with no slot length and no venue', 'bad-noslot-no-venue', 'err', /no slot length/],
   ['replacing a final feeder leaves a repairable conflict, not a refusal', 'unfed-roots', 'conflict', /exactly one championship final/]
 ];
 for (const [name, dir, channel, re] of V) {
@@ -121,6 +123,12 @@ test('pool pairing conflict reports both the duplicate and the omitted opponent'
   const r = validateFixture('bad-pool-pairing');
   assert(r.conflicts.some(c => /repeats the matchup p1 vs p2/.test(c)), 'the repeated fixture is named');
   assert(r.conflicts.some(c => /missing the matchup p2 vs p3/.test(c)), 'the omitted fixture is named');
+});
+
+test('two unplaced matches share no court — undefined is not a venue double-book', () => {
+  const r = validateFixture('bad-doublebook-no-venue');
+  assert(hasConflict(r, /double-booked/), 'the player clash is caught across the venue-less pair');
+  assert(!hasConflict(r, /overlap at venue/), 'undefined === undefined must not read as the same court');
 });
 
 test('two malformed index entries: real shape errors, no bogus undefined-slug duplicate', () => {

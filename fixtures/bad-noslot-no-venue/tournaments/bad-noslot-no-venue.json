@@ -1,0 +1,21 @@
+{
+  "name": "No Slot, No Venue",
+  "location": "Zurich",
+  "timezone": "Europe/Zurich",
+  "venues": [{ "id": "v1", "name": "Court 1" }],
+  "categories": [{ "id": "t", "name": "T", "bestOf": { "groups": 1 } }],
+  "players": [{ "id": "p1", "name": "Ada" }, { "id": "p2", "name": "Ben" }],
+  "matches": {
+    "t": [
+      {
+        "id": 1,
+        "pool": "A",
+        "scheduled": "2025-01-01T09:00:00",
+        "sides": [
+          { "kind": "players", "ids": ["p1"] },
+          { "kind": "players", "ids": ["p2"] }
+        ]
+      }
+    ]
+  }
+}

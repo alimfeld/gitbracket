@@ -1,0 +1,38 @@
+{
+  "name": "No-Venue Doublebook",
+  "location": "Zurich",
+  "timezone": "Europe/Zurich",
+  "venues": [{ "id": "v1", "name": "Court 1" }],
+  "categories": [
+    { "id": "a", "name": "A", "bestOf": { "knockout": 1 }, "slotMinutes": { "knockout": 30 } },
+    { "id": "b", "name": "B", "bestOf": { "knockout": 1 }, "slotMinutes": { "knockout": 30 } }
+  ],
+  "players": [
+    { "id": "p1", "name": "Ada" },
+    { "id": "p2", "name": "Ben" },
+    { "id": "p3", "name": "Cid" },
+    { "id": "p4", "name": "Dan" }
+  ],
+  "matches": {
+    "a": [
+      {
+        "id": 1,
+        "scheduled": "2025-01-01T10:00:00",
+        "sides": [
+          { "kind": "players", "ids": ["p1"] },
+          { "kind": "players", "ids": ["p2"] }
+        ]
+      }
+    ],
+    "b": [
+      {
+        "id": 1,
+        "scheduled": "2025-01-01T10:00:00",
+        "sides": [
+          { "kind": "players", "ids": ["p1"] },
+          { "kind": "players", "ids": ["p3"] }
+        ]
+      }
+    ]
+  }
+}

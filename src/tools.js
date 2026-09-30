@@ -226,7 +226,9 @@ function schedEntries(tjson) {
     if (!Array.isArray(ms)) continue;
     const ctx = makeCat({ meta: cat, matches: ms }, tjson);
     for (const m of ms) {
-      if (!m || typeof m !== 'object' || m.venue === undefined || m.scheduled === undefined) continue;
+      // Scheduled, not necessarily placed: a venue-less match still occupies its players'
+      // wall time, so it feeds the double-book scan and the no-slot check like any other.
+      if (!m || typeof m !== 'object' || m.scheduled === undefined) continue;
       if (isDone(m)) continue;
       const t = schedTime(m, tjson.timezone);
       if (t === null) continue;
@@ -263,7 +265,7 @@ function pairBusy(a, b) {
   const aMs = matchSlotMs(a.m, a.ctx), bMs = matchSlotMs(b.m, b.ctx);
   if (!slotsOverlap(a.t, a.t + aMs, b.t, b.t + bMs)) return [];
   const kinds = [];
-  if (a.m.venue === b.m.venue) kinds.push('venue');
+  if (a.m.venue !== undefined && a.m.venue === b.m.venue) kinds.push('venue'); // two unplaced matches share no court
   if (a.players && b.players) for (const id of a.players) if (b.players.has(id)) { kinds.push('player'); break; }
   return kinds;
 }
