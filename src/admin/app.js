@@ -498,7 +498,7 @@ function openSide(cid, m, si) {
       // rank range is the pool's team count — not a hardcoded 6; re-derive when the pool changes
       const fillRanks = () => {
         const pool = body.querySelector('#poolsel').value;
-        const n = poolFacts(ctx).get(pool)?.sigs.size || 6; // ponytail: 6 if a pool's teams can't be resolved
+        const n = poolStandings(ctx, pool)?.length || 6; // ponytail: 6 if a pool's teams can't be resolved
         const want = cur && cur.kind === 'pool' && cur.pool === pool ? cur.rank : 1;
         body.querySelector('#ranksel').innerHTML = Array.from({ length: n }, (_, i) => i + 1)
           .map(r => `<option${r === want ? ' selected' : ''}>${r}</option>`).join('');

@@ -10,7 +10,7 @@
 
 const path = require('path');
 const { loadRepo, plainObject, isRealDate, schedEntries, pairBusy, consumedSlots, winTarget, reachedWinner, feederBounds, sameSet, daysOf } = require('./tools.js');
-const { DATE_RE, ID_RE, ISO_RE, MAX_BEST_OF, pairSig, matchSlotMs, makeCat, matchesOf, resolveSide, bestOfOf, schedTime, plRange, parentsOf } = require('../site/derive.js');
+const { DATE_RE, ID_RE, ISO_RE, MAX_BEST_OF, validBestOf, pairSig, matchSlotMs, makeCat, matchesOf, resolveSide, bestOfOf, schedTime, plRange, parentsOf } = require('../site/derive.js');
 
 const RESULTS = ['winner', 'loser'];
 const RESULT_STATUSES = ['played', 'walkover', 'void'];
@@ -231,8 +231,7 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, con
   if (!Array.isArray(matches)) { err(cFile, 'matches must be an array'); return; }
 
   const bestOf = cat.bestOf;
-  const stageBest = stage => (bestOf && typeof bestOf[stage] === 'number' && bestOf[stage] % 2 === 1 && bestOf[stage] > 0 && bestOf[stage] <= MAX_BEST_OF)
-    ? bestOf[stage] : undefined;
+  const stageBest = stage => (bestOf && validBestOf(bestOf[stage])) ? bestOf[stage] : undefined;
 
   const byId = new Map();
   for (let i = 0; i < matches.length; i++) {
@@ -403,7 +402,7 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, con
   for (const m of matches) {
     if (!m || typeof m !== 'object') continue;
     const where = `${cFile} match ${m.id || '?'}`;
-    if (m.bestOf !== undefined && (typeof m.bestOf !== 'number' || m.bestOf % 2 !== 1 || m.bestOf < 1 || m.bestOf > MAX_BEST_OF)) {
+    if (m.bestOf !== undefined && !validBestOf(m.bestOf)) {
       err(where, `bestOf override must be an odd number 1–${MAX_BEST_OF}, got ${JSON.stringify(m.bestOf)}`);
     }
 
@@ -497,7 +496,7 @@ function validateCategory(cFile, matches, cat, players, venues, tjson, errs, con
 }
 
 function validateGames(games, target, where, err, conflict) {
-  const wins = [0, 0];
+  const valid = []; // well-formed games so far — the prefix reachedWinner counts
   for (let i = 0; i < games.length; i++) {
     const g = games[i];
     if (!g || typeof g !== 'object' || !Number.isInteger(g.a) || !Number.isInteger(g.b) || g.a < 0 || g.b < 0) {
@@ -508,11 +507,11 @@ function validateGames(games, target, where, err, conflict) {
     // winTarget returns null when the stage's bestOf is invalid/absent — pass A
     // already flags the config, and 0 >= null would invent a reached target.
     if (typeof target !== 'number') continue;
-    if (wins[0] >= target || wins[1] >= target) {
+    // the earlier valid games decide the target; one rule (reachedWinner) with the scorer
+    if (reachedWinner(valid, target) !== null) {
       conflict(where, `games[${i}] recorded after a side already reached the target of ${target}`);
-      continue;
     }
-    if (g.a > g.b) wins[0]++; else wins[1]++;
+    valid.push(g);
   }
 }
 

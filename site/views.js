@@ -102,89 +102,18 @@ function stageLabel(m, ctx) {
   return placementLabel(m, ctx) ?? roundName(koColumn(m, ctx));
 }
 
-// One entry per knockout round a player could still reach: certain bits plus a
-// chip naming the ranks/outcomes that get in.
+// One entry per knockout round a player could still reach: the structural facts
+// from derive.js, named here, plus a chip naming the ranks/outcomes that get in.
 function possibleStages(ctx, pid) {
-  const rows = playerMatches(ctx, pid);
-  const koRows = rows.filter(r => r.m.pool === undefined);
-  const confIds = new Set(koRows.map(r => r.m.id));
-  const poolRow = rows.find(r => r.m.pool !== undefined);
-  const pool = poolRow === undefined ? null : poolRow.m.pool;
-  const facts = (koRows.length || pool === null) ? null : poolFacts(ctx).get(pool);
-  const seats = facts ? playerRanks(ctx, pool, pid, facts.sigs.size) : [];
-
-  // Seats recorded separately from the reach BFS — one match can seat the
-  // player via several ranks or edges, and the seen-guard must not drop the
-  // second record.
-  const poolSeatsOf = new Map(); // match id -> [rank]
-  const edgeSeatsOf = new Map(); // match id -> [{ kind, parent }]
-  const gate = new Map();        // confirmed seat id -> opened result edges
-  const seen = new Set();
-  const queue = [];
-  const add = m => {
-    if (seen.has(m.id)) return;
-    seen.add(m.id);
-    queue.push(m.id);
-  };
-  if (koRows.length) {
-    // A decided seat opens only the branch the player finished on; an undone
-    // (or void) one keeps both — the player could still win or lose.
-    for (const r of koRows) {
-      const w = winnerIdx(r.m);
-      gate.set(r.m.id, w === null ? 'either' : w === r.i ? 'winner' : 'loser');
-      add(r.m); // confirmed seats render as cards — no stage entry
-    }
-  } else if (facts) {
-    for (const r of seats) {
-      const m = facts.slots.get(r);
-      if (!m) continue;
-      if (!poolSeatsOf.has(m.id)) poolSeatsOf.set(m.id, []);
-      poolSeatsOf.get(m.id).push(r);
-      add(m);
-    }
-  }
-  while (queue.length) {
-    const id = queue.shift();
-    const g = gate.get(id);
-    for (const X of koConsumers(ctx, id)) {
-      for (const s of X.sides) {
-        if (!s || s.kind !== 'match' || s.match !== id) continue;
-        if (g === 'winner' && s.result !== 'winner') continue;
-        if (g === 'loser' && s.result !== 'loser') continue;
-        if (!edgeSeatsOf.has(X.id)) edgeSeatsOf.set(X.id, []);
-        edgeSeatsOf.get(X.id).push({ kind: s.result, parent: id });
-        add(X);
-      }
-    }
-  }
-
-  // ---- group reached matches into stages -----------------------------------
-  const stages = new Map();
-  for (const id of seen) {
-    if (confIds.has(id)) continue;
-    const m = ctx.byId.get(id);
-    if (!m || !Array.isArray(m.sides)) continue;
-    const { pr, col } = refInfo(m, ctx);
-    // The label rides its structural row (lo/hi/win) so the merge logic below
-    // classifies by shape, never by word position in a localized string.
-    const label = stageLabel(m, ctx);
-    let stage = stages.get(label);
-    if (!stage) { stage = { label, col, pl: pr, ranks: new Set(), edges: [], times: [], courts: [], n: 0 }; stages.set(label, stage); }
-    stage.n++; // only the count is read (slotSet); the match objects aren't kept
-    for (const rank of poolSeatsOf.get(id) || []) stage.ranks.add(rank);
-    for (const e of edgeSeatsOf.get(id) || []) stage.edges.push(e);
-    const ts = schedTime(m, ctx.tz);
-    if (ts !== null) stage.times.push(ts);
-    if (typeof m.venue === 'string') stage.courts.push(m.venue);
-  }
-
-  // ---- finalize: slot sets, chips ------------------------------------------
-  const present = [...stages.values()];
+  const { stages, pool, seats, hasPoolFacts } = possibleStageFacts(ctx, pid);
+  // The label rides its structural row (lo/hi/win) so the merge logic below
+  // classifies by shape, never by word position in a localized string.
+  const present = stages.map(stage => ({ ...stage, label: stage.pl ? placeLabel(stage.pl) : roundName(stage.col) }));
   const merged = mergeTwinStages(present);
   const out = [];
   for (const stage of present) {
     if (merged.has(stage)) continue; // the pair's originals — the merged entry carries them
-    out.push({ label: stage.label, col: stage.col, ...slotSet(stage.n, stage.times, stage.courts), chip: stageChip(stage, ctx, pool, facts, seats) });
+    out.push({ label: stage.label, col: stage.col, ...slotSet(stage.n, stage.times, stage.courts), chip: stageChip(stage, ctx, pool, hasPoolFacts, seats) });
   }
   // Deepest-first (QF -> SF -> Final); a merged pair keeps its deeper column.
   out.sort((a, b) => (b.col ?? -1) - (a.col ?? -1));
@@ -193,9 +122,9 @@ function possibleStages(ctx, pid) {
 
 // The chip names a stage's entry gates: direct slot ranks, then result edges
 // ("via the Semifinals" once merged); a stage with no gates reads "any rank".
-function stageChip(stage, ctx, pool, facts, seats) {
+function stageChip(stage, ctx, pool, hasPoolFacts, seats) {
   const chips = [];
-  if (facts && stage.ranks.size) {
+  if (hasPoolFacts && stage.ranks.size) {
     const direct = [...stage.ranks];
     if (direct.length === seats.length && !stage.edges.length) chips.push(t(LOCALE, 'chip-any', { pool }));
     else chips.push(t(LOCALE, 'chip-rank', { range: rankRange(direct), pool }));
@@ -274,12 +203,15 @@ function mergeTwinStages(present) {
 
 
 
-// 3rd/5th/7th place or a classification semi; null for main-bracket matches.
+// 3rd/5th/7th place or a classification semi, from a placement range. The
+// pre-word form, not the range form: "Platz 3", never "Platz 3."
+const placeLabel = pr => pr.win
+  ? t(LOCALE, 'pl-place', { n: cardNum(pr.lo) })
+  : t(LOCALE, 'pl-semi', { a: ordNum(pr.lo), b: ordNum(pr.hi) });
+
 function placementLabel(m, ctx) {
   const r = plRange(m, ctx);
-  if (!r) return null;
-  // the pre-word form, not the range form: "Platz 3", never "Platz 3."
-  return r.win ? t(LOCALE, 'pl-place', { n: cardNum(r.lo) }) : t(LOCALE, 'pl-semi', { a: ordNum(r.lo), b: ordNum(r.hi) });
+  return r ? placeLabel(r) : null;
 }
 
 // Knockout round name by field size: 4 -> SF, 8 -> QF, n -> R{n}. Shared by the

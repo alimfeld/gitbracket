@@ -6,6 +6,10 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 // A score row renders one placeholder per possible game; the gate rejects larger overrides.
 const MAX_BEST_OF = 9;
 
+// A stage's best-of: an odd number 1..MAX_BEST_OF. The one rule the gate, the
+// generator, and the scorer share, so they can never disagree.
+const validBestOf = b => Number.isInteger(b) && b % 2 === 1 && b >= 1 && b <= MAX_BEST_OF;
+
 const pairSig = ids => [...ids].sort().join('|');
 
 // One per-render lazy field: built at most once; toCats rebuilds contexts every
@@ -289,6 +293,85 @@ function playerRanks(ctx, pool, pid, roster) {
   let b = i; while (b < std.length - 1 && std[b + 1].tie === std[i].tie) b++;
   for (let r = a + 1; r <= b + 1; r++) out.push(r);
   return out;
+}
+
+// Reachable knockout stages for a player: the matches they could still reach,
+// grouped structurally, with the rank seats and result edges that gate each.
+// Facts only — the browser names and merges them. Confirmed seats are excluded.
+function possibleStageFacts(ctx, pid) {
+  const rows = playerMatches(ctx, pid);
+  const koRows = rows.filter(r => r.m.pool === undefined);
+  const confIds = new Set(koRows.map(r => r.m.id));
+  const poolRow = rows.find(r => r.m.pool !== undefined);
+  const pool = poolRow === undefined ? null : poolRow.m.pool;
+  const facts = (koRows.length || pool === null) ? null : poolFacts(ctx).get(pool);
+  const seats = facts ? playerRanks(ctx, pool, pid, facts.sigs.size) : [];
+
+  // Seats recorded separately from the reach BFS — one match can seat the
+  // player via several ranks or edges, and the seen-guard must not drop the
+  // second record.
+  const poolSeatsOf = new Map(); // match id -> [rank]
+  const edgeSeatsOf = new Map(); // match id -> [{ kind, parent }]
+  const gate = new Map();        // confirmed seat id -> opened result edges
+  const seen = new Set();
+  const queue = [];
+  const add = m => {
+    if (seen.has(m.id)) return;
+    seen.add(m.id);
+    queue.push(m.id);
+  };
+  if (koRows.length) {
+    // A decided seat opens only the branch the player finished on; an undone
+    // (or void) one keeps both — the player could still win or lose.
+    for (const r of koRows) {
+      const w = winnerIdx(r.m);
+      gate.set(r.m.id, w === null ? 'either' : w === r.i ? 'winner' : 'loser');
+      add(r.m); // confirmed seats render as cards — no stage entry
+    }
+  } else if (facts) {
+    for (const r of seats) {
+      const m = facts.slots.get(r);
+      if (!m) continue;
+      if (!poolSeatsOf.has(m.id)) poolSeatsOf.set(m.id, []);
+      poolSeatsOf.get(m.id).push(r);
+      add(m);
+    }
+  }
+  while (queue.length) {
+    const id = queue.shift();
+    const g = gate.get(id);
+    for (const X of koConsumers(ctx, id)) {
+      for (const s of X.sides) {
+        if (!s || s.kind !== 'match' || s.match !== id) continue;
+        if (g === 'winner' && s.result !== 'winner') continue;
+        if (g === 'loser' && s.result !== 'loser') continue;
+        if (!edgeSeatsOf.has(X.id)) edgeSeatsOf.set(X.id, []);
+        edgeSeatsOf.get(X.id).push({ kind: s.result, parent: id });
+        add(X);
+      }
+    }
+  }
+
+  // Group reached matches into structural stages: identity is the placement range
+  // or bracket column, never a rendered label, so grouping survives any locale.
+  const stages = new Map();
+  for (const id of seen) {
+    if (confIds.has(id)) continue;
+    const m = ctx.byId.get(id);
+    if (!m || !Array.isArray(m.sides)) continue;
+    const pr = plRange(m, ctx);
+    const col = pr === null ? koColumn(m, ctx) : null;
+    const key = pr ? `pl:${pr.lo}-${pr.hi}-${pr.win}` : `r:${col}`;
+    let stage = stages.get(key);
+    if (!stage) { stage = { col, pl: pr, ranks: new Set(), edges: [], times: [], courts: [], n: 0 }; stages.set(key, stage); }
+    stage.n++; // only the count is read (slotSet); the match objects aren't kept
+    for (const rank of poolSeatsOf.get(id) || []) stage.ranks.add(rank);
+    for (const e of edgeSeatsOf.get(id) || []) stage.edges.push(e);
+    const ts = schedTime(m, ctx.tz);
+    if (ts !== null) stage.times.push(ts);
+    if (typeof m.venue === 'string') stage.courts.push(m.venue);
+  }
+  return { stages: [...stages.values()], pool, seats, hasPoolFacts: !!facts };
 }
 
 // rankRange collapses runs, so a band must arrive as every rank it spans — [5, 8] would render "5th, 8th".
@@ -794,5 +877,5 @@ function playerBand(ctx, rows) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { DATE_RE, ID_RE, ISO_RE, MAX_BEST_OF, pairSig, makeCat, matchesOf, toCats, matchSlotMs, sideIdx, bestOfOf, poolBo1, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, poolFacts, resolveSide, playerMatches, playerRanks, koConsumers, plRange, plOrdinal, placementColumn, kioskStatus, catStatus, currentWave, playerBand, parentsOf, koColumn, koOrdinal, winners, dayKey, wallMin, schedTime, schedDays };
+  module.exports = { DATE_RE, ID_RE, ISO_RE, MAX_BEST_OF, validBestOf, pairSig, makeCat, matchesOf, toCats, matchSlotMs, sideIdx, bestOfOf, poolBo1, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, resolveSide, playerMatches, possibleStageFacts, plRange, plOrdinal, placementColumn, kioskStatus, catStatus, currentWave, playerBand, parentsOf, koColumn, koOrdinal, winners, dayKey, wallMin, schedTime, schedDays };
 }

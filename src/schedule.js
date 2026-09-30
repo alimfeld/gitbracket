@@ -4,7 +4,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { matchSlotMs, pairSig, dayKey, schedTime, wallMin, ID_RE, MAX_BEST_OF } = require('../site/derive.js');
+const { matchSlotMs, pairSig, dayKey, schedTime, wallMin, ID_RE, MAX_BEST_OF, validBestOf } = require('../site/derive.js');
 const { writeTournament, writeTournamentIndex, slotsOverlap, plainObject, fixedPlayers, isRealDate, daysOf } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 
@@ -490,7 +490,7 @@ function generate(spec) {
     if (c.final !== undefined) {
       // the override is the one spec failure the output gate can't name usefully — fail fast here
       const { bestOf, slotMinutes } = c.final;
-      if (bestOf !== undefined && (!Number.isInteger(bestOf) || bestOf % 2 !== 1 || bestOf < 1 || bestOf > MAX_BEST_OF)) {
+      if (bestOf !== undefined && !validBestOf(bestOf)) {
         throw new Error(`spec: category ${c.id}: final.bestOf must be an odd number 1–${MAX_BEST_OF}, got ${JSON.stringify(bestOf)}`);
       }
       if (slotMinutes !== undefined && (!Number.isInteger(slotMinutes) || slotMinutes < 1)) {

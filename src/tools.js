@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { ID_RE, makeCat, matchesOf, schedTime, isDone, matchSlotMs, resolveSide, schedDays } = require('../site/derive.js');
+const { ID_RE, makeCat, matchesOf, schedTime, isDone, matchSlotMs, resolveSide, schedDays, validBestOf } = require('../site/derive.js');
 
 // Window collision, shared by the validator and the generator.
 const slotsOverlap = (a0, a1, b0, b1) => a0 < b1 && b0 < a1;
@@ -55,7 +55,7 @@ function countWins(games) {
 }
 
 // The games needed to decide, or null when the stage has no valid bestOf.
-const winTarget = b => (typeof b === 'number' && b % 2 === 1) ? (b + 1) / 2 : null;
+const winTarget = b => validBestOf(b) ? (b + 1) / 2 : null;
 
 // The side ('a'|'b') the games at target decide, null while undecided.
 function reachedWinner(games, target) {
