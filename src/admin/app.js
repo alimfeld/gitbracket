@@ -139,7 +139,7 @@ function renderGrid() {
     const t = schedTime(m, S.tz);
     if (t !== null && dayKey(t, S.tz) === S.day) dayMatches.push({ c, m, ctx: c });
   }
-  let mins = dayMatches.map(({ c, m }) => dayWindow(m, c)).filter(Boolean).flat();
+  const mins = dayMatches.map(({ c, m }) => dayWindow(m, c)).filter(Boolean).flat();
   const slots = dayMatches.map(({ c, m }) => slotMinOf(m, c)).filter(Number.isFinite);
   const sShort = slots.length ? Math.min(...slots) : 0;
   let dayStart = mins.length ? Math.min(...mins) : 8 * 60;
@@ -242,7 +242,7 @@ function wireGrid() {
     grid.addEventListener('drop', e => { e.preventDefault(); dropAt(e); });
   }
   grid.querySelectorAll('.match').forEach(el => {
-    el.querySelectorAll('.edit-side').forEach(btn => btn.addEventListener('click', e => {
+    el.querySelectorAll('.edit-side').forEach(btn => btn.addEventListener('click', () => {
       const [cid, mid] = keyParts(el.dataset.key);
       modalTrigger = { key: el.dataset.key };
       openSide(cid, matchOf(cid, mid), +btn.dataset.side);

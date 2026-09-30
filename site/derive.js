@@ -781,7 +781,8 @@ function bandLabels(ctx, col) {
 // "Final / Placement".
 function stageGroupName(round, labels) {
   const uniq = [...new Set(labels.map(bandShort))];
-  return uniq.length === 1 ? `${round} / ${uniq[0]}` : uniq.length > 1 ? `${round} / ${t(LOCALE, 'placement')}` : round;
+  if (!uniq.length) return round;
+  return `${round} / ${uniq.length === 1 ? uniq[0] : t(LOCALE, 'placement')}`;
 }
 
 // The deepest band with a playable card — nextKoWave's counterpart for placement.
