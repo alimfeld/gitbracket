@@ -379,8 +379,8 @@ function bracketHtml(ctx, ko, multi, next) {
 // prefix the date
 const timeEl = (t, tz, day) => `<time datetime="${new Date(t).toISOString()}">${esc((day ? `${dayShort(t, tz)}, ` : '') + fmtTime(t, tz))}</time>`;
 
-// Join a stage slot list with '/'; empty → null (callers render TBD).
-const stageBit = (list, fmt) => list?.length ? list.map(fmt).join('/') : null;
+// Join a stage slot list with ' / '; empty → null (callers render TBD).
+const stageBit = (list, fmt) => list?.length ? list.map(fmt).join(' / ') : null;
 
 const catChip = ctx => `<span class="cat" data-cat="${ctx.order + 1}">${esc(ctx.name)}</span>`;
 

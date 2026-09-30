@@ -287,8 +287,8 @@ function slotLabel(side, ctx) {
   return t(LOCALE, 'slot-of', { who, ref: code ? label : refWord(key, 'dat', label) });
 }
 
-// Player-id set -> display name, "Ada / Ben".
-const teamLabel = (ids, ctx) => [...ids].map(id => ctx.names.get(id) || id).join(' / ');
+// Player-id set -> display name, "Ada & Ben".
+const teamLabel = (ids, ctx) => [...ids].map(id => ctx.names.get(id) || id).join(' & ');
 
 function sideLabel(side, ctx) {
   const ids = resolveSide(side, ctx);

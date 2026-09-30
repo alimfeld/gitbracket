@@ -322,7 +322,7 @@ test('editor editDetail: the side op reports the applied slot label; a move repo
   assert(/^side a → Winner of /.test(d), `expected the applied slot label, got ${d}`);
   const m = repo.tournaments.get('sample').tjson.matches.xd.find(x => x.id === 1);
   assert.equal(editor.editDetail('move', m, { time: m.scheduled, venue: m.venue }), `→ ${m.scheduled} @ ${m.venue}`, 'a move reports the court on an undecided match');
-  assert.equal(editor.editDetail('side', m9, { si: 1, side: { kind: 'players', ids: ['p1', 'p2'] } }, ctx), 'side b → Ada Lovelace / Grace Hopper', 'a players side labels the team');
+  assert.equal(editor.editDetail('side', m9, { si: 1, side: { kind: 'players', ids: ['p1', 'p2'] } }, ctx), 'side b → Ada Lovelace & Grace Hopper', 'a players side labels the team');
   const done = repo.tournaments.get('sample').tjson.matches.md40.find(m => m.id === 1);
   const d2 = editor.editDetail('side', done, { si: 0, side: { kind: 'players', ids: ['p3', 'p4'] } }, ctx);
   assert(/result kept/.test(d2), 'a side op on a decided match flags the kept result — history never reads as a silent rewrite');
