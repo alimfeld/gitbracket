@@ -4,23 +4,15 @@
 
 const fs = require('fs');
 const path = require('path');
-const { matchSlotMs, pairSig, dayKey, schedTime, ID_RE, MAX_BEST_OF } = require('../site/derive.js');
+const { matchSlotMs, pairSig, dayKey, schedTime, wallMin, ID_RE, MAX_BEST_OF } = require('../site/derive.js');
 const { writeTournament, writeTournamentIndex, slotsOverlap, plainObject, fixedPlayers, isRealDate, daysOf } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 
-// Wall-clock HH:MM in the tournament zone, from pinned gregory/latn parts — the
-// generator's own formatting (the shipped path formats in views.js). generate()
-// rejects a bad timezone up front, so the formatter never throws here.
-const wallFmts = new Map();
-function wallHM(t, tz) {
-  let f = wallFmts.get(tz);
-  if (!f) wallFmts.set(tz, f = new Intl.DateTimeFormat('en', {
-    timeZone: tz, calendar: 'gregory', numberingSystem: 'latn',
-    hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
-  }));
-  const p = Object.fromEntries(f.formatToParts(new Date(t)).map(x => [x.type, x.value]));
-  return `${p.hour}:${p.minute}`;
-}
+// Wall-clock HH:MM in the tournament zone. The zone is derive.js's to resolve
+// (zonedParts); this only zero-pads its minutes. generate() rejects a bad
+// timezone up front, so wallMin never returns null here.
+const pad = n => String(n).padStart(2, '0');
+const wallHM = (t, tz) => { const m = wallMin(t, tz); return `${pad(m / 60 | 0)}:${pad(m % 60)}`; };
 
 // Round-robin pairings, circle method: array of rounds, each a list of pairs.
 function roundRobin(teams) {
