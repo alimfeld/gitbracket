@@ -110,9 +110,9 @@ p {
   margin: calc(var(--space)*2) 0;
 }
 
-/* each category stays whole, so the progress line wraps only at the separators */
+/* progress wraps between categories; an over-wide category wraps its own text */
 .progress > span {
-  white-space: nowrap;
+  display: inline-block;
 }
 
 
