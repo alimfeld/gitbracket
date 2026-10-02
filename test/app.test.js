@@ -951,7 +951,7 @@ test('kiosk: the board title links back to the tournaments index', () => {
   assert(links(board).some(l => l.href === '#'), 'the board header carries the trail link, so the kiosk is never a dead end');
 });
 
-test('kiosk: the header stamp never pretends live without a successful fetch', () => {
+test('kiosk: the status dot never pretends live without a successful fetch', () => {
   const tjson = () => ({
     name: 'Live', location: 'Hall', timezone: 'UTC', venues: [{ id: 'c1', name: 'Court 1' }],
     players: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }],
@@ -964,8 +964,9 @@ test('kiosk: the header stamp never pretends live without a successful fetch', (
   assert(open.includes('role="status"'), 'a11y: the stale state is its own live region, not the counting time');
 });
 
-test('tournament views: a poll that changed the file flashes the stamp', () => {
+test('polling views: a poll that changed the file flashes the status dot', () => {
   flashCue(renderTournament, 'tournament', 'updated-cue');
+  flashCue(renderPlayer, 'schedule', 'picker-cue');
 });
 
 test('routing: cat and player ride along between tournament and schedule — applied on their home view only', () => {

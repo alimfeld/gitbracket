@@ -40,7 +40,8 @@ h1 {
   margin: var(--space) 0 calc(var(--space)*2);
 }
 
-h1:has(a) {
+/* a header carrying a right-side group is one row: title left, group right */
+h1:has(.head-right) {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -553,10 +554,6 @@ article[data-status="next"] {
 
 p[data-status="finished"] {
   color: var(--muted);
-}
-
-p[data-status="stale"] {
-  color: var(--alert);
 }
 
 /* possible stages: dashed muted card; the time survives in full ink */

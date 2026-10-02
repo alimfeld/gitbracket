@@ -198,33 +198,22 @@ const catNav = (slug, ctxs, route) => {
 };
 
 // lastPoll moves only on a success, so silence past the tolerance names the reconnect;
-// nowMs is real time. Before the first success the stamp reads stale.
+// nowMs is real time. Before the first success it reads stale.
 const isStale = (lastFetchMs, nowMs) => !lastFetchMs || nowMs - lastFetchMs > STALE_MS;
 
-// The polling views' shared freshness read; a changed file flashes the status.
-// Module-scope so the renderers stay directly testable — not boot's closure.
+// Every polling view's freshness dot: filled while the last fetch sits inside the
+// tolerance, a ring when it doesn't. A fixed box, so a state change never shifts the
+// title row; the word is sr-only and the timestamp a hover title. Module-scope state,
+// so the renderers stay directly testable — not boot's closure.
 let stampSnap = null; // { slug, hash } — the change detector behind the flash
-function pollState(data, tz) {
+function statusDot(data) {
   const hash = JSON.stringify(data.tjson);
   const flash = !!stampSnap && stampSnap.slug === data.t.slug && stampSnap.hash !== hash;
   stampSnap = { slug: data.t.slug, hash };
-  return { flash, stale: isStale(lastPoll, Date.now()), when: lastPoll ? fmtTime(lastPoll, tz) : '—' };
-}
-
-// The board's freshness dot: filled while the last fetch sits inside the tolerance, a
-// ring when it doesn't. A fixed box, so a state change never shifts the title row; the
-// word is sr-only and the timestamp a hover title.
-function statusDot(data, tz) {
-  const { flash, stale, when } = pollState(data, tz);
+  const stale = isStale(lastPoll, Date.now());
+  const when = lastPoll ? fmtTime(lastPoll, data.tjson.timezone || 'UTC') : '—';
   const word = u(stale ? 'reconnect' : 'live');
   return `<span class="status" role="status" data-status="${stale ? 'stale' : 'live'}" title="${esc(u('updated', { time: when }))}"${flash ? ' data-flash' : ''}><span class="sr-only">${esc(word)}</span></span>`;
-}
-
-// The non-kiosk views' stamp — the words that say when, and whether.
-function updateStamp(data, tz) {
-  const { flash, stale, when } = pollState(data, tz);
-  const stamp = `<time datetime="${lastPoll ? new Date(lastPoll).toISOString() : ''}">${u('updated', { time: when })}</time>${stale ? ` · <span role="status">${esc(u('reconnect'))}</span>` : ''}`;
-  return `<p class="meta"${flash ? ' data-flash' : ''}${stale ? ' data-status="stale"' : ''}>${stamp}</p>`;
 }
 
 const HOME_LINK = () => `<a class="chip" href="#" aria-label="${u('tournaments')}">⎋</a>`;
@@ -236,10 +225,10 @@ function renderTournament(route, data) {
   const show = ctxs.find(c => c.id === route.cat) || ctxs[0]; // an unknown cat falls back to the first
   const days = schedDays(ctxs.flatMap(c => c.matches), tz); // one scan: the span and the multi-day cue read the same set
   const multi = days.length > 1;
-  const parts = [segmentBar(route), `<header><h1>${esc(data.t.name)}${HOME_LINK()}</h1>`];
+  const parts = [segmentBar(route), `<header><h1>${esc(data.t.name)}<span class="head-right">${HOME_LINK()}${statusDot(data)}</span></h1>`];
   // the heading states the span and the location once — single-day cards never repeat the date
   const range = fmtRange(days);
-  parts.push(`<p>${[range, esc(data.tjson.location)].filter(Boolean).join(' · ')}</p>${updateStamp(data, tz)}</header>`);
+  parts.push(`<p>${[range, esc(data.tjson.location)].filter(Boolean).join(' · ')}</p></header>`);
   parts.push(`<nav class="cats" aria-label="${u('categories')}">${catNav(data.t.slug, ctxs, route)}</nav>`);
   // a tournament with no categories renders the shell, never a throw
   if (show) parts.push(catSection(show, { multi, href: href(data.t.slug, 'tournament', route) }));
@@ -461,7 +450,7 @@ function renderVenue(route, data, now) {
   // the title carries the same trail link as the tournament page. The clock, the
   // freshness dot, and that link ride the title line pinned to the viewport's right
   // edge, so all three stay put while a wider-than-screen board pans sideways
-  const header = `<header><h1><span class="name">${esc(data.t.name)}</span><span class="head-right">${HOME_LINK()}${clock}${statusDot(data, tz)}</span></h1></header>`;
+  const header = `<header><h1><span class="name">${esc(data.t.name)}</span><span class="head-right">${HOME_LINK()}${clock}${statusDot(data)}</span></h1></header>`;
   // header and venue titles stick as one block, aligned by the shared --cols track
   const top = `<div class="kiosk-top" style="--cols: ${cols.length}">${header}${cols.map(id => `<h2>${esc(venueNames.get(id) || id)}</h2>`).join('')}</div>`;
   if (!cols.length) return top + `<p>${u('nothing')}</p>`;
@@ -547,7 +536,7 @@ function playerPicker(route, data, players) {
       const name = esc(pl.name || pl.id);
       return `<a class="card" aria-label="${name}" href="${esc(href(data.t.slug, 'schedule', { ...route, player: pl.id }))}"><h2>${name}</h2><p>${cats.map(catChip).join(' · ')}</p></a>`;
     });
-  const head = `${segmentBar(route)}<header><h1>${u('pick-player')}</h1></header>`;
+  const head = `${segmentBar(route)}<header><h1>${u('pick-player')}<span class="head-right">${statusDot(data)}</span></h1></header>`;
   return cards.length ? `${head}<section class="grid">${cards.join('')}</section>` : head + `<p>${u('no-players')}</p>`;
 }
 
@@ -587,7 +576,7 @@ function playerSchedule(route, data, p) {
     .filter(([s]) => s)
     .map(([s, name]) => `<span>${esc(name)}: ${esc(s)}</span>`)
     .join('\u00a0· '); // nbsp glues the dot to the line so the only wrap point is after it
-  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}<a class="chip" href="${esc(href(data.t.slug, 'schedule', { ...route, player: null }))}" aria-label="${u('change-player')}">⇄</a></h1>${updateStamp(data, data.tjson.timezone || 'UTC')}${progress ? `<p class="progress">${progress}</p>` : ''}${next ? `<p data-status="next">${next}</p>` : ''}</header>`];
+  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}<span class="head-right"><a class="chip" href="${esc(href(data.t.slug, 'schedule', { ...route, player: null }))}" aria-label="${u('change-player')}">⇄</a>${statusDot(data)}</span></h1>${progress ? `<p class="progress">${progress}</p>` : ''}${next ? `<p data-status="next">${next}</p>` : ''}</header>`];
   const out = [];
   let curDay = null;
   for (const e of events) {
