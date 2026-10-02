@@ -214,23 +214,26 @@ const changedTournament = (prev, slug, hash) => !!prev && prev.slug === slug && 
 // The freshness dot: filled green while the last fetch sits inside two poll cycles, an
 // amber ring when it lags, a red ring past the tolerance. A fixed box, so a state change
 // never shifts the title row; the word is sr-only and the timestamp a hover title. The
-// level doubles as the i18n key.
-function statusDot(data) {
-  const level = freshness(lastPoll, Date.now());
-  const when = lastPoll ? fmtTime(lastPoll, data.tjson.timezone || 'UTC') : '—';
+// level doubles as the i18n key. The caller hands in the fetch stamp — statusDot reads no
+// clock of its own, so a renderer's output is a function of what it is given, and a test
+// can name every level.
+function statusDot(data, stamp) {
+  const { at = 0, now = 0 } = stamp || {};
+  const level = freshness(at, now);
+  const when = at ? fmtTime(at, data.tjson.timezone || 'UTC') : '—';
   return `<span class="status" role="status" data-status="${level}" title="${esc(u('updated', { time: when }))}"><span class="sr-only">${esc(u(level))}</span></span>`;
 }
 
 const HOME_LINK = () => `<a class="chip" href="#" aria-label="${u('tournaments')}">⎋</a>`;
 
-function renderTournament(route, data) {
+function renderTournament(route, data, stamp) {
   if (!data.tjson) return MISSING();
   const tz = data.tjson.timezone || 'UTC';
   const ctxs = data.cats;
   const show = ctxs.find(c => c.id === route.cat) || ctxs[0]; // an unknown cat falls back to the first
   const days = schedDays(ctxs.flatMap(c => c.matches), tz); // one scan: the span and the multi-day cue read the same set
   const multi = days.length > 1;
-  const parts = [segmentBar(route), `<header><h1>${esc(data.t.name)}<span class="head-right">${HOME_LINK()}${statusDot(data)}</span></h1>`];
+  const parts = [segmentBar(route), `<header><h1>${esc(data.t.name)}<span class="head-right">${HOME_LINK()}${statusDot(data, stamp)}</span></h1>`];
   // the heading states the span and the location once — single-day cards never repeat the date
   const range = fmtRange(days);
   parts.push(`<p>${[range, esc(data.tjson.location)].filter(Boolean).join(' · ')}</p></header>`);
@@ -416,8 +419,9 @@ function sideRow(m, ctx, i) {
   return `<div class="side"${w === i ? ' data-win' : ''}><span>${esc(sideLabel(side, ctx))}</span>${w === i ? `<span class="winmark" aria-label="${u('won')}">✓</span>` : ''}<span class="score">${scoreCells(m, i, ctx)}</span></div>`;
 }
 
-function renderVenue(route, data, now) {
+function renderVenue(route, data, stamp) {
   if (!data.tjson) return MISSING();
+  const { now = 0 } = stamp || {}; // the board's clock and the dot's level ride the one stamp the caller read
   const v = route.venue;
   const rows = [];
   const ctxs = data.cats;
@@ -456,7 +460,7 @@ function renderVenue(route, data, now) {
   // link, and the freshness dot ride the title line pinned to the viewport's right
   // edge, so all three stay put while a wider-than-screen board pans sideways — and
   // the link sits against the dot, as on every other polling view
-  const header = `<header><h1><span class="name">${esc(data.t.name)}</span><span class="head-right">${clock}${HOME_LINK()}${statusDot(data)}</span></h1></header>`;
+  const header = `<header><h1><span class="name">${esc(data.t.name)}</span><span class="head-right">${clock}${HOME_LINK()}${statusDot(data, stamp)}</span></h1></header>`;
   // header and venue titles stick as one block, aligned by the shared --cols track
   const top = `<div class="kiosk-top" style="--cols: ${cols.length}">${header}${cols.map(id => `<h2>${esc(venueNames.get(id) || id)}</h2>`).join('')}</div>`;
   if (!cols.length) return top + `<p>${u('nothing')}</p>`;
@@ -511,9 +515,6 @@ function renderVenue(route, data, now) {
 const multiDay = ctxs => schedDays(ctxs.flatMap(c => c.matches), (ctxs[0] && ctxs[0].tz) || 'UTC').length > 1;
 
 
-// The last successful fetch, in real time.
-let lastPoll = 0;
-
 // The round a player could reach once the pools decide; the chip carries the rank
 // or outcome that gets in.
 function possibleCard(stage, ctx, opts) {
@@ -523,17 +524,17 @@ function possibleCard(stage, ctx, opts) {
   return `<article${opts.id ? ` id="${opts.id}"` : ''} data-status="possible"><div class="head"><span>${when}</span><span>${where}</span></div><div class="meta">${catChip(ctx)} · ${label}</div>${stage.chip ? `<div class="meta">(${esc(stage.chip)})</div>` : ''}</article>`;
 }
 
-function renderPlayer(route, data) {
+function renderPlayer(route, data, stamp) {
   if (!data.tjson) return MISSING();
   const players = (Array.isArray(data.tjson.players) ? data.tjson.players : []).filter(p => p && typeof p === 'object' && typeof p.id === 'string');
   const p = route.player ? players.find(x => x.id === route.player) : null;
-  return p ? playerSchedule(route, data, p) : playerPicker(route, data, players);
+  return p ? playerSchedule(route, data, p, stamp) : playerPicker(route, data, players, stamp);
 }
 
 // Only participants are pickable, so a pick always renders a schedule; one
 // alphabetical card per player — its meta names every category they play in, so
 // a player in three categories is still one card.
-function playerPicker(route, data, players) {
+function playerPicker(route, data, players, stamp) {
   const cards = players
     .map(pl => ({ pl, cats: data.cats.filter(c => playerMatches(c, pl.id).length) }))
     .filter(x => x.cats.length)
@@ -542,12 +543,12 @@ function playerPicker(route, data, players) {
       const name = esc(pl.name || pl.id);
       return `<a class="card" aria-label="${name}" href="${esc(href(data.t.slug, 'schedule', { ...route, player: pl.id }))}"><h2>${name}</h2><p>${cats.map(catChip).join(' · ')}</p></a>`;
     });
-  const head = `${segmentBar(route)}<header><h1>${u('pick-player')}<span class="head-right">${statusDot(data)}</span></h1></header>`;
+  const head = `${segmentBar(route)}<header><h1>${u('pick-player')}<span class="head-right">${statusDot(data, stamp)}</span></h1></header>`;
   return cards.length ? `${head}<section class="grid">${cards.join('')}</section>` : head + `<p>${u('no-players')}</p>`;
 }
 
 // One flat timeline for the picked player: confirmed matches and possible stages.
-function playerSchedule(route, data, p) {
+function playerSchedule(route, data, p, stamp) {
   const pid = p.id;
   const ctxs = data.cats;
   const multi = multiDay(ctxs); // the stage times need their date on multi-day pages
@@ -582,7 +583,7 @@ function playerSchedule(route, data, p) {
     .filter(([s]) => s)
     .map(([s, name]) => `<span>${esc(name)}: ${esc(s)}</span>`)
     .join('\u00a0· '); // nbsp glues the dot to the line so the only wrap point is after it
-  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}<span class="head-right"><a class="chip" href="${esc(href(data.t.slug, 'schedule', { ...route, player: null }))}" aria-label="${u('change-player')}">⇄</a>${statusDot(data)}</span></h1>${progress ? `<p class="progress">${progress}</p>` : ''}${next ? `<p data-status="next">${next}</p>` : ''}</header>`];
+  const parts = [segmentBar(route), `<header><h1>${esc(p.name)}<span class="head-right"><a class="chip" href="${esc(href(data.t.slug, 'schedule', { ...route, player: null }))}" aria-label="${u('change-player')}">⇄</a>${statusDot(data, stamp)}</span></h1>${progress ? `<p class="progress">${progress}</p>` : ''}${next ? `<p data-status="next">${next}</p>` : ''}</header>`];
   const out = [];
   let curDay = null;
   for (const e of events) {
@@ -627,9 +628,12 @@ function boot() {
   setLocale(lang);
   document.documentElement.lang = lang;
 
-  const renderers = { index: renderIndex, tournament: renderTournament, venues: (r, d) => renderVenue(r, d, Date.now()), schedule: renderPlayer };
+  // One clock read per render — the last success and the instant, handed to the renderers:
+  // none of them reaches for a clock or a module variable.
+  const renderers = { index: renderIndex, tournament: renderTournament, venues: renderVenue, schedule: renderPlayer };
   let route = null;    // current fragment route — the poll reads it each tick
   let data = null;     // last good snapshot — a failed poll keeps the board up
+  let lastPoll = 0;    // the last successful fetch, in real time — the freshness read's own input
   let pulse = null;    // { slug, hash } — the change detector behind the dot's flash
   let lastHtml = '';   // skip re-render when nothing changed (keeps selection/focus)
   let lastKey = '';    // view|cat — a change is new content, start at the top
@@ -732,7 +736,7 @@ function boot() {
     lastKey = key;
     try {
       document.title = pageTitle(r, d); // inside the guard: the never-throw invariant covers the title too
-      const html = renderers[r.view](r, d);
+      const html = renderers[r.view](r, d, { at: lastPoll, now: Date.now() });
       if (html !== lastHtml) {
         app.innerHTML = html;
         lastHtml = html;

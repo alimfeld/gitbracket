@@ -27,6 +27,10 @@ const bareCat = { id: 't', name: 'T', bestOf: { groups: 1, knockout: 1 }, slotMi
 const bare = ({ venues = [], players = [], matches = {}, categories = [bareCat], ...rest } = {}) =>
   ({ name: 'Bad', location: 'Hall', timezone: 'UTC', venues, players, categories, matches, ...rest });
 
+// The kiosk renderer takes the fetch stamp; these tests drive the board's clock, so the
+// stamp carries the instant and no successful fetch yet.
+const clockAt = ms => ({ at: 0, now: ms });
+
 test('schedTime: an invalid timezone reads as unparseable — never throws', () => {
   assert.equal(schedTime({ scheduled: '2026-05-02T09:00:00' }, 'Mars/Olympus'), null, 'a bad tz is a parse failure, not a crash');
   assert(schedTime({ scheduled: '2026-05-02T09:00:00' }, 'UTC') > 0, 'a good tz still anchors the wall time');
@@ -54,7 +58,7 @@ test('renderers: a tournament with no categories renders empty — never throws'
   const tjson = bare({ name: 'Empty', categories: [] });
   const data = pageData(tjson, 'empty');
   assert.doesNotThrow(() => renderTournament({ slug: 'empty', view: 'tournament' }, data), 'tournament page');
-  assert.doesNotThrow(() => renderVenue({ slug: 'empty', view: 'venues' }, data, Date.now()), 'venue view too');
+  assert.doesNotThrow(() => renderVenue({ slug: 'empty', view: 'venues' }, data, clockAt(Date.now())), 'venue view too');
   assert.doesNotThrow(() => renderPlayer({ slug: 'empty', view: 'schedule' }, data), 'player picker too');
 });
 
@@ -69,7 +73,7 @@ test('renderers: a null category entry is skipped, never throws', () => {
 test('renderers: a null venue entry is skipped on the board, never throws', () => {
   const tjson = bare({ venues: [null, { id: 'c1', name: 'Court 1' }], players: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }], matches: { t: [{ id: 1, pool: 'A', scheduled: '2026-05-02T09:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p1'] }, { kind: 'players', ids: ['p2'] }] }] } });
   const data = pageData(tjson, 'bad');
-  assert.doesNotThrow(() => renderVenue({ slug: 'bad', view: 'venues' }, data, Date.parse('2026-05-02T10:00:00Z')), 'the board renders around the absent entry');
+  assert.doesNotThrow(() => renderVenue({ slug: 'bad', view: 'venues' }, data, clockAt(Date.parse('2026-05-02T10:00:00Z'))), 'the board renders around the absent entry');
 });
 
 test('renderers: a match on an undeclared venue renders absent on the board — never throws', () => {
@@ -80,7 +84,7 @@ test('renderers: a match on an undeclared venue renders absent on the board — 
       { id: 2, pool: 'A', scheduled: '2026-05-02T10:00:00', venue: 'ghost', sides: [{ kind: 'players', ids: ['p3'] }, { kind: 'players', ids: ['p4'] }] },
     ] } });
   const data = pageData(tjson, 'bad');
-  const html = renderVenue({ slug: 'bad', view: 'venues' }, data, Date.parse('2026-05-02T10:00:00Z'));
+  const html = renderVenue({ slug: 'bad', view: 'venues' }, data, clockAt(Date.parse('2026-05-02T10:00:00Z')));
   assert(text(html).includes('Court 1'), 'the declared court still renders');
   assert(!text(html).includes('P3') && !text(html).includes('P4'), 'the ghost-venue match renders absent, never a throw');
 });
@@ -94,16 +98,16 @@ test('renderers: a sideless match renders TBD rows, never throws', () => {
     ] } });
   const data = pageData(tjson, 'bad');
   assert.doesNotThrow(() => renderTournament({ slug: 'bad', view: 'tournament' }, data), 'tournament page');
-  assert.doesNotThrow(() => renderVenue({ slug: 'bad', view: 'venues' }, data, Date.parse('2026-05-02T10:30:00Z')), 'the board renders around the sideless match');
+  assert.doesNotThrow(() => renderVenue({ slug: 'bad', view: 'venues' }, data, clockAt(Date.parse('2026-05-02T10:30:00Z'))), 'the board renders around the sideless match');
 });
 
 test('renderers: an invalid timezone renders TBD, never throws', () => {
   const bad = bare({ timezone: 'Mars/Olympus', venues: [{ id: 'c1', name: 'Court 1' }], players: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }], matches: { t: [{ id: 1, pool: 'A', scheduled: '2026-05-02T09:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p1'] }, { kind: 'players', ids: ['p2'] }] }] } });
   const data = pageData(bad, 'bad');
   assert.doesNotThrow(() => renderTournament({ slug: 'bad', view: 'tournament' }, data), 'tournament page');
-  const board = renderVenue({ slug: 'bad', view: 'venues' }, data, Date.now());
+  const board = renderVenue({ slug: 'bad', view: 'venues' }, data, clockAt(Date.now()));
   assert(!board.includes('NaN'), 'venue board: an empty time axis renders plain TBD, never a NaN frame');
-  assert.doesNotThrow(() => renderVenue({ slug: 'bad', view: 'venues' }, data, Date.now()), 'venue board');
+  assert.doesNotThrow(() => renderVenue({ slug: 'bad', view: 'venues' }, data, clockAt(Date.now())), 'venue board');
   assert.doesNotThrow(() => renderPlayer({ slug: 'bad', view: 'schedule', player: 'p1' }, data), 'player page');
 });
 
@@ -119,7 +123,7 @@ test('renderers: every fixture renders every view — the never-throw contract, 
     if (!info || !info.tjson) continue; // no file to render (bad-null-tjson, index-only duplicates)
     const data = pageData(info.tjson, dir, repo.index);
     assert.doesNotThrow(() => renderTournament({ slug: dir, view: 'tournament' }, data), `${dir}: tournament view`);
-    assert.doesNotThrow(() => renderVenue({ slug: dir, view: 'venues' }, data, now), `${dir}: venue view`);
+    assert.doesNotThrow(() => renderVenue({ slug: dir, view: 'venues' }, data, clockAt(now)), `${dir}: venue view`);
     assert.doesNotThrow(() => renderPlayer({ slug: dir, view: 'schedule' }, data), `${dir}: player view`);
   }
 });
@@ -572,14 +576,14 @@ test('result statuses render: W/O and void on cards, settled matches stay on the
   const data = repoPage('result');
   const st = renderTournament({ slug: 'result', view: 'tournament' }, data);
   assert(st.includes('data-win'), 'the winning side rows a data-win marker');
-  const venue = renderVenue({ slug: 'result', view: 'venues' }, data, Date.parse('2026-05-02T09:30:00Z'));
+  const venue = renderVenue({ slug: 'result', view: 'venues' }, data, clockAt(Date.parse('2026-05-02T09:30:00Z')));
   assert(vals(venue, 'data-status').includes('done'), 'settled matches — played, walkover, void — all stay on the full-day board');
   assert(vals(venue, 'data-status').includes('upcoming'), 'the open 11:00 final is still upcoming at 09:30');
 });
 
 test('category chip: the category name rides a per-category slot on the board and the schedule, escaped', () => {
   const data = repoPage('sample');
-  const venue = renderVenue({ slug: 'sample', view: 'venues' }, data, Date.parse('2025-07-14T10:00:00Z'));
+  const venue = renderVenue({ slug: 'sample', view: 'venues' }, data, clockAt(Date.parse('2025-07-14T10:00:00Z')));
   assert.deepEqual([...new Set(vals(venue, 'data-cat'))].sort(), ['1', '2'], 'both categories ride the venue board, each on its own slot');
   const ppage = renderPlayer({ slug: 'sample', view: 'schedule', player: 'p1' }, data);
   assert.equal(new Set(vals(ppage, 'data-cat')).size, 2, 'the player schedule carries both categories too');
@@ -587,7 +591,7 @@ test('category chip: the category name rides a per-category slot on the board an
   assert.deepEqual([...new Set(vals(tour, 'data-cat'))].sort(), ['1', '2'], 'the category tabs wear each category slot too');
   const evil = JSON.parse(JSON.stringify(data.tjson));
   evil.categories[0].name = '<b>C</b>';
-  const out = renderVenue({ slug: 'sample', view: 'venues' }, withTjson(data, evil), Date.parse('2025-07-14T10:00:00Z'));
+  const out = renderVenue({ slug: 'sample', view: 'venues' }, withTjson(data, evil), clockAt(Date.parse('2025-07-14T10:00:00Z')));
   assert(!out.includes('<b>C</b>') && out.includes('&lt;b&gt;C&lt;/b&gt;'), 'the chip name is escaped, never HTML');
 });
 
@@ -606,7 +610,7 @@ test('kiosk calendar: cards sit by wall-clock top — a slot only on a late venu
       { id: 3, pool: 'A', scheduled: '2026-05-02T14:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p5'] }, { kind: 'players', ids: ['p6'] }] },
     ] },
   });
-  const html = renderVenue({ slug: 'cal', view: 'venues' }, pageData(tjson, 'cal'), Date.parse('2026-05-02T12:05:00Z'));
+  const html = renderVenue({ slug: 'cal', view: 'venues' }, pageData(tjson, 'cal'), clockAt(Date.parse('2026-05-02T12:05:00Z')));
   const topOf = {};
   for (const m of html.matchAll(/<([a-z][a-z0-9]*)[^>]*style="top:([\d.]+)px[^"]*"[^>]*>([\s\S]*?)<\/\1>/g)) {
     const time = /<time[^>]*>([^<]*)<\/time>/.exec(m[3]);
@@ -912,13 +916,13 @@ test('multi-day kiosk: one day at a time, previewing day one early, falling back
   assert(vals(spage, 'datetime').includes('2026-07-12T19:00:00.000Z'), 'a rescheduled pool match carries its new day on the card');
   // kiosk: strict same-day in the tournament timezone, from the device clock instant
   const at = iso => Date.parse(iso);
-  const sat = renderVenue({ slug: 'multiday', view: 'venues' }, data, at('2026-07-11T12:00:00-04:00'));
+  const sat = renderVenue({ slug: 'multiday', view: 'venues' }, data, clockAt(at('2026-07-11T12:00:00-04:00')));
   assert(text(sat).includes('Katherine Johnson') && !text(sat).includes('SF') && !text(sat).includes('Final'), 'saturday board: open pool match, no tomorrow');
-  const sun = renderVenue({ slug: 'multiday', view: 'venues' }, data, at('2026-07-12T08:00:00-04:00'));
+  const sun = renderVenue({ slug: 'multiday', view: 'venues' }, data, clockAt(at('2026-07-12T08:00:00-04:00')));
   assert(text(sun).includes('SF') && text(sun).includes('Final') && !text(sun).includes('Katherine Johnson'), 'sunday board: knockout only, yesterday gone');
-  const mon = renderVenue({ slug: 'multiday', view: 'venues' }, data, at('2026-07-13T12:00:00-04:00'));
+  const mon = renderVenue({ slug: 'multiday', view: 'venues' }, data, clockAt(at('2026-07-13T12:00:00-04:00')));
   assert(text(mon).includes('SF') && text(mon).includes('Final') && !text(mon).includes('Katherine Johnson'), 'after the last day: the board falls back to the last day (Sunday knockout), not a stale today');
-  const fri = renderVenue({ slug: 'multiday', view: 'venues' }, data, at('2026-07-10T12:00:00-04:00'));
+  const fri = renderVenue({ slug: 'multiday', view: 'venues' }, data, clockAt(at('2026-07-10T12:00:00-04:00')));
   assert(text(fri).includes('Katherine Johnson') && !text(fri).includes('SF') && !text(fri).includes('Final'), 'a day before day one: the board previews the first day, pools only');
   assert(sat.includes('id="now-line"') && sun.includes('id="now-line"'), 'a match day carries the now-line — the follow has something to track');
   assert(!fri.includes('id="now-line"') && !mon.includes('id="now-line"'), 'off match day there is no now-line — the board never jumps to a day edge');
@@ -928,16 +932,16 @@ test('kiosk clock: a match day shows a bare time, off day the shown date as a re
   const repo = loadRepo(FIX('multiday'));
   const data = pageData(repo.tournaments.get('multiday').tjson, 'multiday', repo.index);
   const rt = { slug: 'multiday', view: 'venues' };
-  const mon = renderVenue(rt, data, Date.parse('2026-07-13T12:00:00-04:00')); // after the last day: the board falls back to Sunday
+  const mon = renderVenue(rt, data, clockAt(Date.parse('2026-07-13T12:00:00-04:00'))); // after the last day: the board falls back to Sunday
   assert(mon.includes('<time id="clock" data-mode="date" datetime="2026-07-12"'), 'off match day the clock is the shown day, a plain readout');
-  const sat = renderVenue(rt, data, Date.parse('2026-07-11T12:00:00-04:00'));
+  const sat = renderVenue(rt, data, clockAt(Date.parse('2026-07-11T12:00:00-04:00')));
   assert(sat.includes('<time id="clock" data-mode="time"'), 'a match day shows a plain time');
 });
 
 test('kiosk: the board title links back to the tournaments index', () => {
   const repo = loadRepo(FIX('multiday'));
   const data = pageData(repo.tournaments.get('multiday').tjson, 'multiday', repo.index);
-  const board = renderVenue({ slug: 'multiday', view: 'venues' }, data, Date.parse('2026-07-11T12:00:00-04:00'));
+  const board = renderVenue({ slug: 'multiday', view: 'venues' }, data, clockAt(Date.parse('2026-07-11T12:00:00-04:00')));
   assert(links(board).some(l => l.href === '#'), 'the board header carries the trail link, so the kiosk is never a dead end');
 });
 
@@ -949,9 +953,28 @@ test('kiosk: the status dot never pretends live without a successful fetch', () 
     matches: { t: [{ id: 1, pool: 'A', scheduled: '2026-05-02T09:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p1'] }, { kind: 'players', ids: ['p2'] }] }] },
   });
   const rt = { slug: 'kiosk-live', view: 'venues' };
-  const open = renderVenue(rt, pageData(tjson(), 'kiosk-live'), Date.parse('2026-05-02T09:30:00Z'));
+  const open = renderVenue(rt, pageData(tjson(), 'kiosk-live'), clockAt(Date.parse('2026-05-02T09:30:00Z')));
   assert(open.includes('data-status="reconnecting"'), 'no successful fetch yet — the stamp reads reconnecting, never pretends live');
   assert(open.includes('role="status"'), 'a11y: the reconnecting state is its own live region, not the counting time');
+});
+
+// A renderer reads no clock and no module variable: every level is reachable by handing it
+// a stamp, which is what lets this be a test instead of a coincidence.
+test('the freshness dot names the level its stamp implies, on every polling view', () => {
+  const data = repoPage('full');
+  const now = 1e12;
+  const stamp = age => ({ at: now - age, now });
+  const levels = [['live', 1000], ['lagging', STALE_MS], ['reconnecting', STALE_MS + 1]];
+  const views = [
+    ['tournament', s => renderTournament({ slug: 'full', view: 'tournament' }, data, s)],
+    ['kiosk', s => renderVenue({ slug: 'full', view: 'venues' }, data, s)],
+    ['schedule', s => renderPlayer({ slug: 'full', view: 'schedule' }, data, s)],
+  ];
+  for (const [name, draw] of views) {
+    for (const [level, age] of levels) {
+      assert(draw(stamp(age)).includes(`data-status="${level}"`), `${name}: a stamp ${age}ms old reads ${level}`);
+    }
+  }
 });
 
 test('routing: cat and player ride along between tournament and schedule — applied on their home view only', () => {
@@ -1057,7 +1080,7 @@ test('i18n: German renders stay whole — no raw placeholders, never a throw', (
     const data = pageData(info.tjson, 'full', repo.index);
     const views = [
       () => renderTournament({ slug: 'full', view: 'tournament' }, data),
-      () => renderVenue({ slug: 'full', view: 'venues' }, data, Date.now()),
+      () => renderVenue({ slug: 'full', view: 'venues' }, data, clockAt(Date.now())),
       () => renderPlayer({ slug: 'full', view: 'schedule' }, data),
     ];
     for (const v of views) {
