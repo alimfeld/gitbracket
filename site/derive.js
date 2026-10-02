@@ -555,12 +555,7 @@ function zonedParts(tz, instant) {
   } catch { return null; }
 }
 
-const wallMillis = ([y, mo, d, h, mi, s]) => {
-  const date = new Date(0);
-  date.setUTCFullYear(y, mo - 1, d);
-  date.setUTCHours(h, mi, s, 0);
-  return date.getTime();
-};
+const wallMillis = ([y, mo, d, h, mi, s]) => Date.UTC(y, mo - 1, d, h, mi, s);
 
 function offsetAt(tz, instant) {
   const parts = zonedParts(tz, instant);
