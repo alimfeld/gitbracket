@@ -97,17 +97,16 @@ function writeEdit(siteRoot, repo, slug, catId, apply) {
   const ctx = catCtx(tjson, catId);
   const file = path.join(siteRoot, 'tournaments', `${slug}.json`);
   // A hand-edited disk can be malformed between load and write: refuse, never throw.
-  let before, beforeJson;
+  let beforeJson;
   try {
-    before = fs.readFileSync(file, 'utf8');
-    beforeJson = JSON.parse(before); // the rollback snapshot — the day guard below reads it too
+    beforeJson = JSON.parse(fs.readFileSync(file, 'utf8')); // the rollback snapshot — the day guard below reads it too
   } catch (e) {
     return { err: `site/tournaments/${slug}.json is not readable JSON on disk (${e.message}) — fix the file and retry; nothing was written` };
   }
-  // The memory snapshot can outlive an out-of-band hand edit; writing from it would
-  // silently drop that edit. Compared through the same normalizer, so byte-layout-only
-  // differences aren't a change.
-  if (tournamentText(beforeJson) !== tournamentText(tjson)) {
+  // One normalizer for both checks: a hand edit that changed the data is refused (writing
+  // from the stale snapshot would drop it), a layout-only edit is not.
+  const beforeText = tournamentText(beforeJson);
+  if (beforeText !== tournamentText(tjson)) {
     return { err: `the file changed on disk (${slug}.json) since it was loaded — refusing to overwrite it; reload and retry` };
   }
   // undo the in-memory edit too — a same-process retry must start from the original
@@ -134,9 +133,9 @@ function writeEdit(siteRoot, repo, slug, catId, apply) {
     restore();
     return { errs: slugErrs };
   }
-  // byte equality is data equality — "21:19" for a stored "21-9" lands on the
-  // same bytes, as does a re-scored identical game list
-  if (tournamentText(tjson) === before) return { unchanged: true };
+  // canonical equality is data equality — "21:19" for a stored "21-9" lands on the
+  // same form, as does a re-scored identical game list
+  if (tournamentText(tjson) === beforeText) return { unchanged: true };
   writeTournament(siteRoot, slug, tjson);
   return { file, conflicts };
 }

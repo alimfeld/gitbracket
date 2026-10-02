@@ -516,14 +516,13 @@ function validateGames(games, target, where, err, conflict) {
   }
 }
 
-// Findings touching that tournament's file or index entry. Exact matches only — a
-// substring would leak tie3 findings into `validate tie`.
+// The slug must lead the finding's where — matching it anywhere lets a sibling quoting the same string leak in.
 function filterSlug(msgs, slug) {
   // The slug lands in a regex — a caller may pass a non-id (the admin CLI takes a
   // positional arg), and a metacharacter must not break the pattern and take the
   // gate down with it.
   const s = String(slug).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const re = new RegExp(`(?:tournaments/${s}\\.json|\\(${s}\\)|"${s}"|slug ${s}(?:\\s|$))`);
+  const re = new RegExp(`^(?:site/)?tournaments/${s}\\.json\\b|^tournaments\\.json \\[[^\\]]*\\] \\(${s}\\)`);
   return msgs.filter(e => re.test(e));
 }
 

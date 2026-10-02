@@ -155,7 +155,9 @@ function gitEnv(base = process.env) {
 // into the shell string, breaking ids with spaces or quotes.
 function git(root, args) {
   const r = spawnSync('git', args, { cwd: root, encoding: 'utf8', env: gitEnv() });
-  return { code: r.status === 0 ? 0 : 1, out: r.stdout || '', err: r.stderr || '' };
+  // A spawn failure (git missing) sets r.error and nulls stdout/stderr; surface it so
+  // the caller reads the cause, not a generic "dirty tree"/"nothing to undo".
+  return { code: r.status === 0 ? 0 : 1, out: r.stdout || '', err: r.error ? (r.error.message || String(r.error)) : (r.stderr || '') };
 }
 
 // Unpushed commits [{sha, msg}] over the branch's own upstream, not origin/main —

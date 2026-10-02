@@ -232,6 +232,13 @@ test('editor writeEdit/execEdit: an edit already on record writes and commits no
     const r = editor.execEdit(state, 'move', 'md40', '8', { time: m8.scheduled, venue: m8.venue });
     assert.equal(r.unchanged, true, 'the no-op reports unchanged without a git call');
     assert(fs.readFileSync(file, 'utf8') === before, 'still nothing written');
+    // A hand-reformatted file (same data, different bytes) is not a rewrite trigger:
+    // the no-op check runs through the same normalizer as the out-of-band guard.
+    const reformatted = JSON.stringify(JSON.parse(before), null, 4) + '\n';
+    fs.writeFileSync(file, reformatted);
+    const noop2 = editor.writeEdit(dataRoot, repo, 'sample', 'md40', (c) => editor.applyMove(c, '8', { time: c.find(x => x.id === 8).scheduled, venue: 'court-2' }));
+    assert(noop2.unchanged && !noop2.file, 'a reformatted file with the same data still reports unchanged');
+    assert(fs.readFileSync(file, 'utf8') === reformatted, 'the hand layout is left alone');
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
@@ -354,15 +361,20 @@ test('editor applyDelete: a still-referenced match dangles (syntactic gate refus
 test('editor writeEdit: a sibling tournament\'s syntactic error never blocks the edited one — the gate is per-slug', () => {
   const { tmp, dataRoot } = scratchSite('sample');
   try {
-    // A second, broken tournament in the same repo (the admin's real shape is many slugs)
-    const broken = JSON.parse(fs.readFileSync(path.join(FIX('bad-unknown-venue'), 'tournaments', 'bad-unknown-venue.json'), 'utf8'));
+    // A second, broken tournament whose error quotes the edited slug as a category id —
+    // the message text must never attribute a finding, only the where prefix.
+    const broken = JSON.parse(fs.readFileSync(path.join(dataRoot, 'tournaments', 'sample.json'), 'utf8'));
+    broken.name = 'Broken';
+    broken.location = 'Broken Hall';
+    broken.matches['sample'] = []; // undeclared category whose id equals the edited slug
     fs.writeFileSync(path.join(dataRoot, 'tournaments', 'broken.json'), JSON.stringify(broken, null, 2) + '\n');
     const index = JSON.parse(fs.readFileSync(path.join(dataRoot, 'tournaments.json'), 'utf8'));
     index.push({ slug: 'broken', name: broken.name, location: broken.location });
     fs.writeFileSync(path.join(dataRoot, 'tournaments.json'), JSON.stringify(index, null, 2) + '\n');
 
     const repo = loadRepo(dataRoot);
-    assert(validateRepo(repo).errs.some(e => /broken\.json/.test(e)), 'the sibling really is syntactically broken');
+    const sibling = validateRepo(repo).errs.filter(e => /broken\.json/.test(e));
+    assert(sibling.some(e => /"sample"/.test(e)), 'the sibling error really does quote the edited slug');
 
     const r = editor.writeEdit(dataRoot, repo, 'sample', 'md40', (ms, ctx) => editor.applyScore(ms, '8', [{ a: 11, b: 5 }, { a: 11, b: 3 }], ctx));
     assert(!r.err && !r.errs, `the healthy tournament still edits: ${r.err || (r.errs || []).join('; ')}`);

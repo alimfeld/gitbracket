@@ -688,8 +688,10 @@ function boot() {
   const paint = html => { app.innerHTML = html; lastHtml = ''; };
 
   const load = r => {
-    if (live.has(r.slug)) return; // this page's answer is already on its way
-    live.add(r.slug);
+    // r.slug is undefined on the index — key by view so slug-less routes can't collide.
+    const key = r.slug || r.view;
+    if (live.has(key)) return; // this page's answer is already on its way
+    live.add(key);
     loadAll(r).then(d => {
       if (superseded(route, r)) return; // a different tournament won the race
       if (r.view === 'index') return d.failed ? paint(FAILED() + `<p>${u('reload')}</p>`) : render(route, d); // the index never 404s the tournament file
@@ -712,7 +714,7 @@ function boot() {
       console.error(e);
       if (superseded(route, r)) return; // an abandoned route's failure can't blank the view that replaced it
       if (!data) paint(FAILED());
-    }).finally(() => live.delete(r.slug));
+    }).finally(() => live.delete(key));
   };
   const tick = () => load(route);
 

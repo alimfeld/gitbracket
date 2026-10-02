@@ -178,12 +178,14 @@ test('conflicts carry the cards they name: match-scoped refs and both double-boo
 test('filterSlug: validate <slug> narrows to that tournament', () => {
   const errs = [
     'site/tournaments/2026-mammut60.json: name does not match the index entry',
-    'tournaments.json [0]: duplicate slug 2026-mammut60',
+    'tournaments.json [0] (2026-mammut60): duplicate slug 2026-mammut60',
     'site/tournaments/other.json: timezone required',
+    // a sibling quoting the slug as a category id must stay out — the where leads the line
+    'site/tournaments/other.json matches.other: maps to undeclared category "2026-mammut60" — a key typo would silently render an empty category',
   ];
   const got = filterSlug(errs, '2026-mammut60');
   assert.equal(got.length, 2, 'keeps the tournament file and its index entry');
-  assert(!got.some(e => e.includes('other.json')), 'other tournaments stay out');
+  assert(!got.some(e => e.includes('other.json')), 'a sibling quoting the slug as an id stays out');
 });
 
 test('filterSlug: a substring-prefixed slug stays out (tie vs tie3)', () => {
