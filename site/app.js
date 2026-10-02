@@ -196,23 +196,29 @@ const catNav = (slug, ctxs, route) => {
   }).join('');
 };
 
-// lastPoll moves only on a success, so silence past the tolerance names the reconnect;
-// nowMs is real time. Before the first success it reads stale.
-const isStale = (lastFetchMs, nowMs) => !lastFetchMs || nowMs - lastFetchMs > STALE_MS;
+// Freshness is a level, not a boolean. lastPoll moves only on a success, nowMs is real
+// time: inside two poll cycles the board is live, past the tolerance it names the
+// reconnect, and the band between lags — behind, but a request may still be in flight.
+// Before the first success it reads reconnecting.
+const LAG_MS = 2 * POLL_MS;
+const freshness = (lastFetchMs, nowMs) => {
+  if (!lastFetchMs) return 'reconnecting';
+  const age = nowMs - lastFetchMs;
+  return age > STALE_MS ? 'reconnecting' : age > LAG_MS ? 'lagging' : 'live';
+};
 
-// Every polling view's freshness dot: filled while the last fetch sits inside the
-// tolerance, a ring when it doesn't. A fixed box, so a state change never shifts the
-// title row; the word is sr-only and the timestamp a hover title. Module-scope state,
-// so the renderers stay directly testable — not boot's closure.
-let stampSnap = null; // { slug, hash } — the change detector behind the flash
+// A changed same-slug file is a pulse candidate; the caller adds the flag only when the
+// change also moved the rendered markup. boot owns the hash so renderers stay pure.
+const changedTournament = (prev, slug, hash) => !!prev && prev.slug === slug && prev.hash !== hash;
+
+// The freshness dot: filled green while the last fetch sits inside two poll cycles, an
+// amber ring when it lags, a red ring past the tolerance. A fixed box, so a state change
+// never shifts the title row; the word is sr-only and the timestamp a hover title. The
+// level doubles as the i18n key.
 function statusDot(data) {
-  const hash = JSON.stringify(data.tjson);
-  const flash = !!stampSnap && stampSnap.slug === data.t.slug && stampSnap.hash !== hash;
-  stampSnap = { slug: data.t.slug, hash };
-  const stale = isStale(lastPoll, Date.now());
+  const level = freshness(lastPoll, Date.now());
   const when = lastPoll ? fmtTime(lastPoll, data.tjson.timezone || 'UTC') : '—';
-  const word = u(stale ? 'reconnect' : 'live');
-  return `<span class="status" role="status" data-status="${stale ? 'stale' : 'live'}" title="${esc(u('updated', { time: when }))}"${flash ? ' data-flash' : ''}><span class="sr-only">${esc(word)}</span></span>`;
+  return `<span class="status" role="status" data-status="${level}" title="${esc(u('updated', { time: when }))}"><span class="sr-only">${esc(u(level))}</span></span>`;
 }
 
 const HOME_LINK = () => `<a class="chip" href="#" aria-label="${u('tournaments')}">⎋</a>`;
@@ -624,6 +630,7 @@ function boot() {
   const renderers = { index: renderIndex, tournament: renderTournament, venues: (r, d) => renderVenue(r, d, Date.now()), schedule: renderPlayer };
   let route = null;    // current fragment route — the poll reads it each tick
   let data = null;     // last good snapshot — a failed poll keeps the board up
+  let pulse = null;    // { slug, hash } — the change detector behind the dot's flash
   let lastHtml = '';   // skip re-render when nothing changed (keeps selection/focus)
   let lastKey = '';    // view|cat — a change is new content, start at the top
   let pollTimer = null, clockTimer = null;
@@ -657,6 +664,13 @@ function boot() {
       clearInterval(clockTimer);
       clockTimer = null;
     }
+  };
+
+  // The flash receipt: the attribute plays the animation once and leaves with it, so a
+  // later render of the same element starts clean.
+  const flashEl = el => {
+    el.setAttribute('data-flash', '');
+    el.addEventListener('animationend', () => el.removeAttribute('data-flash'), { once: true });
   };
 
   // The timers track the open view and the tab's visibility — the one policy both
@@ -705,6 +719,10 @@ function boot() {
   };
 
   const render = (r, d) => {
+    // the pulse keys on the file's content — a refetch is a new object every time
+    const hash = d.tjson ? JSON.stringify(d.tjson) : null;
+    const changed = hash !== null && changedTournament(pulse, r.slug, hash);
+    if (hash !== null) pulse = { slug: r.slug, hash };
     data = d;
     // full-width board layout keys off body.venue — present only on the venue view
     document.body.classList.toggle('venue', r.view === 'venues');
@@ -715,7 +733,12 @@ function boot() {
     try {
       document.title = pageTitle(r, d); // inside the guard: the never-throw invariant covers the title too
       const html = renderers[r.view](r, d);
-      if (html !== lastHtml) { app.innerHTML = html; lastHtml = html; }
+      if (html !== lastHtml) {
+        app.innerHTML = html;
+        lastHtml = html;
+        // a changed file pulses the dot; the new element carries no flag, so the animation runs
+        if (changed) { const dot = app.querySelector('.status'); if (dot) flashEl(dot); }
+      }
       if (contentChanged) window.scrollTo(0, 0);
     } catch (e) {
       paint(FAILED());
@@ -756,10 +779,7 @@ function boot() {
     const boxes = document.querySelectorAll('article[data-status="next"]');
     const targets = boxes.length ? boxes : [el]; // a possible-stage jump has no spined card — the anchor stands in
     targets[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
-    targets.forEach(box => {
-      box.setAttribute('data-flash', '');
-      box.addEventListener('animationend', () => box.removeAttribute('data-flash'), { once: true });
-    });
+    targets.forEach(flashEl);
   };
   document.addEventListener('click', e => {
     const a = e.target.closest('a[data-jump]');
@@ -781,5 +801,5 @@ if (typeof document !== 'undefined') boot();
 
 // CommonJS exports for node tests; the browser ignores these.
 if (typeof module !== 'undefined') {
-  module.exports = { parseRoute, resolveLang, loadAll, needsFetch, superseded, timeoutSignal, renderIndex, renderTournament, renderVenue, renderPlayer, paintBadRoute, pageTitle, isStale, STALE_MS };
+  module.exports = { parseRoute, resolveLang, loadAll, needsFetch, superseded, timeoutSignal, renderIndex, renderTournament, renderVenue, renderPlayer, paintBadRoute, pageTitle, freshness, changedTournament, LAG_MS, STALE_MS };
 }

@@ -14,7 +14,7 @@ const assert = require('node:assert/strict');
 const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, matchSlotMs, plRange, koColumn, koOrdinal, schedTime, dayKey, toCats, isDeadTie, winners, placementColumn, catStatus, currentWave } = require('../site/derive.js');
 const { sideLabel, placementLabel, matchLabel, fmtTime, roundName, playerStatus, possibleStages, setLocale } = require('../site/views.js');
 const { I18N } = require('../site/i18n.js');
-const { parseRoute, resolveLang, loadAll, needsFetch, superseded, timeoutSignal, renderIndex, renderTournament, renderVenue, renderPlayer, paintBadRoute, pageTitle, isStale, STALE_MS } = require('../site/app.js');
+const { parseRoute, resolveLang, loadAll, needsFetch, superseded, timeoutSignal, renderIndex, renderTournament, renderVenue, renderPlayer, paintBadRoute, pageTitle, freshness, changedTournament, LAG_MS, STALE_MS } = require('../site/app.js');
 const { generate } = require('../src/schedule.js');
 const { FIX, catOf, pageData, repoPage, withTjson, text, vals, card, cards, links, lk } = require('./helpers.js');
 const { loadRepo } = require('../src/tools.js');
@@ -26,22 +26,6 @@ const sameRecord = (a, b) => a.wins === b.wins && a.gd === b.gd && a.pd === b.pd
 const bareCat = { id: 't', name: 'T', bestOf: { groups: 1, knockout: 1 }, slotMinutes: { groups: 30, knockout: 30 } };
 const bare = ({ venues = [], players = [], matches = {}, categories = [bareCat], ...rest } = {}) =>
   ({ name: 'Bad', location: 'Hall', timezone: 'UTC', venues, players, categories, matches, ...rest });
-
-// The polling views share one change detector; each renders its cue in its own place.
-const flashCue = (render, view, slug, args = []) => {
-  const tjson = () => ({
-    name: 'Cue', location: 'Hall', timezone: 'UTC', venues: [{ id: 'c1', name: 'Court 1' }],
-    players: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }],
-    categories: [{ id: 't', name: 'T', bestOf: { groups: 1, knockout: 1 }, slotMinutes: { groups: 30, knockout: 30 } }],
-    matches: { t: [{ id: 1, pool: 'A', scheduled: '2026-05-02T09:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p1'] }, { kind: 'players', ids: ['p2'] }] }] },
-  });
-  const draw = t => render({ slug, view }, pageData(t, slug), ...args);
-  assert(!draw(tjson()).includes('data-flash'), 'the first render is a baseline, not a change');
-  assert(!draw(tjson()).includes('data-flash'), 'an unchanged poll stays quiet');
-  const t2 = tjson();
-  t2.matches.t[0].result = { status: 'played', winner: 'a' };
-  assert(draw(t2).includes('data-flash'), 'a poll that changed the file flashes the cue');
-};
 
 test('schedTime: an invalid timezone reads as unparseable — never throws', () => {
   assert.equal(schedTime({ scheduled: '2026-05-02T09:00:00' }, 'Mars/Olympus'), null, 'a bad tz is a parse failure, not a crash');
@@ -240,13 +224,23 @@ test('loadAll recovers from a rejected cache revalidation (Safari 304)', async (
   });
 });
 
-test('stale: a slow link lands inside the tolerance, a dead one runs past it', () => {
+test('freshness: live inside a poll cycle, lagging behind it, reconnecting past the tolerance', () => {
   const now = 1e12;
   const tol = STALE_MS; // the value the code derives from FETCH_TIMEOUT_MS + 2 * POLL_MS
-  assert.equal(isStale(0, now), true, 'no successful fetch yet — stale, never pretend live');
-  assert.equal(isStale(now - 5000, now), false, 'the last fetch succeeded seconds ago');
-  assert.equal(isStale(now - tol, now), false, 'a link that took the whole attempt still lands inside the tolerance');
-  assert.equal(isStale(now - tol - 1, now), true, 'a millisecond past it — reconnecting');
+  assert.equal(freshness(0, now), 'reconnecting', 'no successful fetch yet — never pretends live');
+  assert.equal(freshness(now - 5000, now), 'live', 'the last fetch succeeded seconds ago');
+  assert.equal(freshness(now - LAG_MS, now), 'live', 'two poll cycles still count as live');
+  assert.equal(freshness(now - LAG_MS - 1, now), 'lagging', 'a millisecond past the live window — behind, still trying');
+  assert.equal(freshness(now - tol, now), 'lagging', 'the tolerance edge is not yet reconnecting');
+  assert.equal(freshness(now - tol - 1, now), 'reconnecting', 'a millisecond past it — reconnecting');
+});
+
+test('changedTournament: the pulse fires only when the same tournament file changed', () => {
+  const base = { slug: 'a', hash: 'h1' };
+  assert.equal(changedTournament(null, 'a', 'h1'), false, 'the first load is a baseline, not a change');
+  assert.equal(changedTournament(base, 'a', 'h1'), false, 'an unchanged poll stays quiet');
+  assert.equal(changedTournament(base, 'a', 'h2'), true, 'a changed file pulses the dot');
+  assert.equal(changedTournament(base, 'b', 'h2'), false, 'a different tournament is navigation, not a change');
 });
 
 test('a timed-out poll does not retry in the other cache mode', async () => {
@@ -940,10 +934,6 @@ test('kiosk clock: a match day shows a bare time, off day the shown date as a re
   assert(sat.includes('<time id="clock" data-mode="time"'), 'a match day shows a plain time');
 });
 
-test('kiosk: a poll that changed the file flashes the status dot', () => {
-  flashCue(renderVenue, 'venues', 'kiosk-cue', [Date.parse('2026-05-02T09:30:00Z')]);
-});
-
 test('kiosk: the board title links back to the tournaments index', () => {
   const repo = loadRepo(FIX('multiday'));
   const data = pageData(repo.tournaments.get('multiday').tjson, 'multiday', repo.index);
@@ -960,13 +950,8 @@ test('kiosk: the status dot never pretends live without a successful fetch', () 
   });
   const rt = { slug: 'kiosk-live', view: 'venues' };
   const open = renderVenue(rt, pageData(tjson(), 'kiosk-live'), Date.parse('2026-05-02T09:30:00Z'));
-  assert(open.includes('data-status="stale"'), 'no successful fetch yet — the stamp reads stale, never pretends live');
-  assert(open.includes('role="status"'), 'a11y: the stale state is its own live region, not the counting time');
-});
-
-test('polling views: a poll that changed the file flashes the status dot', () => {
-  flashCue(renderTournament, 'tournament', 'updated-cue');
-  flashCue(renderPlayer, 'schedule', 'picker-cue');
+  assert(open.includes('data-status="reconnecting"'), 'no successful fetch yet — the stamp reads reconnecting, never pretends live');
+  assert(open.includes('role="status"'), 'a11y: the reconnecting state is its own live region, not the counting time');
 });
 
 test('routing: cat and player ride along between tournament and schedule — applied on their home view only', () => {

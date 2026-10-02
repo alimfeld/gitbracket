@@ -25,6 +25,10 @@ node gb.js sim
 - **Sim the kiosk clock** — the board reads the machine clock, so rehearse a
   day by faking it in the browser driving the kiosk (e.g. the "Fake Date"
   extension). The clock is a view only — it never changes what's scoreable.
+- **Watch the freshness dot** — throttle the link or go offline and the dot
+  lags (amber) then names the reconnect (red ring); score in the admin and it
+  pulses once. Only the level logic is unit-tested; seeing the levels needs a
+  live link, so this is the check that covers them.
 - **Iterate** — edit in admin, hit Publish (validate + push + deploy to the
   scratch domain), watch the kiosk. Every edit validates and commits itself,
   so nothing is lost mid-process.

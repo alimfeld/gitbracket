@@ -12,6 +12,7 @@
   /* role, not status — a match state and a board state share each hue */
   --alert: #b3261e;
   --live: #15803d;
+  --warn: #b45309;
   /* category tints — off the status hues, so a chip reads as identity, not state */
   --cat-1: #fdeda9;
   --cat-2: #eedeff;
@@ -508,9 +509,10 @@ body.venue header {
   white-space: nowrap;
 }
 
-/* the freshness dot: filled while the last fetch sits inside the tolerance, a ring
-   when it doesn't. One fixed box, so a state change never moves the title row; the
-   word lives in the sr-only text, the timestamp in the hover title */
+/* the freshness dot: filled green while the last fetch sits inside two poll cycles, a
+   half-filled amber dot when it lags, an empty red ring past the tolerance — fill, not
+   just hue, separates the three. One fixed box, so a state change never moves the title
+   row; the word lives in the sr-only text, the timestamp in the hover title */
 .status {
   flex: none;
   width: .625rem;
@@ -520,7 +522,12 @@ body.venue header {
   background: var(--live);
 }
 
-.status[data-status="stale"] {
+.status[data-status="lagging"] {
+  border-color: var(--warn);
+  background: linear-gradient(to top, var(--warn) 50%, transparent 50%);
+}
+
+.status[data-status="reconnecting"] {
   border-color: var(--alert);
   background: none;
 }
