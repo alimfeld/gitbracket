@@ -98,9 +98,12 @@ function ship(root) {
     const pre = deployPreflight(root);
     if (pre !== null) { console.error(pre); return resolve(1); }
     const snap = snapshotSite(path.join(root, 'site'));
-    // Cleanup first, then settle — a throw out of rmSync must not hang the daemon.
+    // Cleanup first, then settle. A failed rmSync (EACCES/EBUSY) would otherwise
+    // throw out of the child's 'close' listener with nothing to catch it — a
+    // temp snapshot leaked beats a daemon that dies after a shipped deploy.
     const done = (code) => {
-      try { fs.rmSync(snap, { recursive: true, force: true }); } finally { resolve(code); }
+      try { fs.rmSync(snap, { recursive: true, force: true }); } catch { /* keep the snapshot */ }
+      resolve(code);
     };
     // surge ≥0.43: `surge <path> publish` reads the domain from <path>/CNAME.
     const r = spawn('surge', [snap, 'publish'], { cwd: root, stdio: 'inherit' });
