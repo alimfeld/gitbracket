@@ -1,7 +1,7 @@
 'use strict';
 
-// Players watch the board for their own result: the poll must not add a half-minute to a
-// wait the publish already spent. Overlap on a slow link is deliberate — it lands fresher.
+// Players watch the board for their own result, so the cadence stays short; a poll that fires
+// mid-download is dropped, so a slow link holds one request per page, not one per tick.
 const POLL_MS = 10000;
 const FOLLOW_MS = 60000; // the kiosk re-follows the play on this cadence, data change or not
 // The abort bound for one load — a link's bound, never the poll's cadence.
@@ -69,12 +69,21 @@ function simAimOffset(tjson, now, day) {
 // network failure (null — the poll retries next tick).
 const HTTP_ERR = { httpError: true };
 
+// A load must always settle inside the bound — that one guarantee is what lets the poll
+// keep a single request per page and need no ordering at all. AbortSignal.timeout is the
+// native bound; the timer is the same bound for a browser that lacks it (old Safari).
+const timeoutSignal = ms => {
+  if (AbortSignal.timeout) return AbortSignal.timeout(ms);
+  const c = new AbortController();
+  setTimeout(() => c.abort(), ms); // ponytail: no clearTimeout — the late abort hurts nothing
+  return c.signal;
+};
+
 // 'no-cache' keeps the CDN's 304 byte-saving; a browser that rejects that
 // revalidation (Safari over HTTP/2, WebKit #114738) retries with 'no-store'.
 async function fetchJson(url) {
-  // One abort bound covers both cache modes, so a whole load is a single FETCH_TIMEOUT_MS,
-  // never two; without AbortSignal.timeout it fetches unbounded (old Safari).
-  const signal = AbortSignal.timeout?.(FETCH_TIMEOUT_MS);
+  // One abort bound covers both cache modes, so a whole load is a single FETCH_TIMEOUT_MS, never two.
+  const signal = timeoutSignal(FETCH_TIMEOUT_MS);
   const get = async cache => {
     const res = await fetch(url, { cache, signal });
     if (res.ok) return await res.json();
@@ -85,8 +94,8 @@ async function fetchJson(url) {
   };
   for (const cache of ['no-cache', 'no-store']) {
     try { return await get(cache); }
-    // a timeout is a slow link, not the rejected revalidation the retry exists for
-    catch (e) { if (e?.name === 'TimeoutError') break; }
+    // a bound that fired is a slow link, not the rejected revalidation the retry exists for
+    catch { if (signal.aborted) break; }
   }
   return null; // network failure — the poll retries next tick
 }
@@ -144,14 +153,6 @@ const needsFetch = (r, d) => r.view === 'index' || !(d && d.t && d.t.slug === r.
 // A same-slug response is the same file: a category/view hop supersedes nothing and
 // still feeds the route on screen; only a different tournament drops it.
 const superseded = (route, r) => !route || route.slug !== r.slug;
-
-// A response carries no clock, so the request order is the only ordering an
-// overlapping poll has: a content response older than the newest painted one is an
-// overrun — a later poll already answered for a fresher read.
-const overrun = (seq, paintedSeq) => seq < paintedSeq;
-// A transient failure repaints the snapshot on screen and carries no payload of its
-// own, so it is never ordered against a newer paint — a slow success still lands.
-const carriesData = (r, d) => r.view === 'index' || !!d.httpError || !!d.tjson;
 
 const segmentBar = r => {
   const t = r.view === 'tournament', m = r.view === 'schedule';
@@ -686,8 +687,9 @@ function boot() {
   let lastFollow = 0;  // last minute-tick re-follow — tracks the play even when data never changes
   let pollTimer = null, clockTimer = null;
   let pollOn = false;  // view whose timers should run; false on the index
-  // Monotonic request ids; paintedSeq is the newest the board has shown (overrun).
-  let loadSeq = 0, paintedSeq = 0;
+  // One request per page, by slug: a poll that fires mid-download is dropped, not re-fetched.
+  // A load always settles inside FETCH_TIMEOUT_MS, so the slot can't stay stuck.
+  const live = new Set();
 
   // Every view but the index auto-refreshes while visible; a return fetches immediately.
   const stopPoll = () => {
@@ -728,18 +730,10 @@ function boot() {
   const paint = html => { app.innerHTML = html; lastHtml = ''; };
 
   const load = r => {
-    const seq = ++loadSeq;
+    if (live.has(r.slug)) return; // this page's answer is already on its way
+    live.add(r.slug);
     loadAll(r).then(d => {
       if (superseded(route, r)) return; // a different tournament won the race
-      if (!carriesData(r, d)) { // transient fetch failure — the poll retries next tick
-        // a snapshot repaint, not a payload of its own: lands before the overrun gate
-        // so it can never veto a slower-but-fresher success
-        if (data) render(route, data); // repaint so the stamp can name the failure
-        else paint(MISSING() + `<p>${u('reload')}</p>`);
-        return;
-      }
-      if (overrun(seq, paintedSeq)) return; // a newer request already painted
-      paintedSeq = seq;
       if (r.view === 'index') return d.failed ? paint(FAILED() + `<p>${u('reload')}</p>`) : render(route, d); // the index never 404s the tournament file
       if (d.httpError) {
         // a dead deep link — the file is gone for good; stop the futile poll
@@ -748,15 +742,19 @@ function boot() {
         if (!data) paint(BAD_LINK());
         return;
       }
+      if (!d.tjson) { // transient fetch failure — the poll retries next tick
+        if (data) render(route, data); // repaint so the stamp can name the failure
+        else paint(MISSING() + `<p>${u('reload')}</p>`);
+        return;
+      }
       lastPoll = Date.now(); // the freshness stamp reads the last success, never the sim clock
       render(route, d);
     }, e => {
       // loadAll rejects only on repo data its model can't digest — degrade, never blank
       console.error(e);
       if (superseded(route, r)) return; // an abandoned route's failure can't blank the view that replaced it
-      if (overrun(seq, paintedSeq)) return; // an older failure can't blank a newer board
       if (!data) paint(FAILED());
-    });
+    }).finally(() => live.delete(r.slug));
   };
   const tick = () => load(route);
 
@@ -848,5 +846,5 @@ if (typeof document !== 'undefined') boot();
 
 // CommonJS exports for node tests; the browser ignores these.
 if (typeof module !== 'undefined') {
-  module.exports = { parseRoute, resolveLang, loadAll, needsFetch, superseded, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset, paintBadRoute, pageTitle, isStale, overrun, carriesData, STALE_MS };
+  module.exports = { parseRoute, resolveLang, loadAll, needsFetch, superseded, timeoutSignal, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset, paintBadRoute, pageTitle, isStale, STALE_MS };
 }

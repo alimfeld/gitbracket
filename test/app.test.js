@@ -14,7 +14,7 @@ const assert = require('node:assert/strict');
 const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, matchSlotMs, plRange, koColumn, koOrdinal, schedTime, dayKey, toCats, isDeadTie, winners, placementColumn, catStatus, currentWave } = require('../site/derive.js');
 const { sideLabel, placementLabel, matchLabel, fmtTime, roundName, playerStatus, possibleStages, setLocale } = require('../site/views.js');
 const { I18N } = require('../site/i18n.js');
-const { parseRoute, resolveLang, loadAll, needsFetch, superseded, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset, paintBadRoute, pageTitle, isStale, overrun, carriesData, STALE_MS } = require('../site/app.js');
+const { parseRoute, resolveLang, loadAll, needsFetch, superseded, timeoutSignal, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset, paintBadRoute, pageTitle, isStale, STALE_MS } = require('../site/app.js');
 const { generate } = require('../src/schedule.js');
 const { FIX, catOf, pageData, repoPage, withTjson, text, vals, card, cards, links, lk } = require('./helpers.js');
 const { loadRepo } = require('../src/tools.js');
@@ -246,30 +246,33 @@ test('stale: a slow link lands inside the tolerance, a dead one runs past it', (
 
 test('a timed-out poll does not retry in the other cache mode', async () => {
   const modes = [];
+  const real = AbortSignal.timeout;
+  // a bound that has already fired: the fetch rejects and the signal reads aborted
+  AbortSignal.timeout = () => { const c = new AbortController(); c.abort(); return c.signal; };
   const stub = (url, opts) => {
     modes.push(opts.cache);
     const e = new Error('aborted');
-    e.name = 'TimeoutError'; // AbortSignal.timeout rejects under this name
+    e.name = 'AbortError';
     return Promise.reject(e);
   };
-  await withFetch(stub, async () => {
-    const d = await loadAll({ slug: 'sample', view: 'tournament' });
-    assert.equal(d.tjson, null, 'a timed-out poll yields no data, so the snapshot stays up');
-    assert.deepEqual(modes, ['no-cache'], 'a slow link is not the revalidation bug — one attempt, not two');
-  });
+  try {
+    await withFetch(stub, async () => {
+      const d = await loadAll({ slug: 'sample', view: 'tournament' });
+      assert.equal(d.tjson, null, 'a timed-out poll yields no data, so the snapshot stays up');
+      assert.deepEqual(modes, ['no-cache'], 'a slow link is not the revalidation bug — one attempt, not two');
+    });
+  } finally { AbortSignal.timeout = real; }
 });
 
-test('overrun: a late answer to an older poll is dropped, the newest request paints', () => {
-  assert.equal(overrun(0, 0), false, 'the first response paints');
-  assert.equal(overrun(1, 2), true, 'an early poll answering after a newer one must not paint over it');
-  assert.equal(overrun(3, 2), false, 'a newer response paints');
-});
-
-test('carriesData: a transient failure has no payload, so it never overruns a slower success', () => {
-  assert.equal(carriesData({ view: 'tournament' }, { tjson: null }), false, 'a failed poll repaints the snapshot — it must not veto the success behind it');
-  assert.equal(carriesData({ view: 'tournament' }, { tjson: { name: 'T' } }), true, 'a tournament payload may be ordered');
-  assert.equal(carriesData({ view: 'tournament' }, { httpError: true }), true, 'a gone-for-good 404 is content — a newer paint may outrun it');
-  assert.equal(carriesData({ view: 'index' }, { failed: true }), true, 'the index page is content, failure or not');
+test('timeoutSignal: the bound exists without AbortSignal.timeout too', async () => {
+  const real = AbortSignal.timeout;
+  AbortSignal.timeout = undefined; // old Safari: the native bound is missing
+  try {
+    const signal = timeoutSignal(10);
+    assert.equal(signal.aborted, false, 'the bound has not fired yet');
+    await new Promise(res => signal.addEventListener('abort', res, { once: true }));
+    assert.equal(signal.aborted, true, 'the fallback timer aborts the load, so its slot always frees');
+  } finally { AbortSignal.timeout = real; }
 });
 
 test('superseded: a same-slug hop still feeds the current route, a different slug drops it', () => {
