@@ -14,7 +14,7 @@ const assert = require('node:assert/strict');
 const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, matchSlotMs, plRange, koColumn, koOrdinal, schedTime, dayKey, toCats, isDeadTie, winners, placementColumn, catStatus, currentWave } = require('../site/derive.js');
 const { sideLabel, placementLabel, matchLabel, fmtTime, roundName, playerStatus, possibleStages, setLocale } = require('../site/views.js');
 const { I18N } = require('../site/i18n.js');
-const { parseRoute, resolveLang, loadAll, needsFetch, superseded, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset, paintBadRoute, pageTitle, isStale } = require('../site/app.js');
+const { parseRoute, resolveLang, loadAll, needsFetch, superseded, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset, paintBadRoute, pageTitle, isStale, overrun, carriesData, STALE_MS } = require('../site/app.js');
 const { generate } = require('../src/schedule.js');
 const { FIX, catOf, pageData, repoPage, withTjson, text, vals, card, cards, links, lk } = require('./helpers.js');
 const { loadRepo } = require('../src/tools.js');
@@ -173,10 +173,16 @@ test('parseRoute: fragment routing — bare slug is the tournament page, params 
   assert.equal(parseRoute('#/'), null, 'no slug');
 });
 
+// A stubbed fetch for one test — the real one comes back even on a throw.
+const withFetch = async (stub, fn) => {
+  const orig = global.fetch;
+  global.fetch = stub;
+  try { return await fn(); } finally { global.fetch = orig; }
+};
+
 test('loadAll: a slug route fetches only the tournament file; the index view only the index', async () => {
   const calls = [];
-  const origFetch = global.fetch;
-  global.fetch = url => { // fetchJson passes { cache: 'no-cache' }; the stub ignores it
+  const stub = url => { // fetchJson passes { cache: 'no-cache' }; the stub ignores it
     calls.push(url);
     const body = {
       'tournaments.json': [{ slug: 'sample', name: 'Sample', dates: ['2025-07-14'] }],
@@ -185,7 +191,7 @@ test('loadAll: a slug route fetches only the tournament file; the index view onl
     if (url === 'tournaments/flaky.json') return Promise.resolve({ ok: false, status: 503 });
     return body === null ? Promise.resolve({ ok: false, status: 404 }) : Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
   };
-  try {
+  await withFetch(stub, async () => {
     const slug = await loadAll({ slug: 'sample', view: 'tournament' });
     assert.deepEqual(calls, ['tournaments/sample.json'], 'slug route: one fetch, no index roundtrip');
     assert.equal(slug.t.name, 'Sample', 'name comes from the tournament file');
@@ -201,47 +207,69 @@ test('loadAll: a slug route fetches only the tournament file; the index view onl
     const flaky = await loadAll({ slug: 'flaky', view: 'tournament' });
     assert.equal(flaky.httpError, undefined, 'a 5xx is transient — retryable, never a permanent stop');
     assert.equal(flaky.tjson, null, 'a 5xx returns no data, so the poll keeps trying next tick');
-  } finally {
-    global.fetch = origFetch;
-  }
+  });
 });
 
 test('loadAll: a failed index fetch reports failure, never an empty list', async () => {
-  const origFetch = global.fetch;
-  global.fetch = () => Promise.resolve({ ok: false, status: 503 });
-  try {
+  const stub = () => Promise.resolve({ ok: false, status: 503 });
+  await withFetch(stub, async () => {
     const d = await loadAll({ view: 'index' });
     assert.equal(d.failed, true, 'a 5xx index is a reported failure, not "no tournaments yet"');
     assert.equal(d.index, null, 'no index data rides a failure');
-  } finally {
-    global.fetch = origFetch;
-  }
+  });
 });
 
 test('loadAll recovers from a rejected cache revalidation (Safari 304)', async () => {
   const modes = [];
-  const origFetch = global.fetch;
-  global.fetch = (url, opts) => {
+  const stub = (url, opts) => {
     modes.push(opts.cache);
     // Safari over HTTP/2 rejects the fetch when the CDN answers the revalidation with 304
     if (opts.cache === 'no-cache') return Promise.reject(new TypeError('Load failed'));
     const body = require(FIX('sample', 'tournaments', 'sample.json'));
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
   };
-  try {
+  await withFetch(stub, async () => {
     const d = await loadAll({ slug: 'sample', view: 'tournament' });
     assert(d.tjson, 'data arrives despite the rejected revalidation — the bypassing fetch recovers');
     assert.deepEqual(modes, ['no-cache', 'no-store'], 'the rejected mode is retried once, within the same load');
-  } finally {
-    global.fetch = origFetch;
-  }
+  });
 });
 
-test('stale: one missed poll is tolerated, two running name the reconnect', () => {
-  assert.equal(isStale(0, 0), true, 'no successful fetch yet — stale, never pretend live');
-  assert.equal(isStale(123, 0), false, 'the last fetch succeeded');
-  assert.equal(isStale(123, 1), false, 'a single missed poll does not name a reconnect');
-  assert.equal(isStale(123, 2), true, 'two missed polls running — reconnecting');
+test('stale: a slow link lands inside the tolerance, a dead one runs past it', () => {
+  const now = 1e12;
+  const tol = STALE_MS; // the value the code derives from FETCH_TIMEOUT_MS + 2 * POLL_MS
+  assert.equal(isStale(0, now), true, 'no successful fetch yet — stale, never pretend live');
+  assert.equal(isStale(now - 5000, now), false, 'the last fetch succeeded seconds ago');
+  assert.equal(isStale(now - tol, now), false, 'a link that took the whole attempt still lands inside the tolerance');
+  assert.equal(isStale(now - tol - 1, now), true, 'a millisecond past it — reconnecting');
+});
+
+test('a timed-out poll does not retry in the other cache mode', async () => {
+  const modes = [];
+  const stub = (url, opts) => {
+    modes.push(opts.cache);
+    const e = new Error('aborted');
+    e.name = 'TimeoutError'; // AbortSignal.timeout rejects under this name
+    return Promise.reject(e);
+  };
+  await withFetch(stub, async () => {
+    const d = await loadAll({ slug: 'sample', view: 'tournament' });
+    assert.equal(d.tjson, null, 'a timed-out poll yields no data, so the snapshot stays up');
+    assert.deepEqual(modes, ['no-cache'], 'a slow link is not the revalidation bug — one attempt, not two');
+  });
+});
+
+test('overrun: a late answer to an older poll is dropped, the newest request paints', () => {
+  assert.equal(overrun(0, 0), false, 'the first response paints');
+  assert.equal(overrun(1, 2), true, 'an early poll answering after a newer one must not paint over it');
+  assert.equal(overrun(3, 2), false, 'a newer response paints');
+});
+
+test('carriesData: a transient failure has no payload, so it never overruns a slower success', () => {
+  assert.equal(carriesData({ view: 'tournament' }, { tjson: null }), false, 'a failed poll repaints the snapshot — it must not veto the success behind it');
+  assert.equal(carriesData({ view: 'tournament' }, { tjson: { name: 'T' } }), true, 'a tournament payload may be ordered');
+  assert.equal(carriesData({ view: 'tournament' }, { httpError: true }), true, 'a gone-for-good 404 is content — a newer paint may outrun it');
+  assert.equal(carriesData({ view: 'index' }, { failed: true }), true, 'the index page is content, failure or not');
 });
 
 test('superseded: a same-slug hop still feeds the current route, a different slug drops it', () => {
