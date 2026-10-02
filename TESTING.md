@@ -55,8 +55,8 @@ sheet — six blank cards to an A4 page, cut along the dashed rules.
 Open it in a browser and Print: set **copies to one per match** (a full day of
 70 matches is 12 copies). Every field is pen — court, time, side names, game
 scores; a group match uses Game 1 only, a final uses up to Game 3. `Save as PDF`
-gives a print shop the same sheet. The sheet is 180x260mm, so it clears the
-margins a browser applies when it ignores `@page`.
+gives a print shop the same sheet. The sheet fills the page's printable area (up
+to 180mm wide), so it stays one page without an `@page` margin.
 
 The deploy gate (shared by the admin Publish button and `node gb.js publish`):
 
