@@ -57,6 +57,9 @@ function applyClear(matches, matchId) {
 function applySide(matches, matchId, value) {
   return findMatch(matches, matchId, m => {
     if (!Array.isArray(m.sides) || m.sides.length !== 2) return 'match has no two sides';
+    // si indexes sides: any other property name ("length") throws out of the
+    // daemon's untrusted handler before the validator can refuse the shape.
+    if (value.si !== 0 && value.si !== 1) return `side index must be 0 or 1, got ${JSON.stringify(value.si)}`;
     m.sides[value.si] = value.side;
     return null;
   });

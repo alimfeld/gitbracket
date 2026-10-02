@@ -126,6 +126,24 @@ test('admin HTTP: a non-object edit value is refused with a 400 — never a hang
 });
 
 
+test('admin HTTP: a side index that is not 0/1 is refused — an array-property name never crashes the daemon', async t => {
+  const { tmp, siteRoot, state } = scratchWithRemote();
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  const base = await withServer(t, state);
+  // "length" landed on Array.prototype's length setter and threw RangeError out of
+  // the untrusted handler — an unhandled rejection that killed the match-day daemon.
+  for (const si of ['length', '__proto__', 2, -1, '0', null]) {
+    const value = { si, side: { kind: 'players', ids: ['p1'] } };
+    const r = await postJson(base, '/api/edit', JSON.stringify({ slug: 'sample', verb: 'side', cat: 'md40', matchId: '8', value }));
+    assert.equal(r.status, 400, `si ${JSON.stringify(si)} is refused with a response, not a crash`);
+    assert(/side index must be 0 or 1/.test((await r.json()).error), 'the refusal names the required index');
+  }
+  assert.equal((await fetch(base + '/api/pending')).status, 200, 'the daemon still answers');
+  const m = loadRepo(siteRoot).tournaments.get('sample').tjson.matches.md40.find(x => x.id === 8);
+  assert.equal(m.sides.length, 2, 'the refused edit left the match untouched');
+});
+
+
 test('admin HTTP: a cross-origin POST is refused, a same-origin edit still commits', async t => {
   const { tmp, siteRoot, state } = scratchWithRemote();
   t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
