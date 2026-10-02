@@ -441,17 +441,7 @@ body.venue header {
 
 .kiosk-top h2 {
   margin: 0;
-  padding: calc(var(--space)*2) 0 var(--space);
-}
-
-/* the stamp hugs the h1 — neither its top nor bottom margin may escape the header
-   div and double the gap to the venue titles */
-.kiosk-top p:first-of-type {
-  margin: 0;
-}
-
-.kiosk-top .meta {
-  margin-bottom: 0;
+  padding: 0 0 var(--space);
 }
 
 @keyframes stick {
@@ -493,10 +483,10 @@ body.venue header {
   right: 0;
 }
 
-/* the clock and the trail link ride the title line pinned to the board's right
-   gutter: an opaque plate, so the title passes under it as the board pans sideways,
-   and it never leaves the screen on a board wider than it. Pinning at --gutter (not
-   0) keeps the gap the same whether or not the board overflows */
+/* the clock, the freshness dot, and the trail link ride the title line pinned to the
+   board's right gutter: an opaque plate, so the title passes under them as the board
+   pans sideways, and they never leave the screen on a board wider than it. Pinning at
+   --gutter (not 0) keeps the gap the same whether or not the board overflows */
 .head-right {
   position: sticky;
   right: var(--gutter);
@@ -508,8 +498,8 @@ body.venue header {
   background: var(--page);
 }
 
-/* the clock is the board's control: a bare time on a match day, the offline date
-   otherwise — plain on the title line, so the row never grows for it */
+/* the clock is a readout: a bare time on a match day, the offline date otherwise —
+   plain on the title line, so the row never grows for it */
 #clock {
   font-size: 1.5rem;
   font-weight: 700;
@@ -517,42 +507,30 @@ body.venue header {
   white-space: nowrap;
 }
 
-button#clock {
-  font-family: inherit;
-  color: inherit;
+/* the freshness dot: filled while the last fetch sits inside the tolerance, a ring
+   when it doesn't. One fixed box, so a state change never moves the title row; the
+   word lives in the sr-only text, the timestamp in the hover title */
+.status {
+  flex: none;
+  width: .625rem;
+  height: .625rem;
+  border: 2px solid var(--live);
+  border-radius: 50%;
+  background: var(--live);
+}
+
+.status[data-status="stale"] {
+  border-color: var(--alert);
   background: none;
-  border: 0;
-  padding: 0;
-  cursor: pointer;
 }
 
-/* the running sim's step/stop controls hang under the clock on the stamp band, out
-   of flow so the header keeps its height, pinned with it so a wide board can't hide
-   them. Each button's label prints its key, so the shortcut stays documented on touch */
-.sim-controls {
+/* the dot's state in words, for a screen reader — the color alone is not a signal */
+.sr-only {
   position: absolute;
-  top: 100%;
-  right: 0;
-  width: max-content; /* absolute + right alone clamps to the head-right box and wraps the keys */
-  font-size: 1rem; /* h1's 1.5rem would inflate the 2.75em tap target */
-  display: flex;
-  align-items: center;
-  gap: var(--space);
-  padding: var(--space) 0 var(--space) var(--space);
-  background: var(--page);
-}
-
-.sim-controls button {
-  min-width: 2.75em; /* 44px at the root size — a real tap target */
-  padding: var(--space) calc(var(--space)*1.5);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  touch-action: manipulation; /* one tap steps once, never a double-tap zoom */
-}
-
-.sim-controls button:active {
-  border-color: var(--accent);
-  background: var(--hover);
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
 }
 
 /* status rides the spine — a 3px left edge, the admin board's vocabulary */

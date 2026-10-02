@@ -12,9 +12,9 @@ const STALE_MS = FETCH_TIMEOUT_MS + 2 * POLL_MS;
 // their next slot. ponytail: re-tune on the wall screen beside the viewport floor.
 const CARD_PX = 135;
 
-// The kiosk-top header (h1 + stamp) at base zoom; a taller header clips the day's
-// last card.
-const HEADER_PX = 116;
+// The kiosk-top header (h1 + venue titles) at base zoom; a taller header clips the
+// day's last card. ponytail: measured beside the wall screen — re-tune with the header.
+const HEADER_PX = 79;
 
 // The viewport floor — never scale the board below this many px per minute.
 const MIN_PX_PER_MIN = 1.6;
@@ -54,16 +54,6 @@ const resolveLang = (hash, search) => {
   }
   return 'en';
 };
-
-// The sim clock's aim: a day's first match, or the event's first when no day is
-// given (or that day has none). Pure.
-function simAimOffset(tjson, now, day) {
-  const tz = tjson.timezone || 'UTC';
-  const ts = Object.values(tjson.matches || {}).flat().map(m => m ? schedTime(m, tz) : NaN).filter(Number.isFinite);
-  const onDay = day ? ts.filter(t => dayKey(t, tz) === day) : ts;
-  const aim = onDay.length ? onDay : ts;
-  return aim.length ? Math.min(...aim) - now : null;
-}
 
 // A dead deep link (httpError — permanent, stop polling) versus a transient
 // network failure (null — the poll retries next tick).
@@ -208,18 +198,31 @@ const catNav = (slug, ctxs, route) => {
 };
 
 // lastPoll moves only on a success, so silence past the tolerance names the reconnect;
-// nowMs is real time, never the sim's. Before the first success the stamp reads stale.
+// nowMs is real time. Before the first success the stamp reads stale.
 const isStale = (lastFetchMs, nowMs) => !lastFetchMs || nowMs - lastFetchMs > STALE_MS;
 
-// The polling views' shared stamp; a changed file flashes the line, a failing poll names its state.
+// The polling views' shared freshness read; a changed file flashes the status.
 // Module-scope so the renderers stay directly testable — not boot's closure.
 let stampSnap = null; // { slug, hash } — the change detector behind the flash
-function updateStamp(data, tz) {
+function pollState(data, tz) {
   const hash = JSON.stringify(data.tjson);
   const flash = !!stampSnap && stampSnap.slug === data.t.slug && stampSnap.hash !== hash;
   stampSnap = { slug: data.t.slug, hash };
-  const stale = isStale(lastPoll, Date.now());
-  const when = lastPoll ? fmtTime(lastPoll, tz) : '—';
+  return { flash, stale: isStale(lastPoll, Date.now()), when: lastPoll ? fmtTime(lastPoll, tz) : '—' };
+}
+
+// The board's freshness dot: filled while the last fetch sits inside the tolerance, a
+// ring when it doesn't. A fixed box, so a state change never shifts the title row; the
+// word is sr-only and the timestamp a hover title.
+function statusDot(data, tz) {
+  const { flash, stale, when } = pollState(data, tz);
+  const word = u(stale ? 'reconnect' : 'live');
+  return `<span class="status" role="status" data-status="${stale ? 'stale' : 'live'}" title="${esc(u('updated', { time: when }))}"${flash ? ' data-flash' : ''}><span class="sr-only">${esc(word)}</span></span>`;
+}
+
+// The non-kiosk views' stamp — the words that say when, and whether.
+function updateStamp(data, tz) {
+  const { flash, stale, when } = pollState(data, tz);
   const stamp = `<time datetime="${lastPoll ? new Date(lastPoll).toISOString() : ''}">${u('updated', { time: when })}</time>${stale ? ` · <span role="status">${esc(u('reconnect'))}</span>` : ''}`;
   return `<p class="meta"${flash ? ' data-flash' : ''}${stale ? ' data-status="stale"' : ''}>${stamp}</p>`;
 }
@@ -419,7 +422,7 @@ function sideRow(m, ctx, i) {
   return `<div class="side"${w === i ? ' data-win' : ''}><span>${esc(sideLabel(side, ctx))}</span>${w === i ? `<span class="winmark" aria-label="${u('won')}">✓</span>` : ''}<span class="score">${scoreCells(m, i, ctx)}</span></div>`;
 }
 
-function renderVenue(route, data, now, simOn) {
+function renderVenue(route, data, now) {
   if (!data.tjson) return MISSING();
   const v = route.venue;
   const rows = [];
@@ -446,31 +449,19 @@ function renderVenue(route, data, now, simOn) {
   const declared = (Array.isArray(data.tjson.venues) ? data.tjson.venues : []).filter(venue => venue && typeof venue === 'object');
   const venueNames = new Map(declared.map(v => [v.id, v.name])); // the board's own map — no reach into a category ctx
   const cols = declared.map(v => v.id).filter(id => open.some(r => r.m.venue === id));
-  // the clock is the board's control: a bare time while it plays the schedule (a
-  // match day or the running sim), the shown day's date otherwise — tap the date to
-  // sim that day; the sim's own controls step and stop it (the stamp carries the
-  // real last-fetch; only its stale state is a live region)
+  // the clock is a readout, never a control: a bare time while the board plays today,
+  // the shown day's date otherwise
   const dayText = fmtRange([shownDay]); // null when the day or tz is unreadable
   const time = esc(fmtTime(now, tz));
-  const clock = simOn || isMatchDay
+  const clock = isMatchDay
     ? `<time id="clock" data-mode="time">${time}</time>`
     : dayText
-      ? `<button type="button" id="clock" data-sim-toggle data-mode="date" data-day="${esc(shownDay)}">${esc(dayText)}</button>`
+      ? `<time id="clock" data-mode="date" datetime="${esc(shownDay)}">${esc(dayText)}</time>`
       : '';
-  // ▼ later (j), ▲ earlier (k), ✕ exit (Esc) — each button prints its key, so the
-  // shortcut stays documented where a hover never fires
-  const controls = simOn
-    ? `<span class="sim-controls">`
-      + `<button type="button" data-sim-step="1" aria-label="${u('sim-later')}">▼ j</button>`
-      + `<button type="button" data-sim-step="-1" aria-label="${u('sim-earlier')}">▲ k</button>`
-      + `<button type="button" data-sim-toggle aria-label="${u('sim-exit')}">✕ Esc</button>`
-      + `</span>`
-    : '';
-  // the title carries the same trail link as the tournament page. The clock and that
-  // link ride the title line pinned to the viewport's right edge, so both stay put
-  // while a wider-than-screen board pans sideways; the sim controls hang under the
-  // clock on the stamp band, out of flow so the header keeps its height
-  const header = `<header><h1><span class="name">${esc(data.t.name)}</span><span class="head-right">${HOME_LINK()}${clock}${controls}</span></h1>${updateStamp(data, tz)}</header>`;
+  // the title carries the same trail link as the tournament page. The clock, the
+  // freshness dot, and that link ride the title line pinned to the viewport's right
+  // edge, so all three stay put while a wider-than-screen board pans sideways
+  const header = `<header><h1><span class="name">${esc(data.t.name)}</span><span class="head-right">${HOME_LINK()}${clock}${statusDot(data, tz)}</span></h1></header>`;
   // header and venue titles stick as one block, aligned by the shared --cols track
   const top = `<div class="kiosk-top" style="--cols: ${cols.length}">${header}${cols.map(id => `<h2>${esc(venueNames.get(id) || id)}</h2>`).join('')}</div>`;
   if (!cols.length) return top + `<p>${u('nothing')}</p>`;
@@ -525,7 +516,7 @@ function renderVenue(route, data, now, simOn) {
 const multiDay = ctxs => schedDays(ctxs.flatMap(c => c.matches), (ctxs[0] && ctxs[0].tz) || 'UTC').length > 1;
 
 
-// The last successful fetch, in real time — never the sim clock.
+// The last successful fetch, in real time.
 let lastPoll = 0;
 
 // The round a player could reach once the pools decide; the chip carries the rank
@@ -618,37 +609,6 @@ function playerSchedule(route, data, p) {
   return parts.join('');
 }
 
-// localStorage can throw (private mode, a sandboxed frame); the sim clock is a
-// view, so a denied store ends the sim rather than the page.
-const store = {
-  get: k => { try { return localStorage.getItem(k); } catch { return null; } },
-  set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* store unavailable — the sim just won't persist */ } },
-  clear: k => { try { localStorage.removeItem(k); } catch { /* nothing to clear */ } },
-};
-
-// The sim clock's state — the board's clock button toggles it, j/k step it, Esc ends it.
-function mountSimClock({ tjsonOf, onChange }) {
-  const SIM_KEY = 'gitbracket.sim.offset';
-  const simOffset = () => Number(store.get(SIM_KEY)) || 0;
-  const simOn = () => store.get(SIM_KEY) !== null;
-  const now = () => Date.now() + simOffset();
-  const STEP_MS = 5 * 60000; // one j/k press, one control tap
-  // a clock change re-renders the board — statuses and the now-line recompute
-  const step = dir => { store.set(SIM_KEY, String(simOffset() + dir * STEP_MS)); onChange(); };
-  const toggle = day => {
-    if (simOn()) store.clear(SIM_KEY);
-    else store.set(SIM_KEY, String(simAimOffset(tjsonOf() || {}, Date.now(), day) || 0));
-    onChange();
-  };
-  window.addEventListener('keydown', e => {
-    if (!simOn() || !document.body.classList.contains('venue')) return; // the keys move the board's clock, and only where it is
-    if (e.key === 'j') { e.preventDefault(); step(1); } // j drops the now line later, k rewinds it
-    else if (e.key === 'k') { e.preventDefault(); step(-1); }
-    else if (e.key === 'Escape') { e.preventDefault(); toggle(); }
-  });
-  return { simOn, now, step, toggle };
-}
-
 // Browser-tab title per view: the tournament tab is the event name.
 function pageTitle(r, d) {
   if (r.view === 'index' || !d.t) return 'Bracket';
@@ -672,14 +632,7 @@ function boot() {
   setLocale(lang);
   document.documentElement.lang = lang;
 
-  // The sim clock drives now() and the venue board's clock controls.
-  const sim = mountSimClock({
-    tjsonOf: () => data && data.tjson,
-    onChange: () => { if (data && route) render(route, data); },
-  });
-  const now = sim.now;
-
-  const renderers = { index: renderIndex, tournament: renderTournament, venues: (r, d) => renderVenue(r, d, now(), sim.simOn()), schedule: renderPlayer };
+  const renderers = { index: renderIndex, tournament: renderTournament, venues: (r, d) => renderVenue(r, d, Date.now()), schedule: renderPlayer };
   let route = null;    // current fragment route — the poll reads it each tick
   let data = null;     // last good snapshot — a failed poll keeps the board up
   let lastHtml = '';   // skip re-render when nothing changed (keeps selection/focus)
@@ -702,12 +655,12 @@ function boot() {
     if (!pollTimer) pollTimer = setInterval(tick, POLL_MS);
     if (pollOn === 'venues') {
       if (clockTimer) return; // already ticking — a nav must not re-seed the follow
-      lastFollow = now(); // the first re-follow is +FOLLOW_MS out, never 1s in
+      lastFollow = Date.now(); // the first re-follow is +FOLLOW_MS out, never 1s in
       // The clock ticks between renders; the timer updates it in place, looking
       // the element up fresh since a poll or follow may have rebuilt it. A date
       // stays static — only a time moves.
       clockTimer = setInterval(() => {
-        const t = now();
+        const t = Date.now();
         const el = document.getElementById('clock');
         if (el && el.dataset.mode === 'time') {
           el.textContent = fmtTime(t, (data && data.tjson && data.tjson.timezone) || 'UTC');
@@ -747,7 +700,7 @@ function boot() {
         else paint(MISSING() + `<p>${u('reload')}</p>`);
         return;
       }
-      lastPoll = Date.now(); // the freshness stamp reads the last success, never the sim clock
+      lastPoll = Date.now(); // the freshness read keys off the last success
       render(route, d);
     }, e => {
       // loadAll rejects only on repo data its model can't digest — degrade, never blank
@@ -823,10 +776,6 @@ function boot() {
     });
   };
   document.addEventListener('click', e => {
-    const stepBtn = e.target.closest('button[data-sim-step]');
-    if (stepBtn) return sim.step(Number(stepBtn.dataset.simStep));
-    const toggle = e.target.closest('button[data-sim-toggle]');
-    if (toggle) return sim.toggle(toggle.dataset.day);
     const a = e.target.closest('a[data-jump]');
     if (!a) return;
     e.preventDefault();
@@ -846,5 +795,5 @@ if (typeof document !== 'undefined') boot();
 
 // CommonJS exports for node tests; the browser ignores these.
 if (typeof module !== 'undefined') {
-  module.exports = { parseRoute, resolveLang, loadAll, needsFetch, superseded, timeoutSignal, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset, paintBadRoute, pageTitle, isStale, STALE_MS };
+  module.exports = { parseRoute, resolveLang, loadAll, needsFetch, superseded, timeoutSignal, renderIndex, renderTournament, renderVenue, renderPlayer, paintBadRoute, pageTitle, isStale, STALE_MS };
 }

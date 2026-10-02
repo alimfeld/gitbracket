@@ -81,7 +81,7 @@ function main(root, args) {
   console.log(`sim: ${name} — the real pipeline: commits, pushes, and publish to a scratch site`);
   console.log('  start the daemon yourself: node gb.js admin (every edit validates and commits)');
   console.log(`  publish from it ships ${cname} (never the production domain: the gate proves it from origin/main)`);
-  console.log(`  kiosk: after publishing, open https://${cname}/ — on a venue board, the clock chip's date starts the sim clock`);
+  console.log(`  kiosk: after publishing, open https://${cname}/`);
   console.log(`  done: node gb.js sim --teardown tears ${cname} down and deletes ${name}`);
   return 0;
 }

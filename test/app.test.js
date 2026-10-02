@@ -14,7 +14,7 @@ const assert = require('node:assert/strict');
 const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, matchSlotMs, plRange, koColumn, koOrdinal, schedTime, dayKey, toCats, isDeadTie, winners, placementColumn, catStatus, currentWave } = require('../site/derive.js');
 const { sideLabel, placementLabel, matchLabel, fmtTime, roundName, playerStatus, possibleStages, setLocale } = require('../site/views.js');
 const { I18N } = require('../site/i18n.js');
-const { parseRoute, resolveLang, loadAll, needsFetch, superseded, timeoutSignal, renderIndex, renderTournament, renderVenue, renderPlayer, simAimOffset, paintBadRoute, pageTitle, isStale, STALE_MS } = require('../site/app.js');
+const { parseRoute, resolveLang, loadAll, needsFetch, superseded, timeoutSignal, renderIndex, renderTournament, renderVenue, renderPlayer, paintBadRoute, pageTitle, isStale, STALE_MS } = require('../site/app.js');
 const { generate } = require('../src/schedule.js');
 const { FIX, catOf, pageData, repoPage, withTjson, text, vals, card, cards, links, lk } = require('./helpers.js');
 const { loadRepo } = require('../src/tools.js');
@@ -27,16 +27,21 @@ const bareCat = { id: 't', name: 'T', bestOf: { groups: 1, knockout: 1 }, slotMi
 const bare = ({ venues = [], players = [], matches = {}, categories = [bareCat], ...rest } = {}) =>
   ({ name: 'Bad', location: 'Hall', timezone: 'UTC', venues, players, categories, matches, ...rest });
 
-test('simAimOffset: the sim clock aims at a day\'s first match, else the event\'s', () => {
-  const tjson = { timezone: 'UTC', matches: { md: [
-    { id: 1, scheduled: '2026-05-02T09:00:00' },
-    { id: 2, scheduled: '2026-05-03T09:00:00' } ] } };
-  const now = Date.parse('2026-05-02T06:00:00Z');
-  assert.equal(simAimOffset(tjson, now), Date.parse('2026-05-02T09:00:00Z') - now, 'no day given — the offset lands on the earliest scheduled match');
-  assert.equal(simAimOffset(tjson, now, '2026-05-03'), Date.parse('2026-05-03T09:00:00Z') - now, 'a day lands on its own first match');
-  assert.equal(simAimOffset(tjson, now, '2026-05-04'), Date.parse('2026-05-02T09:00:00Z') - now, 'a day with no matches falls back to the event');
-  assert.equal(simAimOffset({ timezone: 'UTC', matches: {} }, now), null, 'nothing scheduled — no aim');
-});
+// The polling views share one change detector; each renders its cue in its own place.
+const flashCue = (render, view, slug, args = []) => {
+  const tjson = () => ({
+    name: 'Cue', location: 'Hall', timezone: 'UTC', venues: [{ id: 'c1', name: 'Court 1' }],
+    players: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }],
+    categories: [{ id: 't', name: 'T', bestOf: { groups: 1, knockout: 1 }, slotMinutes: { groups: 30, knockout: 30 } }],
+    matches: { t: [{ id: 1, pool: 'A', scheduled: '2026-05-02T09:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p1'] }, { kind: 'players', ids: ['p2'] }] }] },
+  });
+  const draw = t => render({ slug, view }, pageData(t, slug), ...args);
+  assert(!draw(tjson()).includes('data-flash'), 'the first render is a baseline, not a change');
+  assert(!draw(tjson()).includes('data-flash'), 'an unchanged poll stays quiet');
+  const t2 = tjson();
+  t2.matches.t[0].result = { status: 'played', winner: 'a' };
+  assert(draw(t2).includes('data-flash'), 'a poll that changed the file flashes the cue');
+};
 
 test('schedTime: an invalid timezone reads as unparseable — never throws', () => {
   assert.equal(schedTime({ scheduled: '2026-05-02T09:00:00' }, 'Mars/Olympus'), null, 'a bad tz is a parse failure, not a crash');
@@ -925,17 +930,18 @@ test('multi-day kiosk: one day at a time, previewing day one early, falling back
   assert(!fri.includes('id="now-line"') && !mon.includes('id="now-line"'), 'off match day there is no now-line — the board never jumps to a day edge');
 });
 
-test('kiosk clock: a match day shows a bare time; off day the shown date, the sim entry point', () => {
+test('kiosk clock: a match day shows a bare time, off day the shown date as a readout', () => {
   const repo = loadRepo(FIX('multiday'));
   const data = pageData(repo.tournaments.get('multiday').tjson, 'multiday', repo.index);
   const rt = { slug: 'multiday', view: 'venues' };
   const mon = renderVenue(rt, data, Date.parse('2026-07-13T12:00:00-04:00')); // after the last day: the board falls back to Sunday
-  assert(mon.includes('id="clock" data-sim-toggle data-mode="date"') && mon.includes('data-day="2026-07-12"') && !mon.includes('sim-controls'), 'off match day the clock is the shown day, clickable, with no sim controls');
+  assert(mon.includes('<time id="clock" data-mode="date" datetime="2026-07-12"'), 'off match day the clock is the shown day, a plain readout');
   const sat = renderVenue(rt, data, Date.parse('2026-07-11T12:00:00-04:00'));
-  assert(sat.includes('<time id="clock" data-mode="time"') && !sat.includes('sim-controls'), 'a match day shows a plain time and no sim controls');
-  const simmed = renderVenue(rt, data, Date.parse('2026-07-13T12:00:00-04:00'), true);
-  assert(simmed.includes('<time id="clock" data-mode="time"') && !simmed.includes('id="clock" data-sim-toggle'), 'while sim runs the time is a plain readout, never the stop control');
-  assert(simmed.includes('data-sim-step="1"') && simmed.includes('data-sim-step="-1"') && simmed.includes('data-sim-toggle'), 'the running sim carries step-later, step-earlier, and exit controls');
+  assert(sat.includes('<time id="clock" data-mode="time"'), 'a match day shows a plain time');
+});
+
+test('kiosk: a poll that changed the file flashes the status dot', () => {
+  flashCue(renderVenue, 'venues', 'kiosk-cue', [Date.parse('2026-05-02T09:30:00Z')]);
 });
 
 test('kiosk: the board title links back to the tournaments index', () => {
@@ -958,19 +964,8 @@ test('kiosk: the header stamp never pretends live without a successful fetch', (
   assert(open.includes('role="status"'), 'a11y: the stale state is its own live region, not the counting time');
 });
 
-test('tournament views: a poll that changed the file flashes the stamp, an unchanged one stays quiet', () => {
-  const tjson = () => ({
-    name: 'Cue', location: 'Hall', timezone: 'UTC', venues: [{ id: 'c1', name: 'Court 1' }],
-    players: [{ id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' }],
-    categories: [{ id: 't', name: 'T', bestOf: { groups: 1, knockout: 1 }, slotMinutes: { groups: 30, knockout: 30 } }],
-    matches: { t: [{ id: 1, pool: 'A', scheduled: '2026-05-02T09:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p1'] }, { kind: 'players', ids: ['p2'] }] }] },
-  });
-  const rt = { slug: 'updated-cue', view: 'tournament' };
-  assert(!renderTournament(rt, pageData(tjson(), 'updated-cue')).includes('data-flash'), 'the first render is a baseline, not a change');
-  assert(!renderTournament(rt, pageData(tjson(), 'updated-cue')).includes('data-flash'), 'an unchanged poll stays quiet');
-  const t2 = tjson();
-  t2.matches.t[0].result = { status: 'played', winner: 'a' };
-  assert(renderTournament(rt, pageData(t2, 'updated-cue')).includes('data-flash'), 'a poll that changed the file flashes the stamp');
+test('tournament views: a poll that changed the file flashes the stamp', () => {
+  flashCue(renderTournament, 'tournament', 'updated-cue');
 });
 
 test('routing: cat and player ride along between tournament and schedule — applied on their home view only', () => {

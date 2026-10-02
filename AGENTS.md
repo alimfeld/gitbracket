@@ -70,8 +70,8 @@ implement them; treat them as rules, not style.
   safe because one director ships, everyone else pulls and reviews. Sim branches
   (`gb.js sim`) practice the whole pipeline and are never merged; `--teardown` is
   the only exit. The venue board is public — off match day its clock shows the
-  date, and that date is a deliberate control, practice mode's entry point;
-  don't gate or remove it.
+  date, a plain readout; its status dot is the board's only freshness signal, so
+  never let a frozen board read as live.
 - **Every editor edit commits itself; only the ship is gated.** An edit
   passes the syntactic check — unparseable or unreferenceable data blocks it
   — then writes and commits. Semantic conflicts (data that parses but

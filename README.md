@@ -221,7 +221,7 @@ spec — the single source of the schedule:
   `site/`: from `main` to the production domain (proved equal to
   `origin/main`'s CNAME), from a branch only to its own scratch domain.
 - `node gb.js sim` — practices the whole pipeline on a `sim/<rand>` branch
-  with a scratch surge domain and a kiosk sim clock; `--teardown` undoes it.
+  with a scratch surge domain; `--teardown` undoes it.
   Sim branches are practice, never merged.
 
 Commands live as modules under `src/`; `site/` stays the shipping surface.
