@@ -447,10 +447,11 @@ function renderVenue(route, data, now) {
     : dayText
       ? `<time id="clock" data-mode="date" datetime="${esc(shownDay)}">${esc(dayText)}</time>`
       : '';
-  // the title carries the same trail link as the tournament page. The clock, the
-  // freshness dot, and that link ride the title line pinned to the viewport's right
-  // edge, so all three stay put while a wider-than-screen board pans sideways
-  const header = `<header><h1><span class="name">${esc(data.t.name)}</span><span class="head-right">${HOME_LINK()}${clock}${statusDot(data)}</span></h1></header>`;
+  // the title carries the same trail link as the tournament page. The clock, that
+  // link, and the freshness dot ride the title line pinned to the viewport's right
+  // edge, so all three stay put while a wider-than-screen board pans sideways — and
+  // the link sits against the dot, as on every other polling view
+  const header = `<header><h1><span class="name">${esc(data.t.name)}</span><span class="head-right">${clock}${HOME_LINK()}${statusDot(data)}</span></h1></header>`;
   // header and venue titles stick as one block, aligned by the shared --cols track
   const top = `<div class="kiosk-top" style="--cols: ${cols.length}">${header}${cols.map(id => `<h2>${esc(venueNames.get(id) || id)}</h2>`).join('')}</div>`;
   if (!cols.length) return top + `<p>${u('nothing')}</p>`;
