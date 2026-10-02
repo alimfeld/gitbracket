@@ -8,7 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const { isDone, resolveSide, bestOfOf, matchesOf } = require('../site/derive.js');
 const { writeTournament, tournamentText, catCtx, winTarget, reachedWinner, plainObject, git, daysOf } = require('./tools.js');
-const { validateRepo } = require('./validate.js');
+const { validateRepo, filterSlug } = require('./validate.js');
 
 // ---------- pure logic (tests drive these on fixture repos) ----------
 
@@ -123,12 +123,16 @@ function writeEdit(siteRoot, repo, slug, catId, apply) {
     restore();
     return { err: `refused: this edit changes the tournament's scheduled days (${fmtDays(beforeDays)} → ${fmtDays(afterDays)}) — the index dates are fixed once the schedule is published and no edit follows them; keep the match on a published day, or change the days by hand-editing the file and its tournaments.json entry together` };
   }
-  // The validator sees exactly what writeTournament will write.
+  // The validator sees exactly what writeTournament will write. Only the edited
+  // tournament's syntactic errors block the write: the admin is per-slug, so a
+  // sibling file's shape error must not freeze scoring here (publish still gates
+  // the whole repo).
   const { errs, conflicts } = validateRepo(repo);
-  if (errs.length) {
+  const slugErrs = filterSlug(errs, slug);
+  if (slugErrs.length) {
     // Nothing was written — writeTournament runs only past this gate.
     restore();
-    return { errs };
+    return { errs: slugErrs };
   }
   // byte equality is data equality — "21:19" for a stored "21-9" lands on the
   // same bytes, as does a re-scored identical game list

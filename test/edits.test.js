@@ -350,3 +350,28 @@ test('editor applyDelete: a still-referenced match dangles (syntactic gate refus
   assert.equal(errs.length + conflicts.length, 0, 'detached delete lands clean: ' + [...errs, ...conflicts].join('; '));
   assert.equal(editor.editDetail('delete', { id: 7 }, {}, null), 'deleted', 'the delete detail reads in history');
 });
+
+test('editor writeEdit: a sibling tournament\'s syntactic error never blocks the edited one — the gate is per-slug', () => {
+  const { tmp, dataRoot } = scratchSite('sample');
+  try {
+    // A second, broken tournament in the same repo (the admin's real shape is many slugs)
+    const broken = JSON.parse(fs.readFileSync(path.join(FIX('bad-unknown-venue'), 'tournaments', 'bad-unknown-venue.json'), 'utf8'));
+    fs.writeFileSync(path.join(dataRoot, 'tournaments', 'broken.json'), JSON.stringify(broken, null, 2) + '\n');
+    const index = JSON.parse(fs.readFileSync(path.join(dataRoot, 'tournaments.json'), 'utf8'));
+    index.push({ slug: 'broken', name: broken.name, location: broken.location });
+    fs.writeFileSync(path.join(dataRoot, 'tournaments.json'), JSON.stringify(index, null, 2) + '\n');
+
+    const repo = loadRepo(dataRoot);
+    assert(validateRepo(repo).errs.some(e => /broken\.json/.test(e)), 'the sibling really is syntactically broken');
+
+    const r = editor.writeEdit(dataRoot, repo, 'sample', 'md40', (ms, ctx) => editor.applyScore(ms, '8', [{ a: 11, b: 5 }, { a: 11, b: 3 }], ctx));
+    assert(!r.err && !r.errs, `the healthy tournament still edits: ${r.err || (r.errs || []).join('; ')}`);
+    assert(r.file, 'the edit wrote its file');
+    assert(validateRepo(loadRepo(dataRoot)).errs.some(e => /broken\.json/.test(e)), 'the sibling error rides along — publish still gates it');
+
+    const bad = editor.writeEdit(dataRoot, repo, 'sample', 'md40', ms => editor.applySide(ms, '8', { si: 0, side: { kind: 'players', ids: ['nobody'] } }));
+    assert(bad.errs && bad.errs.some(e => /sample\.json/.test(e)), 'the edited tournament\'s own syntactic error still refuses');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
