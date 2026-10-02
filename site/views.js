@@ -315,8 +315,9 @@ function playerStatus(ctx, pid) {
     const row = rows.find(r => r.m.pool !== undefined);
     const std = row && poolStandings(ctx, row.m.pool, true);
     const i = std ? std.findIndex(x => x.ids.has(pid)) : -1;
-    if (i < 0 || !poolDecided(std) || isDeadTie(std, i + 1)) return '';
-    return t(LOCALE, 'slot-pool', { rank: ordNum(poolRanks(std)[i]), pool: row.m.pool });
+    if (i < 0 || !poolDecided(std)) return '';
+    const rank = ordNum(poolRanks(std)[i]);
+    return t(LOCALE, isDeadTie(std, i + 1) ? 'slot-pool-tie' : 'slot-pool', { rank, pool: row.m.pool });
   };
   const band = () => { const b = playerBand(ctx, rows); return b ? rankRange(b) : ''; };
   const undone = rows.filter(r => !isDone(r.m));
@@ -349,7 +350,11 @@ function playerStatus(ctx, pid) {
   const b = band();
   if (b) return b;
   const poolsDone = ctx.matches.filter(m => m.pool !== undefined).every(isDone);
-  return poolsDone ? withRank(t(LOCALE, 'out-groups'), pool()) : withRank(t(LOCALE, 'in-groups'), pool());
+  // A dead tie seats nobody: if the tie still owns a knockout seat the entry is
+  // pending, not lost. A decided rank below the cutoff owns no seat — a real exit.
+  const pending = rows.every(r => r.m.pool !== undefined) && possibleStageFacts(ctx, pid).stages.length > 0;
+  const word = poolsDone && !pending ? 'out-groups' : 'in-groups';
+  return withRank(t(LOCALE, word), pool());
 }
 
 if (typeof module !== 'undefined') {

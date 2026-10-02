@@ -483,6 +483,29 @@ test('playerStatus: a capped classification band is the finish for both semi res
   assert(playerStatus(capped, 'p6') === '5th–8th', 'a lost 5-8 semi finishes the same band — no decider separates it');
 });
 
+test('playerStatus: a dead pool tie is a pending entry, not a group exit', () => {
+  // 4-team pool, p4 3-0 and p1/p2/p3 a 1-2 cycle with equal differentials — the
+  // ladder calls 2nd–4th a dead tie, so no knockout slot resolves for them. They
+  // are not out: their seats are still owned by the tie.
+  const ctx = catOf('blocked-tie', 't');
+  assert(playerStatus(ctx, 'p4') === 'In the Semifinals', 'the decided pool winner keeps its resolved slot');
+  for (const p of ['p1', 'p2', 'p3']) {
+    const s = playerStatus(ctx, p);
+    assert(!s.includes('Out in groups'), `${p} is not eliminated while its knockout seat is unresolved`);
+    assert(s.includes('tie not broken'), `${p} names the unresolved tie`);
+  }
+});
+
+test('playerStatus: a settled knockout row keeps a player out, never pending', () => {
+  // A void semi seats nobody but still owns p4's row: the final and bronze it
+  // opens are reachable, not p4's. Reading reachable rounds as a seat would
+  // call a settled exit a pending entry.
+  const tjson = require(FIX('blocked-tie', 'tournaments', 'blocked-tie.json'));
+  const matches = catOf('blocked-tie', 't').matches.map(m => m.id === 7 ? { ...m, result: { status: 'void' } } : m);
+  const ctx = makeCat({ meta: tjson.categories[0], matches }, tjson);
+  assert(playerStatus(ctx, 'p4') === 'Out in groups — 1st in Pool A', 'the voided semi owns the row, so p4 is out, not a pending entry');
+});
+
 test('playerMatches: only matches the player is actually in, not potential slots', () => {
   const md = catOf('sample', 'md40');
   const ids = pid => playerMatches(md, pid).map(r => r.m.id).sort();
