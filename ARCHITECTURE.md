@@ -51,7 +51,7 @@ public function.
 |---|---|---|---|
 | `site/derive.js` | raw facts → derived facts: categories, standings, slot resolution, bracket shape, placement bands, wall-clock instants | — (nothing) | call `t`/`esc`, hold `LOCALE`, `require` anything |
 | `site/views.js` | facts → human words and markup: labels, status lines, formatting | `derive`, `i18n` | be imported by any node tool |
-| `site/i18n.js` | word bundles as data | — | contain logic |
+| `site/i18n.js` | word bundles as data, plus the `t`/`bundle` substitution mechanism and the per-locale formatters the bundles name (`fmt`) | — | hold markup or domain facts; make a word rule a code branch instead of bundle data |
 | `site/app.js` | public + kiosk rendering, routing, polling | `derive`, `views`, `i18n` | |
 | `src/admin/app.js` | admin edit UI (browser, served loopback-only) | `derive`, `views`, `i18n` | be published |
 | `src/admin.js` | daemon: serve the admin page + site modules, edit/publish API | `derive`, `edits`, `publish` | import `views` |
