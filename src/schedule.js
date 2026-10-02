@@ -386,8 +386,14 @@ function scheduleMatches(categories, tz, slotCfgOf, courtsOf, eventDate, blockSt
     const place = (m, t, taken) => {
       const slotMs = matchSlotMs(m, { slotMinutes: catSlots });
       const venue = courtAt(t, slotMs, taken, st[pick].courts);
+      const scheduled = `${dayKey(t, tz)}T${wallHM(t, tz)}:00`;
+      // Wall-clock data can only express the first occurrence of a repeated local
+      // hour; an instant in the fold would read back an hour earlier.
+      if (schedTime({ scheduled }, tz) !== t) {
+        throw new Error(`spec: category ${cat}: a match lands in the repeated local hour of the fall-back transition (${scheduled}) — wall-clock data can't represent it; move the block start or slot length`);
+      }
       m.venue = venue;
-      m.scheduled = `${dayKey(t, tz)}T${wallHM(t, tz)}:00`;
+      m.scheduled = scheduled;
       courtUse.set(venue, [...(courtUse.get(venue) ?? []), { start: t, end: t + slotMs }]);
       endOf.get(pick).set(m.id, t + slotMs);
       if (m.pool !== undefined) poolDone.get(pick).set(m.pool, Math.max(poolDone.get(pick).get(m.pool) ?? start, t + slotMs));

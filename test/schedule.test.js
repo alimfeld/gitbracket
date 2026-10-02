@@ -84,6 +84,21 @@ test('schedule blocks preserve wall time across DST and reject skipped local tim
   assert.throws(() => generate({ ...spec, blocks: { md: '02:30' } }), /not a real local time/, 'a skipped spring-forward time is rejected');
 });
 
+test('a schedule entering the fall-back fold is rejected, never silently shifted', () => {
+  const spec = {
+    ...MINI,
+    date: '2026-10-25',
+    poolSize: 4,
+    venues: { 'court-1': 'Court 1' },
+    blocks: { md: '01:30' },
+    categories: [{ ...MINI.categories[0], knockout: false }],
+    teams: { md: MINI.teams.md.slice(0, 4) },
+  };
+  assert.throws(() => generate(spec), /repeated local hour/, 'a match in the repeated local hour cannot be written as wall time');
+  const ok = generate({ ...spec, blocks: { md: '00:00' }, categories: [{ ...spec.categories[0], slotMinutes: 120 }] });
+  assert.equal(ok.matches.md[1].scheduled, '2026-10-25T02:00:00', 'a fold-crossing schedule still generates, and the repeated hour is written at its first occurrence');
+});
+
 test('spec guards reject bad input fast', () => {
   assert.throws(() => generate({ ...MINI, poolSize: 1 }), /poolSize/);
   assert.throws(() => generate({ ...MINI, date: '2026-02-30' }), /not a real calendar date/);
