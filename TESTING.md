@@ -47,6 +47,18 @@ happens on `main`.
 reschedule, undo/redo, publish. The daemon reads `site/` at startup, so restart
 it after edits made in another terminal.
 
+## Printing the match cards
+
+Match day runs on paper too: each match gets a card the players fill in, and the
+operator types its scores into the admin. `print/match-card.html` is a static
+sheet — six blank cards to an A4 page, cut along the dashed rules.
+
+Open it in a browser and Print: set **copies to one per match** (a full day of
+70 matches is 12 copies). Every field is pen — court, time, side names, game
+scores; a group match uses Game 1 only, a final uses up to Game 3. `Save as PDF`
+gives a print shop the same sheet. The sheet is 180x260mm, so it clears the
+margins a browser applies when it ignores `@page`.
+
 The deploy gate (shared by the admin Publish button and `node gb.js publish`):
 
 - **on `main`** — ships only if `site/CNAME` is the production domain (the one

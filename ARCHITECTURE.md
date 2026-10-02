@@ -85,6 +85,8 @@ One question decides placement: does the browser run it?
 - **No → `src/`**: keep it in the tool that uses it, share via `src/tools.js`.
   Root files (`gb.js`, `.githooks/`) dispatch and gate only.
 - **Specs → `specs/`**, one file per tournament, consumed only by `schedule.js`.
+- **Print → `print/`**: static print assets — `print/match-card.html`, the blank
+  match-day card sheet: no data, no generator, nothing in the pipeline reads it.
 
 A function that returns **words or tags** belongs in `views.js`; one that returns
 **facts** belongs in `derive.js`. When unsure, ask whether the gate could ever

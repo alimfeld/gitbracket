@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Match cards</title>
+<style>
+/* Blank match cards — six to an A4 sheet, every field pen. Static: nothing here
+   is generated from data.
+   Rows are flex, not a table — WebKit's fixed layout with a colspan fields cell
+   let the side-name line run through the score boxes.
+   ponytail: one div row per line, so no table semantics; go back to <table> if a
+   browser ships predictable fixed layout with colspan + colgroup. */
+@page { size: A4 portrait; }
+* { box-sizing: border-box; }
+body { margin: 0; font: 9pt/1.3 system-ui, sans-serif; color: #111; }
+/* Score box and side-name line share one height, so their bottom rules line up. */
+:root { --box: 12mm; }
+
+.sheet {
+  width: 180mm; height: 260mm; margin: 0 auto; display: flex; flex-direction: column;
+  background: #fff;
+}
+@media screen {
+  body { background: #f2f2f1; }
+  .sheet { margin: 8mm auto; box-shadow: 0 0 4mm #0002; }
+}
+/* Six equal strips: 10mm of white per rule, a 20mm left inset for staples, and a
+   rule at the sheet's own edges — the page margin is white too, so without them
+   the end cards cut oversized. */
+.card {
+  flex: 1 1 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column;
+  padding: 5mm 5mm 5mm 20mm; border-top: 1px dashed #9c9c9a;
+}
+.card:last-child { border-bottom: 1px dashed #9c9c9a; }
+
+.row { display: flex; align-items: flex-end; }
+.row.head { height: 5mm; color: #444; }
+.row.side { flex: 1 1 0; min-height: 0; }
+
+/* Fields line and side-name line share a track: game captions over their boxes. */
+.fld { flex: 1 1 0; padding-right: 6mm; display: flex; align-items: flex-end; gap: 2mm; }
+.tag { width: 18mm; font-size: 9pt; font-weight: 600; }
+.who { flex: 1 1 0; padding-right: 6mm; }
+.games { width: 17mm; margin-left: 2mm; font-size: 8pt; text-align: right; }
+.box { width: 17mm; height: var(--box); margin-left: 2mm; border: 1px solid #999; }
+
+/* Pen lines: dotted, so a fill-in rule never reads as a cut rule; inline for court
+   and time (they share a line), block for a side name. */
+.line { height: 5mm; border-bottom: 1px dotted #777; }
+.fld .line { flex: none; width: 20mm; }
+.fld .time { flex: 1 1 auto; }
+.who .line { display: block; height: var(--box); }
+</style>
+</head>
+<body>
+<main class="sheet">
+  <article class="card">
+    <div class="row head">
+      <span class="fld">Court <span class="line"></span> Time <span class="line time"></span></span>
+      <span class="games">Game 1</span><span class="games">Game 2</span><span class="games">Game 3</span>
+    </div>
+    <div class="row side">
+      <span class="tag">Side A</span><span class="who"><span class="line"></span></span><span class="box"></span><span class="box"></span><span class="box"></span>
+    </div>
+    <div class="row side">
+      <span class="tag">Side B</span><span class="who"><span class="line"></span></span><span class="box"></span><span class="box"></span><span class="box"></span>
+    </div>
+  </article>
+  <article class="card">
+    <div class="row head">
+      <span class="fld">Court <span class="line"></span> Time <span class="line time"></span></span>
+      <span class="games">Game 1</span><span class="games">Game 2</span><span class="games">Game 3</span>
+    </div>
+    <div class="row side">
+      <span class="tag">Side A</span><span class="who"><span class="line"></span></span><span class="box"></span><span class="box"></span><span class="box"></span>
+    </div>
+    <div class="row side">
+      <span class="tag">Side B</span><span class="who"><span class="line"></span></span><span class="box"></span><span class="box"></span><span class="box"></span>
+    </div>
+  </article>
+  <article class="card">
+    <div class="row head">
+      <span class="fld">Court <span class="line"></span> Time <span class="line time"></span></span>
+      <span class="games">Game 1</span><span class="games">Game 2</span><span class="games">Game 3</span>
+    </div>
+    <div class="row side">
+      <span class="tag">Side A</span><span class="who"><span class="line"></span></span><span class="box"></span><span class="box"></span><span class="box"></span>
+    </div>
+    <div class="row side">
+      <span class="tag">Side B</span><span class="who"><span class="line"></span></span><span class="box"></span><span class="box"></span><span class="box"></span>
+    </div>
+  </article>
+  <article class="card">
+    <div class="row head">
+      <span class="fld">Court <span class="line"></span> Time <span class="line time"></span></span>
+      <span class="games">Game 1</span><span class="games">Game 2</span><span class="games">Game 3</span>
+    </div>
+    <div class="row side">
+      <span class="tag">Side A</span><span class="who"><span class="line"></span></span><span class="box"></span><span class="box"></span><span class="box"></span>
+    </div>
+    <div class="row side">
+      <span class="tag">Side B</span><span class="who"><span class="line"></span></span><span class="box"></span><span class="box"></span><span class="box"></span>
+    </div>
+  </article>
+  <article class="card">
+    <div class="row head">
+      <span class="fld">Court <span class="line"></span> Time <span class="line time"></span></span>
+      <span class="games">Game 1</span><span class="games">Game 2</span><span class="games">Game 3</span>
+    </div>
+    <div class="row side">
+      <span class="tag">Side A</span><span class="who"><span class="line"></span></span><span class="box"></span><span class="box"></span><span class="box"></span>
+    </div>
+    <div class="row side">
+      <span class="tag">Side B</span><span class="who"><span class="line"></span></span><span class="box"></span><span class="box"></span><span class="box"></span>
+    </div>
+  </article>
+  <article class="card">
+    <div class="row head">
+      <span class="fld">Court <span class="line"></span> Time <span class="line time"></span></span>
+      <span class="games">Game 1</span><span class="games">Game 2</span><span class="games">Game 3</span>
+    </div>
+    <div class="row side">
+      <span class="tag">Side A</span><span class="who"><span class="line"></span></span><span class="box"></span><span class="box"></span><span class="box"></span>
+    </div>
+    <div class="row side">
+      <span class="tag">Side B</span><span class="who"><span class="line"></span></span><span class="box"></span><span class="box"></span><span class="box"></span>
+    </div>
+  </article>
+</main>
+</body>
+</html>
