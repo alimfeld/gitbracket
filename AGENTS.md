@@ -57,8 +57,9 @@ implement them; treat them as rules, not style.
   small stylesheet, no framework, no presentational classes from JS. State
   rides `data-*` / `aria-current`; body classes layer per-page layout (e.g.
   `venue` on the kiosk); layout is flex/grid + `em`, so browser zoom scales
-  the kiosk — no media queries. A board too wide for the viewport pans
-  horizontally rather than squeezing its columns. New markup reuses existing
+  the kiosk — no layout/width breakpoints (`@media (hover:hover)` and the static
+  print sheet's `@media print` are capability queries, allowed). A board too
+  wide for the viewport pans horizontally rather than squeezing its columns. New markup reuses existing
   elements and rules; a new class is a change to be justified.
 
 ### Process & Deploy

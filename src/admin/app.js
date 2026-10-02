@@ -34,6 +34,8 @@ const pendingReason = (m, ctx) => {
 };
 
 // wall "HH:MM" from an ISO scheduled string; the grid works in wall minutes.
+// derive.js's wallMin owns wall-clock math; the admin reads the literal string
+// because it only ever wants the stored wall time, never an instant.
 const isoWallMin = iso => { const m = /T(\d{2}):(\d{2})/.exec(String(iso || '')); return m ? +m[1] * 60 + +m[2] : null; };
 const pad = n => String(n).padStart(2, '0');
 const isoOf = (day, wm) => `${day}T${pad(Math.floor(wm / 60))}:${pad(wm % 60)}:00`;

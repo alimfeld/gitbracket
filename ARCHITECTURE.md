@@ -43,7 +43,10 @@ memoizes on first use, so any read order yields the same facts (pinned by
 `test/architecture.test.js`). A **fresh `ctx` per render** discards the memo, so a
 corrected score surfaces on the next poll. A new builder must follow the same
 shape: memoize under a unique key, and read other builders only through their
-public function.
+public function. The only caches that outlive a render are keyed by immutable
+inputs — the formatter/offset maps (`zoneFormatters`, `wallOffsets` in derive;
+`locFmts` in views) — so they stay put on purpose; anything keyed by match data
+belongs in `ctx._memo`.
 
 ## Responsibilities
 
