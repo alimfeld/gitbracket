@@ -88,6 +88,7 @@ function json(res, code, obj) {
 
 function readBody(req) {
   return new Promise((resolve) => {
+    req.setEncoding('utf8'); // decode across chunk boundaries — a split multi-byte character would corrupt the JSON
     let b = '';
     let over = false;
     req.on('data', c => {
