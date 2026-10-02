@@ -3,7 +3,6 @@
 // Players watch the board for their own result, so the cadence stays short; a poll that fires
 // mid-download is dropped, so a slow link holds one request per page, not one per tick.
 const POLL_MS = 10000;
-const FOLLOW_MS = 60000; // the kiosk re-follows the play on this cadence, data change or not
 // The abort bound for one load — a link's bound, never the poll's cadence.
 const FETCH_TIMEOUT_MS = 30000;
 // One full load (either cache mode), then the wait for the next poll and a grace poll — derived so the relation can't drift.
@@ -627,7 +626,6 @@ function boot() {
   let data = null;     // last good snapshot — a failed poll keeps the board up
   let lastHtml = '';   // skip re-render when nothing changed (keeps selection/focus)
   let lastKey = '';    // view|cat — a change is new content, start at the top
-  let lastFollow = 0;  // last minute-tick re-follow — tracks the play even when data never changes
   let pollTimer = null, clockTimer = null;
   let pollOn = false;  // view whose timers should run; false on the index
   // One request per page, by slug: a poll that fires mid-download is dropped, not re-fetched.
@@ -643,12 +641,10 @@ function boot() {
     // The poll cadence belongs to the open page, not to a navigation — restarting it
     // here would let tab clicks postpone the next poll past the stale threshold.
     if (!pollTimer) pollTimer = setInterval(tick, POLL_MS);
-    if (pollOn === 'venues') {
-      if (clockTimer) return; // already ticking — a nav must not re-seed the follow
-      lastFollow = Date.now(); // the first re-follow is +FOLLOW_MS out, never 1s in
-      // The clock ticks between renders; the timer updates it in place, looking
-      // the element up fresh since a poll or follow may have rebuilt it. A date
-      // stays static — only a time moves.
+    // The kiosk clock ticks between renders — a date stays static, only a time moves;
+    // the element is looked up fresh since a poll may have rebuilt it. The play's
+    // statuses and now-line ride the poll's render, not this timer.
+    if (pollOn === 'venues' && !clockTimer) {
       clockTimer = setInterval(() => {
         const t = Date.now();
         const el = document.getElementById('clock');
@@ -656,17 +652,18 @@ function boot() {
           el.textContent = fmtTime(t, (data && data.tjson && data.tjson.timezone) || 'UTC');
           el.dateTime = new Date(t).toISOString(); // the instant, derived — the label stays wall clock
         }
-        // once a minute, re-follow from the last snapshot — statuses and the
-        // now-line recompute against now
-        if (t - lastFollow >= FOLLOW_MS && data) {
-          lastFollow = t;
-          render(route, data);
-        }
       }, 1000);
-    } else if (clockTimer) {
+    } else if (pollOn !== 'venues' && clockTimer) {
       clearInterval(clockTimer);
       clockTimer = null;
     }
+  };
+
+  // The timers track the open view and the tab's visibility — the one policy both
+  // navigation and the visibility event obey.
+  const sync = () => {
+    if (pollOn && !document.hidden) startPoll();
+    else stopPoll();
   };
 
   // Any paint outside render's guard voids the memo — else a later identical render is suppressed.
@@ -681,7 +678,7 @@ function boot() {
       if (d.httpError) {
         // a dead deep link — the file is gone for good; stop the futile poll
         pollOn = false;
-        stopPoll();
+        sync();
         if (!data) paint(BAD_LINK());
         return;
       }
@@ -701,8 +698,7 @@ function boot() {
   };
   const tick = () => load(route);
 
-  // Centre the now-line on every render; the clock handler re-aims on its own
-  // minute.
+  // Centre the now-line on every render — the poll is the kiosk's clock for the play.
   const aim = () => {
     const ln = document.getElementById('now-line');
     if (ln) ln.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -733,7 +729,7 @@ function boot() {
     const r = parseRoute();
     if (!r) {
       route = null;
-      pollOn = false; stopPoll();
+      pollOn = false; sync();
       document.body.classList.remove('venue'); // a dead link is not the kiosk — never inherit the board layout
       paintBadRoute(app);
       lastHtml = ''; // as in the render catch: a later cached re-render must repaint over the bad-link page
@@ -741,7 +737,7 @@ function boot() {
     }
     route = r;
     pollOn = r.view === 'index' ? false : r.view;
-    if (pollOn && !document.hidden) startPoll(); else stopPoll();
+    sync();
     if (needsFetch(r, data)) {
       data = null;
       lastHtml = '';
@@ -776,8 +772,8 @@ function boot() {
   window.addEventListener('hashchange', navigate);
   // a hidden tab stops polling entirely; a return fetches immediately
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) stopPoll();
-    else if (pollOn) { tick(); startPoll(); }
+    if (pollOn && !document.hidden) tick();
+    sync();
   });
 }
 
