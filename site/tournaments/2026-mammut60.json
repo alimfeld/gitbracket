@@ -1966,7 +1966,17 @@
           }
         ],
         "venue": "court-5",
-        "scheduled": "2026-10-03T15:35:00"
+        "scheduled": "2026-10-03T15:35:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 2
+          }
+        ],
+        "result": {
+          "status": "played",
+          "winner": "a"
+        }
       },
       {
         "id": 22,
