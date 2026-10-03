@@ -1293,7 +1293,21 @@
         "bestOf": 3,
         "slotMinutes": 60,
         "venue": "court-2",
-        "scheduled": "2026-10-03T11:55:00"
+        "scheduled": "2026-10-03T11:55:00",
+        "games": [
+          {
+            "a": 7,
+            "b": 11
+          },
+          {
+            "a": 10,
+            "b": 12
+          }
+        ],
+        "result": {
+          "status": "played",
+          "winner": "b"
+        }
       }
     ],
     "xd": [
