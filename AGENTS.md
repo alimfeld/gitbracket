@@ -22,6 +22,13 @@ implement them; treat them as rules, not style.
   Two exceptions: schedules, which can't be derived, and the index's
   `name`/`location`/`dates`, a deliberate copy so the list page is one fetch —
   the validator keeps it equal to the tournament file.
+- **A committed file's outcome never moves under it.** Ranks, slots and podium
+  come from the facts plus the pool ladder README documents — or the `tiebreak`
+  rungs a file declares. A rung's meaning, including how the ladder re-applies to
+  the teams still tied, is frozen once shipped, and the default reproduces it. A
+  rule that would re-rank a played tournament is written into that file as its
+  old rungs, or it is a deliberate correction of the facts — never a silent
+  shift beneath a published result.
 - **Times are wall-clock, never offsets.** `scheduled` is local wall time in
   the tournament's `timezone`; the instant is derived at render, so data stays
   readable and stays right if clock rules change.

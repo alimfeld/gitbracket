@@ -65,7 +65,8 @@ matches keyed by category:
   "venues": [{ "id": "court-3", "name": "Court 3" }],
   "categories": [{ "id": "md40", "name": "Men's Doubles 40+",
     "bestOf": { "groups": 3, "knockout": 5 },
-    "slotMinutes": { "groups": 30, "knockout": 45 } }],
+    "slotMinutes": { "groups": 30, "knockout": 45 },
+    "tiebreak": ["h2hWins", "h2hGameRatio", "h2hPointRatio"] }],
   "players": [{ "id": "p1", "name": "Ada Lovelace" }],
   "matches": { "md40": [ /* below */ ] }
 }
@@ -74,6 +75,12 @@ matches keyed by category:
 - Matches have two stages: `groups` (has a `pool`) and `knockout` (no pool).
 - `bestOf` sets match length per stage, `slotMinutes` the court slot per
   stage; a match can override either with a plain number.
+- `tiebreak` (optional) records the pool-ranking rungs a file was ranked under
+  — `h2hWins`, `h2hGameRatio`, `h2hPointRatio`, in that order. Omit it and the
+  ladder below applies; the editor stamps a category's rungs with its first
+  result, so a later change to that default cannot re-rank a played file. A bare
+  rung name is data whose meaning is frozen the day it ships, so a new rule takes
+  a new name.
 - `scheduled` is local wall time in the tournament's `timezone` — never a UTC
   instant or offset; the IANA zone at the top of the file interprets it. A
   nonexistent time during a spring clock change is rejected; an ambiguous time
@@ -110,8 +117,8 @@ done when it has one, in play without one. `winner` is a side letter (`a` or
 
 | result | winner | standings impact | notes |
 |---|---|---|---|
-| `played` | a\|b | win + gd/pd from games | games must reach the best-of target and agree with the winner |
-| `walkover` | a\|b | win only, no gd/pd | a side can't play — no games |
+| `played` | a\|b | a win, plus the games it was decided by | games must reach the best-of target and agree with the winner |
+| `walkover` | a\|b | a win, no games | a side can't play — no games, so it drops out of the ratios |
 | `void` | — | nothing counts | neither side can play — pools still complete |
 
 Standings and brackets are derived from these facts, never stored. A `winner`
@@ -125,11 +132,20 @@ scoring on. To reshuffle feeders, edit sides directly: an intermediate state
 (a source claimed twice, an orphaned match) is a conflict to clear in the next
 edit, never a refusal.
 
-**Pool rankings** use the standard round-robin ladder: wins, then
-head-to-head against the tied teams (mutual-match wins, game differential,
-point differential), then overall game and point differential. A group still
-tied after the whole ladder is a dead tie — its bracket slot stays TBD for
-the organizer to settle.
+**Pool rankings** use the head-to-head ladder, written out in full:
+
+1. most match wins;
+2. among the teams still tied on wins, and over the matches between them only:
+   most head-to-head wins, then the better ratio of games won to games lost,
+   then the better ratio of points won to points lost;
+3. a rung that separates some teams sends the rest back to step 2, again over
+   only the matches between those still tied;
+4. a group still level after the whole ladder is a dead tie — its bracket slot
+   stays TBD for the organizer.
+
+Ratios, not differences. A difference can stay level where a ratio separates,
+and a match with no games (a walkover) drops out of both ratios instead of
+skewing them.
 
 ## Views
 

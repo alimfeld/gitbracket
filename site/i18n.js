@@ -6,7 +6,7 @@ const enOrd = n => n + ({ one: 'st', two: 'nd', few: 'rd' }[enOrdRules.select(n)
 
 // Every user-facing string ships through these maps (completeness pinned by a
 // test). Repo data (names, courts, pools, players) and scoring shorthand (TBD,
-// void, W/O, W/L/GD/PD) stay as authored. fmt/refs/art carry the word rules as
+// void, W/O, W/L) stay as authored. fmt/refs/art carry the word rules as
 // data; views.js only dispatches them.
 const I18N = {
   en: {
@@ -81,6 +81,13 @@ const I18N = {
     'slot-pool': '{rank} in Pool {pool}',
     'slot-pool-tie': '{rank} in Pool {pool} — tie not broken',
     'slot-dangling': '{who} of match {id}',
+    // the pool table's reason column (app.js): the rung that placed a row, or why it is level
+    'tiebreak': 'Decided by',
+    'tiebreak-primary': 'most wins',
+    'tiebreak-level': 'level',
+    'tiebreak-wins': 'h2h wins',
+    'tiebreak-games': 'h2h games',
+    'tiebreak-points': 'h2h points',
     // per-locale word rules (views.js dispatches by name): bandShort strips the
     // classification word, place is the pre-word number, ord the range form.
     fmt: {
@@ -168,6 +175,12 @@ const I18N = {
     'slot-pool': '{rank} in Pool {pool}',
     'slot-pool-tie': '{rank} in Pool {pool} — Gleichstand',
     'slot-dangling': '{who} von Spiel {id}',
+    'tiebreak': 'Entschieden durch',
+    'tiebreak-primary': 'meiste Siege',
+    'tiebreak-level': 'Gleichstand',
+    'tiebreak-wins': 'direkt Siege',
+    'tiebreak-games': 'direkt Spiele',
+    'tiebreak-points': 'direkt Punkte',
     fmt: {
       ord: n => `${n}.`,
       place: n => String(n),

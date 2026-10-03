@@ -35,7 +35,12 @@
       "slotMinutes": {
         "groups": 25,
         "knockout": 25
-      }
+      },
+      "tiebreak": [
+        "h2hWins",
+        "h2hGameRatio",
+        "h2hPointRatio"
+      ]
     },
     {
       "id": "wd",
@@ -47,7 +52,12 @@
       "slotMinutes": {
         "groups": 25,
         "knockout": 25
-      }
+      },
+      "tiebreak": [
+        "h2hWins",
+        "h2hGameRatio",
+        "h2hPointRatio"
+      ]
     },
     {
       "id": "xd",
@@ -59,7 +69,12 @@
       "slotMinutes": {
         "groups": 25,
         "knockout": 25
-      }
+      },
+      "tiebreak": [
+        "h2hWins",
+        "h2hGameRatio",
+        "h2hPointRatio"
+      ]
     }
   ],
   "players": [

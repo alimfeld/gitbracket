@@ -40,6 +40,7 @@ function makeCat(c, tjson, shared, order = 0) {
     matches,
     byId: new Map(matches.map(m => [m.id, m])),
     bestOf: (c.meta && c.meta.bestOf) || {},
+    tiebreak: c.meta && c.meta.tiebreak,
     names: s.names,
     tz: s.tz,
     slotMinutes: (c.meta && c.meta.slotMinutes) || {},
@@ -70,23 +71,8 @@ function matchSlotMs(m, ctx) {
 
 const sideIdx = w => w === 'a' ? 0 : 1;
 
-function gameDiff(games) {
-  let gd = 0, pd = 0;
-  if (Array.isArray(games)) for (const g of games) {
-    if (!g || typeof g !== 'object') continue;
-    gd += Math.sign(g.a - g.b);
-    pd += g.a - g.b;
-  }
-  return { gd, pd };
-}
-
 function bestOfOf(m, ctx) {
   return m.bestOf ?? (ctx?.bestOf || {})[stageOf(m)]; // a raw validate ctx may carry no bestOf
-}
-
-// A best-of-1 pool's GD just restates W−L; one match overridden to best-of-3 brings it back.
-function poolBo1(ctx, pool) {
-  return ctx.matches.filter(m => m && m.pool === pool).every(m => bestOfOf(m, ctx) === 1);
 }
 
 function winnerIdx(m) {
@@ -124,7 +110,7 @@ function poolStandings(ctx, pool, partial) {
     if (!(s && s.kind === 'players' && Array.isArray(s.ids))) return null;
     const sig = pairSig(s.ids);
     let r = recs.get(sig);
-    if (!r) { r = { sig, ids: new Set(s.ids), wins: 0, losses: 0, gd: 0, pd: 0 }; recs.set(sig, r); }
+    if (!r) { r = { sig, ids: new Set(s.ids), wins: 0, losses: 0 }; recs.set(sig, r); }
     return r;
   };
   for (const m of ms) {
@@ -141,18 +127,31 @@ function poolStandings(ctx, pool, partial) {
     }
     (w === 0 ? r0 : r1).wins++;
     (w === 0 ? r1 : r0).losses++;
-    if (m.result && m.result.status === 'played') {
-      const { gd, pd } = gameDiff(m.games);
-      r0.gd += gd; r0.pd += pd;
-      r1.gd -= gd; r1.pd -= pd;
-    }
   }
-  return poolLadder([...recs.values()], ms);
+  // a declared list, else the shipped ladder; a malformed one falls back too
+  return poolLadder([...recs.values()], ms, Array.isArray(ctx?.tiebreak) && ctx.tiebreak.length ? ctx.tiebreak : TIEBREAK_RUNGS);
 }
 
-// Head-to-head over the set's mutual matches only (walkovers carry no differential).
+// A ratio of wins to losses, as a quotient: equal ratios round to the same double, so the
+// values group and sort directly. No games at all is no evidence, so it reads level.
+const q = (won, lost) => (lost ? won / lost : (won ? Infinity : 1));
+
+// The pool ladder's rungs, written out in README: more wins, then among the teams still tied
+// head-to-head wins, the ratio of games won to lost, the ratio of points won to lost. A rung
+// name is data — it ships inside tournament files, so it is never renamed or redefined; that
+// would re-rank a finished tournament under its own published result. Declaration order is the
+// default ladder.
+const RUNGS = {
+  h2hWins: (r, h) => h.get(r.sig).w,
+  h2hGameRatio: (r, h) => q(h.get(r.sig).gw, h.get(r.sig).gl),
+  h2hPointRatio: (r, h) => q(h.get(r.sig).pw, h.get(r.sig).pl),
+};
+const TIEBREAK_RUNGS = Object.keys(RUNGS);
+
+// Head-to-head over the set's mutual matches only, so a rung never sees a match against a team
+// it isn't tied with. An unplayed match is a win with no games: it decides h2hWins, no ratios.
 function mutualKeys(list, ms) {
-  const h = new Map(list.map(r => [r.sig, { hw: 0, hg: 0, hp: 0 }]));
+  const h = new Map(list.map(r => [r.sig, { w: 0, gw: 0, gl: 0, pw: 0, pl: 0 }]));
   for (const m of ms) {
     if (!Array.isArray(m.sides)) continue;
     const [s0, s1] = m.sides;
@@ -163,42 +162,47 @@ function mutualKeys(list, ms) {
     const w = winnerIdx(m);
     if (w === null) continue;
     const ka = h.get(a), kb = h.get(b);
-    (w === 0 ? ka : kb).hw++;
-    if (m.result && m.result.status === 'played') {
-      const { gd, pd } = gameDiff(m.games);
-      ka.hg += gd; ka.hp += pd; kb.hg -= gd; kb.hp -= pd;
+    (w === 0 ? ka : kb).w++;
+    if (!m.result || m.result.status !== 'played') continue;
+    for (const g of Array.isArray(m.games) ? m.games : []) {
+      if (!g || !Number.isFinite(g.a) || !Number.isFinite(g.b)) continue; // a malformed game is the gate's report, not a NaN rung
+      ka.pw += g.a; ka.pl += g.b;
+      kb.pw += g.b; kb.pl += g.a;
+      if (g.a > g.b) { ka.gw++; kb.gl++; } else { kb.gw++; ka.gl++; }
     }
   }
   return h;
 }
 
-// Ladder: wins, then per wins-block h2h wins/gd/pd, then overall gd/pd. A rung that
-// splits a cluster recurses; a still-tied block is a dead tie (renders TBD).
-function poolLadder(list, ms) {
+// Ladder: wins, then the declared rungs. A set a rung leaves level goes back to the top of the
+// ladder, re-measured against only those rows; a set no rung can split is a dead tie.
+function poolLadder(list, ms, rungs) {
   const out = [];
   let tieCluster = 0; // one id per dead-tie cluster — poolRanks shares a rank only within it
   const order = (set) => {
     if (set.length <= 1) { out.push(...set); return; }
     const h = mutualKeys(set, ms);
-    const cmp = (a, b) => {
-      const ka = [h.get(a.sig).hw, h.get(a.sig).hg, h.get(a.sig).hp, a.gd, a.pd];
-      const kb = [h.get(b.sig).hw, h.get(b.sig).hg, h.get(b.sig).hp, b.gd, b.pd];
-      for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return kb[i] - ka[i];
-      return 0;
-    };
-    set.sort(cmp); // every caller passes a fresh slice
-    for (let i = 0; i < set.length;) {
-      let j = i + 1;
-      while (j < set.length && cmp(set[i], set[j]) === 0) j++;
-      const cluster = set.slice(i, j);
-      if (cluster.length === 1) out.push(cluster[0]);
-      else if (cluster.length === set.length) {
-        tieCluster++;
-        for (const r of cluster) r.tie = tieCluster; // truthy so isDeadTie keeps working
-        out.push(...cluster);
-      } else order(cluster);
-      i = j;
+    for (const name of rungs) {
+      const val = RUNGS[name];
+      if (!val) continue; // an unknown rung is the gate's report — rank as if undeclared
+      const groups = new Map();
+      for (const r of set) {
+        const k = val(r, h);
+        if (!groups.has(k)) groups.set(k, []);
+        groups.get(k).push(r);
+      }
+      if (groups.size === 1) continue; // level here: the next rung, as far as is necessary
+      for (const part of [...groups.values()].sort((x, y) => val(y[0], h) - val(x[0], h))) {
+        if (part.length > 1) { order(part); continue; }
+        part[0].splitBy = name; // the rung that placed this row, and the numbers it won on
+        part[0].h2h = h.get(part[0].sig);
+        out.push(part[0]);
+      }
+      return;
     }
+    tieCluster++;
+    for (const r of set) r.tie = tieCluster; // truthy so isDeadTie keeps working
+    out.push(...set);
   };
   const top = [...list].sort((a, b) => b.wins - a.wins);
   for (let i = 0; i < top.length;) {
@@ -863,5 +867,5 @@ function playerBand(ctx, rows) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { DATE_RE, ID_RE, ISO_RE, MAX_BEST_OF, validBestOf, pairSig, makeCat, matchesOf, toCats, matchSlotMs, sideIdx, bestOfOf, poolBo1, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, resolveSide, playerMatches, possibleStageFacts, plRange, plOrdinal, placementColumn, kioskStatus, catStatus, currentWave, playerBand, parentsOf, koColumn, koOrdinal, winners, dayKey, wallMin, schedTime, schedDays };
+  module.exports = { DATE_RE, ID_RE, ISO_RE, MAX_BEST_OF, validBestOf, TIEBREAK_RUNGS, pairSig, makeCat, matchesOf, toCats, matchSlotMs, sideIdx, bestOfOf, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, resolveSide, playerMatches, possibleStageFacts, plRange, plOrdinal, placementColumn, kioskStatus, catStatus, currentWave, playerBand, parentsOf, koColumn, koOrdinal, winners, dayKey, wallMin, schedTime, schedDays };
 }

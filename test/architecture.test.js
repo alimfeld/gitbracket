@@ -38,7 +38,7 @@ test('every node tool stays off views.js (browser-only)', () => {
 // derive.js is the shipped model. A helper the gate/tools share is exported on
 // purpose and named here; anything else must be read by a shipped file, so a
 // helper can't quietly drift into node-only or die unused.
-const NODE_SHARED_EXPORTS = new Set(['ISO_RE', 'pairSig', 'makeCat', 'matchesOf', 'parentsOf', 'validBestOf']);
+const NODE_SHARED_EXPORTS = new Set(['ISO_RE', 'pairSig', 'makeCat', 'matchesOf', 'parentsOf', 'validBestOf', 'TIEBREAK_RUNGS']);
 
 test('every derive.js export is read by the shipped site, or is a node-shared primitive', () => {
   const shipped = ['site/app.js', 'site/views.js', 'site/i18n.js']

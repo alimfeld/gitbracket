@@ -278,10 +278,6 @@ function fmtRange(keys) {
   return ks[0].slice(0, 4) !== ks.at(-1).slice(0, 4) ? `${out}, ${ks.at(-1).slice(0, 4)}` : out;
 }
 
-function fmtDiff(n) {
-  return (n > 0 ? '+' : '') + n;
-}
-
 // Round name by distance from the final (0 -> Final, 1 -> Semifinals, ...). Which
 // round size takes a dedicated word is a per-locale bundle key, no branch here.
 function roundName(depthFromEnd) {
@@ -358,6 +354,6 @@ function playerStatus(ctx, pid) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { setLocale, esc, teamLabel, sideLabel, scoreCells, possibleStages, placementLabel, bandLabels, stageGroupName, fmtTime, dayShort, dayLabel, fmtRange, fmtDiff, roundName, matchLabel, playerStatus };
+  module.exports = { setLocale, esc, teamLabel, sideLabel, scoreCells, possibleStages, placementLabel, bandLabels, stageGroupName, fmtTime, dayShort, dayLabel, fmtRange, roundName, matchLabel, playerStatus };
 }
 

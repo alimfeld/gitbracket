@@ -10,7 +10,7 @@
 
 const path = require('path');
 const { loadRepo, plainObject, isRealDate, schedEntries, pairBusy, consumedSlots, winTarget, reachedWinner, feederBounds, sameSet, daysOf } = require('./tools.js');
-const { DATE_RE, ID_RE, ISO_RE, MAX_BEST_OF, validBestOf, pairSig, matchSlotMs, makeCat, matchesOf, resolveSide, bestOfOf, schedTime, plRange, parentsOf } = require('../site/derive.js');
+const { DATE_RE, ID_RE, ISO_RE, MAX_BEST_OF, validBestOf, TIEBREAK_RUNGS, pairSig, matchSlotMs, makeCat, matchesOf, resolveSide, bestOfOf, schedTime, plRange, parentsOf } = require('../site/derive.js');
 
 const RESULTS = ['winner', 'loser'];
 const RESULT_STATUSES = ['played', 'walkover', 'void'];
@@ -24,8 +24,8 @@ function makeConflict(where, message, refs) {
   return { where, message, refs: base.concat(refs || []), toString() { return `${this.where}: ${this.message}`; } };
 }
 
-// One rule per status: played counts win + gd/pd from games; walkover a win only;
-// void nothing.
+// One rule per status: played is a win plus the games it was decided by; walkover a
+// win with no games; void nothing.
 function validateResultShape(r, games, target, where, err, conflict) {
   const hasGames = Array.isArray(games);
   if (!RESULT_STATUSES.includes(r.status)) {
@@ -173,6 +173,16 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
     else if (sm !== undefined) {
       for (const k of ['groups', 'knockout']) {
         if (sm[k] !== undefined && (!Number.isInteger(sm[k]) || sm[k] < 1)) err(where, `slotMinutes.${k} must be a positive integer, got ${JSON.stringify(sm[k])}`);
+      }
+    }
+    const tb = c.tiebreak;
+    if (tb !== undefined) {
+      if (!Array.isArray(tb) || tb.length === 0) {
+        err(where, `tiebreak must be a non-empty array of rung names (${TIEBREAK_RUNGS.join(', ')})`);
+      } else {
+        for (const r of tb) {
+          if (!TIEBREAK_RUNGS.includes(r)) err(where, `tiebreak rung ${JSON.stringify(r)} is not one of ${TIEBREAK_RUNGS.join(', ')} — a typo would silently re-rank the pool`);
+        }
       }
     }
   });

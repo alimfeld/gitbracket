@@ -20,8 +20,6 @@ const { FIX, catOf, pageData, repoPage, withTjson, text, vals, card, cards, link
 const { loadRepo } = require('../src/tools.js');
 const { validateRepo } = require('../src/validate.js');
 
-const sameRecord = (a, b) => a.wins === b.wins && a.gd === b.gd && a.pd === b.pd; // test-only — derive.js doesn't ship it
-
 // The bare tournament body every renderer case shares; pass only what the case varies.
 const bareCat = { id: 't', name: 'T', bestOf: { groups: 1, knockout: 1 }, slotMinutes: { groups: 30, knockout: 30 } };
 const bare = ({ venues = [], players = [], matches = {}, categories = [bareCat], ...rest } = {}) =>
@@ -299,40 +297,84 @@ test('pool A standings: 4 sides, order, leader record', () => {
   const md = catOf('sample', 'md40');
   const st = poolStandings(md, 'A');
   assert(st && st.length === 4, 'pool A has 4 sides');
-  assert(st[0].sig === 'p1|p2' && st[1].sig === 'p3|p4' && st[3].sig === 'p7|p8', 'pool A order by wins/gd/pd');
-  assert(st[0].wins === 3 && st[0].gd === 6 && st[0].pd === 31, 'leader record');
+  assert(st[0].sig === 'p1|p2' && st[1].sig === 'p3|p4' && st[3].sig === 'p7|p8', 'pool A order by wins alone');
+  assert(st[0].wins === 3 && st[0].losses === 0, 'leader record');
+  assert(st.every(r => !r.splitBy && !r.tie), 'no tie, so no rung placed a row');
 });
 
-test('standings tiebreak: wins, then head-to-head, then differentials', () => {
+test('standings tiebreak: wins, then head-to-head', () => {
   const ctx = catOf('tiebreak', 't');
   const st = poolStandings(ctx, 'A');
   assert(st && st.length === 4, 'pool A has 4 sides');
-  assert(st[0].sig === 'p1' && st[1].sig === 'p2', 'p1 beat p2 head-to-head — the higher point differential does not rescue p2');
-  assert(st[0].wins === 2 && st[0].gd === 2 && st[0].pd === 3, 'p1 record');
-  assert(st[1].wins === 2 && st[1].gd === 1 && st[1].pd === 5, 'p2 record');
+  assert(st[0].sig === 'p1' && st[1].sig === 'p2', 'p1 beat p2 head-to-head');
+  assert(st[0].wins === 2 && st[1].wins === 2, 'both on two wins');
+  assert(st[0].splitBy === 'h2hWins' && st[1].splitBy === 'h2hWins' && st[0].h2h.w === 1, 'the h2h wins rung placed them');
+  assert(!isDeadTie(st, 1) && !isDeadTie(st, 2), 'and it separated them');
 });
 
-test('h2h ladder: head-to-head winner ranks above the overall-differential leader', () => {
+test('h2h ladder: the mutual-match winner ranks first', () => {
   const ctx = catOf('h2h', 't');
   const st = poolStandings(ctx, 'A');
   assert(st && st.length === 4, 'pool A has 4 sides');
-  assert(st[0].sig === 'p1' && st[1].sig === 'p2', 'p1 won the p1-p2 match — p2 leads overall gd yet ranks 2nd');
-  assert(st[0].wins === 2 && st[0].gd === 1 && st[1].wins === 2 && st[1].gd === 2, 'same wins, p2 better overall gd');
+  assert(st[0].sig === 'p1' && st[1].sig === 'p2', 'p1 won the p1-p2 match — same wins, p1 ranks first');
+  assert(st[0].wins === 2 && st[1].wins === 2 && st[0].splitBy === 'h2hWins', 'placed by the head-to-head win');
   assert(st[2].sig === 'p3' && st[3].sig === 'p4', 'lower pair also splits by h2h');
   assert(!isDeadTie(st, 1) && !isDeadTie(st, 2), 'both resolved — no TBD');
   const slot = resolveSide(ctx.byId.get(13).sides[0], ctx);
-  assert(slot && slot.has('p1'), 'rank-1 slot takes the h2h winner, not the gd leader');
+  assert(slot && slot.has('p1'), 'rank-1 slot takes the h2h winner');
 });
 
-test('h2h ladder: tied trio recurses — the pair splits via their mutual match', () => {
+test('h2h ladder: a trio level on every rung is a dead tie', () => {
   const ctx = catOf('h2h', 't');
   const st = poolStandings(ctx, 'B');
   assert(st && st.length === 4, 'pool B has 4 sides');
-  assert(st[0].sig === 'p5', 'p5 separates on overall gd');
-  assert(sameRecord(st[1], st[2]) && st[1].sig === 'p6' && st[2].sig === 'p7', 'p6 and p7 share a full record — only the mutual match separates them');
-  assert(!isDeadTie(st, 2), '2nd place resolves via recursion, not TBD');
-  const slot = resolveSide(ctx.byId.get(14).sides[0], ctx);
-  assert(slot && slot.has('p6'), 'rank-2 slot resolves to p6');
+  assert(st[0].sig === 'p5' && st[1].sig === 'p6' && st[2].sig === 'p7', 'dead-tie order is the pool order');
+  assert(st.slice(0, 3).every(r => r.wins === 2 && r.tie && !r.splitBy), 'p5, p6 and p7 share a record no rung can split');
+  assert.deepEqual(poolRanks(st), [1, 1, 1, 4], 'the trio shares rank 1');
+  assert(isDeadTie(st, 1) && isDeadTie(st, 2), 'both slots stay TBD for the organizer');
+  assert(resolveSide(ctx.byId.get(14).sides[0], ctx) === null, 'the rank-2 slot is unresolved');
+});
+
+test('h2h ladder: the rungs are ratios — a pair level on point difference still separates', () => {
+  // A, B and C each win one match 2-0. B and C are level on head-to-head point difference
+  // (−2 each) and only the ratio of points won to lost separates them (32/34 vs 30/32).
+  // Difference rungs would fall through to the recursion, where C beat B.
+  const ctx = catOf('h2hratio', 't');
+  const st = poolStandings(ctx, 'A');
+  assert(st && st.length === 3, 'three tied sides');
+  assert.deepEqual(st.map(r => r.sig), ['p1', 'p2', 'p3'], 'the point ratio orders A, B, C');
+  assert(st.every(r => r.splitBy === 'h2hPointRatio'), 'every row is placed by the head-to-head point ratio');
+  assert(!isDeadTie(st, 2), 'B and C are separated, not a dead tie');
+});
+
+test('walkover: a win with no games drops out of the ratio rungs', () => {
+  // p1, p2 and p3 each win one match. p1's win is a walkover, so it earns the head-to-head win
+  // but no games: its game ratio is 0 won to 2 lost, so the ratio rung ranks it last. A
+  // 3-0/11-0 walkover fiction would have put p1 first instead.
+  const ctx = catOf('walkover-ratio', 't');
+  const st = poolStandings(ctx, 'A');
+  assert.deepEqual(st.map(r => r.sig), ['p2', 'p3', 'p1'], 'the played wins rank above the walkover win');
+  assert(st.every(r => r.splitBy === 'h2hGameRatio'), 'the head-to-head game ratio placed all three');
+  const walk = st.find(r => r.sig === 'p1');
+  assert(walk.wins === 1 && walk.h2h.w === 1, 'the walkover counts as a win, head-to-head too');
+  assert(walk.h2h.gw === 0 && walk.h2h.gl === 2, 'but it adds no games — only the played loss counts');
+});
+
+test('a declared tiebreak list replaces the ladder — one rung that cannot separate leaves a dead tie', () => {
+  const tjson = JSON.parse(JSON.stringify(repoPage('h2hratio').tjson));
+  tjson.categories[0].tiebreak = ['h2hWins'];
+  const st = poolStandings(toCats(tjson)[0], 'A');
+  assert.deepEqual(st.map(r => r.sig), ['p1', 'p2', 'p3'], 'the pool order stands');
+  assert(st.every(r => r.tie && !r.splitBy), 'the declared rung alone cannot separate them — the point ratio is not applied on top');
+});
+
+test('pool table: a row placed by a head-to-head rung names that rung, and a broken list still renders', () => {
+  const data = repoPage('h2hratio');
+  const html = renderTournament({ slug: 'h2hratio', view: 'tournament' }, data);
+  assert.deepEqual(vals(html, 'data-tiebreak'), ['h2hPointRatio', 'h2hPointRatio', 'h2hPointRatio'], 'each tied row carries the rung that placed it');
+  const broken = JSON.parse(JSON.stringify(data.tjson));
+  broken.categories[0].tiebreak = ['nonsense'];
+  assert.doesNotThrow(() => renderTournament({ slug: 'h2hratio', view: 'tournament' }, withTjson(data, broken)), 'an unknown rung ranks nothing and never throws');
 });
 
 test('walkover and partial-match detection', () => {
@@ -563,13 +605,15 @@ test('result statuses: walkover counts a win, void counts nothing, pool complete
   const st = poolStandings(res, 'A');
   assert(st && st.length === 3, 'a void match does not stall the pool');
   const rec = sig => st.find(r => r.sig === sig);
-  assert(rec('p1').wins === 1 && rec('p1').gd === 1 && rec('p1').pd === 2, 'played win counts gd/pd');
-  assert(rec('p3').wins === 1 && rec('p3').gd === 0 && rec('p3').pd === 0, 'walkover win counts, no gd/pd');
+  assert(rec('p1').wins === 1 && rec('p1').losses === 0, 'played win counts');
+  assert(rec('p3').wins === 1 && rec('p3').losses === 0, 'walkover win counts');
   assert(rec('p2').wins === 0 && rec('p2').losses === 2, 'walkover loss counts, void contributes nothing to either side');
-  assert(st[0].sig === 'p1' && st[1].sig === 'p3', 'p1 separates on overall gd');
+  assert(st[0].sig === 'p1' && st[1].sig === 'p3', 'the pool order');
+  assert(isDeadTie(st, 1), 'p1 and p3 are level — their own match was void, so no rung has a number to split them on');
+  assert.deepEqual(poolRanks(st), [1, 1, 3], 'they share rank 1');
   assert(winnerIdx(res.byId.get(3)) === null && isDone(res.byId.get(3)), 'void: settled, no winner');
   const f = res.byId.get(4);
-  assert(resolveSide(f.sides[0], res) && resolveSide(f.sides[1], res), 'pool ranks resolve despite the void');
+  assert(resolveSide(f.sides[0], res) === null && resolveSide(f.sides[1], res) === null, 'a dead tie leaves its pool-rank slots TBD');
 });
 
 test('result statuses render: W/O and void on cards, settled matches stay on the board', () => {
@@ -638,14 +682,14 @@ test('bracket walkers tolerate a sideless match: report, never throw', () => {
 test('dead tie: standings tie + pool slot TBD', () => {
   const tie = catOf('tie', 't');
   const st = poolStandings(tie, 'A');
-  assert(st && st.length === 2 && sameRecord(st[0], st[1]), 'tie detected in standings');
+  assert(st && st.length === 2 && st[0].wins === st[1].wins && st[0].tie && st[0].tie === st[1].tie, 'tie detected in standings');
   assert(resolveSide(tie.byId.get(3).sides[0], tie) === null, 'dead-tied pool slot -> TBD');
 });
 
 test('3-way dead tie: standings tie + pool slot TBD', () => {
   const tie3 = catOf('tie3', 't');
   const st = poolStandings(tie3, 'A');
-  assert(st && st.length === 3 && sameRecord(st[0], st[1]) && sameRecord(st[1], st[2]), '3-way tie detected');
+  assert(st && st.length === 3 && st.every(r => r.wins === st[0].wins && r.tie === st[0].tie), '3-way tie detected');
   assert(resolveSide(tie3.byId.get(4).sides[0], tie3) === null, '3-way dead-tied pool slot -> TBD');
 });
 
@@ -656,8 +700,9 @@ test('poolRanks: dead-tie members share their group rank, resolved rows have the
   assert.deepEqual(adj.map(r => [r.wins, r.tie]), [[2, 1], [2, 1], [0, 2], [0, 2]], 'two adjacent dead-tie clusters, each with its own id');
   assert.deepEqual(poolRanks(adj), [1, 1, 3, 3], 'adjacent clusters keep separate ranks — 1 1 3 3, not 1 1 1 1');
   assert.deepEqual(poolRanks(poolStandings(catOf('sample', 'md40'), 'A')), [1, 2, 3, 4], 'resolved ladder: sequential ranks');
-  const h2h = poolStandings(catOf('h2h', 't'), 'B'); // p6/p7 resolve via the mutual match, no tie flag
-  assert.deepEqual(poolRanks(h2h), [1, 2, 3, 4], 'head-to-head separations are resolved rows, each its own rank');
+  const h2h = poolStandings(catOf('h2hratio', 't'), 'A'); // resolved by the point ratio
+  assert.deepEqual(poolRanks(h2h), [1, 2, 3], 'head-to-head separations are resolved rows, each its own rank');
+  assert.deepEqual(poolRanks(poolStandings(catOf('h2h', 't'), 'B')), [1, 1, 1, 4], 'a trio level on every rung dead-ties');
 });
 
 test('koOrdinal: bracket ordinals are structural — schedule edits cannot renumber them', () => {

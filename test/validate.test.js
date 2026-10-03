@@ -13,6 +13,8 @@ const { loadRepo } = require('../src/tools.js');
 // [name, fixture, channel, message] — 'clean' = neither channel.
 const V = [
   ['clean fixture validates', 'sample', 'clean', null],
+  ['head-to-head ratio fixture validates', 'h2hratio', 'clean', null],
+  ['walkover ratio fixture validates', 'walkover-ratio', 'clean', null],
   ['placement bracket validates', 'place', 'clean', null],
   ['play-in draw validates', 'playin', 'clean', null],
   ['open placement band beside the final validates', 'placewave', 'clean', null],
@@ -31,6 +33,7 @@ const V = [
   ['bracket scheduled before its feeders end', 'bad-feeder-time', 'conflict', /starts before its feeders end/],
   ['even bestOf override', 'bad-even-bestof', 'err', /odd/],
   ['bestOf beyond the render bound rejected', 'bad-huge-bestof', 'err', /odd number 1–9/],
+  ['unknown tiebreak rung rejected', 'bad-tiebreak', 'err', /tiebreak rung "h2hPointDiff" is not one of/],
   ['bad scheduled string', 'bad-scheduled', 'err', /ISO-8601/],
   ['venue overlap', 'bad-venue-overlap', 'conflict', /overlap/],
   ['long-slot venue overlap', 'bad-slot-overlap', 'conflict', /60-minute and 60-minute slots/],

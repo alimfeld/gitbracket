@@ -293,6 +293,20 @@ const anticipationLine = (ctx, status, href, day, wave) => {
   return `<p${section ? ' data-status="next"' : ''}>${u('next', { body })}</p>`;
 };
 
+// Why a row sits where it sits: the ladder rung that placed it, with the numbers it won on. A row
+// the wins alone placed, or a tie no rung could split, says so instead — the tie only once the
+// pool has nothing left to play, so an unplayed pool never reads as a level one.
+function tiebreakCell(r, settled) {
+  const tb = r.h2h && {
+    h2hWins: ['tiebreak-wins', r.h2h.w],
+    h2hGameRatio: ['tiebreak-games', `${r.h2h.gw}:${r.h2h.gl}`],
+    h2hPointRatio: ['tiebreak-points', `${r.h2h.pw}:${r.h2h.pl}`],
+  }[r.splitBy];
+  if (tb) return `<td data-tiebreak="${esc(r.splitBy)}">${esc(u(tb[0]))} ${esc(String(tb[1]))}</td>`;
+  if (r.tie) return `<td>${settled ? esc(u('tiebreak-level')) : ''}</td>`;
+  return `<td>${esc(u('tiebreak-primary'))}</td>`;
+}
+
 function catSection(ctx, opts) {
   const parts = [];
   const byPool = new Map(); // pool -> its group matches (creation order = pool order)
@@ -326,15 +340,16 @@ function catSection(ctx, opts) {
       parts.push('<div class="grid">');
       for (const [pool] of byPool) {
         parts.push(`<div><h4>Pool ${esc(String(pool))}</h4>`);
-        const bo1 = poolBo1(ctx, pool); // GD restates W−L in a best-of-1 pool — drop the column, keep PD
-        const gdHead = bo1 ? '' : '<th scope="col" class="num">GD</th>';
-        parts.push(`<table><thead><tr><th scope="col" class="num">#</th><th scope="col">${u('team')}</th><th scope="col" class="num">W</th><th scope="col" class="num">L</th>${gdHead}<th scope="col" class="num">PD</th></tr></thead><tbody>`);
         const std = poolStandings(ctx, pool, true); // pools come from matches, so partial standings always resolve
         const ranks = poolDecided(std) ? poolRanks(std) : null;
+        const settled = ctx.matches.filter(m => m && m.pool === pool).every(isDone);
+        // The reason column earns its width only where it can say something: a rung placed a row,
+        // or the pool has nothing left to play and a tie survived the whole ladder.
+        const showTb = std.some(r => r.splitBy) || (settled && std.some(r => r.tie));
+        const tbHead = showTb ? `<th scope="col">${u('tiebreak')}</th>` : '';
+        parts.push(`<table><thead><tr><th scope="col" class="num">#</th><th scope="col">${u('team')}</th><th scope="col" class="num">W</th><th scope="col" class="num">L</th>${tbHead}</tr></thead><tbody>`);
         std.forEach((r, i) => {
-          const team = teamLabel(r.ids, ctx);
-          const gdCell = bo1 ? '' : `<td class="num">${fmtDiff(r.gd)}</td>`;
-          parts.push(`<tr><td class="num">${ranks ? ranks[i] : ''}</td><td>${esc(team)}</td><td class="num">${r.wins}</td><td class="num">${r.losses}</td>${gdCell}<td class="num">${fmtDiff(r.pd)}</td></tr>`);
+          parts.push(`<tr><td class="num">${ranks ? ranks[i] : ''}</td><td>${esc(teamLabel(r.ids, ctx))}</td><td class="num">${r.wins}</td><td class="num">${r.losses}</td>${showTb ? tiebreakCell(r, settled) : ''}</tr>`);
         });
         parts.push('</tbody></table></div>');
       }
