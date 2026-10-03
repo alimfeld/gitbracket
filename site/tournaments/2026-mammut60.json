@@ -2265,7 +2265,21 @@
         "bestOf": 3,
         "slotMinutes": 60,
         "venue": "court-5",
-        "scheduled": "2026-10-03T16:50:00"
+        "scheduled": "2026-10-03T16:50:00",
+        "games": [
+          {
+            "a": 11,
+            "b": 4
+          },
+          {
+            "a": 11,
+            "b": 3
+          }
+        ],
+        "result": {
+          "status": "played",
+          "winner": "a"
+        }
       },
       {
         "id": 33,
