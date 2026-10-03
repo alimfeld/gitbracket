@@ -2172,7 +2172,17 @@
           }
         ],
         "venue": "court-4",
-        "scheduled": "2026-10-03T16:25:00"
+        "scheduled": "2026-10-03T16:25:00",
+        "games": [
+          {
+            "a": 3,
+            "b": 11
+          }
+        ],
+        "result": {
+          "status": "played",
+          "winner": "b"
+        }
       },
       {
         "id": 30,
