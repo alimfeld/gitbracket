@@ -767,10 +767,8 @@ function boot() {
     aimKey = key;
     const target = board.querySelector('[data-aim]');
     if (!target) return; // nothing playable on this board
-    // Reserve a card's worth above the target: ppm's floor makes every card at
-    // least CARD_PX tall, so an abutting predecessor's tail fills the band below
-    // the sticky header, and a taller one just tucks its top under the header.
-    const top = target.getBoundingClientRect().top + window.scrollY - (HEADER_PX + CARD_PX + CARD_GAP);
+    // A card's worth plus the seam above the target: the predecessor clears the sticky header by CARD_GAP.
+    const top = target.getBoundingClientRect().top + window.scrollY - (HEADER_PX + CARD_PX + CARD_GAP * 2);
     window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
   };
 
