@@ -167,9 +167,11 @@ picks the UI language, defaulting to the browser's.
   players. The URL is the only memory of a pick — share or bookmark it.
 - `#<slug>/venues?venue=<venue-id>` — the kiosk, the fullscreen board for the
   hall: the whole day on every court, following the earliest playable wave
-  (done matches stay, muted; the wave is accented, with one card of finished
-  play kept above it; a classification match — bronze and placement bands — dims its
-  round label, so the road to the final stands out); `venue` narrows to one court.
+  (done matches stay, muted; the wave is accented; a match a free team could
+  already start — later than the wave — carries a dashed accent; one card of
+  finished play is kept above the wave; a classification match — bronze and
+  placement bands — dims its round label, so the road to the final stands out);
+  `venue` narrows to one court.
 
 ## Specs
 

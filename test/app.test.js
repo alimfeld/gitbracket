@@ -11,7 +11,7 @@
 const fs = require('fs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, poolSealed, resolveSide, playerMatches, matchSlotMs, plRange, koColumn, koOrdinal, schedTime, dayKey, toCats, isDeadTie, winners, placementColumn, catStatus, currentWave } = require('../site/derive.js');
+const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, poolSealed, resolveSide, playerMatches, matchSlotMs, plRange, koColumn, koOrdinal, schedTime, dayKey, toCats, isDeadTie, winners, placementColumn, catStatus, currentWave, startableAhead } = require('../site/derive.js');
 const { sideLabel, placementLabel, matchLabel, fmtTime, roundName, playerStatus, possibleStages, setLocale } = require('../site/views.js');
 const { I18N } = require('../site/i18n.js');
 const { parseRoute, resolveLang, loadAll, needsFetch, superseded, timeoutSignal, renderIndex, renderTournament, renderVenue, renderPlayer, paintBadRoute, setPending, pageTitle, freshness, changedTournament, LAG_MS, STALE_MS } = require('../site/app.js');
@@ -1062,6 +1062,20 @@ test('kiosk follow: the aim target is the earliest wave, not the first venue tha
   assert(card(html, 'data-aim', '660').includes('11:00'), 'the follow lands on the earliest wave card');
   assert(!card(html, 'data-aim', '660').includes('14:00'), 'never the later wave in the first column');
   assert.equal(vals(html, 'data-status').filter(s => s === 'next').length, 2, 'both waves stay accented — the aim is the earliest');
+});
+
+test('kiosk ready: a free team\'s later match is marked ahead — a held one is not', () => {
+  // Round 1 done, round 2's second match spilled a slot. Both its teams are free,
+  // so it can be pulled onto a court now; round 3 still waits on the running matches.
+  const ctx = catOf('ready', 'rd');
+  assert.deepEqual(startableAhead(ctx, catStatus(ctx)).map(m => m.id), [4],
+    'the free spilled match is ready ahead; the wave and the matches fed by it are not');
+  assert.deepEqual(startableAhead(ctx, { kind: 'blocked' }), [], 'a blocked category exposes nothing, never throws');
+  const html = renderVenue({ slug: 'ready', view: 'venues' }, repoPage('ready'), clockAt(Date.parse('2026-05-02T10:05:00Z')));
+  const ready = cards(html, 'data-status', 'ready');
+  assert.equal(ready.length, 1, 'exactly one card carries the ready hook');
+  assert(ready[0].includes('Cid') && ready[0].includes('Gus'), 'the ready card is the free spilled match');
+  assert.equal(cards(html, 'data-status', 'next').length, 1, 'the running 10:00 match stays the wave');
 });
 
 test('kiosk clock: a match day shows a bare time, off day the shown date as a readout', () => {

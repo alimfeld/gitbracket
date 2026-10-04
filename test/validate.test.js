@@ -13,6 +13,7 @@ const { loadRepo } = require('../src/tools.js');
 // [name, fixture, channel, message] — 'clean' = neither channel.
 const V = [
   ['clean fixture validates', 'sample', 'clean', null],
+  ['ready-ahead scenario validates', 'ready', 'clean', null],
   ['head-to-head ratio fixture validates', 'h2hratio', 'clean', null],
   ['walkover ratio fixture validates', 'walkover-ratio', 'clean', null],
   ['placement bracket validates', 'place', 'clean', null],

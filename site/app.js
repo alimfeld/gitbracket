@@ -444,9 +444,15 @@ function renderVenue(route, data, stamp) {
   const v = route.venue;
   const rows = [];
   const ctxs = data.cats;
-  // The board's follow: each category's current wave — its earliest playable matches.
+  // The board's follow: each category's current wave — its earliest playable matches —
+  // plus the matches a free team could pull forward, marked ready.
   const nexts = new Set();
-  for (const ctx of ctxs) for (const m of currentWave(ctx, catStatus(ctx))) nexts.add(m);
+  const aheads = new Set();
+  for (const ctx of ctxs) {
+    const st = catStatus(ctx);
+    for (const m of currentWave(ctx, st)) nexts.add(m);
+    for (const m of startableAhead(ctx, st)) aheads.add(m);
+  }
   for (const ctx of ctxs) {
     for (const m of ctx.matches) {
       if (!m || m.venue === undefined) continue;
@@ -516,7 +522,7 @@ function renderVenue(route, data, stamp) {
   const nextRows = win.filter(w => nexts.has(w.r.m));
   const aimMin = nextRows.length ? Math.min(...nextRows.map(w => w.s)) : null;
   const card = (r, h, aim) => {
-    const status = isDone(r.m) ? 'done' : nexts.has(r.m) ? 'next' : 'upcoming';
+    const status = isDone(r.m) ? 'done' : nexts.has(r.m) ? 'next' : aheads.has(r.m) ? 'ready' : 'upcoming';
     // The pool stage is the road's first leg; only the classification tree is off it.
     const road = plRange(r.m, r.ctx) === null ? undefined : 'off';
     return matchCard(r.m, r.ctx, { meta: ['catName'], aim, road,

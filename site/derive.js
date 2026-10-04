@@ -842,6 +842,26 @@ function currentWave(ctx, status) {
   return ready.filter(m => schedTime(m, ctx.tz) === t);
 }
 
+// Matches a free team could pull forward, scheduled after the wave in play: both
+// sides resolve and no earlier undone match in the category holds either side —
+// each team's own next match, just later on the clock.
+// Not memoized: it takes a status, and a ctx-keyed memo would freeze the first one.
+function startableAhead(ctx, status) {
+  const floor = Math.min(...currentWave(ctx, status).map(m => schedTime(m, ctx.tz))); // no wave -> Infinity, so nothing qualifies
+  const open = ctx.matches.filter(m => !isDone(m) && Number.isFinite(schedTime(m, ctx.tz)));
+  // each open match's resolved player sets, or null when a side is unresolved
+  const sides = new Map(open.map(m => [m, Array.isArray(m.sides) && m.sides.length === 2 ? m.sides.map(s => resolveSide(s, ctx)) : null]));
+  return open.filter(m => {
+    const t = schedTime(m, ctx.tz);
+    if (t <= floor) return false;
+    const sets = sides.get(m);
+    if (!sets || sets.some(r => !r)) return false;
+    const ids = new Set(sets.flatMap(r => [...r]));
+    return !open.some(o => o !== m && schedTime(o, ctx.tz) < t &&
+      (sides.get(o) || []).some(r => r && [...r].some(id => ids.has(id))));
+  });
+}
+
 // A finish band: the tightest placement range, a decided two-rank decider's exact
 // place (winner lo, loser hi), else the deepest KO loss (a bye'd round clamps the top).
 function playerBand(ctx, rows) {
@@ -866,5 +886,5 @@ function playerBand(ctx, rows) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { DATE_RE, ID_RE, ISO_RE, MAX_BEST_OF, validBestOf, TIEBREAK_RUNGS, pairSig, makeCat, matchesOf, toCats, matchSlotMs, sideIdx, bestOfOf, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, poolSealed, resolveSide, playerMatches, possibleStageFacts, plRange, plOrdinal, placementColumn, catStatus, currentWave, playerBand, parentsOf, koColumn, koOrdinal, winners, dayKey, wallMin, schedTime, schedDays };
+  module.exports = { DATE_RE, ID_RE, ISO_RE, MAX_BEST_OF, validBestOf, TIEBREAK_RUNGS, pairSig, makeCat, matchesOf, toCats, matchSlotMs, sideIdx, bestOfOf, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, poolSealed, resolveSide, playerMatches, possibleStageFacts, plRange, plOrdinal, placementColumn, catStatus, currentWave, startableAhead, playerBand, parentsOf, koColumn, koOrdinal, winners, dayKey, wallMin, schedTime, schedDays };
 }

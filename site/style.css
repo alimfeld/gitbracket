@@ -565,6 +565,11 @@ article[data-status="next"] {
   border-left: 3px solid var(--accent);
 }
 
+/* a free team's next match, later than the wave in play — the next accent, dashed */
+article[data-status="ready"] {
+  border-left: 3px dashed var(--accent);
+}
+
 /* off the title road: the head's right cell is the round label — names and scores keep their ink */
 article[data-road="off"] .head span:last-child {
   color: var(--muted);
