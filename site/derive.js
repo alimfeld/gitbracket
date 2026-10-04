@@ -794,15 +794,6 @@ function placementColumn(m, ctx) {
   return plBands(ctx).get(m && m.id) ?? null;
 }
 
-// Board status token: done | overdue | now | upcoming.
-function kioskStatus(r, now) {
-  const t = r.t;
-  if (isDone(r.m)) return 'done';
-  if (now >= t + matchSlotMs(r.m, r.ctx)) return 'overdue';
-  if (now >= t) return 'now';
-  return 'upcoming';
-}
-
 // Both sides of a card resolve; a malformed side counts (the gate reports it,
 // the status must never throw on it).
 const isPlayable = (m, ctx) => !Array.isArray(m.sides) || m.sides.every(s => resolveSide(s, ctx));
@@ -875,5 +866,5 @@ function playerBand(ctx, rows) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { DATE_RE, ID_RE, ISO_RE, MAX_BEST_OF, validBestOf, TIEBREAK_RUNGS, pairSig, makeCat, matchesOf, toCats, matchSlotMs, sideIdx, bestOfOf, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, poolSealed, resolveSide, playerMatches, possibleStageFacts, plRange, plOrdinal, placementColumn, kioskStatus, catStatus, currentWave, playerBand, parentsOf, koColumn, koOrdinal, winners, dayKey, wallMin, schedTime, schedDays };
+  module.exports = { DATE_RE, ID_RE, ISO_RE, MAX_BEST_OF, validBestOf, TIEBREAK_RUNGS, pairSig, makeCat, matchesOf, toCats, matchSlotMs, sideIdx, bestOfOf, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, poolSealed, resolveSide, playerMatches, possibleStageFacts, plRange, plOrdinal, placementColumn, catStatus, currentWave, playerBand, parentsOf, koColumn, koOrdinal, winners, dayKey, wallMin, schedTime, schedDays };
 }

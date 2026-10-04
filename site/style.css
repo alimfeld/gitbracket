@@ -556,14 +556,6 @@ body.venue header {
 }
 
 /* status rides the spine — a 3px left edge, the admin board's vocabulary */
-article[data-status="overdue"] {
-  border-left: 3px solid var(--alert);
-}
-
-article[data-status="now"] {
-  border-left: 3px solid var(--live);
-}
-
 article[data-status="done"] {
   border-left: 3px solid var(--muted);
   background: var(--hairline); /* settled reads as a block from across the hall, not a 3px shade */

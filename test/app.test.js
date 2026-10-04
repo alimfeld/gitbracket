@@ -672,6 +672,7 @@ test('result statuses render: W/O and void on cards, settled matches stay on the
   const venue = renderVenue({ slug: 'result', view: 'venues' }, data, clockAt(Date.parse('2026-05-02T09:30:00Z')));
   assert(vals(venue, 'data-status').includes('done'), 'settled matches — played, walkover, void — all stay on the full-day board');
   assert(vals(venue, 'data-status').includes('upcoming'), 'the open 11:00 final is still upcoming at 09:30');
+  assert(!vals(venue, 'data-status').includes('next'), 'a blocked front — a dead-tied pool rank leaves the final unplayable — lights no card');
 });
 
 test('category chip: the category name rides a per-category slot on the board and the schedule, escaped', () => {
@@ -1018,8 +1019,36 @@ test('multi-day kiosk: one day at a time, previewing day one early, falling back
   assert(text(mon).includes('SF') && text(mon).includes('Final') && !text(mon).includes('Katherine Johnson'), 'after the last day: the board falls back to the last day (Sunday knockout), not a stale today');
   const fri = renderVenue({ slug: 'multiday', view: 'venues' }, data, clockAt(at('2026-07-10T12:00:00-04:00')));
   assert(text(fri).includes('Katherine Johnson') && !text(fri).includes('SF') && !text(fri).includes('Final'), 'a day before day one: the board previews the first day, pools only');
-  assert(sat.includes('id="now-line"') && sun.includes('id="now-line"'), 'a match day carries the now-line — the follow has something to track');
-  assert(!fri.includes('id="now-line"') && !mon.includes('id="now-line"'), 'off match day there is no now-line — the board never jumps to a day edge');
+  // the follow is the earliest playable wave, not the clock: the board stamps its target
+  // (shown day + wave start minute) and only a new result that moves it re-aims
+  assert(vals(sat, 'data-aim').length > 0 && vals(sat, 'data-aim').every(m => m === '660'), 'every aim hook sits at the earliest wave minute');
+  assert.equal(cards(sat, 'data-status', 'next').length, 1, 'the open pool match is the one accented card');
+  assert(!vals(sat, 'data-status').some(s => s === 'now' || s === 'overdue'), 'the kiosk carries no clock statuses');
+  assert(vals(sat, 'data-status').includes('done'), 'finished matches keep their done treatment');
+  assert(sat.includes('data-follow="2026-07-11|660"'), 'the board stamps the followed target: shown day + wave start minute');
+  const joined = JSON.parse(JSON.stringify(info.tjson));
+  joined.matches.md40[5].result = { status: 'played', winner: 'a' };
+  const satDone = renderVenue({ slug: 'multiday', view: 'venues' }, pageData(joined, 'multiday', repo.index), clockAt(at('2026-07-11T13:00:00-04:00')));
+  assert(satDone.includes('data-follow="2026-07-11|"'), 'the key moves when the last pool match lands — the only thing that re-aims');
+});
+
+test('kiosk follow: the aim target is the earliest wave, not the first venue that has one', () => {
+  // Two categories, two courts: court 1's wave is 14:00, court 3's is 11:00. The
+  // board renders column-major, so a DOM-order target would land on the 14:00 card.
+  const tjson = bare({
+    venues: [{ id: 'c1', name: 'Court 1' }, { id: 'c3', name: 'Court 3' }],
+    players: ['p1', 'p2', 'p3', 'p4'].map(id => ({ id, name: id.toUpperCase() })),
+    categories: [{ ...bareCat, id: 'a', name: 'A' }, { ...bareCat, id: 'b', name: 'B' }],
+    matches: {
+      a: [{ id: 1, pool: 'A', scheduled: '2026-05-02T11:00:00', venue: 'c3', sides: [{ kind: 'players', ids: ['p1'] }, { kind: 'players', ids: ['p2'] }] }],
+      b: [{ id: 1, pool: 'A', scheduled: '2026-05-02T14:00:00', venue: 'c1', sides: [{ kind: 'players', ids: ['p3'] }, { kind: 'players', ids: ['p4'] }] }],
+    },
+  });
+  const html = renderVenue({ slug: 'aim', view: 'venues' }, pageData(tjson, 'aim'), clockAt(Date.parse('2026-05-02T09:00:00Z')));
+  assert.deepEqual(vals(html, 'data-aim'), ['660'], 'the 11:00 wave is the target, though court 1 opens the board');
+  assert(card(html, 'data-aim', '660').includes('11:00'), 'the follow lands on the earliest wave card');
+  assert(!card(html, 'data-aim', '660').includes('14:00'), 'never the later wave in the first column');
+  assert.equal(vals(html, 'data-status').filter(s => s === 'next').length, 2, 'both waves stay accented — the aim is the earliest');
 });
 
 test('kiosk clock: a match day shows a bare time, off day the shown date as a readout', () => {

@@ -166,8 +166,9 @@ picks the UI language, defaulting to the browser's.
   valid `player` (or via "Change") it shows a picker of participating
   players. The URL is the only memory of a pick — share or bookmark it.
 - `#<slug>/venues?venue=<venue-id>` — the kiosk, the fullscreen board for the
-  hall: the whole day on every court, auto-centered on the current slot (done
-  matches stay, muted; overdue red, now green); `venue` narrows to one court.
+  hall: the whole day on every court, following the earliest playable wave
+  (done matches stay, muted; the wave is accented, with one card of finished
+  play kept above it); `venue` narrows to one court.
 
 ## Specs
 

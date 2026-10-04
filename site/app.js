@@ -428,7 +428,7 @@ function matchCard(m, ctx, opts = {}) {
   };
   const meta = opts.meta.map(k => item[k]).join(' · ');
   const head = opts.head ? `<div class="head">${opts.head.map(c => `<span>${c.html !== undefined ? c.html : item[c.key]}</span>`).join('')}</div>` : '';
-  return `<article${opts.id ? ` id="${opts.id}"` : ''}${opts.status ? ` data-status="${opts.status}"` : ''}${opts.style ? ` style="${opts.style}"` : ''}>${head}${sideRow(m, ctx, 0)}${sideRow(m, ctx, 1)}<div class="meta">${meta}</div></article>`;
+  return `<article${opts.id ? ` id="${opts.id}"` : ''}${opts.status ? ` data-status="${opts.status}"` : ''}${opts.aim != null ? ` data-aim="${opts.aim}"` : ''}${opts.style ? ` style="${opts.style}"` : ''}>${head}${sideRow(m, ctx, 0)}${sideRow(m, ctx, 1)}<div class="meta">${meta}</div></article>`;
 }
 
 function sideRow(m, ctx, i) {
@@ -444,6 +444,9 @@ function renderVenue(route, data, stamp) {
   const v = route.venue;
   const rows = [];
   const ctxs = data.cats;
+  // The board's follow: each category's current wave — its earliest playable matches.
+  const nexts = new Set();
+  for (const ctx of ctxs) for (const m of currentWave(ctx, catStatus(ctx))) nexts.add(m);
   for (const ctx of ctxs) {
     for (const m of ctx.matches) {
       if (!m || m.venue === undefined) continue;
@@ -510,24 +513,26 @@ function renderVenue(route, data, stamp) {
   // the board's foot gap owns its band, same as the sticky header above
   const ppm = Math.max(MIN_PX_PER_MIN, avail ? (avail - HEADER_PX - GAP_PX) / total : 0, (CARD_PX + CARD_GAP) / sShort);
   const y = min => (min - dayStart) * ppm;
-  const card = (r, h) => {
-    const status = kioskStatus(r, now);
-    const when = timeEl(r.t, r.ctx.tz);
-    const flag = status === 'now' ? u('now') : status === 'overdue' ? u('overdue') : ''; // the status word is the flag; done and upcoming cards show none
-    return matchCard(r.m, r.ctx, { meta: ['catName', 'label'],
-      head: [{ html: when }, { html: flag }], status, style: `height:${h}px` });
+  const nextRows = win.filter(w => nexts.has(w.r.m));
+  const aimMin = nextRows.length ? Math.min(...nextRows.map(w => w.s)) : null;
+  const card = (r, h, aim) => {
+    const status = isDone(r.m) ? 'done' : nexts.has(r.m) ? 'next' : 'upcoming';
+    return matchCard(r.m, r.ctx, { meta: ['catName'], aim,
+      head: [{ html: timeEl(r.t, r.ctx.tz) }, { key: 'label' }], status, style: `height:${h}px` });
   };
-  // Cards sit at their wall-clock top; the scroll target is the now-line.
+  // Cards sit at their wall-clock top; only the earliest wave's cards carry data-aim,
+  // so the follow lands on it rather than on the first venue column that has a wave.
   const placed = w => {
     const { r, s, e } = w;
-    return `<div class="bcard" style="top:${y(s)}px">${card(r, e !== null ? (e - s) * ppm - CARD_GAP : CARD_PX)}</div>`;
+    const aim = s === aimMin && nexts.has(r.m) ? aimMin : null; // the wave's earliest cards, never a done one at the same minute
+    return `<div class="bcard" style="top:${y(s)}px">${card(r, e !== null ? (e - s) * ppm - CARD_GAP : CARD_PX, aim)}</div>`;
   };
   const dayH = Math.ceil(total * ppm);
   const nowMin = wallMin(now, tz);
-  // The line is the day's "now" — it exists only while the board's day is today;
-  // on any other day there is nothing for aim() to follow.
+  // The line is the day's "now" — drawn only while the board's day is today, so it
+  // reads as an ahead/behind reference beside the wave the aim follows.
   const nowY = nowMin !== null && dayKey(now, tz) === shownDay ? Math.min(Math.max(y(nowMin), 0), dayH) : null;
-  return top + `<div class="board" style="--cols: ${cols.length}; --day-h: ${dayH}">${nowY !== null ? `<div class="now" id="now-line" style="top:${nowY}px"></div>` : ''}${cols.map((id, i) => `<div class="col" style="grid-column: ${i + 1}">${byVenue.get(id).map(placed).join('')}</div>`).join('')}</div>`;
+  return top + `<div class="board" data-follow="${shownDay}|${aimMin ?? ''}" style="--cols: ${cols.length}; --day-h: ${dayH}">${nowY !== null ? `<div class="now" style="top:${nowY}px"></div>` : ''}${cols.map((id, i) => `<div class="col" style="grid-column: ${i + 1}">${byVenue.get(id).map(placed).join('')}</div>`).join('')}</div>`;
 }
 
 // Do scheduled matches span more than one wall-clock day? Gates the date on cards.
@@ -741,10 +746,24 @@ function boot() {
   };
   const tick = () => load(route);
 
-  // Centre the now-line on every render — the poll is the kiosk's clock for the play.
+  // Follow the wave, not the clock. The board stamps shown-day + the wave's start
+  // minute; only when that target moves do we re-aim, so a poll that changes nothing
+  // (or a later result that leaves the wave put) never yanks a manual scroll. The
+  // tournament rides the key too: a hop to another board needs its own aim.
+  let aimKey = null;
   const aim = () => {
-    const ln = document.getElementById('now-line');
-    if (ln) ln.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    const board = document.querySelector('.board[data-follow]');
+    if (!board) { aimKey = null; return; } // off the kiosk — a return re-aims
+    const key = `${route ? route.slug : ''}|${board.dataset.follow}`;
+    if (key === aimKey) return;
+    aimKey = key;
+    const target = board.querySelector('[data-aim]');
+    if (!target) return; // nothing playable on this board
+    // Reserve a card's worth above the target: ppm's floor makes every card at
+    // least CARD_PX tall, so an abutting predecessor's tail fills the band below
+    // the sticky header, and a taller one just tucks its top under the header.
+    const top = target.getBoundingClientRect().top + window.scrollY - (HEADER_PX + CARD_PX + CARD_GAP);
+    window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
   };
 
   const render = (r, d) => {

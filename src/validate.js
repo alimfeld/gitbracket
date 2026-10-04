@@ -213,7 +213,7 @@ function validateTournamentData(slug, indexName, indexLocation, indexDates, info
   // players is the resolved set, so a pool/edge side double-books like an explicit one.
   const { entries: sched, noSlot } = schedEntries(tjson);
   for (const cid of noSlot) {
-    err(`${tFile} matches.${cid}`, 'scheduled matches resolve to no slot length — set slotMinutes (per stage or per match) or the kiosk can\'t mark matches overdue');
+    err(`${tFile} matches.${cid}`, 'scheduled matches resolve to no slot length — set slotMinutes (per stage or per match) or the board can\'t lay out the day');
   }
   // ponytail: O(n²) pair scan over one tournament file — small by construction;
   // a per-venue time index is the upgrade if a file ever grows past ~300 matches.
