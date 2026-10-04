@@ -14,7 +14,7 @@ const assert = require('node:assert/strict');
 const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, poolSealed, resolveSide, playerMatches, matchSlotMs, plRange, koColumn, koOrdinal, schedTime, dayKey, toCats, isDeadTie, winners, placementColumn, catStatus, currentWave } = require('../site/derive.js');
 const { sideLabel, placementLabel, matchLabel, fmtTime, roundName, playerStatus, possibleStages, setLocale } = require('../site/views.js');
 const { I18N } = require('../site/i18n.js');
-const { parseRoute, resolveLang, loadAll, needsFetch, superseded, timeoutSignal, renderIndex, renderTournament, renderVenue, renderPlayer, paintBadRoute, pageTitle, freshness, changedTournament, LAG_MS, STALE_MS } = require('../site/app.js');
+const { parseRoute, resolveLang, loadAll, needsFetch, superseded, timeoutSignal, renderIndex, renderTournament, renderVenue, renderPlayer, paintBadRoute, setPending, pageTitle, freshness, changedTournament, LAG_MS, STALE_MS } = require('../site/app.js');
 const { generate } = require('../src/schedule.js');
 const { FIX, catOf, pageData, repoPage, withTjson, text, vals, card, cards, links, lk } = require('./helpers.js');
 const { loadRepo } = require('../src/tools.js');
@@ -139,6 +139,14 @@ test('a rejected fragment route paints the bad-link page — a call, never the b
   // page painted its source. This is the shipped recovery page's one contract.
   assert.equal(typeof app.innerHTML, 'string', 'the branch assigns rendered HTML, not a function');
   assert(app.innerHTML.includes('href="#"'), 'the page offers a route home — the shipped recovery link');
+});
+
+test('setPending: the busy token is spelled "true", and a settle removes it', () => {
+  const el = { attrs: {}, setAttribute(n, v) { this.attrs[n] = v; }, removeAttribute(n) { delete this.attrs[n]; } };
+  setPending(el, true);
+  assert.equal(el.attrs['aria-busy'], 'true', 'the busy token is spelled "true" — a valueless attribute reads as false');
+  setPending(el, false);
+  assert.equal(el.attrs['aria-busy'], undefined, 'a settled load leaves no busy state behind');
 });
 
 test('parseRoute: fragment routing — bare slug is the tournament page, params id-gated, unknown input ignored', () => {

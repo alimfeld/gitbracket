@@ -157,6 +157,10 @@ const BAD_LINK = () => `<p>${u('bad-link')}</p><p><a href="#">${u('all-tournamen
 // Painted through a named seam so the branch is DOM-testable.
 const paintBadRoute = el => { el.innerHTML = BAD_LINK(); };
 
+// A busy page reads as loading, not dead. Named as a seam so the state flip is
+// DOM-testable; "true" is spelled out because a valueless attribute reads as false.
+const setPending = (el, on) => { if (on) el.setAttribute('aria-busy', 'true'); else el.removeAttribute('aria-busy'); };
+
 const FAILED = () => `<p>${u('failed')}</p>`;
 
 
@@ -657,6 +661,9 @@ function boot() {
   // One request per page, by slug: a poll that fires mid-download is dropped, not re-fetched.
   // A load always settles inside FETCH_TIMEOUT_MS, so the slot can't stay stuck.
   const live = new Set();
+  // Cold navigations only — a poll must never dim a board that is already up.
+  // Counted, not flagged: a click on a second card keeps the page busy until the last settles.
+  let navPending = 0;
 
   // Every view but the index auto-refreshes while visible; a return fetches immediately.
   const stopPoll = () => {
@@ -702,11 +709,12 @@ function boot() {
   // Any paint outside render's guard voids the memo — else a later identical render is suppressed.
   const paint = html => { app.innerHTML = html; lastHtml = ''; };
 
-  const load = r => {
+  const load = (r, nav) => {
     // r.slug is undefined on the index — key by view so slug-less routes can't collide.
     const key = r.slug || r.view;
     if (live.has(key)) return; // this page's answer is already on its way
     live.add(key);
+    if (nav) { navPending += 1; setPending(app, true); } // only a navigation counts as pending — never tick's poll
     loadAll(r).then(d => {
       if (superseded(route, r)) return; // a different tournament won the race
       if (r.view === 'index') return d.failed ? paint(FAILED() + `<p>${u('reload')}</p>`) : render(route, d); // the index never 404s the tournament file
@@ -729,7 +737,7 @@ function boot() {
       console.error(e);
       if (superseded(route, r)) return; // an abandoned route's failure can't blank the view that replaced it
       if (!data) paint(FAILED());
-    }).finally(() => live.delete(key));
+    }).finally(() => { live.delete(key); if (nav) { navPending -= 1; if (!navPending) setPending(app, false); } });
   };
   const tick = () => load(route);
 
@@ -785,7 +793,7 @@ function boot() {
     if (needsFetch(r, data)) {
       data = null;
       lastHtml = '';
-      load(r);
+      load(r, true);
     } else {
       render(r, data);
     }
@@ -822,5 +830,5 @@ if (typeof document !== 'undefined') boot();
 
 // CommonJS exports for node tests; the browser ignores these.
 if (typeof module !== 'undefined') {
-  module.exports = { parseRoute, resolveLang, loadAll, needsFetch, superseded, timeoutSignal, renderIndex, renderTournament, renderVenue, renderPlayer, paintBadRoute, pageTitle, freshness, changedTournament, LAG_MS, STALE_MS };
+  module.exports = { parseRoute, resolveLang, loadAll, needsFetch, superseded, timeoutSignal, renderIndex, renderTournament, renderVenue, renderPlayer, paintBadRoute, setPending, pageTitle, freshness, changedTournament, LAG_MS, STALE_MS };
 }

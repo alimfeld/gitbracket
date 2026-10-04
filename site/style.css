@@ -36,6 +36,20 @@ body {
   background: var(--page);
 }
 
+/* A cold navigation marks <main> busy. The dim waits ~.15s so a fast hop never
+flashes grey; clearing is undelayed, so a settle reads instantly. */
+main[aria-busy="true"] {
+  opacity: .6;
+  cursor: progress;
+  transition: opacity .2s .15s;
+}
+
+/* The UA's own `a { cursor: pointer }` outranks the inherited `progress` above,
+and the mouse rests on the link just clicked — so a busy page names the link too. */
+main[aria-busy="true"] a {
+  cursor: progress;
+}
+
 h1 {
   font-size: 1.5rem;
   margin: var(--space) 0 calc(var(--space)*2);
