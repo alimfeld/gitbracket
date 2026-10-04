@@ -42,7 +42,7 @@ function slotLabel(side, ctx) {
   if (!side || typeof side !== 'object') return 'TBD';
   if (side.kind === 'pool') {
     const st = poolStandings(ctx, side.pool);
-    const key = st && isDeadTie(st, side.rank) ? 'slot-pool-tie' : 'slot-pool';
+    const key = poolSealed(ctx, side.pool) && isDeadTie(st, side.rank) ? 'slot-pool-tie' : 'slot-pool';
     return t(LOCALE, key, { rank: ordNum(side.rank), pool: side.pool });
   }
   if (side.kind !== 'match') return 'TBD';
@@ -313,7 +313,8 @@ function playerStatus(ctx, pid) {
     const i = std ? std.findIndex(x => x.ids.has(pid)) : -1;
     if (i < 0 || !poolDecided(std)) return '';
     const rank = ordNum(poolRanks(std)[i]);
-    return t(LOCALE, isDeadTie(std, i + 1) ? 'slot-pool-tie' : 'slot-pool', { rank, pool: row.m.pool });
+    // the rank can be a live one; only a sealed pool's tie is a final word
+    return t(LOCALE, poolSealed(ctx, row.m.pool) && isDeadTie(std, i + 1) ? 'slot-pool-tie' : 'slot-pool', { rank, pool: row.m.pool });
   };
   const band = () => { const b = playerBand(ctx, rows); return b ? rankRange(b) : ''; };
   const undone = rows.filter(r => !isDone(r.m));

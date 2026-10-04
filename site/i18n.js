@@ -37,6 +37,8 @@ const I18N = {
     'group-stage': 'Group stage',
     'group-matches': 'Group matches',
     team: 'Team',
+    'played-col': 'Played',
+    'won-col': 'Won',
     'ko-stage': 'Knockout stage',
     won: 'won',
     walkover: 'Walkover',
@@ -81,13 +83,12 @@ const I18N = {
     'slot-pool': '{rank} in Pool {pool}',
     'slot-pool-tie': '{rank} in Pool {pool} — tie not broken',
     'slot-dangling': '{who} of match {id}',
-    // the pool table's reason column (app.js): the rung that placed a row, or why it is level
-    'tiebreak': 'Decided by',
-    'tiebreak-primary': 'most wins',
+    // the pool table's head-to-head column (app.js): the rung that placed a tied row, or why it is level
+    'tiebreak': 'Head-to-head tiebreak',
     'tiebreak-level': 'level',
-    'tiebreak-wins': 'h2h wins',
-    'tiebreak-games': 'h2h games',
-    'tiebreak-points': 'h2h points',
+    'tiebreak-wins': 'Wins',
+    'tiebreak-games': 'Games',
+    'tiebreak-points': 'Points',
     // per-locale word rules (views.js dispatches by name): bandShort strips the
     // classification word, place is the pre-word number, ord the range form.
     fmt: {
@@ -131,6 +132,8 @@ const I18N = {
     'group-stage': 'Gruppenphase',
     'group-matches': 'Gruppenspiele',
     team: 'Team',
+    'played-col': 'Gespielt',
+    'won-col': 'Gewonnen',
     'ko-stage': 'K.o.-Phase',
     won: 'gewonnen',
     walkover: 'Walkover',
@@ -175,12 +178,11 @@ const I18N = {
     'slot-pool': '{rank} in Pool {pool}',
     'slot-pool-tie': '{rank} in Pool {pool} — Gleichstand',
     'slot-dangling': '{who} von Spiel {id}',
-    'tiebreak': 'Entschieden durch',
-    'tiebreak-primary': 'meiste Siege',
+    'tiebreak': 'Direkter Vergleich',
     'tiebreak-level': 'Gleichstand',
-    'tiebreak-wins': 'direkt Siege',
-    'tiebreak-games': 'direkt Spiele',
-    'tiebreak-points': 'direkt Punkte',
+    'tiebreak-wins': 'Siege',
+    'tiebreak-games': 'Spiele',
+    'tiebreak-points': 'Punkte',
     fmt: {
       ord: n => `${n}.`,
       place: n => String(n),

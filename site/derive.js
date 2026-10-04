@@ -101,6 +101,14 @@ function poolRanks(std) {
 // Rank cells stay blank until a pool has a decided match.
 const poolDecided = std => !!std && std.some(r => r.wins || r.losses);
 
+// Sealed: every match in the pool settled and at least one of them counted. Only then is a tie the
+// ladder left standing final. An all-void pool is settled but decided nothing — missing evidence,
+// not a level pool — so no view claims a dead tie for it.
+const poolSealed = (ctx, pool) => {
+  const ms = ctx.matches.filter(m => m && m.pool === pool);
+  return ms.length > 0 && ms.every(isDone) && poolDecided(poolStandings(ctx, pool, true));
+};
+
 function poolStandings(ctx, pool, partial) {
   // partial=true: skip unfinished matches — live standings; strict form TBDs.
   const ms = ctx.matches.filter(m => m && m.pool === pool);
@@ -867,5 +875,5 @@ function playerBand(ctx, rows) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { DATE_RE, ID_RE, ISO_RE, MAX_BEST_OF, validBestOf, TIEBREAK_RUNGS, pairSig, makeCat, matchesOf, toCats, matchSlotMs, sideIdx, bestOfOf, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, resolveSide, playerMatches, possibleStageFacts, plRange, plOrdinal, placementColumn, kioskStatus, catStatus, currentWave, playerBand, parentsOf, koColumn, koOrdinal, winners, dayKey, wallMin, schedTime, schedDays };
+  module.exports = { DATE_RE, ID_RE, ISO_RE, MAX_BEST_OF, validBestOf, TIEBREAK_RUNGS, pairSig, makeCat, matchesOf, toCats, matchSlotMs, sideIdx, bestOfOf, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, poolSealed, resolveSide, playerMatches, possibleStageFacts, plRange, plOrdinal, placementColumn, kioskStatus, catStatus, currentWave, playerBand, parentsOf, koColumn, koOrdinal, winners, dayKey, wallMin, schedTime, schedDays };
 }

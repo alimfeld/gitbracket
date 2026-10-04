@@ -140,8 +140,8 @@ edit, never a refusal.
    then the better ratio of points won to points lost;
 3. a rung that separates some teams sends the rest back to step 2, again over
    only the matches between those still tied;
-4. a group still level after the whole ladder is a dead tie — its bracket slot
-   stays TBD for the organizer.
+4. a group still level after the whole ladder is a dead tie once the pool has no
+   match left to play — its bracket slot stays TBD for the organizer.
 
 Ratios, not differences. A difference can stay level where a ratio separates,
 and a match with no games (a walkover) drops out of both ratios instead of

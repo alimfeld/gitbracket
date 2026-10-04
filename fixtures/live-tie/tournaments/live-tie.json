@@ -1,0 +1,301 @@
+{
+  "name": "Live Tie",
+  "location": "Test Hall",
+  "timezone": "UTC",
+  "venues": [
+    {
+      "id": "c1",
+      "name": "Court 1"
+    }
+  ],
+  "categories": [
+    {
+      "id": "t",
+      "name": "Live Tie",
+      "bestOf": {
+        "groups": 1,
+        "knockout": 1
+      },
+      "slotMinutes": {
+        "groups": 20,
+        "knockout": 20
+      }
+    }
+  ],
+  "players": [
+    {
+      "id": "p1",
+      "name": "A"
+    },
+    {
+      "id": "p2",
+      "name": "B"
+    },
+    {
+      "id": "p3",
+      "name": "C"
+    },
+    {
+      "id": "p4",
+      "name": "D"
+    },
+    {
+      "id": "p5",
+      "name": "E"
+    }
+  ],
+  "matches": {
+    "t": [
+      {
+        "id": 1,
+        "pool": "A",
+        "bestOf": 1,
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p1"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p2"
+            ]
+          }
+        ],
+        "result": {
+          "status": "played",
+          "winner": "a"
+        },
+        "games": [
+          {
+            "a": 11,
+            "b": 5
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "pool": "A",
+        "bestOf": 1,
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p1"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p3"
+            ]
+          }
+        ],
+        "result": {
+          "status": "played",
+          "winner": "a"
+        },
+        "games": [
+          {
+            "a": 11,
+            "b": 5
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "pool": "A",
+        "bestOf": 1,
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p2"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p4"
+            ]
+          }
+        ],
+        "result": {
+          "status": "played",
+          "winner": "a"
+        },
+        "games": [
+          {
+            "a": 11,
+            "b": 5
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "pool": "A",
+        "bestOf": 1,
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p3"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p4"
+            ]
+          }
+        ],
+        "result": {
+          "status": "played",
+          "winner": "a"
+        },
+        "games": [
+          {
+            "a": 11,
+            "b": 5
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "pool": "A",
+        "bestOf": 1,
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p2"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p5"
+            ]
+          }
+        ],
+        "result": {
+          "status": "played",
+          "winner": "a"
+        },
+        "games": [
+          {
+            "a": 11,
+            "b": 5
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "pool": "A",
+        "bestOf": 1,
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p3"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p5"
+            ]
+          }
+        ],
+        "result": {
+          "status": "played",
+          "winner": "a"
+        },
+        "games": [
+          {
+            "a": 11,
+            "b": 5
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "pool": "A",
+        "bestOf": 1,
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p2"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p3"
+            ]
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "pool": "A",
+        "bestOf": 1,
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p1"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p4"
+            ]
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "pool": "A",
+        "bestOf": 1,
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p1"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p5"
+            ]
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "pool": "A",
+        "bestOf": 1,
+        "sides": [
+          {
+            "kind": "players",
+            "ids": [
+              "p4"
+            ]
+          },
+          {
+            "kind": "players",
+            "ids": [
+              "p5"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

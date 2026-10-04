@@ -11,7 +11,7 @@
 const fs = require('fs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, resolveSide, playerMatches, matchSlotMs, plRange, koColumn, koOrdinal, schedTime, dayKey, toCats, isDeadTie, winners, placementColumn, catStatus, currentWave } = require('../site/derive.js');
+const { makeCat, winnerIdx, isDone, poolStandings, poolRanks, poolSealed, resolveSide, playerMatches, matchSlotMs, plRange, koColumn, koOrdinal, schedTime, dayKey, toCats, isDeadTie, winners, placementColumn, catStatus, currentWave } = require('../site/derive.js');
 const { sideLabel, placementLabel, matchLabel, fmtTime, roundName, playerStatus, possibleStages, setLocale } = require('../site/views.js');
 const { I18N } = require('../site/i18n.js');
 const { parseRoute, resolveLang, loadAll, needsFetch, superseded, timeoutSignal, renderIndex, renderTournament, renderVenue, renderPlayer, paintBadRoute, pageTitle, freshness, changedTournament, LAG_MS, STALE_MS } = require('../site/app.js');
@@ -377,6 +377,31 @@ test('pool table: a row placed by a head-to-head rung names that rung, and a bro
   assert.doesNotThrow(() => renderTournament({ slug: 'h2hratio', view: 'tournament' }, withTjson(data, broken)), 'an unknown rung ranks nothing and never throws');
 });
 
+test('pool table: only a wins-tie carries a tiebreak state — a wins-separated row stays blank', () => {
+  const html = renderTournament({ slug: 'blocked-tie', view: 'tournament' }, repoPage('blocked-tie'));
+  assert.deepEqual(vals(html, 'data-tiebreak'), ['level', 'level', 'level'], 'the three tied rows carry a state; the wins-separated row carries none');
+});
+
+test('pool table: a tie reads level only once the pool is sealed — a live tie and an unplayed pool show no tie state', () => {
+  const live = renderTournament({ slug: 'multiday', view: 'tournament' }, repoPage('multiday'));
+  assert(!vals(live, 'data-tiebreak').includes('level'), 'an unfinished pool claims no dead tie — its bracket slot is unclaimed too');
+  const open = renderTournament({ slug: 'live-tie', view: 'tournament' }, repoPage('live-tie'));
+  assert.deepEqual(vals(open, 'data-tiebreak'), ['h2hWins'], 'a live pool still names the rung that placed a row, but its open tie claims no level');
+  const unplayed = renderTournament({ slug: 'tie', view: 'tournament' }, repoPage('tie'));
+  assert(!vals(unplayed, 'data-tiebreak').includes('level'), 'a pool with no counted match claims no tie');
+});
+
+// The table test above reads a state hook, so it cannot tell an all-void pool from a sealed one on words
+// or columns alone (per AGENTS, renderer tests are smoke only). The predicate the renderer gates on is
+// domain behavior, so it is pinned here.
+test('poolSealed: only a settled pool with counted play seals a tie', () => {
+  const sealed = (name, cat) => poolSealed(catOf(name, cat), 'A');
+  assert.equal(sealed('blocked-tie', 't'), true, 'every match settled and the play counted');
+  assert.equal(sealed('multiday', 'md40'), false, 'a match is still to play');
+  assert.equal(sealed('live-tie', 't'), false, 'a match is still to play even though a rung already placed a row');
+  assert.equal(sealed('tie', 't'), false, 'fully settled but nothing counted — missing evidence, not a level pool');
+});
+
 test('walkover and partial-match detection', () => {
   const md = catOf('sample', 'md40');
   assert(winnerIdx(md.byId.get(7)) === 0, 'walkover side b -> side a wins');
@@ -393,10 +418,26 @@ test('slot resolution: walkover winner vs in-play TBD', () => {
 });
 
 test('slot resolution: a dead tie is labelled, not silently unresolved', () => {
-  const ctx = catOf('tie', 't');
-  const ko = ctx.byId.get(3);
+  const ctx = catOf('blocked-tie', 't');
+  const ko = ctx.byId.get(8);
   assert.equal(resolveSide(ko.sides[0], ctx), null, 'a dead-tie rank resolves to nothing');
   assert.match(sideLabel(ko.sides[0], ctx), /tie not broken/, 'the slot says why it is TBD — the gate no longer warns');
+});
+
+test('slot resolution: a pool nothing was played in names itself, but no tie', () => {
+  const ctx = catOf('tie', 't'); // one pool match, void
+  const ko = ctx.byId.get(3);
+  assert.equal(resolveSide(ko.sides[0], ctx), null, 'an all-void pool resolves to nothing');
+  const label = sideLabel(ko.sides[0], ctx);
+  assert(!label.includes('tie not broken'), 'missing evidence is not a tie the ladder exhausted');
+  assert.match(label, /Pool A/, 'the slot still names the pool it waits on');
+});
+
+test('playerStatus: a live pool names its rank without calling the tie final', () => {
+  const live = catOf('live-tie', 't'); // pool A has play left
+  const s = playerStatus(live, 'p2');
+  assert.match(s, /2nd in Pool A/, 'the live rank still shows — b and c share it');
+  assert(!s.includes('tie not broken'), 'a tie play can still break is not a dead one');
 });
 
 test('resolveSide: string ids on a players side is TBD, never a char-split team', () => {
