@@ -11,9 +11,9 @@ const STALE_MS = FETCH_TIMEOUT_MS + 2 * POLL_MS;
 // their next slot. ponytail: re-tune on the wall screen beside the viewport floor.
 const CARD_PX = 135;
 
-// The kiosk-top header (h1 + venue titles) at base zoom; a taller header clips the
-// day's last card. ponytail: measured beside the wall screen — re-tune with the header.
-const HEADER_PX = 79;
+// The kiosk-top header (h1 + venue titles) at base zoom. ponytail: re-measure —
+// the old 79 missed the h1's row, so the aim left less than a card above its target.
+const HEADER_PX = 131;
 
 // The viewport floor — never scale the board below this many px per minute.
 const MIN_PX_PER_MIN = 1.6;
