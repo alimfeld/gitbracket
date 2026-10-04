@@ -428,7 +428,7 @@ function matchCard(m, ctx, opts = {}) {
   };
   const meta = opts.meta.map(k => item[k]).join(' · ');
   const head = opts.head ? `<div class="head">${opts.head.map(c => `<span>${c.html !== undefined ? c.html : item[c.key]}</span>`).join('')}</div>` : '';
-  return `<article${opts.id ? ` id="${opts.id}"` : ''}${opts.status ? ` data-status="${opts.status}"` : ''}${opts.aim != null ? ` data-aim="${opts.aim}"` : ''}${opts.style ? ` style="${opts.style}"` : ''}>${head}${sideRow(m, ctx, 0)}${sideRow(m, ctx, 1)}<div class="meta">${meta}</div></article>`;
+  return `<article${opts.id ? ` id="${opts.id}"` : ''}${opts.status ? ` data-status="${opts.status}"` : ''}${opts.road ? ` data-road="${opts.road}"` : ''}${opts.aim != null ? ` data-aim="${opts.aim}"` : ''}${opts.style ? ` style="${opts.style}"` : ''}>${head}${sideRow(m, ctx, 0)}${sideRow(m, ctx, 1)}<div class="meta">${meta}</div></article>`;
 }
 
 function sideRow(m, ctx, i) {
@@ -517,7 +517,9 @@ function renderVenue(route, data, stamp) {
   const aimMin = nextRows.length ? Math.min(...nextRows.map(w => w.s)) : null;
   const card = (r, h, aim) => {
     const status = isDone(r.m) ? 'done' : nexts.has(r.m) ? 'next' : 'upcoming';
-    return matchCard(r.m, r.ctx, { meta: ['catName'], aim,
+    // The pool stage is the road's first leg; only the classification tree is off it.
+    const road = plRange(r.m, r.ctx) === null ? undefined : 'off';
+    return matchCard(r.m, r.ctx, { meta: ['catName'], aim, road,
       head: [{ html: timeEl(r.t, r.ctx.tz) }, { key: 'label' }], status, style: `height:${h}px` });
   };
   // Cards sit at their wall-clock top; only the earliest wave's cards carry data-aim,

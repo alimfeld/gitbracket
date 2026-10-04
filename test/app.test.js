@@ -715,6 +715,19 @@ test('kiosk calendar: cards sit by wall-clock top — a slot only on a late venu
   // layout — review surface; the position contract is the wall-clock order above
 });
 
+test('kiosk: classification cards are flagged off the title road — pool and main bracket are not', () => {
+  // Off the road means the match settles a lower rank (bronze, placement bands); the pool
+  // stage is the first leg of the road, so it never flags.
+  const data = repoPage('place8');
+  const html = renderVenue({ slug: 'place8', view: 'venues' }, data, clockAt(Date.parse('2026-06-01T11:30:00Z')));
+  const ctx = data.cats[0];
+  const flagged = vals(html, 'data-road');
+  const onRoad = ctx.matches.filter(m => m.pool !== undefined || plRange(m, ctx) === null).length;
+  assert(flagged.every(v => v === 'off'), 'the flag carries its one value');
+  // every card is one chip; the flag must land on exactly the classification tree
+  assert.equal(vals(html, 'data-cat').length - flagged.length, onRoad, 'the flag marks the classification cards only');
+});
+
 test('bracket walkers tolerate a sideless match: report, never throw', () => {
   const ko = makeCat({ meta: {}, matches: [
     { id: 'sf1', sides: [{ kind: 'players', ids: ['a'] }, { kind: 'players', ids: ['b'] }] },

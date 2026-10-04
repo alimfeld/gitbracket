@@ -168,7 +168,8 @@ picks the UI language, defaulting to the browser's.
 - `#<slug>/venues?venue=<venue-id>` — the kiosk, the fullscreen board for the
   hall: the whole day on every court, following the earliest playable wave
   (done matches stay, muted; the wave is accented, with one card of finished
-  play kept above it); `venue` narrows to one court.
+  play kept above it; a classification match — bronze and placement bands — dims its
+  round label, so the road to the final stands out); `venue` narrows to one court.
 
 ## Specs
 

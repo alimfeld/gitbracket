@@ -565,6 +565,11 @@ article[data-status="next"] {
   border-left: 3px solid var(--accent);
 }
 
+/* off the title road: the head's right cell is the round label — names and scores keep their ink */
+article[data-road="off"] .head span:last-child {
+  color: var(--muted);
+}
+
 p[data-status="finished"] {
   color: var(--muted);
 }
