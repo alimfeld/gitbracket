@@ -16,6 +16,11 @@
     {
       "id": "md40",
       "name": "Men's Doubles 40+",
+      "tiebreak": [
+        "h2hWins",
+        "h2hGameRatio",
+        "h2hPointRatio"
+      ],
       "bestOf": {
         "groups": 3,
         "knockout": 1
@@ -28,6 +33,11 @@
     {
       "id": "xd",
       "name": "Mixed Doubles",
+      "tiebreak": [
+        "h2hWins",
+        "h2hGameRatio",
+        "h2hPointRatio"
+      ],
       "bestOf": {
         "groups": 3
       },

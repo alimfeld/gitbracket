@@ -10,6 +10,7 @@
     {
       "id": "rd",
       "name": "Ready Doubles",
+      "tiebreak": ["h2hWins", "h2hGameRatio", "h2hPointRatio"],
       "bestOf": { "groups": 3, "knockout": 3 },
       "slotMinutes": { "groups": 30, "knockout": 30 }
     }

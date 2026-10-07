@@ -1,15 +1,10 @@
 {
-  "name": "Bad Tiebreak",
+  "name": "Bad No Tiebreak",
   "location": "Test Hall",
   "timezone": "UTC",
   "venues": [],
   "categories": [
-    {
-      "id": "t",
-      "name": "T",
-      "bestOf": { "groups": 3, "knockout": 3 },
-      "tiebreak": ["h2hWinRatio"]
-    }
+    { "id": "t", "name": "T", "bestOf": { "groups": 3, "knockout": 3 } }
   ],
   "players": [
     { "id": "p1", "name": "A" },

@@ -6,6 +6,7 @@
     {
       "id": "t",
       "name": "Singles",
+      "tiebreak": ["h2hWins", "h2hGameRatio", "h2hPointRatio"],
       "bestOf": {
         "knockout": 1
       }

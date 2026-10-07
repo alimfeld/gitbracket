@@ -118,7 +118,7 @@ function poolStandings(ctx, pool, partial) {
     if (!(s && s.kind === 'players' && Array.isArray(s.ids))) return null;
     const sig = pairSig(s.ids);
     let r = recs.get(sig);
-    if (!r) { r = { sig, ids: new Set(s.ids), wins: 0, losses: 0 }; recs.set(sig, r); }
+    if (!r) { r = { sig, ids: new Set(s.ids), wins: 0, losses: 0, pf: 0, pa: 0 }; recs.set(sig, r); }
     return r;
   };
   for (const m of ms) {
@@ -135,26 +135,45 @@ function poolStandings(ctx, pool, partial) {
     }
     (w === 0 ? r0 : r1).wins++;
     (w === 0 ? r1 : r0).losses++;
+    // Points ride only the games actually played — a walkover has none to count. They follow the
+    // side letter, not the match winner: a game is won and lost by sides, not by the result.
+    if (m.result.status === 'played' && Array.isArray(m.games)) {
+      for (const g of m.games) {
+        if (!g || !Number.isFinite(g.a) || !Number.isFinite(g.b)) continue; // a malformed game is the gate's report
+        r0.pf += g.a; r0.pa += g.b;
+        r1.pf += g.b; r1.pa += g.a;
+      }
+    }
   }
-  // a declared list, else the shipped ladder; a malformed one falls back too
-  return poolLadder([...recs.values()], ms, Array.isArray(ctx?.tiebreak) && ctx.tiebreak.length ? ctx.tiebreak : TIEBREAK_RUNGS);
+  // The category declares its rungs; an undeclared or malformed list ranks on wins alone.
+  return poolLadder([...recs.values()], ms, Array.isArray(ctx?.tiebreak) ? ctx.tiebreak : []);
 }
 
 // A ratio of wins to losses, as a quotient: equal ratios round to the same double, so the
 // values group and sort directly. No games at all is no evidence, so it reads level.
 const q = (won, lost) => (lost ? won / lost : (won ? Infinity : 1));
 
-// The pool ladder's rungs, written out in README: more wins, then among the teams still tied
-// head-to-head wins, the ratio of games won to lost, the ratio of points won to lost. A rung
-// name is data — it ships inside tournament files, so it is never renamed or redefined; that
-// would re-rank a finished tournament under its own published result. Declaration order is the
-// default ladder.
+// The pool ladder's rungs, written out in README. Each reads the mutual map h (the tied set's
+// own matches) or the row's own whole-pool totals. A rung name is data — it ships inside tournament
+// files, so it is never renamed or redefined; that would re-rank a finished tournament under its
+// own published result. The order below is the catalog, not a default: a file declares its own
+// list (validator-enforced), and an undeclared one ranks on wins alone.
 const RUNGS = {
   h2hWins: (r, h) => h.get(r.sig).w,
   h2hGameRatio: (r, h) => q(h.get(r.sig).gw, h.get(r.sig).gl),
   h2hPointRatio: (r, h) => q(h.get(r.sig).pw, h.get(r.sig).pl),
+  h2hPointDiff: (r, h) => h.get(r.sig).pw - h.get(r.sig).pl,
+  pointDiff: r => r.pf - r.pa,
+  pointsFor: r => r.pf,
 };
-const TIEBREAK_RUNGS = Object.keys(RUNGS);
+const RUNG_NAMES = Object.keys(RUNGS);
+
+// The category's ladder is the file's own: a missing or malformed list, or a rung the catalog
+// doesn't know, is the gate's report — one string per problem, so a gate can print every one.
+const tiebreakProblems = tb => {
+  if (!Array.isArray(tb) || tb.length === 0) return [`tiebreak must be a non-empty array of rung names (${RUNG_NAMES.join(', ')})`];
+  return tb.filter(r => !RUNG_NAMES.includes(r)).map(r => `tiebreak rung ${JSON.stringify(r)} is not one of ${RUNG_NAMES.join(', ')} — a typo would silently re-rank the pool`);
+};
 
 // Head-to-head over the set's mutual matches only, so a rung never sees a match against a team
 // it isn't tied with. An unplayed match is a win with no games: it decides h2hWins, no ratios.
@@ -200,9 +219,10 @@ function poolLadder(list, ms, rungs) {
         groups.get(k).push(r);
       }
       if (groups.size === 1) continue; // level here: the next rung, as far as is necessary
-      for (const part of [...groups.values()].sort((x, y) => val(y[0], h) - val(x[0], h))) {
+      for (const [k, part] of [...groups].sort((x, y) => y[0] - x[0])) {
         if (part.length > 1) { order(part); continue; }
         part[0].splitBy = name; // the rung that placed this row, and the numbers it won on
+        part[0].splitVal = k;
         part[0].h2h = h.get(part[0].sig);
         out.push(part[0]);
       }
@@ -886,5 +906,5 @@ function playerBand(ctx, rows) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { DATE_RE, ID_RE, ISO_RE, MAX_BEST_OF, validBestOf, TIEBREAK_RUNGS, pairSig, makeCat, matchesOf, toCats, matchSlotMs, sideIdx, bestOfOf, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, poolSealed, resolveSide, playerMatches, possibleStageFacts, plRange, plOrdinal, placementColumn, catStatus, currentWave, startableAhead, playerBand, parentsOf, koColumn, koOrdinal, winners, dayKey, wallMin, schedTime, schedDays };
+  module.exports = { DATE_RE, ID_RE, ISO_RE, MAX_BEST_OF, validBestOf, RUNG_NAMES, tiebreakProblems, pairSig, makeCat, matchesOf, toCats, matchSlotMs, sideIdx, bestOfOf, winnerIdx, isDone, isDeadTie, poolStandings, poolRanks, poolDecided, poolSealed, resolveSide, playerMatches, possibleStageFacts, plRange, plOrdinal, placementColumn, catStatus, currentWave, startableAhead, playerBand, parentsOf, koColumn, koOrdinal, winners, dayKey, wallMin, schedTime, schedDays };
 }

@@ -593,3 +593,32 @@ article[data-status="possible"] .head {
   color: var(--muted);
   text-decoration: underline dotted;
 }
+
+/* the tiebreaker column's info button + the rules overlay */
+.tb-open {
+  padding: 0 .4em;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: .8em;
+  cursor: pointer;
+}
+
+dialog.tb-info {
+  max-width: 34em;
+  padding: var(--space);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--page);
+  color: var(--ink);
+}
+
+dialog.tb-info h4 {
+  margin-top: 0;
+}
+
+dialog.tb-info ol {
+  padding-left: 1.2em;
+}

@@ -136,6 +136,14 @@ test('spec guards reject bad input fast', () => {
   assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], courts: 'court-1' }] }), /courts must be an array/);
   assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], courts: [] }] }), /courts must be an array of venue ids, got \[\]/);
   assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], courts: ['court-9'] }] }), /not in spec.venues/);
+  assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], tiebreak: undefined }] }), /tiebreak must be a non-empty array/);
+  assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], tiebreak: [] }] }), /tiebreak must be a non-empty array/);
+  assert.throws(() => generate({ ...MINI, categories: [{ ...MINI.categories[0], tiebreak: ['nope'] }] }), /tiebreak rung "nope" is not one of/);
+});
+
+test('spec rungs reach the generated file', () => {
+  const t = generate({ ...MINI, categories: [{ ...MINI.categories[0], tiebreak: ['h2hWins', 'pointDiff'] }, MINI.categories[1]] });
+  assert.deepEqual(t.categories[0].tiebreak, ['h2hWins', 'pointDiff'], 'the category carries the declared rungs');
 });
 
 test('courts confines a category to its listed venues', () => {
@@ -172,7 +180,7 @@ test('a category confined to fewer courts than its round needs spills over time,
     poolSize: 7,
     venues: { 'court-1': 'C1', 'court-2': 'C2', 'court-3': 'C3', 'court-4': 'C4', 'court-5': 'C5' },
     players,
-    categories: [{ id: 'md', name: 'Men', bestOf: 1, slotMinutes: 30, final: { bestOf: 3, slotMinutes: 60 }, courts: ['court-1', 'court-2', 'court-3'] }],
+    categories: [{ id: 'md', name: 'Men', bestOf: 1, slotMinutes: 30, final: { bestOf: 3, slotMinutes: 60 }, tiebreak: ['h2hWins', 'h2hGameRatio', 'h2hPointRatio'], courts: ['court-1', 'court-2', 'court-3'] }],
     teams: { md },
   });
   const { errs } = validateRepo(repoOf(tourney));
@@ -442,7 +450,7 @@ test('categories sharing a block start end within one slot of each other', () =>
   for (let i = 0; i < 8; i++) { players['a' + (i + 1)] = 'A' + (i + 1); a.push(['a' + (i + 1)]); }
   for (let i = 0; i < 6; i++) { players['b' + (i + 1)] = 'B' + (i + 1); b.push(['b' + (i + 1)]); }
   const venues = { 'court-1': 'C1', 'court-2': 'C2', 'court-3': 'C3', 'court-4': 'C4' };
-  const mkCat = (id, name) => ({ id, name, bestOf: 1, slotMinutes: 30 });
+  const mkCat = (id, name) => ({ id, name, bestOf: 1, slotMinutes: 30, tiebreak: ['h2hWins', 'h2hGameRatio', 'h2hPointRatio'] });
   const tourney = generate({
     ...MINI,
     players,
@@ -473,8 +481,8 @@ test('a knockout round syncs to one wave when its floor wave has a court for eve
     blocks: { md: '09:00', wd: '09:00' },
     players,
     categories: [
-      { id: 'md', name: 'Men', bestOf: 1, slotMinutes: 30, final: { bestOf: 3, slotMinutes: 60 } },
-      { id: 'wd', name: 'Women', bestOf: 1, slotMinutes: 30, knockout: true, final: { bestOf: 3, slotMinutes: 60 } },
+      { id: 'md', name: 'Men', bestOf: 1, slotMinutes: 30, final: { bestOf: 3, slotMinutes: 60 }, tiebreak: ['h2hWins', 'h2hGameRatio', 'h2hPointRatio'] },
+      { id: 'wd', name: 'Women', bestOf: 1, slotMinutes: 30, knockout: true, final: { bestOf: 3, slotMinutes: 60 }, tiebreak: ['h2hWins', 'h2hGameRatio', 'h2hPointRatio'] },
     ],
     teams: { md, wd },
   });
@@ -507,7 +515,7 @@ test('a knockout round spills across waves when courts cannot hold it whole', ()
     poolSize: 7,
     venues: { 'court-1': 'C1', 'court-2': 'C2', 'court-3': 'C3' },
     players,
-    categories: [{ id: 'md', name: 'Men', bestOf: 1, slotMinutes: 30, final: { bestOf: 3, slotMinutes: 60 } }],
+    categories: [{ id: 'md', name: 'Men', bestOf: 1, slotMinutes: 30, final: { bestOf: 3, slotMinutes: 60 }, tiebreak: ['h2hWins', 'h2hGameRatio', 'h2hPointRatio'] }],
     teams: { md },
   });
   const { errs } = validateRepo(repoOf(tourney));
@@ -533,8 +541,8 @@ test('a finishing chain yields to a round: the near-done category takes its fina
     blocks: { md: '09:00', wd: '09:00' },
     players,
     categories: [
-      { id: 'md', name: 'Men', bestOf: 1, slotMinutes: 30, final: { bestOf: 3, slotMinutes: 60 } },
-      { id: 'wd', name: 'Women', bestOf: 1, slotMinutes: 30, knockout: true, final: { bestOf: 3, slotMinutes: 60 } },
+      { id: 'md', name: 'Men', bestOf: 1, slotMinutes: 30, final: { bestOf: 3, slotMinutes: 60 }, tiebreak: ['h2hWins', 'h2hGameRatio', 'h2hPointRatio'] },
+      { id: 'wd', name: 'Women', bestOf: 1, slotMinutes: 30, knockout: true, final: { bestOf: 3, slotMinutes: 60 }, tiebreak: ['h2hWins', 'h2hGameRatio', 'h2hPointRatio'] },
     ],
     teams: { md, wd },
   });

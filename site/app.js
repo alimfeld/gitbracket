@@ -297,18 +297,32 @@ const anticipationLine = (ctx, status, href, day, wave) => {
   return `<p${section ? ' data-status="next"' : ''}>${u('next', { body })}</p>`;
 };
 
-// Why a row sits where it sits: the ladder rung that placed it, with the numbers it won on. Only a
-// wins-tie reaches a rung, so a row the wins alone placed stays blank; a tie no rung could split
-// says level — but only in a sealed pool (derive), where no play is left to move it.
+// Why a row sits where it sits: the rung that placed it, as its word token and the number it won
+// on — the overlay carries the meaning. Only a wins-tie reaches a rung, so a row the wins alone
+// placed stays blank; a tie no rung could split says level in a sealed pool.
+const signed = n => (n > 0 ? `+${n}` : String(n));
+const TB = {
+  h2hWins: ['tiebreak-wins', r => r.splitVal],
+  h2hGameRatio: ['tiebreak-games', r => `${r.h2h.gw}:${r.h2h.gl}`],
+  h2hPointRatio: ['tiebreak-points', r => `${r.h2h.pw}:${r.h2h.pl}`],
+  h2hPointDiff: ['tiebreak-h2hpd', r => signed(r.splitVal)],
+  pointDiff: ['tiebreak-pd', r => signed(r.splitVal)],
+  pointsFor: ['tiebreak-pf', r => r.splitVal],
+};
 function tiebreakCell(r, sealed) {
-  const tb = r.h2h && {
-    h2hWins: ['tiebreak-wins', r.h2h.w],
-    h2hGameRatio: ['tiebreak-games', `${r.h2h.gw}:${r.h2h.gl}`],
-    h2hPointRatio: ['tiebreak-points', `${r.h2h.pw}:${r.h2h.pl}`],
-  }[r.splitBy];
-  if (tb) return `<td data-tiebreak="${esc(r.splitBy)}">${esc(u(tb[0]))} ${esc(String(tb[1]))}</td>`;
+  const tb = TB[r.splitBy];
+  if (tb) return `<td data-tiebreak="${esc(r.splitBy)}">${esc(u(tb[0]))} ${esc(tb[1](r))}</td>`;
   if (r.tie) return sealed ? `<td data-tiebreak="level">${esc(u('tiebreak-level'))}</td>` : '<td></td>';
   return '<td></td>';
+}
+
+// The rules behind the column, for the category's declared rungs in order. Plain words, no
+// rulebook citations — a rung name is data and revisions aren't this page's to track.
+function tiebreakDialog(ctx) {
+  const rungs = Array.isArray(ctx.tiebreak) ? ctx.tiebreak.filter(n => TB[n]) : [];
+  if (!rungs.length) return '';
+  const items = rungs.map(n => `<li><strong>${esc(u(`tb-${n}`))}</strong> — ${esc(u(`tb-${n}-desc`))}</li>`).join('');
+  return `<dialog class="tb-info"><h4>${esc(u('tiebreak'))}</h4><p>${esc(u('tiebreak-desc'))}</p><ol>${items}</ol><p>${esc(u('tiebreak-level-desc'))}</p><form method="dialog"><button>${esc(u('close'))}</button></form></dialog>`;
 }
 
 function catSection(ctx, opts) {
@@ -342,6 +356,7 @@ function catSection(ctx, opts) {
     // scoreboard first, cards last
     if (byPool.size) {
       parts.push('<div class="grid">');
+      let anyTb = false;
       for (const [pool] of byPool) {
         parts.push(`<div><h4>Pool ${esc(String(pool))}</h4>`);
         const std = poolStandings(ctx, pool, true); // pools come from matches, so partial standings always resolve
@@ -350,7 +365,8 @@ function catSection(ctx, opts) {
         // sealed pool left a tie the ladder could not split.
         const sealed = poolSealed(ctx, pool);
         const showTb = std.some(r => r.splitBy) || (sealed && std.some(r => r.tie));
-        const tbHead = showTb ? `<th scope="col">${u('tiebreak')}</th>` : '';
+        if (showTb) anyTb = true;
+        const tbHead = showTb ? `<th scope="col">${u('tiebreak')} <button type="button" class="tb-open" data-tb aria-label="${esc(u('tiebreak-info'))}">i</button></th>` : '';
         parts.push(`<table><thead><tr><th scope="col" class="num">#</th><th scope="col">${u('team')}</th><th scope="col" class="num"><abbr title="${esc(u('played-col'))}">P</abbr></th><th scope="col" class="num"><abbr title="${esc(u('won-col'))}">W</abbr></th>${tbHead}</tr></thead><tbody>`);
         std.forEach((r, i) => {
           parts.push(`<tr><td class="num">${ranks ? ranks[i] : ''}</td><td>${esc(teamLabel(r.ids, ctx))}</td><td class="num">${r.wins + r.losses}</td><td class="num">${r.wins}</td>${showTb ? tiebreakCell(r, sealed) : ''}</tr>`);
@@ -358,6 +374,7 @@ function catSection(ctx, opts) {
         parts.push('</tbody></table></div>');
       }
       parts.push('</div>');
+      if (anyTb) parts.push(tiebreakDialog(ctx));
     }
     parts.push(`<h4 id="group-matches">${u('group-matches')}</h4>`, matchGrid(grp, ctx, opts.multi, next), '</section>');
   }
@@ -836,6 +853,12 @@ function boot() {
     targets.forEach(flashEl);
   };
   document.addEventListener('click', e => {
+    const tb = e.target.closest('button[data-tb]');
+    if (tb) {
+      const d = tb.closest('section')?.querySelector('dialog.tb-info');
+      if (d && !d.open) d.showModal();
+      return;
+    }
     const a = e.target.closest('a[data-jump]');
     if (!a) return;
     e.preventDefault();

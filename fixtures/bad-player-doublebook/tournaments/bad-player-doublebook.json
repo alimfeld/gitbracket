@@ -16,6 +16,11 @@
     {
       "id": "a",
       "name": "Category A",
+      "tiebreak": [
+        "h2hWins",
+        "h2hGameRatio",
+        "h2hPointRatio"
+      ],
       "bestOf": {
         "knockout": 1
       },
@@ -26,6 +31,11 @@
     {
       "id": "b",
       "name": "Category B",
+      "tiebreak": [
+        "h2hWins",
+        "h2hGameRatio",
+        "h2hPointRatio"
+      ],
       "bestOf": {
         "knockout": 1
       },

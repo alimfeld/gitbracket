@@ -2,7 +2,7 @@
   "name": "Bad Sides Knockout",
   "location": "Test Hall",
   "timezone": "UTC",
-  "categories": [{ "id": "t", "name": "T", "bestOf": { "groups": 1, "knockout": 1 } }],
+  "categories": [{ "id": "t", "name": "T", "tiebreak": ["h2hWins", "h2hGameRatio", "h2hPointRatio"], "bestOf": { "groups": 1, "knockout": 1 } }],
   "players": [
     { "id": "p1", "name": "P1" }, { "id": "p2", "name": "P2" },
     { "id": "p3", "name": "P3" }, { "id": "p4", "name": "P4" }

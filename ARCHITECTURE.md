@@ -69,8 +69,9 @@ Pinned by `test/architecture.test.js`:
 - No node tool under `src/` (outside `src/admin/`, which is browser code) imports
   `views.js`.
 - Every `derive.js` export is read by a browser consumer (the shipped site or the
-  loopback admin), or is a named node-shared primitive (`ISO_RE`, `pairSig`,
-  `makeCat`, `matchesOf`, `parentsOf`, `validBestOf`) — no dead or node-only drift.
+  loopback admin), or is a named shared primitive the gate/tools or a test reads
+  (`ISO_RE`, `pairSig`, `makeCat`, `matchesOf`, `parentsOf`, `validBestOf`,
+  `RUNG_NAMES`, `tiebreakProblems`) — no dead or node-only drift.
 - Each page's scripts compile together with no top-level name declared twice —
   classic scripts share one global lexical scope.
 - Every id a page looks up (`$('…')` / `getElementById('…')`) is produced by that

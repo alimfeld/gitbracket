@@ -12,6 +12,11 @@
     {
       "id": "t",
       "name": "Test",
+      "tiebreak": [
+        "h2hWins",
+        "h2hGameRatio",
+        "h2hPointRatio"
+      ],
       "bestOf": {
         "groups": 4,
         "knockout": 5

@@ -4,7 +4,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { matchSlotMs, pairSig, dayKey, schedTime, wallMin, ID_RE, MAX_BEST_OF, validBestOf } = require('../site/derive.js');
+const { matchSlotMs, pairSig, dayKey, schedTime, wallMin, ID_RE, MAX_BEST_OF, validBestOf, tiebreakProblems } = require('../site/derive.js');
 const { writeTournament, writeTournamentIndex, slotsOverlap, plainObject, fixedPlayers, isRealDate, daysOf } = require('./tools.js');
 const { validateRepo } = require('./validate.js');
 
@@ -482,6 +482,10 @@ function generate(spec) {
   // A non-object final would drop the override silently and still validate — the one
   // spec failure the gate can't see.
   for (const c of categories) {
+    // Every category declares its pool ladder; there is no fallback, so an omitted
+    // one would rank the pool on wins alone.
+    const tbProblem = tiebreakProblems(c.tiebreak)[0];
+    if (tbProblem) throw new Error(`spec: category ${c.id}: ${tbProblem}`);
     // A missing block start used to leak NaN through the greedy into an
     // unreadable TypeError — name it here instead.
     if (typeof blockStart[c.id] !== 'string' || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(blockStart[c.id])) {
@@ -543,6 +547,7 @@ function generate(spec) {
     name: c.name,
     bestOf: { groups: c.bestOf, knockout: c.bestOf },
     slotMinutes: { groups: c.slotMinutes, knockout: c.slotMinutes },
+    tiebreak: [...c.tiebreak], // a copy — the generated file never aliases the spec's array
   }));
 
   // ---- teams ----

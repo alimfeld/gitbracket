@@ -3,7 +3,7 @@
   "location": "Test Hall",
   "timezone": "UTC",
   "venues": [{ "id": "c", "name": "C" }],
-  "categories": [{ "id": "t", "name": "T", "bestOf": { "groups": 1, "knockout": 3 }, "slotMinutes": { "groups": 30, "knockout": 45 } }],
+  "categories": [{ "id": "t", "name": "T", "tiebreak": ["h2hWins", "h2hGameRatio", "h2hPointRatio"], "bestOf": { "groups": 1, "knockout": 3 }, "slotMinutes": { "groups": 30, "knockout": 45 } }],
   "players": [{ "id": "p1", "name": "P1" }, { "id": "p2", "name": "P2" }, { "id": "p3", "name": "P3" }],
   "matches": {
     "t": [

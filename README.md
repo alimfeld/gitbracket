@@ -75,12 +75,12 @@ matches keyed by category:
 - Matches have two stages: `groups` (has a `pool`) and `knockout` (no pool).
 - `bestOf` sets match length per stage, `slotMinutes` the court slot per
   stage; a match can override either with a plain number.
-- `tiebreak` (optional) records the pool-ranking rungs a file was ranked under
-  — `h2hWins`, `h2hGameRatio`, `h2hPointRatio`, in that order. Omit it and the
-  ladder below applies; the editor stamps a category's rungs with its first
-  result, so a later change to that default cannot re-rank a played file. A bare
-  rung name is data whose meaning is frozen the day it ships, so a new rule takes
-  a new name.
+- `tiebreak` (required) is a category's pool-ranking ladder: a non-empty,
+  ordered list of rung names. Nothing is implicit — a file that never declares a
+  ladder is a validator error, so a rung added to the catalog can't quietly move
+  a tournament that didn't ask for it. The catalog is `h2hWins`, `h2hGameRatio`,
+  `h2hPointRatio`, `h2hPointDiff`, `pointDiff`, `pointsFor`; a bare rung name is
+  data whose meaning is frozen the day it ships, so a new rule takes a new name.
 - `scheduled` is local wall time in the tournament's `timezone` — never a UTC
   instant or offset; the IANA zone at the top of the file interprets it. A
   nonexistent time during a spring clock change is rejected; an ambiguous time
@@ -132,20 +132,29 @@ scoring on. To reshuffle feeders, edit sides directly: an intermediate state
 (a source claimed twice, an orphaned match) is a conflict to clear in the next
 edit, never a refusal.
 
-**Pool rankings** use the head-to-head ladder, written out in full:
+**Pool rankings** are the category's declared `tiebreak` ladder, applied in order:
 
 1. most match wins;
-2. among the teams still tied on wins, and over the matches between them only:
-   most head-to-head wins, then the better ratio of games won to games lost,
-   then the better ratio of points won to points lost;
+2. the declared rungs, in order. Each compares only the teams still tied, and
+   measures either their mutual matches or the whole pool:
+   - `h2hWins` — most wins among the tied teams;
+   - `h2hGameRatio`, `h2hPointRatio` — the better ratio of games won to games
+     lost, then of points won to points lost, over their mutual matches;
+   - `h2hPointDiff` — the better points-for minus points-against over their
+     mutual matches;
+   - `pointDiff` — the better points-for minus points-against over every match
+     in the pool;
+   - `pointsFor` — the most points scored over every match in the pool;
 3. a rung that separates some teams sends the rest back to step 2, again over
-   only the matches between those still tied;
+   only the matches between those still tied — the mutual (`h2h*`) numbers are
+   re-measured for the survivors, while `pointDiff` and `pointsFor` stay pinned
+   to the whole pool;
 4. a group still level after the whole ladder is a dead tie once the pool has no
    match left to play — its bracket slot stays TBD for the organizer.
 
-Ratios, not differences. A difference can stay level where a ratio separates,
-and a match with no games (a walkover) drops out of both ratios instead of
-skewing them.
+A match with no games (a walkover) decides `h2hWins` but adds nothing to any
+ratio or point total, so it can't skew them. Rankings are per pool; nothing here
+ranks teams across pools, so a rung never compares pools of different sizes.
 
 ## Views
 
@@ -188,6 +197,7 @@ spec — the single source of the schedule:
   "categories": [
     { "id": "md", "name": "Men's Doubles", "bestOf": 1, "slotMinutes": 30,
       "knockout": true, "placements": 2, "courts": ["court-1"],
+      "tiebreak": ["h2hWins", "h2hGameRatio", "h2hPointRatio"],
       "final": { "bestOf": 3, "slotMinutes": 60 } }
   ],
   "teams": { "md": [["ada", "ben"]] } }
@@ -207,6 +217,10 @@ spec — the single source of the schedule:
   each classification band plays (1 = every eliminated team gets exactly one
   placement match — the band is entered, not resolved); `final` overrides the
   final and bronze matches.
+- `tiebreak` (required) is the category's ordered rung list, exactly as in the
+  tournament file; the generator writes it into the produced category and checks
+  it against the same catalog, so a typo fails the spec before anything is
+  written.
 - `courts` (optional) lists the venue ids a category may use, in priority
   order: a match takes the first free one and never another. Omitting it
   allows every venue. A round too wide for the category's courts spills into

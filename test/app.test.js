@@ -385,6 +385,54 @@ test('pool table: a row placed by a head-to-head rung names that rung, and a bro
   assert.doesNotThrow(() => renderTournament({ slug: 'h2hratio', view: 'tournament' }, withTjson(data, broken)), 'an unknown rung ranks nothing and never throws');
 });
 
+test('pointDiff: overall point difference places a wins-level trio', () => {
+  const st = poolStandings(catOf('rungs', 'pd'), 'A');
+  assert.deepEqual(st.map(r => r.sig), ['a1', 'a3', 'a2'], 'a1 +10, a3 +8, a2 −18');
+  assert(st.every(r => r.splitBy === 'pointDiff' && !r.tie), 'the whole-pool point difference placed every row');
+});
+
+test('h2hPointDiff: the difference is measured over the tied teams only', () => {
+  const st = poolStandings(catOf('rungs', 'hpd'), 'A');
+  assert.deepEqual(st.map(r => r.sig), ['b1', 'b3', 'b2'], 'the same scores, read head-to-head');
+  assert(st.every(r => r.splitBy === 'h2hPointDiff'), 'the head-to-head point difference placed every row');
+});
+
+test('pointsFor: total points is the last resort when the differences stay level', () => {
+  const st = poolStandings(catOf('rungs', 'pf'), 'A');
+  assert.deepEqual(st.map(r => r.sig), ['c3', 'c1', 'c2'], 'c3 40, c1 32, c2 22');
+  assert(st.every(r => r.splitBy === 'pointsFor'), 'total points placed every row');
+});
+
+test('pointDiff stays pinned to the whole pool while a head-to-head rung re-measures the survivors', () => {
+  const st = poolStandings(catOf('rungs', 'mix'), 'A');
+  assert.deepEqual(st.map(r => r.sig), ['d2', 'd3', 'd1', 'd4'], 'd2/d3 tie on the whole-pool difference, so d1 drops out and d4 never reaches a rung');
+  assert.deepEqual(st.slice(0, 2).map(r => r.splitBy), ['h2hPointDiff', 'h2hPointDiff'], 'the surviving pair is separated head-to-head, on their own match only');
+  assert.equal(st[2].splitBy, 'pointDiff', 'd1 was placed on the whole-pool difference');
+  assert.equal(st[2].splitVal, 2, 'd1 reads its whole-pool +2, not the mutual 0 that would leave the trio level');
+  assert(st.every(r => !r.tie), 'the ladder separates every row — no dead tie');
+});
+
+test('pointDiff: a side-b win credits the points to the side that scored them', () => {
+  const st = poolStandings(catOf('rungs', 'bside'), 'A');
+  const by = Object.fromEntries(st.map(r => [r.sig, r]));
+  assert.equal(by.e2.pf, 38, 'e2 scored 22 as side b in match 1 and 16 as side a in match 2');
+  assert.equal(by.e2.pa, 30);
+  assert.equal(by.e1.pf, 30, 'e1 scored 22 as side b in match 3');
+  assert.equal(by.e1.pa, 40);
+  assert.deepEqual(st.map(r => r.sig), ['e2', 'e3', 'e1'], 'the whole-pool difference ranks three side-b wins correctly');
+  assert.deepEqual(st.map(r => r.splitBy), ['pointDiff', 'pointDiff', 'pointDiff'], 'every row is placed on the whole-pool difference');
+});
+
+test('pool table: each pool names its placing rung and carries an info overlay', () => {
+  const data = repoPage('rungs');
+  for (const [cat, rung] of [['pd', 'pointDiff'], ['hpd', 'h2hPointDiff'], ['pf', 'pointsFor']]) {
+    const html = renderTournament({ slug: 'rungs', view: 'tournament', cat }, data);
+    assert.deepEqual(vals(html, 'data-tiebreak'), [rung, rung, rung], `${cat} carries ${rung}`);
+    assert(html.includes('<dialog class="tb-info">'), `${cat} carries the rules overlay`);
+    assert(html.includes('data-tb'), `${cat} carries an info button`);
+  }
+});
+
 test('pool table: only a wins-tie carries a tiebreak state — a wins-separated row stays blank', () => {
   const html = renderTournament({ slug: 'blocked-tie', view: 'tournament' }, repoPage('blocked-tie'));
   assert.deepEqual(vals(html, 'data-tiebreak'), ['level', 'level', 'level'], 'the three tied rows carry a state; the wins-separated row carries none');
@@ -789,7 +837,7 @@ test('matchLabel: every knockout round carries its bracket ordinal — R16-N, QF
     blocks: { t: '09:00' },
     venues: { c1: 'C1', c2: 'C2', c3: 'C3', c4: 'C4', c5: 'C5', c6: 'C6' },
     players: Object.fromEntries(Array.from({ length: 16 }, (_, i) => ['p' + i, 'P' + i])),
-    categories: [{ id: 't', name: 'T', bestOf: 1, slotMinutes: 30 }],
+    categories: [{ id: 't', name: 'T', bestOf: 1, slotMinutes: 30, tiebreak: ['h2hWins', 'h2hGameRatio', 'h2hPointRatio'] }],
     teams: { t: Array.from({ length: 16 }, (_, i) => ['p' + i]) },
   };
   const tourney = generate(spec);
@@ -862,7 +910,7 @@ test('classification deciders name their feeder semis as cards', () => {
     blocks: { t: '09:00' },
     venues: { c1: 'C1', c2: 'C2', c3: 'C3', c4: 'C4' },
     players,
-    categories: [{ id: 't', name: 'T', bestOf: 1, slotMinutes: 30, placements: 8 }],
+    categories: [{ id: 't', name: 'T', bestOf: 1, slotMinutes: 30, placements: 8, tiebreak: ['h2hWins', 'h2hGameRatio', 'h2hPointRatio'] }],
     teams: { t: teams },
   };
   const tourney = generate(spec);
@@ -882,7 +930,7 @@ test('plOrdinal: nested bands number their cards independently', () => {
     blocks: { t: '09:00' },
     venues: { c1: 'C1', c2: 'C2' },
     players,
-    categories: [{ id: 't', name: 'T', bestOf: 1, slotMinutes: 30, placements: 16 }],
+    categories: [{ id: 't', name: 'T', bestOf: 1, slotMinutes: 30, placements: 16, tiebreak: ['h2hWins', 'h2hGameRatio', 'h2hPointRatio'] }],
     teams: { t: teams },
   };
   const tourney = generate(spec);

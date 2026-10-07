@@ -35,8 +35,8 @@ const MINI = {
   venues: { 'court-1': 'Court 1', 'court-2': 'Court 2' },
   players: { ada: 'Ada', ben: 'Ben', cid: 'Cid', dan: 'Dan', eve: 'Eve', fin: 'Fin', gus: 'Gus', huw: 'Huw', ida: 'Ida', jan: 'Jan', kim: 'Kim' },
   categories: [
-    { id: 'md', name: 'Men', bestOf: 1, slotMinutes: 30, final: { bestOf: 3, slotMinutes: 60 } },
-    { id: 'xd', name: 'Mixed', bestOf: 1, slotMinutes: 30 },
+    { id: 'md', name: 'Men', bestOf: 1, slotMinutes: 30, final: { bestOf: 3, slotMinutes: 60 }, tiebreak: ['h2hWins', 'h2hGameRatio', 'h2hPointRatio'] },
+    { id: 'xd', name: 'Mixed', bestOf: 1, slotMinutes: 30, tiebreak: ['h2hWins', 'h2hGameRatio', 'h2hPointRatio'] },
   ],
   teams: {
     md: [['ada', 'ben'], ['cid', 'dan'], ['eve', 'fin'], ['gus', 'huw'], ['ida', 'jan']],

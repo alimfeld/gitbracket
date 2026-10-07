@@ -16,6 +16,11 @@
     {
       "id": "x",
       "name": "X",
+      "tiebreak": [
+        "h2hWins",
+        "h2hGameRatio",
+        "h2hPointRatio"
+      ],
       "bestOf": {
         "groups": 1,
         "knockout": 1
@@ -28,6 +33,11 @@
     {
       "id": "y",
       "name": "Y",
+      "tiebreak": [
+        "h2hWins",
+        "h2hGameRatio",
+        "h2hPointRatio"
+      ],
       "bestOf": {
         "groups": 1
       },

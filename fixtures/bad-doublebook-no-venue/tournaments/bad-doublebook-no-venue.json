@@ -4,8 +4,8 @@
   "timezone": "Europe/Zurich",
   "venues": [{ "id": "v1", "name": "Court 1" }],
   "categories": [
-    { "id": "a", "name": "A", "bestOf": { "knockout": 1 }, "slotMinutes": { "knockout": 30 } },
-    { "id": "b", "name": "B", "bestOf": { "knockout": 1 }, "slotMinutes": { "knockout": 30 } }
+    { "id": "a", "name": "A", "tiebreak": ["h2hWins", "h2hGameRatio", "h2hPointRatio"], "bestOf": { "knockout": 1 }, "slotMinutes": { "knockout": 30 } },
+    { "id": "b", "name": "B", "tiebreak": ["h2hWins", "h2hGameRatio", "h2hPointRatio"], "bestOf": { "knockout": 1 }, "slotMinutes": { "knockout": 30 } }
   ],
   "players": [
     { "id": "p1", "name": "Ada" },

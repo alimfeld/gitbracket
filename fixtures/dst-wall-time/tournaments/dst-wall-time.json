@@ -3,7 +3,7 @@
   "location": "Zurich",
   "timezone": "Europe/Zurich",
   "venues": [],
-  "categories": [{ "id": "t", "name": "T", "bestOf": { "groups": 1 }, "slotMinutes": { "groups": 30 } }],
+  "categories": [{ "id": "t", "name": "T", "tiebreak": ["h2hWins", "h2hGameRatio", "h2hPointRatio"], "bestOf": { "groups": 1 }, "slotMinutes": { "groups": 30 } }],
   "players": [
     { "id": "p1", "name": "P1" },
     { "id": "p2", "name": "P2" }

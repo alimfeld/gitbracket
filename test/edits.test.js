@@ -281,20 +281,20 @@ test('editor writeEdit: a result is side-relative — a feeder correction reinte
   }
 });
 
-test('editor writeEdit: the first result freezes the rungs a played file is ranked under', () => {
-  // derive's default ladder is mutable; the editor declares it at the instant a pool
-  // becomes played, so a later change to that default can't re-rank a finished file.
+test('editor writeEdit: scoring never touches the declared ladder', () => {
+  // The category declares its rungs when the file is generated; the editor is a fact editor,
+  // so scoring a match leaves the declaration exactly as it found it.
   const { tmp, dataRoot } = scratchSite('dst-wall-time');
   try {
     const cat = () => loadRepo(dataRoot).tournaments.get('dst-wall-time').tjson.categories[0];
-    assert(cat().tiebreak === undefined, 'an unplayed file declares no rungs');
+    const declared = [...cat().tiebreak];
+    assert(declared.length > 0, 'the fixture declares its rungs');
     const r = editor.writeEdit(dataRoot, loadRepo(dataRoot), 'dst-wall-time', 't', (ms, ctx) => editor.applyScore(ms, '1', [{ a: 11, b: 5 }], ctx));
     assert(!r.err && !r.errs && r.file, `the first score writes, got: ${r.err || (r.errs || []).join('; ')}`);
-    assert.deepEqual(cat().tiebreak, ['h2hWins', 'h2hGameRatio', 'h2hPointRatio'], 'the rungs are stamped with the first result');
-    // a later result edit keeps the one declaration — no duplicate, no re-stamp
+    assert.deepEqual(cat().tiebreak, declared, 'the declared rungs stand');
     const r2 = editor.writeEdit(dataRoot, loadRepo(dataRoot), 'dst-wall-time', 't', (ms, ctx) => editor.applyScore(ms, '1', [{ a: 11, b: 3 }], ctx));
     assert(!r2.err && !r2.errs, 'the rescore applies');
-    assert.deepEqual(cat().tiebreak, ['h2hWins', 'h2hGameRatio', 'h2hPointRatio'], 'the declared rungs stand');
+    assert.deepEqual(cat().tiebreak, declared, 'and still stand after a rescore');
     assert(validateRepo(loadRepo(dataRoot)).errs.length === 0, 'the written repo validates');
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });

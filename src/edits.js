@@ -6,7 +6,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { isDone, resolveSide, bestOfOf, matchesOf, TIEBREAK_RUNGS } = require('../site/derive.js');
+const { isDone, resolveSide, bestOfOf, matchesOf } = require('../site/derive.js');
 const { writeTournament, tournamentText, catCtx, winTarget, reachedWinner, plainObject, git, daysOf } = require('./tools.js');
 const { validateRepo, filterSlug } = require('./validate.js');
 
@@ -109,22 +109,12 @@ function writeEdit(siteRoot, repo, slug, catId, apply) {
   if (beforeText !== tournamentText(tjson)) {
     return { err: `the file changed on disk (${slug}.json) since it was loaded — refusing to overwrite it; reload and retry` };
   }
-  const catObj = tjson.categories.find(c => plainObject(c) && c.id === catId); // cats above proved it exists
-  let stamped = false;
   // undo the in-memory edit too — a same-process retry must start from the original
   const restore = () => {
     ms.splice(0, ms.length, ...((beforeJson.matches || {})[catId] || []));
-    if (stamped) delete catObj.tiebreak; // or the retry's stale-disk check sees a phantom change
   };
-  const wasPlayed = ms.some(m => m && m.result !== undefined);
   const aerr = apply(ms, ctx);
   if (aerr) return { err: aerr };
-  // The category's first result freezes the ladder it is ranked under: declare the
-  // current rungs, so a later change to the default can't re-rank a played file.
-  if (!wasPlayed && catObj.tiebreak === undefined && ms.some(m => m && m.result !== undefined)) {
-    catObj.tiebreak = [...TIEBREAK_RUNGS];
-    stamped = true;
-  }
   // Published days are fixed: an edit that moves a match off a day (or clears a day's
   // last match) would desync the index, which no edit path follows. Refused here.
   const beforeDays = daysOf(beforeJson);

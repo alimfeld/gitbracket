@@ -3,7 +3,7 @@
   "location": "Zurich",
   "timezone": "Europe/Zurich",
   "venues": [{ "id": "v1", "name": "Court 1" }],
-  "categories": [{ "id": "t", "name": "T", "bestOf": { "groups": 1 } }],
+  "categories": [{ "id": "t", "name": "T", "tiebreak": ["h2hWins", "h2hGameRatio", "h2hPointRatio"], "bestOf": { "groups": 1 } }],
   "players": [{ "id": "p1", "name": "Ada" }, { "id": "p2", "name": "Ben" }],
   "matches": {
     "t": [

@@ -9,7 +9,8 @@ const path = require('path');
 const vm = require('vm');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { plRange, koColumn, koOrdinal, placementColumn, plOrdinal } = require('../site/derive.js');
+const { plRange, koColumn, koOrdinal, placementColumn, plOrdinal, RUNG_NAMES } = require('../site/derive.js');
+const { I18N } = require('../site/i18n.js');
 const { catOf } = require('./helpers.js');
 
 const root = path.join(__dirname, '..');
@@ -35,18 +36,41 @@ test('every node tool stays off views.js (browser-only)', () => {
   }
 });
 
-// derive.js is the shipped model. A helper the gate/tools share is exported on
-// purpose and named here; anything else must be read by a shipped file, so a
-// helper can't quietly drift into node-only or die unused.
-const NODE_SHARED_EXPORTS = new Set(['ISO_RE', 'pairSig', 'makeCat', 'matchesOf', 'parentsOf', 'validBestOf', 'TIEBREAK_RUNGS']);
+// derive.js is the shipped model. A helper shared with the gate/tools — or read
+// by a test to pin the catalog — is exported on purpose and named here; anything
+// else must be read by a shipped file, so a helper can't quietly drift into
+// node-only or die unused.
+const SHARED_EXPORTS = new Set(['ISO_RE', 'pairSig', 'makeCat', 'matchesOf', 'parentsOf', 'validBestOf', 'RUNG_NAMES', 'tiebreakProblems']);
 
-test('every derive.js export is read by the shipped site, or is a node-shared primitive', () => {
+test('every derive.js export is read by the shipped site, or is a shared primitive', () => {
   const shipped = ['site/app.js', 'site/views.js', 'site/i18n.js']
     .map(f => read(f).replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, ''))
     .join('\n');
   const orphans = Object.keys(require('../site/derive.js'))
-    .filter(n => !NODE_SHARED_EXPORTS.has(n) && !new RegExp(`\\b${n}\\b`).test(shipped));
-  assert.deepEqual(orphans, [], `derive.js exports no shipped file reads (drop it or make it node-shared): ${orphans.join(', ')}`);
+    .filter(n => !SHARED_EXPORTS.has(n) && !new RegExp(`\\b${n}\\b`).test(shipped));
+  assert.deepEqual(orphans, [], `derive.js exports no shipped file reads (drop it or make it shared): ${orphans.join(', ')}`);
+});
+
+// A rung the renderer doesn't name renders a blank tiebreak cell and drops out of
+// the rules dialog; one with no word falls back to the raw {tb-…} key. The catalog
+// is the model's, so every rung must be reachable in app.js and both bundles.
+test('every catalog rung is named by the renderer and both word bundles', () => {
+  const shipped = read('site/app.js').replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  for (const rung of RUNG_NAMES) {
+    assert(new RegExp(`\\b${rung}\\b`).test(shipped), `site/app.js never names the ${rung} rung — its cell would render blank`);
+    for (const lang of ['en', 'de']) {
+      assert.equal(typeof I18N[lang][`tb-${rung}`], 'string', `I18N.${lang} has no tb-${rung} label`);
+      assert.equal(typeof I18N[lang][`tb-${rung}-desc`], 'string', `I18N.${lang} has no tb-${rung}-desc`);
+    }
+  }
+  // The cell's own token words are a different surface: a rung in TB whose token
+  // label is missing renders the raw {tiebreak-x} on the board. Read the literals.
+  const tokens = new Set([...shipped.matchAll(/tiebreak-[a-z0-9-]+/g)].map(m => m[0]));
+  for (const tok of tokens) {
+    for (const lang of ['en', 'de']) {
+      assert.equal(typeof I18N[lang][tok], 'string', `I18N.${lang} has no ${tok} label — the cell would render the raw key`);
+    }
+  }
 });
 
 // views.js is the other shipped module with a public surface. Its exports must be

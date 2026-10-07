@@ -38,7 +38,6 @@
       },
       "tiebreak": [
         "h2hWins",
-        "h2hGameRatio",
         "h2hPointRatio"
       ]
     },
@@ -55,7 +54,6 @@
       },
       "tiebreak": [
         "h2hWins",
-        "h2hGameRatio",
         "h2hPointRatio"
       ]
     },
@@ -72,7 +70,6 @@
       },
       "tiebreak": [
         "h2hWins",
-        "h2hGameRatio",
         "h2hPointRatio"
       ]
     }

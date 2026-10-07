@@ -2,7 +2,7 @@
   "name": "Bad No BestOf Games",
   "location": "Test Hall",
   "timezone": "UTC",
-  "categories": [{ "id": "t", "name": "T" }],
+  "categories": [{ "id": "t", "name": "T", "tiebreak": ["h2hWins", "h2hGameRatio", "h2hPointRatio"] }],
   "players": [{ "id": "p1", "name": "P1" }, { "id": "p2", "name": "P2" }],
   "matches": {
     "t": [

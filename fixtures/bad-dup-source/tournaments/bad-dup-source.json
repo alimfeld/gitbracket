@@ -12,6 +12,11 @@
     {
       "id": "t",
       "name": "T",
+      "tiebreak": [
+        "h2hWins",
+        "h2hGameRatio",
+        "h2hPointRatio"
+      ],
       "bestOf": {
         "groups": 3,
         "knockout": 3

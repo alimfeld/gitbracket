@@ -12,7 +12,7 @@ const os = require('os');
 const path = require('path');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { loadRepo, isRealDate, findRoot, writeTournamentIndex, writeTournament } = require('../src/tools.js');
+const { loadRepo, isRealDate, findRoot, writeTournamentIndex, writeTournament, tournamentText } = require('../src/tools.js');
 const { FIX } = require('./helpers.js');
 
 test('repo loadRepo: unreadable tournament files land in readErrs, the rest still load', () => {
@@ -56,6 +56,20 @@ test('tools writeTournament: atomic tmp+rename leaves no litter and the byte con
     assert.deepEqual(fs.readdirSync(dir), ['one.json'], 'no .tmp sibling survives the rename — a crash would leave one, which git status makes loud');
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+// A committed tournament is tool-managed: writeEdit rewrites the whole file on
+// every score, tolerating a hand-edit that only parses. Pin the shipped files to
+// the exact bytes writeTournament would emit, so a formatting drift stays in the
+// commit that caused it instead of reflowing into the next unrelated edit.
+test('every committed site tournament is byte-identical to what writeTournament writes', () => {
+  const dir = path.join(__dirname, '..', 'site', 'tournaments');
+  const files = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
+  assert(files.length > 0, 'the shipped site has tournaments to check');
+  for (const f of files) {
+    const text = fs.readFileSync(path.join(dir, f), 'utf8');
+    assert.equal(text, tournamentText(JSON.parse(text)), `site/tournaments/${f} is not the tool's byte shape — the next edit would reflow it`);
   }
 });
 

@@ -6,6 +6,11 @@
     {
       "id": "pl",
       "name": "Place",
+      "tiebreak": [
+        "h2hWins",
+        "h2hGameRatio",
+        "h2hPointRatio"
+      ],
       "bestOf": {
         "knockout": 1
       }
