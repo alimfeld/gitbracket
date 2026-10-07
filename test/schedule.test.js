@@ -47,6 +47,11 @@ function field(players, n, prefix) {
   return teams;
 }
 
+// The category literal most spec cases share; overrides vary one flag.
+const cat = (over = {}) => ({ id: 'md', name: 'Men', bestOf: 1, slotMinutes: 30, final: { bestOf: 3, slotMinutes: 60 }, tiebreak: ['h2hWins', 'h2hGameRatio', 'h2hPointRatio'], ...over });
+// n numbered courts, spec order = assignment priority.
+const venueMap = n => Object.fromEntries(Array.from({ length: n }, (_, i) => [`court-${i + 1}`, `C${i + 1}`]));
+
 test('a minimal spec generates a valid tournament', () => {
   const tourney = generate(MINI);
   const { errs } = validateRepo(repoOf(tourney));
@@ -178,9 +183,9 @@ test('a category confined to fewer courts than its round needs spills over time,
   const tourney = generate({
     ...MINI,
     poolSize: 7,
-    venues: { 'court-1': 'C1', 'court-2': 'C2', 'court-3': 'C3', 'court-4': 'C4', 'court-5': 'C5' },
+    venues: venueMap(5),
     players,
-    categories: [{ id: 'md', name: 'Men', bestOf: 1, slotMinutes: 30, final: { bestOf: 3, slotMinutes: 60 }, tiebreak: ['h2hWins', 'h2hGameRatio', 'h2hPointRatio'], courts: ['court-1', 'court-2', 'court-3'] }],
+    categories: [{ ...cat(), courts: ['court-1', 'court-2', 'court-3'] }],
     teams: { md },
   });
   const { errs } = validateRepo(repoOf(tourney));
@@ -423,7 +428,7 @@ test('group stage: multi-pool rounds pack tight and spread back-to-backs evenly'
   const tourney = generate({
     ...MINI,
     poolSize: 7,
-    venues: { 'court-1': 'C1', 'court-2': 'C2', 'court-3': 'C3', 'court-4': 'C4', 'court-5': 'C5' },
+    venues: venueMap(5),
     players,
     teams: { md: teams },
   });
@@ -449,7 +454,7 @@ test('categories sharing a block start end within one slot of each other', () =>
   const a = [], b = [];
   for (let i = 0; i < 8; i++) { players['a' + (i + 1)] = 'A' + (i + 1); a.push(['a' + (i + 1)]); }
   for (let i = 0; i < 6; i++) { players['b' + (i + 1)] = 'B' + (i + 1); b.push(['b' + (i + 1)]); }
-  const venues = { 'court-1': 'C1', 'court-2': 'C2', 'court-3': 'C3', 'court-4': 'C4' };
+  const venues = venueMap(4);
   const mkCat = (id, name) => ({ id, name, bestOf: 1, slotMinutes: 30, tiebreak: ['h2hWins', 'h2hGameRatio', 'h2hPointRatio'] });
   const tourney = generate({
     ...MINI,
@@ -477,13 +482,10 @@ test('a knockout round syncs to one wave when its floor wave has a court for eve
   const tourney = generate({
     ...MINI,
     poolSize: 7,
-    venues: { 'court-1': 'C1', 'court-2': 'C2', 'court-3': 'C3', 'court-4': 'C4', 'court-5': 'C5' },
+    venues: venueMap(5),
     blocks: { md: '09:00', wd: '09:00' },
     players,
-    categories: [
-      { id: 'md', name: 'Men', bestOf: 1, slotMinutes: 30, final: { bestOf: 3, slotMinutes: 60 }, tiebreak: ['h2hWins', 'h2hGameRatio', 'h2hPointRatio'] },
-      { id: 'wd', name: 'Women', bestOf: 1, slotMinutes: 30, knockout: true, final: { bestOf: 3, slotMinutes: 60 }, tiebreak: ['h2hWins', 'h2hGameRatio', 'h2hPointRatio'] },
-    ],
+    categories: [cat(), cat({ id: 'wd', name: 'Women', knockout: true })],
     teams: { md, wd },
   });
   const { errs } = validateRepo(repoOf(tourney));
@@ -513,9 +515,9 @@ test('a knockout round spills across waves when courts cannot hold it whole', ()
   const tourney = generate({
     ...MINI,
     poolSize: 7,
-    venues: { 'court-1': 'C1', 'court-2': 'C2', 'court-3': 'C3' },
+    venues: venueMap(3),
     players,
-    categories: [{ id: 'md', name: 'Men', bestOf: 1, slotMinutes: 30, final: { bestOf: 3, slotMinutes: 60 }, tiebreak: ['h2hWins', 'h2hGameRatio', 'h2hPointRatio'] }],
+    categories: [cat()],
     teams: { md },
   });
   const { errs } = validateRepo(repoOf(tourney));
@@ -537,13 +539,10 @@ test('a finishing chain yields to a round: the near-done category takes its fina
   const tourney = generate({
     ...MINI,
     poolSize: 7,
-    venues: { 'court-1': 'C1', 'court-2': 'C2', 'court-3': 'C3', 'court-4': 'C4', 'court-5': 'C5' },
+    venues: venueMap(5),
     blocks: { md: '09:00', wd: '09:00' },
     players,
-    categories: [
-      { id: 'md', name: 'Men', bestOf: 1, slotMinutes: 30, final: { bestOf: 3, slotMinutes: 60 }, tiebreak: ['h2hWins', 'h2hGameRatio', 'h2hPointRatio'] },
-      { id: 'wd', name: 'Women', bestOf: 1, slotMinutes: 30, knockout: true, final: { bestOf: 3, slotMinutes: 60 }, tiebreak: ['h2hWins', 'h2hGameRatio', 'h2hPointRatio'] },
-    ],
+    categories: [cat(), cat({ id: 'wd', name: 'Women', knockout: true })],
     teams: { md, wd },
   });
   const { errs } = validateRepo(repoOf(tourney));
