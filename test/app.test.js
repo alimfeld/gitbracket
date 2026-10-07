@@ -428,9 +428,17 @@ test('pool table: each pool names its placing rung and carries an info overlay',
   for (const [cat, rung] of [['pd', 'pointDiff'], ['hpd', 'h2hPointDiff'], ['pf', 'pointsFor']]) {
     const html = renderTournament({ slug: 'rungs', view: 'tournament', cat }, data);
     assert.deepEqual(vals(html, 'data-tiebreak'), [rung, rung, rung], `${cat} carries ${rung}`);
-    assert(html.includes('<dialog class="tb-info">'), `${cat} carries the rules overlay`);
-    assert(html.includes('data-tb'), `${cat} carries an info button`);
+    for (const kind of ['played', 'won', 'tb']) {
+      assert(html.includes(`<button type="button" data-info="${kind}"`), `${cat} carries the ${kind} info button`);
+      assert(html.includes(`<dialog class="info" data-info="${kind}"`), `${cat} carries the ${kind} overlay`);
+    }
   }
+});
+
+test('pool table: the tiebreak column stays put where the wins alone ranked the pool', () => {
+  const html = renderTournament({ slug: 'ready', view: 'tournament' }, repoPage('ready'));
+  assert.deepEqual(vals(html, 'data-tiebreak'), [], 'no row was placed by a rung or left level');
+  assert(html.includes('data-info="tb"'), 'the column and its rules stay discoverable anyway');
 });
 
 test('pool table: only a wins-tie carries a tiebreak state — a wins-separated row stays blank', () => {

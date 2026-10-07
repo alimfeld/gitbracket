@@ -38,7 +38,9 @@ const I18N = {
     'group-matches': 'Group matches',
     team: 'Team',
     'played-col': 'Played',
+    'played-desc': 'Matches played in this pool. A walkover counts; a match neither side could play counts for nothing.',
     'won-col': 'Won',
+    'won-desc': 'Matches won in this pool. Most wins is the first pool-ranking criterion — the tiebreaker only separates teams with equal wins.',
     'ko-stage': 'Knockout stage',
     won: 'won',
     walkover: 'Walkover',
@@ -81,8 +83,8 @@ const I18N = {
     'slot-pool': '{rank} in Pool {pool}',
     'slot-pool-tie': '{rank} in Pool {pool} — tie not broken',
     'slot-dangling': '{who} of match {id}',
-    // the pool table's tiebreaker column (app.js): the rung that placed a tied row, its short
-    // token, and the info overlay's plain-language rules
+    // the pool table's column tokens (app.js): each header's long name, the tiebreaker's
+    // rung tokens, and the overlay's plain-language rules
     'tiebreak': 'Tiebreaker',
     'tiebreak-level': 'level',
     'tiebreak-wins': 'H2H W',
@@ -93,7 +95,7 @@ const I18N = {
     'tiebreak-pf': 'PF',
     'tiebreak-info': 'Tiebreaker rules',
     'tiebreak-desc': 'Tied teams are ranked by the first rule below that separates them; the rest start again from the top.',
-    'tiebreak-level-desc': 'If no rule separates them, the slot stays TBD.',
+    'tiebreak-dead-desc': 'If no rule separates the teams, the organizer decides.',
     'tb-h2hWins': 'Head-to-head wins',
     'tb-h2hWins-desc': 'Most wins in the matches between the tied teams.',
     'tb-h2hGameRatio': 'Head-to-head game ratio',
@@ -151,7 +153,9 @@ const I18N = {
     'group-matches': 'Gruppenspiele',
     team: 'Team',
     'played-col': 'Gespielt',
+    'played-desc': 'Im Pool gespielte Spiele. Ein Walkover zählt; ein Spiel, das keine Seite antreten konnte, zählt nicht.',
     'won-col': 'Gewonnen',
+    'won-desc': 'Im Pool gewonnene Spiele. Die meisten Siege sind das erste Kriterium der Pool-Rangliste — der Tiebreaker trennt nur Teams mit gleich vielen Siegen.',
     'ko-stage': 'K.o.-Phase',
     won: 'gewonnen',
     walkover: 'Walkover',
@@ -204,7 +208,7 @@ const I18N = {
     'tiebreak-pf': 'PF',
     'tiebreak-info': 'Tiebreak-Regeln',
     'tiebreak-desc': 'Punktgleiche Teams werden nach der ersten Regel unten gereiht, die sie trennt; die übrigen beginnen wieder oben.',
-    'tiebreak-level-desc': 'Trennt keine Regel die Teams, bleibt der Platz offen (TBD).',
+    'tiebreak-dead-desc': 'Trennt keine Regel die Teams, entscheidet die Turnierleitung.',
     'tb-h2hWins': 'Direkte Siege',
     'tb-h2hWins-desc': 'Die meisten Siege in den Spielen zwischen den punktgleichen Teams.',
     'tb-h2hGameRatio': 'Direktes Spielverhältnis',

@@ -311,18 +311,31 @@ const TB = {
 };
 function tiebreakCell(r, sealed) {
   const tb = TB[r.splitBy];
-  if (tb) return `<td data-tiebreak="${esc(r.splitBy)}">${esc(u(tb[0]))} ${esc(tb[1](r))}</td>`;
-  if (r.tie) return sealed ? `<td data-tiebreak="level">${esc(u('tiebreak-level'))}</td>` : '<td></td>';
-  return '<td></td>';
+  if (tb) return `<td class="num" data-tiebreak="${esc(r.splitBy)}"><small>${esc(u(tb[0]))}</small> ${esc(tb[1](r))}</td>`;
+  if (r.tie) return sealed ? `<td class="num" data-tiebreak="level">${esc(u('tiebreak-level'))}</td>` : '<td class="num"></td>';
+  return '<td class="num"></td>';
 }
 
-// The rules behind the column, for the category's declared rungs in order. Plain words, no
-// rulebook citations — a rung name is data and revisions aren't this page's to track.
+// A column header whose token opens its explanation: the abbr carries the browser's dotted
+// underline and hover tooltip, the button makes it tappable on a touch screen.
+const colHead = (kind, token, title, label = title) => `<button type="button" data-info="${kind}" aria-label="${esc(label)}"><abbr title="${esc(title)}">${esc(token)}</abbr></button>`;
+
+// The padded body wrapper keeps a click in the dialog's whitespace off the backdrop.
+function infoDialog(kind, title, body) {
+  const id = `info-${kind}-title`;
+  return `<dialog class="info" data-info="${kind}" tabindex="-1" aria-labelledby="${id}"><div class="info-body"><form method="dialog"><button aria-label="${esc(u('close'))}">×</button></form><h4 id="${id}">${esc(title)}</h4>${body}</div></dialog>`;
+}
+
+const plainDialogs = () => ['played', 'won'].map(c => infoDialog(c, u(`${c}-col`), `<p>${esc(u(`${c}-desc`))}</p>`)).join('');
+
+// The tiebreaker's rules, for the category's declared rungs in order. Each names the rung in
+// words with the table's own token in parentheses, so a cell maps straight to its rule. Plain
+// words, no rulebook citations — a rung name is data and revisions aren't this page's to track.
 function tiebreakDialog(ctx) {
   const rungs = Array.isArray(ctx.tiebreak) ? ctx.tiebreak.filter(n => TB[n]) : [];
   if (!rungs.length) return '';
-  const items = rungs.map(n => `<li><strong>${esc(u(`tb-${n}`))}</strong> — ${esc(u(`tb-${n}-desc`))}</li>`).join('');
-  return `<dialog class="tb-info"><h4>${esc(u('tiebreak'))}</h4><p>${esc(u('tiebreak-desc'))}</p><ol>${items}</ol><p>${esc(u('tiebreak-level-desc'))}</p><form method="dialog"><button>${esc(u('close'))}</button></form></dialog>`;
+  const items = rungs.map(n => `<li><strong>${esc(u(`tb-${n}`))} (${esc(u(TB[n][0]))})</strong> — ${esc(u(`tb-${n}-desc`))}</li>`).join('');
+  return infoDialog('tb', u('tiebreak'), `<p>${esc(u('tiebreak-desc'))}</p><ol>${items}</ol><p>${esc(u('tiebreak-dead-desc'))}</p>`);
 }
 
 function catSection(ctx, opts) {
@@ -356,25 +369,23 @@ function catSection(ctx, opts) {
     // scoreboard first, cards last
     if (byPool.size) {
       parts.push('<div class="grid">');
-      let anyTb = false;
+      // the rung list is per category, so its overlay is built once and reused by every pool
+      const tbDlg = tiebreakDialog(ctx);
       for (const [pool] of byPool) {
         parts.push(`<div><h4>Pool ${esc(String(pool))}</h4>`);
         const std = poolStandings(ctx, pool, true); // pools come from matches, so partial standings always resolve
         const ranks = poolDecided(std) ? poolRanks(std) : null;
-        // The reason column earns its width only where it can say something: a rung placed a row, or a
-        // sealed pool left a tie the ladder could not split.
         const sealed = poolSealed(ctx, pool);
-        const showTb = std.some(r => r.splitBy) || (sealed && std.some(r => r.tie));
-        if (showTb) anyTb = true;
-        const tbHead = showTb ? `<th scope="col">${u('tiebreak')} <button type="button" class="tb-open" data-tb aria-label="${esc(u('tiebreak-info'))}">i</button></th>` : '';
-        parts.push(`<table><thead><tr><th scope="col" class="num">#</th><th scope="col">${u('team')}</th><th scope="col" class="num"><abbr title="${esc(u('played-col'))}">P</abbr></th><th scope="col" class="num"><abbr title="${esc(u('won-col'))}">W</abbr></th>${tbHead}</tr></thead><tbody>`);
+        // The tiebreak column is always there: it is how the rules stay discoverable before a tie
+        // ever happens. With no rung to explain it is a plain heading, never a dead button.
+        const tbHead = tbDlg ? colHead('tb', 'TB', u('tiebreak'), u('tiebreak-info')) : esc(u('tiebreak'));
+        parts.push(`<table><thead><tr><th scope="col" class="num">#</th><th scope="col">${u('team')}</th><th scope="col" class="num">${colHead('played', 'P', u('played-col'))}</th><th scope="col" class="num">${colHead('won', 'W', u('won-col'))}</th><th scope="col" class="num">${tbHead}</th></tr></thead><tbody>`);
         std.forEach((r, i) => {
-          parts.push(`<tr><td class="num">${ranks ? ranks[i] : ''}</td><td>${esc(teamLabel(r.ids, ctx))}</td><td class="num">${r.wins + r.losses}</td><td class="num">${r.wins}</td>${showTb ? tiebreakCell(r, sealed) : ''}</tr>`);
+          parts.push(`<tr><td class="num">${ranks ? ranks[i] : ''}</td><td>${esc(teamLabel(r.ids, ctx))}</td><td class="num">${r.wins + r.losses}</td><td class="num">${r.wins}</td>${tiebreakCell(r, sealed)}</tr>`);
         });
         parts.push('</tbody></table></div>');
       }
-      parts.push('</div>');
-      if (anyTb) parts.push(tiebreakDialog(ctx));
+      parts.push('</div>', plainDialogs(), tbDlg);
     }
     parts.push(`<h4 id="group-matches">${u('group-matches')}</h4>`, matchGrid(grp, ctx, opts.multi, next), '</section>');
   }
@@ -853,12 +864,14 @@ function boot() {
     targets.forEach(flashEl);
   };
   document.addEventListener('click', e => {
-    const tb = e.target.closest('button[data-tb]');
-    if (tb) {
-      const d = tb.closest('section')?.querySelector('dialog.tb-info');
-      if (d && !d.open) d.showModal();
+    const open = e.target.closest('button[data-info]');
+    if (open) {
+      const d = open.closest('section')?.querySelector(`dialog.info[data-info="${open.dataset.info}"]`);
+      if (d && !d.open) { d.showModal(); d.focus(); } // the dialog, not the close button, takes first focus
       return;
     }
+    // a backdrop click lands on the dialog element itself, never on the padded body wrapper
+    if (e.target.matches('dialog.info')) { e.target.close(); return; }
     const a = e.target.closest('a[data-jump]');
     if (!a) return;
     e.preventDefault();

@@ -591,34 +591,57 @@ article[data-status="possible"] .head {
 
 .tbd {
   color: var(--muted);
-  text-decoration: underline dotted;
 }
 
-/* the tiebreaker column's info button + the rules overlay */
-.tb-open {
-  padding: 0 .4em;
-  border: 1px solid var(--line);
-  border-radius: 50%;
+/* a column heading's token and the explanation overlay it opens */
+th button[data-info] {
+  padding: 0;
+  border: 0;
   background: none;
-  color: var(--muted);
+  color: inherit;
   font: inherit;
-  font-size: .8em;
   cursor: pointer;
 }
 
-dialog.tb-info {
+dialog.info {
   max-width: 34em;
-  padding: var(--space);
+  padding: 0;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--page);
   color: var(--ink);
 }
 
-dialog.tb-info h4 {
+dialog.info .info-body {
+  padding: calc(var(--space) * 2);
+}
+
+dialog.info h4 {
   margin-top: 0;
 }
 
-dialog.tb-info ol {
+/* the dialog itself takes first focus, so it must not draw a ring — it is not tabbable */
+dialog.info:focus {
+  outline: none;
+}
+
+dialog.info ol {
   padding-left: 1.2em;
+}
+
+/* the top-right dismiss; floated so it needs no positioning on the dialog itself */
+dialog.info form {
+  float: right;
+  margin: 0;
+}
+
+dialog.info button {
+  padding: 0 .3em;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 1.2em;
+  line-height: 1;
+  cursor: pointer;
 }
