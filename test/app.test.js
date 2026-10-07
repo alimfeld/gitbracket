@@ -609,6 +609,21 @@ test('winners: first/second off the final, third/fourth off the bronze; voids ki
   assert(bw.first.join() === 'p1' && bw.second.join() === 'p2' && bw.third === null, 'a void bronze drops the third-place prize, keeps the podium');
 });
 
+// Renderer smoke: the podium stands as a table whose medal is decoration and whose
+// place word is the accessible name; a void final tables nothing.
+test('podium render: medals ride aria-hidden, place words sr-only, a void final stays a plain line', () => {
+  const html = renderTournament({ slug: 'full', view: 'tournament' }, repoPage('full'));
+  for (const [medal, key] of [['🥇', 'champion'], ['🥈', 'runner-up'], ['🥉', 'rank3']]) {
+    assert(new RegExp(`<td><span aria-hidden="true">${medal}</span><span class="sr-only">[^<]+</span></td>`).test(html),
+      `${medal}: the medal is hidden from a screen reader, the place word is not`);
+    assert(html.includes(`sr-only">${I18N.en[key]}<`), `${medal} carries the ${key} word as its accessible name`);
+  }
+  const tjson = JSON.parse(JSON.stringify(require(FIX('full', 'tournaments', 'full.json'))));
+  tjson.matches.t.find(m => m.id === 10).result = { status: 'void' };
+  const voided = renderTournament({ slug: 'full', view: 'tournament' }, withTjson(repoPage('full'), tjson));
+  assert(voided.includes('data-status="finished"') && !voided.includes('🥇'), 'a void final decides no podium — the Finished line stands, no table');
+});
+
 test('playerStatus: the podium lands the moment the final is played, not when the category wraps', () => {
   const tjson = JSON.parse(JSON.stringify(require(FIX('place8', 'tournaments', 'place8.json'))));
   tjson.matches.t.find(m => m.id === 20).result = undefined; // bronze still to play

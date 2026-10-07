@@ -397,6 +397,14 @@ table {
   border: 1px solid var(--line);
 }
 
+/* a podium is one pool-table track wide — it rides the same .grid geometry, so
+   the two line up; its one symbol column centers, the emoji's own side bearing
+   the only padding it needs */
+table.podium th:first-child,
+table.podium td:first-child {
+  text-align: center;
+}
+
 th,
 td {
   padding: var(--space);

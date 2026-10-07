@@ -169,7 +169,9 @@ picks the UI language, defaulting to the browser's.
   kiosk links.
 - `#<slug>` / `#<slug>?cat=<category-id>` — the tournament, one category at a
   time (the first by default); date span and location in the heading, the
-  category's status under its title (its span too, on a multi-day event). A
+  category's status under its title (its span too, on a multi-day event); a
+  finished category shows its top-3 podium as a medal table, the place word
+  kept for screen readers. A
   floating `Tournament | Schedule` switch sits above the two views.
 - `#<slug>/schedule?player=<player-id>` — a player's Schedule. Without a
   valid `player` (or via "Change") it shows a picker of participating
