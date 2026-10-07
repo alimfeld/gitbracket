@@ -1,0 +1,20 @@
+{
+  "name": "Drawn Game",
+  "location": "Test Hall",
+  "timezone": "UTC",
+  "categories": [
+    { "id": "t", "name": "Test", "tiebreak": ["h2hGameDiff"], "bestOf": { "groups": 3, "knockout": 3 } }
+  ],
+  "players": [
+    { "id": "p1", "name": "P1" },
+    { "id": "p2", "name": "P2" },
+    { "id": "p3", "name": "P3" }
+  ],
+  "matches": {
+    "t": [
+      { "id": 1, "pool": "A", "sides": [ { "kind": "players", "ids": ["p1"] }, { "kind": "players", "ids": ["p2"] } ], "games": [ { "a": 11, "b": 5 }, { "a": 11, "b": 7 } ], "result": { "status": "played", "winner": "a" } },
+      { "id": 2, "pool": "A", "sides": [ { "kind": "players", "ids": ["p2"] }, { "kind": "players", "ids": ["p3"] } ], "games": [ { "a": 11, "b": 5 }, { "a": 5, "b": 11 }, { "a": 11, "b": 9 } ], "result": { "status": "played", "winner": "a" } },
+      { "id": 3, "pool": "A", "sides": [ { "kind": "players", "ids": ["p3"] }, { "kind": "players", "ids": ["p1"] } ], "games": [ { "a": 11, "b": 5 }, { "a": 11, "b": 11 }, { "a": 5, "b": 11 }, { "a": 11, "b": 9 } ], "result": { "status": "played", "winner": "a" } }
+    ]
+  }
+}

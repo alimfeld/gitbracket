@@ -308,9 +308,11 @@ const anticipationLine = (ctx, status, href, day, wave) => {
 const signed = n => (n > 0 ? `+${n}` : String(n));
 const TB = {
   h2hWins: ['tiebreak-wins', r => r.splitVal],
+  h2hGameDiff: ['tiebreak-h2hgd', r => signed(r.splitVal)],
   h2hGameRatio: ['tiebreak-games', r => `${r.h2h.gw}:${r.h2h.gl}`],
   h2hPointRatio: ['tiebreak-points', r => `${r.h2h.pw}:${r.h2h.pl}`],
   h2hPointDiff: ['tiebreak-h2hpd', r => signed(r.splitVal)],
+  gameDiff: ['tiebreak-gd', r => signed(r.splitVal)],
   pointDiff: ['tiebreak-pd', r => signed(r.splitVal)],
   pointsFor: ['tiebreak-pf', r => r.splitVal],
 };

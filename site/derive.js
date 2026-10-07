@@ -118,7 +118,7 @@ function poolStandings(ctx, pool, partial) {
     if (!(s && s.kind === 'players' && Array.isArray(s.ids))) return null;
     const sig = pairSig(s.ids);
     let r = recs.get(sig);
-    if (!r) { r = { sig, ids: new Set(s.ids), wins: 0, losses: 0, pf: 0, pa: 0 }; recs.set(sig, r); }
+    if (!r) { r = { sig, ids: new Set(s.ids), wins: 0, losses: 0, gw: 0, gl: 0, pf: 0, pa: 0 }; recs.set(sig, r); }
     return r;
   };
   for (const m of ms) {
@@ -142,6 +142,7 @@ function poolStandings(ctx, pool, partial) {
         if (!g || !Number.isFinite(g.a) || !Number.isFinite(g.b)) continue; // a malformed game is the gate's report
         r0.pf += g.a; r0.pa += g.b;
         r1.pf += g.b; r1.pa += g.a;
+        if (g.a > g.b) { r0.gw++; r1.gl++; } else if (g.b > g.a) { r1.gw++; r0.gl++; } // a drawn game (the gate's report) credits neither side
       }
     }
   }
@@ -160,9 +161,11 @@ const q = (won, lost) => (lost ? won / lost : (won ? Infinity : 1));
 // list (validator-enforced), and an undeclared one ranks on wins alone.
 const RUNGS = {
   h2hWins: (r, h) => h.get(r.sig).w,
+  h2hGameDiff: (r, h) => h.get(r.sig).gw - h.get(r.sig).gl,
   h2hGameRatio: (r, h) => q(h.get(r.sig).gw, h.get(r.sig).gl),
   h2hPointRatio: (r, h) => q(h.get(r.sig).pw, h.get(r.sig).pl),
   h2hPointDiff: (r, h) => h.get(r.sig).pw - h.get(r.sig).pl,
+  gameDiff: r => r.gw - r.gl,
   pointDiff: r => r.pf - r.pa,
   pointsFor: r => r.pf,
 };
@@ -195,7 +198,7 @@ function mutualKeys(list, ms) {
       if (!g || !Number.isFinite(g.a) || !Number.isFinite(g.b)) continue; // a malformed game is the gate's report, not a NaN rung
       ka.pw += g.a; ka.pl += g.b;
       kb.pw += g.b; kb.pl += g.a;
-      if (g.a > g.b) { ka.gw++; kb.gl++; } else { kb.gw++; ka.gl++; }
+      if (g.a > g.b) { ka.gw++; kb.gl++; } else if (g.b > g.a) { kb.gw++; ka.gl++; } // a drawn game credits neither side, same as the whole-pool tally
     }
   }
   return h;

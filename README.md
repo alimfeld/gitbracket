@@ -78,9 +78,10 @@ matches keyed by category:
 - `tiebreak` (required) is a category's pool-ranking ladder: a non-empty,
   ordered list of rung names. Nothing is implicit — a file that never declares a
   ladder is a validator error, so a rung added to the catalog can't quietly move
-  a tournament that didn't ask for it. The catalog is `h2hWins`, `h2hGameRatio`,
-  `h2hPointRatio`, `h2hPointDiff`, `pointDiff`, `pointsFor`; a bare rung name is
-  data whose meaning is frozen the day it ships, so a new rule takes a new name.
+  a tournament that didn't ask for it. The catalog is `h2hWins`, `h2hGameDiff`,
+  `h2hGameRatio`, `h2hPointRatio`, `h2hPointDiff`, `gameDiff`, `pointDiff`,
+  `pointsFor`; a bare rung name is data whose meaning is frozen the day it
+  ships, so a new rule takes a new name.
 - `scheduled` is local wall time in the tournament's `timezone` — never a UTC
   instant or offset; the IANA zone at the top of the file interprets it. A
   nonexistent time during a spring clock change is rejected; an ambiguous time
@@ -138,23 +139,30 @@ edit, never a refusal.
 2. the declared rungs, in order. Each compares only the teams still tied, and
    measures either their mutual matches or the whole pool:
    - `h2hWins` — most wins among the tied teams;
-   - `h2hGameRatio`, `h2hPointRatio` — the better ratio of games won to games
-     lost, then of points won to points lost, over their mutual matches;
-   - `h2hPointDiff` — the better points-for minus points-against over their
+   - `h2hGameDiff` — the better games won minus games lost over their mutual
+     matches;
+   - `h2hGameRatio` — the better ratio of games won to games lost over their
      mutual matches;
+   - `h2hPointRatio` — the better ratio of points won to points lost over their
+     mutual matches;
+   - `h2hPointDiff` — the better points won minus points lost over their mutual
+     matches;
+   - `gameDiff` — the better games won minus games lost over every match in the
+     pool;
    - `pointDiff` — the better points-for minus points-against over every match
      in the pool;
    - `pointsFor` — the most points scored over every match in the pool;
 3. a rung that separates some teams sends the rest back to step 2, again over
    only the matches between those still tied — the mutual (`h2h*`) numbers are
-   re-measured for the survivors, while `pointDiff` and `pointsFor` stay pinned
-   to the whole pool;
+   re-measured for the survivors, while `gameDiff`, `pointDiff` and `pointsFor`
+   stay pinned to the whole pool;
 4. a group still level after the whole ladder is a dead tie once the pool has no
    match left to play — its bracket slot stays TBD for the organizer.
 
 A match with no games (a walkover) decides `h2hWins` but adds nothing to any
-ratio or point total, so it can't skew them. Rankings are per pool; nothing here
-ranks teams across pools, so a rung never compares pools of different sizes.
+ratio, game or point total, so it can't skew them. Rankings are per pool;
+nothing here ranks teams across pools, so a rung never compares pools of
+different sizes.
 
 ## Views
 

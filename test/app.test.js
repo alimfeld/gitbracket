@@ -403,6 +403,26 @@ test('pointsFor: total points is the last resort when the differences stay level
   assert(st.every(r => r.splitBy === 'pointsFor'), 'total points placed every row');
 });
 
+test('gameDiff: whole-pool game difference places a wins-level trio', () => {
+  const st = poolStandings(catOf('rungs', 'gd'), 'A');
+  assert.deepEqual(st.map(r => r.sig), ['f2', 'f3', 'f1'], 'f2 +1, f3 0, f1 −1');
+  assert(st.every(r => r.splitBy === 'gameDiff' && !r.tie), 'the whole-pool game difference placed every row');
+});
+
+test('h2hGameDiff: the game difference is measured over the tied teams only', () => {
+  const st = poolStandings(catOf('rungs', 'hgd'), 'A');
+  assert.deepEqual(st.map(r => r.sig), ['g1', 'g3', 'g2', 'g4'], 'the trio splits head-to-head, the winless row trails');
+  assert.deepEqual(st.slice(0, 3).map(r => r.splitBy), ['h2hGameDiff', 'h2hGameDiff', 'h2hGameDiff'], 'the head-to-head game difference placed the trio');
+  assert.equal(st[0].splitVal, 1, 'g1 reads its mutual +1, not the whole-pool +3');
+});
+
+test('h2hGameDiff: a drawn game credits neither side, not side b', () => {
+  const st = poolStandings(catOf('bad-drawn-game', 't'), 'A');
+  assert.deepEqual(st.map(r => r.sig), ['p1', 'p3', 'p2'], 'p1 +1, p3 0, p2 −1 — the drawn game moved neither');
+  assert.deepEqual(st.map(r => r.splitBy), ['h2hGameDiff', 'h2hGameDiff', 'h2hGameDiff'], 'the rung placed all three');
+  assert.deepEqual(st.map(r => r.splitVal), [1, 0, -1], 'crediting the drawn game to side b would read +2/+1/−1');
+});
+
 test('pointDiff stays pinned to the whole pool while a head-to-head rung re-measures the survivors', () => {
   const st = poolStandings(catOf('rungs', 'mix'), 'A');
   assert.deepEqual(st.map(r => r.sig), ['d2', 'd3', 'd1', 'd4'], 'd2/d3 tie on the whole-pool difference, so d1 drops out and d4 never reaches a rung');
@@ -425,9 +445,9 @@ test('pointDiff: a side-b win credits the points to the side that scored them', 
 
 test('pool table: each pool names its placing rung and carries an info overlay', () => {
   const data = repoPage('rungs');
-  for (const [cat, rung] of [['pd', 'pointDiff'], ['hpd', 'h2hPointDiff'], ['pf', 'pointsFor']]) {
+  for (const [cat, rung] of [['pd', 'pointDiff'], ['hpd', 'h2hPointDiff'], ['pf', 'pointsFor'], ['gd', 'gameDiff'], ['hgd', 'h2hGameDiff']]) {
     const html = renderTournament({ slug: 'rungs', view: 'tournament', cat }, data);
-    assert.deepEqual(vals(html, 'data-tiebreak'), [rung, rung, rung], `${cat} carries ${rung}`);
+    assert.deepEqual(vals(html, 'data-tiebreak'), [rung, rung, rung], `${cat} names ${rung} on every tied row`);
     for (const kind of ['played', 'won', 'tb']) {
       assert(html.includes(`<button type="button" data-info="${kind}"`), `${cat} carries the ${kind} info button`);
       assert(html.includes(`<dialog class="info" data-info="${kind}"`), `${cat} carries the ${kind} overlay`);

@@ -76,6 +76,7 @@ const V = [
   ['side id not a registered player', 'bad-unknown-player', 'err', /unknown player/],
   ['string side ids rejected, not char-split', 'bad-string-ids', 'err', /ids must be a non-empty array of strings/],
   ['game with no winner (a equals b)', 'bad-tie-game', 'err', /no winner/],
+  ['drawn game inside a decided match', 'bad-drawn-game', 'err', /no winner/],
   ['invalid timezone', 'bad-invalid-tz', 'err', /not a valid IANA timezone/],
   ['invalid timezone with scheduled matches reported, never a crash', 'bad-tz-sched', 'err', /not a valid IANA timezone/],
   ['tournament file missing its name', 'bad-no-name', 'err', /name must be a non-empty string/],
