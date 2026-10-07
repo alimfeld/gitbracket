@@ -263,7 +263,7 @@ const statusLine = (status, ctx) => {
   // winners: a top-3 table — third only when a bronze decided it, 4th omitted
   // (only the top 3 get awards). The medal is the visible place; the place word
   // beside it is the accessible name, so the table reads like the pool tables.
-  return `<div class="grid"><table class="podium"><thead><tr><th scope="col">#</th><th scope="col">${u('team')}</th></tr></thead><tbody>${
+  return `<div class="grid"><table><thead><tr><th scope="col">#</th><th scope="col">${u('team')}</th></tr></thead><tbody>${
     [[u('champion'), status.first], [u('runner-up'), status.second], [u('rank3'), status.third]]
       .filter(([, ids]) => ids)
       .map(([word, ids], i) => `<tr><td><span aria-hidden="true">${PODIUM[i]}</span><span class="sr-only">${word}</span></td><td>${esc(teamLabel(ids, ctx))}</td></tr>`)

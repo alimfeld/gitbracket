@@ -397,12 +397,30 @@ table {
   border: 1px solid var(--line);
 }
 
-/* a podium is one pool-table track wide — it rides the same .grid geometry, so
-   the two line up; its one symbol column centers, the emoji's own side bearing
-   the only padding it needs */
-table.podium th:first-child,
-table.podium td:first-child {
+/* a podium is one pool-table track wide — it rides the same .grid geometry — and
+   # is the rank on both: a number or a medal, one centered 2em box */
+th:first-child,
+td:first-child {
+  width: 2em;
+  white-space: nowrap;
   text-align: center;
+}
+
+/* fixed columns, so sibling pool tables line up: P and W hold a width, TB
+   shrink-wraps its own content, Team takes what is left. Auto layout (not
+   table-layout:fixed) grows a column past its width rather than clipping it */
+th:nth-child(3),
+td:nth-child(3),
+th:nth-child(4),
+td:nth-child(4) {
+  width: 2ch;
+  white-space: nowrap;
+}
+
+th:nth-child(5),
+td:nth-child(5) {
+  width: 1%;
+  white-space: nowrap;
 }
 
 th,
