@@ -264,7 +264,7 @@ const dayShort = (t, tz) => {
 const locFmts = new Map();
 const L = loc => {
   let f = locFmts.get(loc);
-  if (!f) locFmts.set(loc, f = new Intl.DateTimeFormat(loc, { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' }));
+  if (!f) locFmts.set(loc, f = new Intl.DateTimeFormat(loc, { timeZone: 'UTC', weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' }));
   return f;
 };
 const dayLabel = k => L(LOCALE).format(new Date(k + 'T00:00:00Z'));
@@ -272,10 +272,7 @@ const dayLabel = k => L(LOCALE).format(new Date(k + 'T00:00:00Z'));
 // Human span from ISO day keys; the locale's ordering comes from Intl.
 function fmtRange(keys) {
   const ks = (Array.isArray(keys) ? keys : []).filter(k => DATE_RE.test(k));
-  if (!ks.length) return null;
-  if (ks.length === 1) return dayLabel(ks[0]);
-  const out = ks.map(dayLabel).join(' – ');
-  return ks[0].slice(0, 4) !== ks.at(-1).slice(0, 4) ? `${out}, ${ks.at(-1).slice(0, 4)}` : out;
+  return ks.map(dayLabel).join(' – ') || null;
 }
 
 // Round name by distance from the final (0 -> Final, 1 -> Semifinals, ...). Which
